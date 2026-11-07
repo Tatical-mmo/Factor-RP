@@ -50,8 +50,10 @@ export async function criarPerfil(id, nome, personagem) {
   if (error) throw new Error(traduzir(error));
   return data;
 }
-export async function salvarPosicao(id, x, z) {
-  await sb.from('perfis').update({ pos_x: x, pos_z: z, visto_em: new Date().toISOString() }).eq('id', id);
+export async function salvarPosicao(id, x, z, fome) {
+  const dados = { pos_x: x, pos_z: z, visto_em: new Date().toISOString() };
+  if (typeof fome === 'number') dados.fome = Math.max(0, Math.min(100, Math.round(fome * 10) / 10));
+  await sb.from('perfis').update(dados).eq('id', id);
 }
 
 // ---------------------------------------------------------------- tempo real
@@ -88,6 +90,7 @@ export function escutarMeuPerfil(id, eventos) {
   const canal = sb.channel('eu-' + id)
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'perfis', filter: `id=eq.${id}` }, (p) => eventos.perfil?.(p.new))
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comandos', filter: `alvo=eq.${id}` }, (p) => eventos.comando?.(p.new))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'inventario', filter: `dono=eq.${id}` }, () => eventos.inventario?.())
     .subscribe();
   return () => sb.removeChannel(canal);
 }
@@ -117,7 +120,21 @@ function traduzirRpc(m) {
     'tempo invalido': 'Tempo inválido (0 a 1440 minutos).',
     'valor muito alto': 'Valor muito alto.',
     'jogador nao encontrado': 'Jogador não encontrado.',
+    'voce esta preso': 'Você não pode fazer isso preso ou algemado.',
+    'mochila cheia de sucata': 'Sua mochila já está cheia de sucata. Venda na loja.',
+    'mochila cheia': 'Sua mochila está cheia desse item.',
+    'nenhuma caixa embalada': 'Essa caixa não foi embalada por você.',
+    'entrega rapida demais': 'Entrega rápida demais. Tente de novo em instantes.',
+    'moedas insuficientes': 'Moedas insuficientes.',
+    'itens insuficientes': 'Você não tem itens suficientes.',
+    'a loja nao vende esse item': 'A loja não vende esse item.',
+    'a loja nao compra esse item': 'A loja não compra esse item.',
+    'isso nao se come': 'Isso não se come.',
+    'quantidade invalida': 'Quantidade inválida.',
+    'produto invalido': 'Produto inválido.',
   };
+  const espera = /^aguarde (\d+) s$/.exec(m);
+  if (espera) return `Aguarde ${espera[1]} s.`;
   return t[m] || m;
 }
 export const painel = {
@@ -150,4 +167,25 @@ export async function historico() {
   const { data, error } = await sb.from('registro_admin').select('acao,detalhes,criado_em,autor:perfis!registro_admin_autor_fkey(nome),alvo:perfis!registro_admin_alvo_fkey(nome)').order('criado_em', { ascending: false }).limit(40);
   if (error) throw new Error(error.message);
   return data;
+}
+
+// ---------------------------------------------------------------- economia (etapa 3)
+export const economia = {
+  coletarSucata: () => rpc('coletar_sucata'),
+  iniciarEmbalagem: (produto) => rpc('iniciar_embalagem', { produto }),
+  entregarPacote: () => rpc('entregar_pacote'),
+  comprar: (item, qtd) => rpc('comprar', { nome_item: item, quantidade: qtd }),
+  vender: (item, qtd) => rpc('vender', { nome_item: item, quantidade: qtd }),
+  consumir: (item) => rpc('consumir', { nome_item: item }),
+};
+export async function carregarPrecos() {
+  const { data, error } = await sb.from('precos').select('*').order('item');
+  if (error) throw new Error(error.message);
+  return data;
+}
+export async function carregarInventario(id) {
+  const { data, error } = await sb.from('inventario').select('item,qtd').eq('dono', id);
+  if (error) throw new Error(error.message);
+  const inv = {}; for (const r of data) inv[r.item] = r.qtd;
+  return inv;
 }

@@ -43,7 +43,7 @@ function pode(poder) {
   const p = ctx.perfil();
   return p.cargo === 'admin' || (p.cargo === 'moderador' && p.poderes?.[poder] === true);
 }
-function msg(t, ok = true) { const m = $('painelMsg'); m.textContent = t; m.className = ok ? 'ok' : 'erro'; clearTimeout(msg.t); msg.t = setTimeout(() => { m.textContent = ''; }, 4000); }
+function msg(t, ok = true) { const m = $('painelMsg'); m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'erro'); clearTimeout(msg.t); msg.t = setTimeout(() => { m.textContent = ''; }, 4000); }
 async function executar(fn, sucesso) {
   try { await fn(); msg(sucesso); if (selecionado) await abrirJogador(selecionado); else desenhar(); }
   catch (e) { msg(e.message, false); }

@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { FERRO_VELHOS, FABRICAS, PRODUTOS, FOME_POR_SEGUNDO } from './config.js';
+import { iniciarLoja, abrir as abrirJanela, recarregarInventario } from './loja.js';
 import { PERSONAGENS, ROBOS, MODELOS, CIDADE, RUAS_HORIZONTAIS, RUAS_VERTICAIS, QUARTEIROES_ESPECIAIS, VELOCIDADE, CONTROLES_PC } from './config.js';
 
 const $ = (id) => document.getElementById(id);
@@ -324,7 +326,7 @@ function addColisorCaixa(obj, encolher = 0.6) {
   return b;
 }
 
-const CORES_MAPA = { delegacia: '#4f7bd8', loja: '#e05a4f', empresa: '#9aa0a8', transportadora: '#e39b3a', casa: '#8c5a3c', base_cla: '#c43b3b' };
+const CORES_MAPA = { ferro_velho: '#7a4a2a', delegacia: '#4f7bd8', loja: '#e05a4f', empresa: '#9aa0a8', transportadora: '#e39b3a', casa: '#8c5a3c', base_cla: '#c43b3b' };
 
 function colocarPredio(nome, x, z, rotY) {
   const obj = clonar(nome);
@@ -357,6 +359,55 @@ function colocarVeiculo(nome, x, z, rot) {
 }
 
 let contratante = null;
+const pontos = { bancadas: [], docas: [], lojas: [], sucata: [] };
+function pontoProximo(lista, raio) {
+  let melhor = null, dm = raio;
+  for (const p of lista) { const d = Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z); if (d < dm) { dm = d; melhor = p; } }
+  return melhor;
+}
+
+function criarFerroVelho(x, z) {
+  const cores = ['#7a4a2a', '#8c5a32', '#5b5f66', '#6e3b22', '#9a9184', '#4a4f57'];
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const montes = [[x - 3, z - 2], [x + 3.5, z + 2.5]];
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+  for (const [mx, mz] of montes) {
+    const n = 46;
+    const inst = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.45 }), n);
+    for (let i = 0; i < n; i++) {
+      const a = rng() * Math.PI * 2, r = Math.sqrt(rng()) * 2.6;
+      const h = (2.6 - r) * 0.7 + rng() * 0.3;
+      e.set(rng() * 3, rng() * 3, rng() * 3); q.setFromEuler(e);
+      m.compose(new THREE.Vector3(mx + Math.cos(a) * r, 0.18 + h * 0.6, mz + Math.sin(a) * r), q,
+        new THREE.Vector3(0.3 + rng() * 0.9, 0.12 + rng() * 0.4, 0.3 + rng() * 0.7));
+      inst.setMatrixAt(i, m); inst.setColorAt(i, new THREE.Color(cores[Math.floor(rng() * cores.length)]));
+    }
+    inst.castShadow = true; inst.receiveShadow = true; scene.add(inst);
+    colisores.push({ tipo: 'circ', x: mx, z: mz, r: 2.2 });
+    pontos.sucata.push({ x: mx, z: mz });
+  }
+  const pl = textoSprite('Ferro-velho', { escala: 0.8, fundo: 'rgba(90,50,20,.9)' }); pl.position.set(x, 3, z); scene.add(pl);
+  itensMapa.push({ tipo: 'ferro_velho', x0: x - 7, x1: x + 7, z0: z - 6, z1: z + 6 });
+}
+
+// caixa com produto (cor da fita indica o tipo)
+const matCaixas = {};
+function criarCaixa(tipo) {
+  const c = clonar('caixa'); c.scale.setScalar(0.72); c.userData.tipo = tipo || null;
+  if (tipo && PRODUTOS[tipo]) {
+    if (!matCaixas[tipo]) matCaixas[tipo] = new Map();
+    c.traverse((o) => {
+      if (!o.isMesh) return;
+      const cache = matCaixas[tipo];
+      if (!cache.has(o.material)) { const mm = o.material.clone(); mm.color.set(PRODUTOS[tipo].cor); cache.set(o.material, mm); }
+      o.material = cache.get(o.material);
+    });
+  }
+  scene.add(c);
+  return c;
+}
+const codigoCaixa = (c) => !c ? 0 : (PRODUTOS[c.userData.tipo]?.codigo || 1);
+const tipoDoCodigo = (n) => Object.keys(PRODUTOS).find((k) => PRODUTOS[k].codigo === n) || null;
 let cadeia = null;
 const RAIO_CADEIA = 2.2;
 function criarCadeia(caixaDelegacia) {
@@ -392,6 +443,7 @@ function montarQuarteiroes() {
       continue;
     }
     const lotes = esp || { SO: 'casa', SE: 'casa', NE: rng() < 0.6 ? 'casa' : 'arvores', NO: 'arvores' };
+    if (!esp && FERRO_VELHOS.includes(`${cx},${cz}`)) lotes.NO = 'ferro_velho';
     // centro de cada lote
     const c = L / 2;
     const lote = { SO: [x - c, z + c], SE: [x + c, z + c], NE: [x + c, z - c], NO: [x - c, z - c] };
@@ -401,8 +453,15 @@ function montarQuarteiroes() {
       if (tipo === 'patio_caixas') {
         const b = clonar('bancada'); b.position.set(lx, 0.18, lz); b.rotation.y = Math.PI / 2; scene.add(b); b.updateMatrixWorld(true); addColisorCaixa(b, 0.1);
         for (let k = 0; k < 5; k++) colocarCaixa(lx - 5 + k * 2.4, lz + 4.5 + (k % 2) * 1.2, rng());
+        const produto = FABRICAS[`${cx},${cz}`];
+        if (produto) {
+          pontos.bancadas.push({ x: lx, z: lz, produto });
+          const pl = textoSprite(`Bancada: ${PRODUTOS[produto].nome}`, { escala: 0.6, fundo: 'rgba(60,40,15,.85)', cor: '#ffd9a0' });
+          pl.position.set(lx, 2.3, lz); scene.add(pl);
+        }
         continue;
       }
+      if (tipo === 'ferro_velho') { criarFerroVelho(lx, lz); continue; }
       if (tipo === 'patio_policia') {
         colocarVeiculo('viatura', lx - 3, lz + 1, Math.PI / 2);
         colocarVeiculo('van_policia', lx + 4.5, lz + 1, Math.PI / 2);
@@ -421,6 +480,20 @@ function montarQuarteiroes() {
       p.caixa = addColisorCaixa(obj, 0.8);
       Object.assign(itensMapa[itensMapa.length - 1], { x0: p.caixa.min.x, x1: p.caixa.max.x, z0: p.caixa.min.z, z1: p.caixa.max.z });
       if (tipo === 'delegacia') criarCadeia(p.caixa);
+      if (tipo === 'transportadora' || tipo === 'loja') {
+        const frente = rot === 0
+          ? { x: (p.caixa.min.x + p.caixa.max.x) / 2, z: p.caixa.max.z + 1.3 }
+          : { x: p.caixa.max.x + 1.3, z: (p.caixa.min.z + p.caixa.max.z) / 2 };
+        if (tipo === 'loja') {
+          pontos.lojas.push(frente);
+          const pl = textoSprite('Loja', { escala: 0.8, fundo: 'rgba(140,30,30,.85)' }); pl.position.set(frente.x, 2.6, frente.z); scene.add(pl);
+        } else {
+          pontos.docas.push(frente);
+          const faixa = new THREE.Mesh(new THREE.PlaneGeometry(5, 2.6), new THREE.MeshStandardMaterial({ color: '#e3b23c', roughness: 0.8, transparent: true, opacity: 0.85 }));
+          faixa.rotation.x = -Math.PI / 2; faixa.rotation.z = rot; faixa.position.set(frente.x, 0.19, frente.z); faixa.receiveShadow = true; scene.add(faixa);
+          const pl = textoSprite('Doca de entrega', { escala: 0.7, fundo: 'rgba(120,80,10,.9)' }); pl.position.set(frente.x, 2.4, frente.z); scene.add(pl);
+        }
+      }
     }
   }
   // veículos estacionados
@@ -520,7 +593,7 @@ const jogador = {
   avatar: null, nome: '', pos: new THREE.Vector3(), yaw: 0, raio: 0.38,
   trava: 0, armado: false, carregando: null, eventos: [], recarga: 0, alvo: null, soco: 0,
   arma: null, etiqueta: null, perfil: null,
-  algemado: false, pena: 0, algemas: null, sincPena: 10,
+  algemado: false, pena: 0, algemas: null, sincPena: 10, fome: 100,
 };
 
 function resolverColisao(p, raio) {
@@ -574,6 +647,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'q') alternarArma();
   if (k === 'z') girarCamera(-1);
   if (k === 'x') girarCamera(1);
+  if (k === 'm') abrirJanela('mochila');
 });
 window.addEventListener('keyup', (e) => teclas.delete(e.key.toLowerCase()));
 window.addEventListener('blur', () => teclas.clear());
@@ -658,9 +732,61 @@ function livre() {
 function acaoContexto() {
   if (jogador.trava > 0 || !livre()) return;
   if (pertoContratante()) { aviso('Contratante: "Ainda não tenho cargas para você. Volte quando as transportadoras abrirem."', 4); return; }
-  if (jogador.carregando) { pegarOuSoltar(null); return; }
+  if (pontoProximo(pontos.lojas, 3.2)) { abrirJanela('loja'); return; }
+  if (jogador.carregando) {
+    if (pontoProximo(pontos.docas, 3.4)) { entregar(); return; }
+    pegarOuSoltar(null); return;
+  }
   const c = caixaProxima();
-  if (c) { if (jogador.armado) { aviso('Guarde a arma para carregar caixas.'); return; } pegarOuSoltar(c); }
+  if (c) { if (jogador.armado) { aviso('Guarde a arma para carregar caixas.'); return; } pegarOuSoltar(c); return; }
+  const b = pontoProximo(pontos.bancadas, 2.6);
+  if (b) { if (jogador.armado) { aviso('Guarde a arma para trabalhar.'); return; } embalar(b); return; }
+  if (pontoProximo(pontos.sucata, 4)) { if (jogador.armado) { aviso('Guarde a arma para trabalhar.'); return; } coletar(); }
+}
+
+// ---------------------------------------------------------------- trabalho (etapa 3)
+let ocupado = false;     // evita chamar o banco duas vezes seguidas
+function virarPara(x, z) { jogador.yaw = Math.atan2(x - jogador.pos.x, z - jogador.pos.z); }
+
+async function embalar(bancada) {
+  if (ocupado) return; ocupado = true;
+  try {
+    await rede.economia.iniciarEmbalagem(bancada.produto);
+    virarPara(bancada.x, bancada.z); jogador.alvo = null;
+    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 0.6, fade: 0.15 });
+    jogador.trava = 2.8;
+    jogador.eventos.push({ t: 2.7, fn: () => {
+      jogador.carregando = criarCaixa(bancada.produto);
+      aviso(`Caixa de ${PRODUTOS[bancada.produto].nome.toLowerCase()} embalada! Leve até a doca da transportadora.`, 3.5);
+    } });
+  } catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
+}
+
+async function entregar() {
+  const caixa = jogador.carregando;
+  if (!caixa.userData.tipo) { aviso('Essa caixa está vazia. Embale uma caixa na bancada de uma empresa.', 3.5); return; }
+  if (ocupado) return; ocupado = true;
+  try {
+    const pago = await rede.economia.entregarPacote();
+    jogador.carregando = null; scene.remove(caixa);
+    aviso(`Entrega feita! +${pago} moedas`);
+  } catch (e) { aviso(e.message, 3.5); }
+  finally { ocupado = false; }
+}
+
+async function coletar() {
+  if (ocupado) return; ocupado = true;
+  try {
+    const qtd = await rede.economia.coletarSucata();
+    const p = pontoProximo(pontos.sucata, 4); if (p) virarPara(p.x, p.z);
+    jogador.alvo = null;
+    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 1.5, fade: 0.15 });
+    jogador.trava = 1.1;
+    aviso(`+1 sucata (${qtd} na mochila)`);
+    recarregarInventario();
+  } catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
 }
 
 function pegarOuSoltar(caixa) {
@@ -895,6 +1021,7 @@ async function iniciarJogo(perfil) {
   av.encaixarArma(arma); arma.visible = false; jogador.arma = arma;
   jogador.pos.set(perfil.pos_x ?? 0, 0, perfil.pos_z ?? quadC(2));
   jogador.pena = perfil.pena_seg || 0;
+  jogador.fome = typeof perfil.fome === 'number' ? perfil.fome : 100;
   if (jogador.pena > 0 && cadeia) jogador.pos.set(cadeia.x, 0, cadeia.z);
   resolverColisao(jogador.pos, jogador.raio);
   jogador.pos.y = alturaChao(jogador.pos.x, jogador.pos.z);
@@ -924,7 +1051,8 @@ async function iniciarJogo(perfil) {
   aviso(`Bem-vindo à cidade, ${nome}!`);
   criarNPCs(id);
   conectarMultiplayer(perfil);
-  rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando });
+  rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando, inventario: recarregarInventario });
+  iniciarLoja({ perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); } });
   iniciarPainel({
     perfil: () => jogador.perfil,
     online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta.nome })),
@@ -943,8 +1071,10 @@ function atualizarInfo() {
   const p = jogador.perfil;
   const tags = (p.cargo !== 'jogador' ? `<i class="tagc ${p.cargo}">${p.cargo}</i>` : '') + (p.imortal ? '<i class="tagc imortal">imortal</i>' : '');
   $('info').innerHTML = `<b>${escapar(p.nome)}</b>${tags}<br>Moedas: ${p.moedas.toLocaleString('pt-BR')}<br>`
+    + `Fome <span class="fome" id="barFome"><i></i></span><br>`
     + `<span class="online">● ${online} online</span>${conectado ? '' : ' <small>(conectando…)</small>'}<br><button id="btSair">Sair da conta</button>`;
   $('btSair').onclick = async () => { await salvarAgora(); await rede.sair(); location.reload(); };
+  desenharFome();
 }
 
 // ================================================================= MULTIPLAYER
@@ -1013,8 +1143,8 @@ function atualizarRemotos(dt) {
       r.av.tocar(a.a, { umaVez, velocidade: ANIM_UMA_VEZ[a.a] || ANIM_VEL[a.a] || 1, fade: umaVez ? 0.1 : 0.2 });
     }
     r.arma.visible = !!a.ar;
-    if (a.cx && !r.caixa) { r.caixa = clonar('caixa'); r.caixa.scale.setScalar(0.72); scene.add(r.caixa); }
-    if (!a.cx && r.caixa) { scene.remove(r.caixa); r.caixa = null; }
+    if (r.caixa && codigoCaixa(r.caixa) !== (a.cx || 0)) { scene.remove(r.caixa); r.caixa = null; }
+    if (a.cx && !r.caixa) r.caixa = criarCaixa(tipoDoCodigo(a.cx));
     r.av.mixer.update(dt);
     raiz.updateMatrixWorld(true);
     if (r.caixa) posicionarCaixa(r.av, r.caixa, raiz.rotation.y);
@@ -1030,7 +1160,7 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: j.carregando ? 1 : 0, al: j.algemado ? 1 : 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0 };
   const u = ultimoEnvio;
   const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al;
   if (!mudou && tempoKeepAlive > 0) return;
@@ -1039,7 +1169,7 @@ function enviarEstado(dt) {
 
 async function salvarAgora() {
   if (!jogador.perfil || !jogador.avatar) return;
-  try { await rede.salvarPosicao(jogador.perfil.id, Math.round(jogador.pos.x * 10) / 10, Math.round(jogador.pos.z * 10) / 10); } catch { /* tenta de novo depois */ }
+  try { await rede.salvarPosicao(jogador.perfil.id, Math.round(jogador.pos.x * 10) / 10, Math.round(jogador.pos.z * 10) / 10, jogador.fome); } catch { /* tenta de novo depois */ }
 }
 
 // ================================================================= MUDANÇAS VINDAS DO BANCO
@@ -1050,6 +1180,9 @@ function montarLocais() {
   if (cadeia) LOCAIS.push({ nome: 'Delegacia', x: cadeia.x + 4, z: cadeia.z + 4 });
   LOCAIS.push({ nome: 'Transportadora', x: quadC(2) + 9, z: ruaC(2) + 2.5 });
   LOCAIS.push({ nome: 'Avenida Central', x: 0, z: ruaC(2) });
+  if (pontos.lojas[0]) LOCAIS.push({ nome: 'Loja', x: pontos.lojas[0].x, z: pontos.lojas[0].z + 1.5 });
+  if (pontos.sucata[0]) LOCAIS.push({ nome: 'Ferro-velho', x: pontos.sucata[0].x + 3.5, z: pontos.sucata[0].z + 3.5 });
+  if (pontos.bancadas[0]) LOCAIS.push({ nome: 'Bancada (chocolate)', x: pontos.bancadas[0].x, z: pontos.bancadas[0].z + 2.5 });
   LOCAIS.push({ nome: 'Base Leste', x: BASE_X - 26, z: ruaC(2) });
   LOCAIS.push({ nome: 'Base Oeste', x: -BASE_X + 26, z: ruaC(2) });
 }
@@ -1115,6 +1248,7 @@ function aplicarPerfil(novo) {
     if (cadeia) teleportar(cadeia.x, cadeia.z);
     aviso(`Você foi preso por ${formatarTempo(novo.pena_seg)}.`, 4);
   } else if (!(novo.pena_seg > 0) && jogador.pena > 0) solto();
+  if (typeof novo.fome === 'number' && novo.fome > jogador.fome + 1) { jogador.fome = novo.fome; desenharFome(); }
   if (novo.moedas !== antigo.moedas) {
     const dif = novo.moedas - antigo.moedas;
     aviso(`${dif > 0 ? '+' : ''}${dif.toLocaleString('pt-BR')} moedas`);
@@ -1167,6 +1301,7 @@ function atualizarJogador(dt) {
     if (forca > 0.15) {
       vel = j.carregando ? VELOCIDADE.carregando : j.armado ? VELOCIDADE.armado : correr ? VELOCIDADE.correr : VELOCIDADE.andar;
       if (joy.ativo && !correr) vel *= THREE.MathUtils.clamp(forca * 1.3, 0.5, 1);
+      if (j.fome <= 0) vel *= 0.6;
       j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 12);
       j.pos.x += dir.x * vel * dt; j.pos.z += dir.z * vel * dt;
       resolverColisao(j.pos, j.raio);
@@ -1249,12 +1384,10 @@ function atualizarCamera(dt) {
 function atualizarHUD(dt) {
   tempoMapa -= dt;
   if (tempoMapa <= 0) { tempoMapa = 0.1; desenharMapa(); $('rua').textContent = nomeDaRua(jogador.pos.x, jogador.pos.z) || '—'; }
-  let dica = '';
-  if (pertoContratante()) dica = TOQUE ? 'Toque em Falar' : 'E para falar com o Contratante';
-  else if (jogador.carregando) dica = TOQUE ? 'Toque em Soltar' : 'E para soltar a caixa';
-  else if (caixaProxima() && !jogador.armado) dica = TOQUE ? 'Toque em Pegar' : 'E para pegar a caixa';
-  const el = $('dica'); el.textContent = dica; el.classList.toggle('oculto', !dica || TOQUE);
-  if (TOQUE) $('btAcao').textContent = pertoContratante() ? 'Falar' : jogador.carregando ? 'Soltar' : 'Pegar';
+  const [dica, botao] = contexto();
+  const el = $('dica'); el.textContent = dica ? `E: ${dica}` : ''; el.classList.toggle('oculto', !dica || TOQUE);
+  if (TOQUE) { $('btAcao').textContent = botao || 'Pegar'; $('btAcao').classList.toggle('ativo', !!dica); }
+  atualizarFome(dt);
   const bl = $('bloqueio');
   if (jogador.perfil?.banido) { /* mensagem já exibida */ }
   else if (jogador.pena > 0) { bl.textContent = `Preso: ${formatarTempo(jogador.pena)}`; bl.classList.remove('oculto'); }
@@ -1263,6 +1396,38 @@ function atualizarHUD(dt) {
   if (avisoTimer > 0) { avisoTimer -= dt; if (avisoTimer <= 0) $('aviso').style.opacity = 0; }
   atualizarPlacas();
   if (contratante?.excl) contratante.excl.position.y = 3.0 + Math.sin(performance.now() / 300) * 0.12;
+}
+
+// texto da dica e do botão de ação conforme o que está perto
+function contexto() {
+  if (pertoContratante()) return ['falar com o Contratante', 'Falar'];
+  if (pontoProximo(pontos.lojas, 3.2)) return ['abrir a loja', 'Loja'];
+  if (jogador.carregando) {
+    if (pontoProximo(pontos.docas, 3.4)) return jogador.carregando.userData.tipo ? ['entregar a caixa', 'Entregar'] : ['caixa vazia: embale na bancada', 'Soltar'];
+    return ['soltar a caixa', 'Soltar'];
+  }
+  if (jogador.armado) return ['', ''];
+  if (caixaProxima()) return ['pegar a caixa', 'Pegar'];
+  const b = pontoProximo(pontos.bancadas, 2.6);
+  if (b) return [`embalar ${PRODUTOS[b.produto].nome.toLowerCase()}`, 'Embalar'];
+  if (pontoProximo(pontos.sucata, 4)) return ['coletar sucata', 'Coletar'];
+  return ['', ''];
+}
+
+// ---------------------------------------------------------------- fome
+let avisoFome = false;
+function atualizarFome(dt) {
+  jogador.fome = Math.max(0, jogador.fome - FOME_POR_SEGUNDO * dt);
+  if (jogador.fome <= 0 && !avisoFome) { avisoFome = true; aviso('Você está com fome e mais lento. Coma algo da mochila.', 4); }
+  if (jogador.fome > 5) avisoFome = false;
+  tempoInfo -= dt; if (tempoInfo <= 0) { tempoInfo = 1; desenharFome(); }
+}
+let tempoInfo = 1;
+function desenharFome() {
+  const b = $('barFome'); if (!b) return;
+  b.firstChild.style.width = jogador.fome.toFixed(0) + '%';
+  b.classList.toggle('vazia', jogador.fome < 15);
+  b.title = `Fome ${Math.round(jogador.fome)}%`;
 }
 
 function quadro() {

@@ -65,7 +65,7 @@
   #ajuda kbd { color:var(--texto); font-family:inherit; font-weight:700; }
   #aviso { position:absolute; left:50%; top:22%; transform:translateX(-50%); font-size:15px; max-width:86vw; text-align:center; transition:opacity .3s; }
 
-  #btPainel { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(150px + env(safe-area-inset-top)); pointer-events:auto;
+  #btPainel { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(196px + env(safe-area-inset-top)); pointer-events:auto;
     font-size:14px; font-weight:700; padding:8px 14px; border-radius:10px; border:1px solid var(--borda); background:#3a2a10; color:#ffd08a; cursor:pointer; }
   #bloqueio { position:absolute; left:50%; bottom:calc(200px + env(safe-area-inset-bottom)); transform:translateX(-50%); font-size:16px; font-weight:700;
     background:rgba(120,20,20,.85); border:1px solid #ff8a7a; border-radius:12px; padding:8px 16px; white-space:nowrap; }
@@ -73,20 +73,20 @@
   .tagc.admin { background:#7a1f1f; } .tagc.moderador { background:#1f3f7a; } .tagc.imortal { background:#5b3b8a; }
 
   /* Painel */
-  #painel { position:fixed; z-index:25; inset:auto; left:50%; top:50%; transform:translate(-50%,-50%); width:min(560px, 96vw); max-height:88vh;
+  .modal { position:fixed; z-index:25; inset:auto; left:50%; top:50%; transform:translate(-50%,-50%); width:min(560px, 96vw); max-height:88vh;
     display:flex; flex-direction:column; background:#151a24; border:1px solid var(--borda); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.5); touch-action:pan-y; }
-  #painel .topo { display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--borda); }
-  #painel .topo button { background:none; border:0; color:var(--texto); font-size:20px; cursor:pointer; }
-  #painel .abas { display:flex; gap:6px; padding:10px 12px 0; flex-wrap:wrap; }
-  #painel .abas button { flex:1; min-width:90px; padding:9px; border-radius:9px; border:1px solid var(--borda); background:#202737; color:var(--suave); font-weight:700; cursor:pointer; }
-  #painel .abas button.sel { background:var(--destaque); color:#20160a; }
-  #painelConteudo { overflow-y:auto; padding:12px 14px; flex:1; }
-  #painelConteudo input:not([type=checkbox]) { font-size:15px; padding:9px 10px; border-radius:8px; border:1px solid var(--borda); background:#0f131b; color:var(--texto); min-width:0; flex:1; }
-  #painelConteudo #pBusca { width:100%; }
-  #painelConteudo .sub { margin:14px 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--suave); }
-  #painelConteudo .botoes { display:flex; gap:8px; flex-wrap:wrap; }
-  #painelConteudo .botoes button, #painelConteudo .voltar, .chip { padding:9px 13px; border-radius:9px; border:0; background:#2d3650; color:var(--texto); font-weight:700; cursor:pointer; }
-  #painelConteudo .botoes button.perigo { background:#8a2525; } #painelConteudo .botoes button.ativo { background:#5b3b8a; }
+  .modal .topo { display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--borda); }
+  .modal .topo button { background:none; border:0; color:var(--texto); font-size:20px; cursor:pointer; }
+  .modal .abas { display:flex; gap:6px; padding:10px 12px 0; flex-wrap:wrap; }
+  .modal .abas button { flex:1; min-width:90px; padding:9px; border-radius:9px; border:1px solid var(--borda); background:#202737; color:var(--suave); font-weight:700; cursor:pointer; }
+  .modal .abas button.sel { background:var(--destaque); color:#20160a; }
+  .modal .conteudo { overflow-y:auto; padding:12px 14px; flex:1; }
+  .modal .conteudo input:not([type=checkbox]) { font-size:15px; padding:9px 10px; border-radius:8px; border:1px solid var(--borda); background:#0f131b; color:var(--texto); min-width:0; flex:1; }
+  #pBusca { width:100%; }
+  .modal .conteudo .sub { margin:14px 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--suave); }
+  .modal .conteudo .botoes { display:flex; gap:8px; flex-wrap:wrap; }
+  .modal .conteudo .botoes button, .modal .conteudo .voltar, .chip { padding:9px 13px; border-radius:9px; border:0; background:#2d3650; color:var(--texto); font-weight:700; cursor:pointer; }
+  .modal .conteudo .botoes button.perigo { background:#8a2525; } .modal .conteudo .botoes button.ativo { background:#5b3b8a; }
   .chips { display:flex; flex-wrap:wrap; gap:6px; } .chip { padding:6px 11px; background:#1f4a35; }
   .lista { display:flex; flex-direction:column; gap:6px; }
   .lista .linha { text-align:left; padding:10px 12px; border-radius:10px; border:1px solid var(--borda); background:#1b2130; color:var(--texto); cursor:pointer; }
@@ -100,8 +100,17 @@
   .skin { background:#1b2130; border:2px solid transparent; border-radius:10px; padding:4px; color:var(--texto); cursor:pointer; font-size:11px; }
   .skin.sel { border-color:var(--destaque); } .skin img { width:100%; aspect-ratio:1; object-fit:contain; display:block; }
   .vazio, .dica { color:var(--suave); font-size:13px; }
-  #painelMsg { min-height:22px; padding:6px 14px 12px; font-size:14px; } #painelMsg.ok { color:var(--verde); } #painelMsg.erro { color:#ff8a7a; }
+  .modal .msg { min-height:22px; padding:6px 14px 12px; font-size:14px; } .modal .msg.ok { color:var(--verde); } .modal .msg.erro { color:#ff8a7a; }
 
+  .item { display:flex; align-items:center; gap:10px; cursor:default; }
+  .item .ic { font-size:24px; } .item .nm { flex:1; display:flex; flex-direction:column; } .item .nm small { color:var(--suave); }
+  .item .bts { display:flex; gap:6px; }
+  .item .bts button { padding:8px 12px; border-radius:8px; border:0; background:#2d3650; color:var(--texto); font-weight:700; cursor:pointer; }
+  .item .bts button:disabled { opacity:.35; cursor:default; }
+  #btMochila { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(150px + env(safe-area-inset-top)); pointer-events:auto;
+    font-size:14px; font-weight:700; padding:8px 14px; border-radius:10px; border:1px solid var(--borda); background:#1f3a2c; color:#bff0d2; cursor:pointer; }
+  .fome { display:inline-block; width:70px; height:8px; border-radius:4px; background:#3a2a20; vertical-align:middle; overflow:hidden; margin-left:4px; }
+  .fome i { display:block; height:100%; background:#e7a43c; } .fome.vazia i { background:#e05a4f; }
   /* Controles de toque */
   #toque { position:fixed; inset:0; pointer-events:none; z-index:11; }
   #joy { position:absolute; left:calc(22px + env(safe-area-inset-left)); bottom:calc(22px + env(safe-area-inset-bottom)); width:130px; height:130px; border-radius:50%;
@@ -163,18 +172,25 @@
   <div id="dica" class="painel oculto"></div>
   <div id="aviso" class="painel" style="opacity:0"></div>
   <div id="ajuda" class="painel oculto"></div>
+  <button id="btMochila">🎒 Mochila</button>
   <button id="btPainel" class="oculto">🛡 Painel</button>
   <div id="bloqueio" class="oculto"></div>
 </div>
 
-<div id="painel" class="oculto">
+<div id="painel" class="modal oculto">
   <div class="topo"><b>Painel da equipe</b><button id="fecharPainel" aria-label="Fechar">✕</button></div>
   <div class="abas">
     <button data-aba="jogadores">Jogadores</button><button data-aba="eu">Eu</button>
     <button data-aba="equipe" class="soAdmin">Equipe</button><button data-aba="historico" class="soAdmin">Histórico</button>
   </div>
-  <div id="painelConteudo"></div>
-  <div id="painelMsg"></div>
+  <div id="painelConteudo" class="conteudo"></div>
+  <div id="painelMsg" class="msg"></div>
+</div>
+
+<div id="janela" class="modal oculto">
+  <div class="topo"><b id="janelaTitulo">Loja</b><button id="fecharJanela" aria-label="Fechar">✕</button></div>
+  <div id="janelaConteudo" class="conteudo"></div>
+  <div id="janelaMsg" class="msg"></div>
 </div>
 
 <div id="toque" class="oculto">

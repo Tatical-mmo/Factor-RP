@@ -1,6 +1,6 @@
 # Fator RP
 
-MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 2**, com contas, perfil salvo e jogadores se vendo na cidade em tempo real.
+MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 3**, com trabalho, produção, loja, mochila e fome, além de contas e multiplayer.
 
 ## O que já funciona
 
@@ -28,8 +28,21 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 2**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql`.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` e `supabase/03_economia.sql`, nessa ordem.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
+
+## Etapa 3: trabalho e produção
+
+| Atividade | Onde | Rende | Limite (no banco) |
+| --- | --- | --- | --- |
+| Embalar e entregar | bancada no pátio da empresa → doca da transportadora | 20 moedas por entrega | 1 entrega a cada 50 s |
+| Coletar sucata | 2 ferros-velhos da cidade | sucata na mochila, vendida por 15 | 1 coleta a cada 40 s, até 20 |
+
+- Empresa da Rua do Comércio embala **chocolate**; a da Rua da Sucata embala **remédio**.
+- **Loja:** compra chocolate (100), cereal (60) e remédio (300); compra de volta sucata e o que você tiver.
+- **Mochila (tecla M):** itens guardados no banco; chocolate enche 60% da fome e cereal 35%.
+- **Fome:** esvazia em 1 hora de jogo; vazia, o personagem anda 40% mais devagar.
+- Valores ajustáveis na função `regra()` e na tabela `precos` (`supabase/03_economia.sql`).
 
 ## Painel da equipe
 
@@ -89,6 +102,7 @@ js/config.js            personagens, ruas, layout da cidade, velocidades
 js/main.js              motor do jogo (Three.js 0.170 via CDN)
 js/rede.js              contas, perfis e tempo real (Supabase)
 js/painel.js            painel da equipe
+js/loja.js              loja e mochila
 supabase/               SQL do banco de dados
 assets/personagens/     17 personagens com as 13 animações
 assets/robos/           robôs (polícia, admin, moderadores, Contratante)

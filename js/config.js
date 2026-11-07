@@ -54,10 +54,20 @@ export const CONTROLES_PC = [
   ['W A S D', 'andar'],
   ['Shift', 'correr'],
   ['Clique no chão', 'ir até o ponto'],
-  ['E', 'pegar / soltar caixa, falar'],
+  ['E', 'agir (pegar, embalar, entregar, coletar, loja)'],
+  ['M', 'mochila'],
   ['F', 'soco'],
   ['Q', 'sacar / guardar arma'],
   ['Clique (armado)', 'atirar'],
   ['Z / X', 'girar câmera'],
   ['Roda do mouse', 'zoom'],
 ];
+
+// Etapa 3: trabalho e produção
+export const FERRO_VELHOS = ['0,3', '3,0'];                         // quarteirões com ferro-velho no lote NO
+export const FABRICAS = { '2,1': 'chocolate', '2,2': 'remedio' };   // bancada de cada empresa
+export const PRODUTOS = {
+  chocolate: { nome: 'Chocolate', cor: '#c98b5e', codigo: 2 },
+  remedio: { nome: 'Remédio', cor: '#eef3ff', codigo: 3 },
+};
+export const FOME_POR_SEGUNDO = 100 / 3600;   // esvazia em 1 hora
