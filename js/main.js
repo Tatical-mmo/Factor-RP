@@ -8,6 +8,7 @@ const $ = (id) => document.getElementById(id);
 const TOQUE = window.matchMedia('(pointer: coarse)').matches;
 
 import * as rede from './rede.js';
+import { iniciarPainel, atualizarBotao } from './painel.js';
 
 // ================================================================= CONTA E PERFIL
 let escolhido = null;
@@ -22,6 +23,11 @@ async function aposLogin(s) {
   sessao = s;
   msgLogin('Carregando perfil…', true);
   const perfil = await rede.carregarPerfil(s.user.id);
+  if (perfil?.banido) {
+    await rede.sair(); mostrar('login');
+    msgLogin('Esta conta foi banida.' + (perfil.banido_motivo ? ' Motivo: ' + perfil.banido_motivo : ''));
+    return;
+  }
   if (perfil) comecar(perfil);
   else { mostrar('escolha'); validar(); }
 }
@@ -349,6 +355,23 @@ function colocarVeiculo(nome, x, z, rot) {
 }
 
 let contratante = null;
+let cadeia = null;
+const RAIO_CADEIA = 2.2;
+function criarCadeia(caixaDelegacia) {
+  cadeia = { x: caixaDelegacia.max.x + 3.2, z: (caixaDelegacia.min.z + caixaDelegacia.max.z) / 2 };
+  const mat = new THREE.MeshStandardMaterial({ color: '#30353d', metalness: 0.7, roughness: 0.4 });
+  const barra = new THREE.CylinderGeometry(0.045, 0.045, 2.6, 6);
+  const grade = new THREE.InstancedMesh(barra, mat, 40);
+  const m = new THREE.Matrix4();
+  for (let i = 0; i < 40; i++) {
+    const a = i / 40 * Math.PI * 2;
+    m.makeTranslation(cadeia.x + Math.cos(a) * (RAIO_CADEIA + 0.3), 0.18 + 1.3, cadeia.z + Math.sin(a) * (RAIO_CADEIA + 0.3)); grade.setMatrixAt(i, m);
+  }
+  grade.castShadow = true; scene.add(grade);
+  const aro = new THREE.Mesh(new THREE.TorusGeometry(RAIO_CADEIA + 0.3, 0.06, 6, 48), mat);
+  aro.rotation.x = Math.PI / 2; aro.position.set(cadeia.x, 2.75, cadeia.z); scene.add(aro);
+  const placa = textoSprite('Cadeia', { escala: 0.7, cor: '#ffb4a8' }); placa.position.set(cadeia.x, 3.3, cadeia.z); scene.add(placa);
+}
 
 function montarQuarteiroes() {
   const L = (QB - CW * 2) / 2;           // tamanho do lote (19 m)
@@ -395,6 +418,7 @@ function montarQuarteiroes() {
       const p = predios[predios.length - 1]; colisores.splice(colisores.length - 1, 1);
       p.caixa = addColisorCaixa(obj, 0.8);
       Object.assign(itensMapa[itensMapa.length - 1], { x0: p.caixa.min.x, x1: p.caixa.max.x, z0: p.caixa.min.z, z1: p.caixa.max.z });
+      if (tipo === 'delegacia') criarCadeia(p.caixa);
     }
   }
   // veículos estacionados
@@ -493,7 +517,8 @@ async function criarAvatar(pasta, id) {
 const jogador = {
   avatar: null, nome: '', pos: new THREE.Vector3(), yaw: 0, raio: 0.38,
   trava: 0, armado: false, carregando: null, eventos: [], recarga: 0, alvo: null, soco: 0,
-  arma: null, etiqueta: null,
+  arma: null, etiqueta: null, perfil: null,
+  algemado: false, pena: 0, algemas: null, sincPena: 10,
 };
 
 function resolverColisao(p, raio) {
@@ -538,7 +563,8 @@ function alturaChao(x, z) {
 const teclas = new Set();
 const joy = { ativo: false, x: 0, y: 0, id: null };
 window.addEventListener('keydown', (e) => {
-  if (document.activeElement === $('nome')) return;
+  const foco = document.activeElement;
+  if (foco && (foco.tagName === 'INPUT' || foco.tagName === 'TEXTAREA')) return;
   const k = e.key.toLowerCase(); teclas.add(k);
   if (!jogador.avatar || e.repeat) return;
   if (k === 'e') acaoContexto();
@@ -621,8 +647,14 @@ function caixaProxima() {
 }
 function pertoContratante() { return contratante && Math.hypot(contratante.x - jogador.pos.x, contratante.z - jogador.pos.z) < 3.4; }
 
+function livre() {
+  if (jogador.algemado) { aviso('Você está algemado.'); return false; }
+  if (jogador.pena > 0) { aviso('Você está preso.'); return false; }
+  return true;
+}
+
 function acaoContexto() {
-  if (jogador.trava > 0) return;
+  if (jogador.trava > 0 || !livre()) return;
   if (pertoContratante()) { aviso('Contratante: "Ainda não tenho cargas para você. Volte quando as transportadoras abrirem."', 4); return; }
   if (jogador.carregando) { pegarOuSoltar(null); return; }
   const c = caixaProxima();
@@ -649,7 +681,7 @@ function pegarOuSoltar(caixa) {
 }
 
 function socar() {
-  if (jogador.trava > 0 || jogador.carregando) return;
+  if (jogador.trava > 0 || jogador.carregando || !livre()) return;
   jogador.alvo = null;
   jogador.soco = (jogador.soco + 1) % 2;
   jogador.avatar.tocar(jogador.soco ? 'punch_right' : 'punch_left', { umaVez: true, velocidade: 1.7, fade: 0.08 });
@@ -658,6 +690,7 @@ function socar() {
 
 function alternarArma() {
   if (jogador.trava > 0) return;
+  if (!jogador.armado && !livre()) return;
   if (jogador.carregando) { aviso('Solte a caixa antes de sacar a arma.'); return; }
   jogador.armado = !jogador.armado;
   jogador.arma.visible = jogador.armado;
@@ -672,7 +705,7 @@ const geoBola = new THREE.SphereGeometry(0.07, 10, 8);
 const geoMancha = new THREE.CircleGeometry(0.35, 14);
 const CORES_TINTA = ['#ff3e6c', '#35d07f', '#3ea8ff', '#ffd23e', '#b05cff', '#ff8a2a'];
 function atirar(alvo) {
-  if (!jogador.armado || jogador.trava > 0 || jogador.recarga > 0) return;
+  if (!jogador.armado || jogador.trava > 0 || jogador.recarga > 0 || !livre()) return;
   jogador.alvo = null;
   if (alvo) jogador.yaw = Math.atan2(alvo.x - jogador.pos.x, alvo.z - jogador.pos.z);
   jogador.avatar.raiz.rotation.y = jogador.yaw;
@@ -859,13 +892,16 @@ async function iniciarJogo(perfil) {
   const arma = clonar('arma_paintball');
   av.encaixarArma(arma); arma.visible = false; jogador.arma = arma;
   jogador.pos.set(perfil.pos_x ?? 0, 0, perfil.pos_z ?? quadC(2));
+  jogador.pena = perfil.pena_seg || 0;
+  if (jogador.pena > 0 && cadeia) jogador.pos.set(cadeia.x, 0, cadeia.z);
   resolverColisao(jogador.pos, jogador.raio);
   jogador.pos.y = alturaChao(jogador.pos.x, jogador.pos.z);
   jogador.yaw = Math.PI;
   alvoCam.set(jogador.pos.x, 0.9, jogador.pos.z);
   scene.add(av.raiz);
-  const etiqueta = textoSprite(nome, { escala: 0.8, cor: '#f2a33a' }); etiqueta.position.y = 2.15; av.raiz.add(etiqueta);
+  jogador.etiqueta = textoSprite(nome, { escala: 0.8, cor: '#f2a33a' }); jogador.etiqueta.position.y = 2.15; av.raiz.add(jogador.etiqueta);
   av.tocar('idle');
+  jogador.algemado = !!perfil.algemado; mostrarAlgemas(jogador.algemado);
 
   // Contratante (robô NPC na praça)
   const robo = await roboP;
@@ -877,6 +913,7 @@ async function iniciarJogo(perfil) {
   colisores.push({ tipo: 'circ', x: contratante.x, z: contratante.z + 2, r: 0.5 });
 
   desenharFundoMapa();
+  montarLocais();
   atualizarInfo();
   if (TOQUE) { $('toque').classList.remove('oculto'); configurarJoystick(); $('btTiro').classList.add('oculto'); }
   else { $('ajuda').innerHTML = CONTROLES_PC.map(([k, t]) => `<kbd>${k}</kbd> ${t}`).join('<br>'); $('ajuda').classList.remove('oculto'); }
@@ -885,13 +922,25 @@ async function iniciarJogo(perfil) {
   aviso(`Bem-vindo à cidade, ${nome}!`);
   criarNPCs(id);
   conectarMultiplayer(perfil);
+  rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando });
+  iniciarPainel({
+    perfil: () => jogador.perfil,
+    online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta.nome })),
+    posicaoDe: (id) => { const r = remotos.get(id); return r?.av?.raiz.visible ? r.av.raiz.position : (r?.alvo || null); },
+    minhaPosicao: () => jogador.pos,
+    teleportar,
+    locais: () => LOCAIS,
+  });
+  if (perfil.cargo === 'moderador') rede.receberSalario().then((v) => { if (v > 0) aviso(`Salário de moderador: +${v} moedas`); }).catch(() => {});
+  if (jogador.pena > 0) aviso(`Você está preso. Faltam ${formatarTempo(jogador.pena)}.`, 4);
   relogio.start();
   renderer.setAnimationLoop(quadro);
 }
 
 function atualizarInfo() {
   const p = jogador.perfil;
-  $('info').innerHTML = `<b>${escapar(p.nome)}</b><br>Moedas: ${p.moedas.toLocaleString('pt-BR')}<br>`
+  const tags = (p.cargo !== 'jogador' ? `<i class="tagc ${p.cargo}">${p.cargo}</i>` : '') + (p.imortal ? '<i class="tagc imortal">imortal</i>' : '');
+  $('info').innerHTML = `<b>${escapar(p.nome)}</b>${tags}<br>Moedas: ${p.moedas.toLocaleString('pt-BR')}<br>`
     + `<span class="online">● ${online} online</span>${conectado ? '' : ' <small>(conectando…)</small>'}<br><button id="btSair">Sair da conta</button>`;
   $('btSair').onclick = async () => { await salvarAgora(); await rede.sair(); location.reload(); };
 }
@@ -908,7 +957,13 @@ function conectarMultiplayer(perfil) {
     conectado: (ok) => { conectado = ok; atualizarInfo(); if (ok) ultimoEnvio = null; },
     presenca: (lista) => {
       online = Object.keys(lista).length || 1;
-      for (const [id, meta] of Object.entries(lista)) if (id !== perfil.id && !remotos.has(id)) adicionarRemoto(id, meta);
+      for (const [id, meta] of Object.entries(lista)) {
+        if (id === perfil.id) continue;
+        const r = remotos.get(id);
+        if (r && (r.meta.personagem !== meta.personagem || r.meta.cargo !== meta.cargo || r.meta.nome !== meta.nome)) {
+          const alvo = r.alvo; removerRemoto(id); adicionarRemoto(id, meta).then(() => { const n = remotos.get(id); if (n && alvo && !n.alvo) n.alvo = alvo; });
+        } else if (!r) adicionarRemoto(id, meta);
+      }
       for (const id of [...remotos.keys()]) if (!lista[id]) removerRemoto(id);
       atualizarInfo();
     },
@@ -939,6 +994,7 @@ function removerRemoto(id) {
   if (!r) return;
   if (r.av) scene.remove(r.av.raiz);
   if (r.caixa) scene.remove(r.caixa);
+  if (r.algemas) scene.remove(r.algemas);
 }
 
 function atualizarRemotos(dt) {
@@ -960,6 +1016,9 @@ function atualizarRemotos(dt) {
     r.av.mixer.update(dt);
     raiz.updateMatrixWorld(true);
     if (r.caixa) posicionarCaixa(r.av, r.caixa, raiz.rotation.y);
+    if (a.al && !r.algemas) { r.algemas = clonar('algemas'); r.algemas.scale.setScalar(1.4); scene.add(r.algemas); }
+    if (!a.al && r.algemas) { scene.remove(r.algemas); r.algemas = null; }
+    if (r.algemas) posicionarAlgemas(r.av, r.algemas, raiz.rotation.y);
   }
 }
 
@@ -969,9 +1028,9 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: j.carregando ? 1 : 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: j.carregando ? 1 : 0, al: j.algemado ? 1 : 0 };
   const u = ultimoEnvio;
-  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx;
+  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al;
   if (!mudou && tempoKeepAlive > 0) return;
   conexao.enviar('pos', est); ultimoEnvio = est; tempoKeepAlive = 3;
 }
@@ -980,6 +1039,91 @@ async function salvarAgora() {
   if (!jogador.perfil || !jogador.avatar) return;
   try { await rede.salvarPosicao(jogador.perfil.id, Math.round(jogador.pos.x * 10) / 10, Math.round(jogador.pos.z * 10) / 10); } catch { /* tenta de novo depois */ }
 }
+
+// ================================================================= MUDANÇAS VINDAS DO BANCO
+const LOCAIS = [];
+function montarLocais() {
+  LOCAIS.length = 0;
+  if (contratante) LOCAIS.push({ nome: 'Praça do Contratante', x: contratante.x + 5, z: contratante.z + 5 });
+  if (cadeia) LOCAIS.push({ nome: 'Delegacia', x: cadeia.x + 4, z: cadeia.z + 4 });
+  LOCAIS.push({ nome: 'Transportadora', x: quadC(2) + 9, z: ruaC(2) + 2.5 });
+  LOCAIS.push({ nome: 'Avenida Central', x: 0, z: ruaC(2) });
+  LOCAIS.push({ nome: 'Base Leste', x: BASE_X - 26, z: ruaC(2) });
+  LOCAIS.push({ nome: 'Base Oeste', x: -BASE_X + 26, z: ruaC(2) });
+}
+
+function teleportar(x, z) {
+  if (jogador.pena > 0 && cadeia) { x = cadeia.x; z = cadeia.z; }
+  jogador.pos.set(x, alturaChao(x, z), z);
+  resolverColisao(jogador.pos, jogador.raio);
+  jogador.alvo = null;
+  alvoCam.set(jogador.pos.x, 0.9, jogador.pos.z);
+  ultimoEnvio = null;
+}
+
+function aoComando(c) {
+  if (c.tipo === 'teleporte' && c.dados) { teleportar(Number(c.dados.x), Number(c.dados.z)); aviso('Você foi teleportado pela equipe.'); }
+}
+
+function solto() {
+  jogador.pena = 0;
+  aviso('Você cumpriu a pena e está livre.');
+  if (cadeia) teleportar(cadeia.x + 4.5, cadeia.z);
+}
+
+let trocandoAvatar = false;
+async function trocarAvatar(personagem) {
+  if (trocandoAvatar) return; trocandoAvatar = true;
+  try {
+    const novo = await criarAvatar(ROBOS.includes(personagem) ? 'robos' : 'personagens', personagem);
+    const arma = clonar('arma_paintball'); novo.encaixarArma(arma); arma.visible = jogador.armado;
+    const velho = jogador.avatar;
+    scene.remove(velho.raiz); velho.raiz.remove(jogador.etiqueta);
+    novo.raiz.add(jogador.etiqueta);
+    novo.raiz.position.copy(jogador.pos); novo.raiz.rotation.y = jogador.yaw;
+    scene.add(novo.raiz); novo.tocar('idle');
+    jogador.avatar = novo; jogador.arma = arma;
+  } finally { trocandoAvatar = false; }
+}
+
+function aplicarPerfil(novo) {
+  const antigo = jogador.perfil;
+  jogador.perfil = { ...antigo, ...novo };
+  if (novo.banido) {
+    renderer.setAnimationLoop(null); conexao?.fechar();
+    $('bloqueio').textContent = 'Você foi banido.' + (novo.banido_motivo ? ' Motivo: ' + novo.banido_motivo : '');
+    $('bloqueio').classList.remove('oculto');
+    setTimeout(async () => { await rede.sair(); location.reload(); }, 5000);
+    return;
+  }
+  if (novo.personagem !== antigo.personagem) trocarAvatar(novo.personagem);
+  if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome) {
+    conexao?.rastrear({ nome: novo.nome, personagem: novo.personagem, cargo: novo.cargo });
+  }
+  if (novo.algemado !== antigo.algemado) {
+    jogador.algemado = novo.algemado; mostrarAlgemas(novo.algemado);
+    if (novo.algemado) {
+      if (jogador.armado) alternarArmaForcado(false);
+      aviso('Você foi algemado.');
+    } else aviso('As algemas foram retiradas.');
+  }
+  if (novo.pena_seg > 0 && !(antigo.pena_seg > 0)) {
+    jogador.pena = novo.pena_seg; jogador.sincPena = 10;
+    if (jogador.armado) alternarArmaForcado(false);
+    if (cadeia) teleportar(cadeia.x, cadeia.z);
+    aviso(`Você foi preso por ${formatarTempo(novo.pena_seg)}.`, 4);
+  } else if (!(novo.pena_seg > 0) && jogador.pena > 0) solto();
+  if (novo.moedas !== antigo.moedas) {
+    const dif = novo.moedas - antigo.moedas;
+    aviso(`${dif > 0 ? '+' : ''}${dif.toLocaleString('pt-BR')} moedas`);
+  }
+  atualizarInfo(); atualizarBotao();
+}
+function alternarArmaForcado(ligado) {
+  jogador.armado = ligado; jogador.arma.visible = ligado;
+  $('btTiro').classList.toggle('oculto', !ligado || !TOQUE); $('btArma').classList.toggle('ativo', ligado);
+}
+function formatarTempo(seg) { seg = Math.ceil(seg); return `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`; }
 
 function escapar(s) { return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
@@ -1003,6 +1147,7 @@ function atualizarJogador(dt) {
   if (teclas.has('d') || teclas.has('arrowright')) ix += 1;
   if (teclas.has('a') || teclas.has('arrowleft')) ix -= 1;
   if (joy.ativo) { ix = joy.x; iy = joy.y; }
+  if (j.algemado) { ix = 0; iy = 0; j.alvo = null; }
   const dir = new THREE.Vector3().addScaledVector(direita, ix).addScaledVector(frente, iy);
   let forca = Math.min(1, dir.length());
   if (forca > 0.01) { dir.normalize(); j.alvo = null; }
@@ -1031,12 +1176,22 @@ function atualizarJogador(dt) {
       else if (correr) av.tocar('run', { velocidade: 1 });
       else av.tocar('walk', { velocidade: vel / VELOCIDADE.andar });
     } else {
-      if (j.carregando) av.tocar('carregar_parado');
+      if (j.carregando || j.algemado) av.tocar('carregar_parado');
       else if (j.armado) av.tocar('mirar');
       else av.tocar('idle');
     }
   }
   resolverColisao(j.pos, j.raio);
+  if (j.pena > 0 && cadeia) {
+    const dx = j.pos.x - cadeia.x, dz = j.pos.z - cadeia.z, d = Math.hypot(dx, dz);
+    if (d > RAIO_CADEIA) { j.pos.x = cadeia.x + dx / d * RAIO_CADEIA; j.pos.z = cadeia.z + dz / d * RAIO_CADEIA; }
+    j.pena = Math.max(0, j.pena - dt);
+    j.sincPena -= dt;
+    if (j.sincPena <= 0) {
+      j.sincPena = 10;
+      rede.cumprirPena().then((r) => { if (typeof r === 'number') { j.pena = r; if (r <= 0) solto(); } }).catch(() => {});
+    }
+  }
   j.pos.y = THREE.MathUtils.lerp(j.pos.y, alturaChao(j.pos.x, j.pos.z), Math.min(1, dt * 12));
   av.raiz.position.copy(j.pos);
   av.raiz.rotation.y = j.yaw;
@@ -1045,6 +1200,17 @@ function atualizarJogador(dt) {
 
   // caixa entre as mãos
   if (j.carregando) posicionarCaixa(av, j.carregando, j.yaw);
+  if (j.algemas) posicionarAlgemas(av, j.algemas, j.yaw);
+}
+
+function posicionarAlgemas(av, obj, yaw) {
+  tmpA.setFromMatrixPosition(av.maoD.matrixWorld); tmpB.setFromMatrixPosition(av.maoE.matrixWorld);
+  obj.position.copy(tmpA.add(tmpB).multiplyScalar(0.5)); obj.position.y -= 0.02;
+  obj.rotation.set(0, yaw + Math.PI / 2, 0);
+}
+function mostrarAlgemas(ligado) {
+  if (ligado && !jogador.algemas) { jogador.algemas = clonar('algemas'); jogador.algemas.scale.setScalar(1.4); scene.add(jogador.algemas); }
+  if (!ligado && jogador.algemas) { scene.remove(jogador.algemas); jogador.algemas = null; }
 }
 
 function posicionarCaixa(av, caixa, yaw) {
@@ -1087,6 +1253,11 @@ function atualizarHUD(dt) {
   else if (caixaProxima() && !jogador.armado) dica = TOQUE ? 'Toque em Pegar' : 'E para pegar a caixa';
   const el = $('dica'); el.textContent = dica; el.classList.toggle('oculto', !dica || TOQUE);
   if (TOQUE) $('btAcao').textContent = pertoContratante() ? 'Falar' : jogador.carregando ? 'Soltar' : 'Pegar';
+  const bl = $('bloqueio');
+  if (jogador.perfil?.banido) { /* mensagem já exibida */ }
+  else if (jogador.pena > 0) { bl.textContent = `Preso: ${formatarTempo(jogador.pena)}`; bl.classList.remove('oculto'); }
+  else if (jogador.algemado) { bl.textContent = 'Algemado'; bl.classList.remove('oculto'); }
+  else bl.classList.add('oculto');
   if (avisoTimer > 0) { avisoTimer -= dt; if (avisoTimer <= 0) $('aviso').style.opacity = 0; }
   atualizarPlacas();
   if (contratante?.excl) contratante.excl.position.y = 3.0 + Math.sin(performance.now() / 300) * 0.12;

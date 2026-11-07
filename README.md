@@ -28,8 +28,19 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 2**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql`.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
+
+## Painel da equipe
+
+O botão **🛡 Painel** aparece só para o administrador e os moderadores. Todas as ações são conferidas no banco (`supabase/02_painel_admin.sql`), então um jogo modificado não consegue usar poderes.
+
+- **Jogadores:** buscar, ver quem está online, ir até um jogador, trazer até você, dar ou tirar moedas, algemar, prender (a pena só corre com o jogador online), soltar, banir e desbanir.
+- **Eu:** modo imortal, teleporte para pontos da cidade e troca de skin (robôs inclusos) de graça.
+- **Equipe** (só admin): lista de moderadores, com poderes e salário. Para nomear, abra o jogador e toque em **Tornar moderador**.
+- **Histórico** (só admin): tudo o que a equipe fez.
+
+Regras: algemas e prisão não funcionam na equipe, o admin não pode ser banido, moderadores só agem sobre jogadores e só com os poderes que o admin marcou, e o salário do moderador cai uma vez a cada 24 horas, ao entrar no jogo.
 
 ## Controles no PC
 
@@ -77,6 +88,7 @@ index.html              telas, HUD e estilos
 js/config.js            personagens, ruas, layout da cidade, velocidades
 js/main.js              motor do jogo (Three.js 0.170 via CDN)
 js/rede.js              contas, perfis e tempo real (Supabase)
+js/painel.js            painel da equipe
 supabase/               SQL do banco de dados
 assets/personagens/     17 personagens com as 13 animações
 assets/robos/           robôs (polícia, admin, moderadores, Contratante)
