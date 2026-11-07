@@ -1,6 +1,6 @@
 # Fator RP
 
-MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 3**, com trabalho, produção, loja, mochila e fome, além de contas e multiplayer.
+MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 4**, com empresas dos jogadores, funcionários, pedidos de frete, caminhões e missões do Contratante.
 
 ## O que já funciona
 
@@ -28,7 +28,7 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 3**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` e `supabase/03_economia.sql`, nessa ordem.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql` e `supabase/04_logistica.sql`, nessa ordem.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
 
 ## Etapa 3: trabalho e produção
@@ -43,6 +43,17 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 3**, co
 - **Mochila (tecla M):** itens guardados no banco; chocolate enche 60% da fome e cereal 35%.
 - **Fome:** esvazia em 1 hora de jogo; vazia, o personagem anda 40% mais devagar.
 - Valores ajustáveis na função `regra()` e na tabela `precos` (`supabase/03_economia.sql`).
+
+## Etapa 4: logística
+
+- **10 lotes à venda** (20.000 cada), com placa "Lote à venda". Quem compra escolhe nome e tipo: fábrica (chocolate ou remédio) ou transportadora.
+- **Caixa da empresa:** o dono deposita e saca; os pagamentos saem dele.
+- **Funcionários:** o dono contrata pelo nome e define o pagamento por tarefa (0 a 500). Um jogador trabalha em uma empresa por vez.
+- **Fábrica:** os membros embalam na bancada ao lado do prédio; cada caixa vai para o estoque (1 tarefa a cada 25 s por jogador).
+- **Pedido de frete:** o dono da fábrica escolhe transportadora, quantidade e frete por caixa. O mercado paga 32 (chocolate) ou 60 (remédio) por caixa: a fábrica recebe o valor menos o frete; a transportadora recebe o frete.
+- **Entrega à mão:** funcionário da transportadora retira a caixa no depósito (portão) da fábrica e leva ao destino (mínimo 15 s).
+- **Caminhão** (15.000, até 5 por transportadora, 20 caixas): sai sozinho, busca na fábrica, entrega e volta. O horário de chegada é do servidor; todos veem o caminhão nas ruas.
+- **Contratante:** até 3 missões abertas pagando o dobro do mercado, por 40 minutos. O dono de fábrica aceita e escolhe a transportadora.
 
 ## Painel da equipe
 
@@ -103,6 +114,7 @@ js/main.js              motor do jogo (Three.js 0.170 via CDN)
 js/rede.js              contas, perfis e tempo real (Supabase)
 js/painel.js            painel da equipe
 js/loja.js              loja e mochila
+js/empresa.js           empresas, pedidos, caminhões e missões
 supabase/               SQL do banco de dados
 assets/personagens/     17 personagens com as 13 animações
 assets/robos/           robôs (polícia, admin, moderadores, Contratante)

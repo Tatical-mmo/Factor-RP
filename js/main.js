@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { FERRO_VELHOS, FABRICAS, PRODUTOS, FOME_POR_SEGUNDO } from './config.js';
+import { FERRO_VELHOS, FABRICAS, PRODUTOS, FOME_POR_SEGUNDO, LOTES_VENDA, DESTINOS } from './config.js';
+import { iniciarEmpresa, abrirCompra, abrirMissoes, atualizar as atualizarJanelaEmpresa } from './empresa.js';
 import { iniciarLoja, abrir as abrirJanela, recarregarInventario } from './loja.js';
 import { PERSONAGENS, ROBOS, MODELOS, CIDADE, RUAS_HORIZONTAIS, RUAS_VERTICAIS, QUARTEIROES_ESPECIAIS, VELOCIDADE, CONTROLES_PC } from './config.js';
 
@@ -359,7 +360,7 @@ function colocarVeiculo(nome, x, z, rot) {
 }
 
 let contratante = null;
-const pontos = { bancadas: [], docas: [], lojas: [], sucata: [] };
+const pontos = { bancadas: [], docas: [], lojas: [], sucata: [], lotes: [], bancadasEmp: [], depositos: [] };
 function pontoProximo(lista, raio) {
   let melhor = null, dm = raio;
   for (const p of lista) { const d = Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z); if (d < dm) { dm = d; melhor = p; } }
@@ -448,6 +449,7 @@ function montarQuarteiroes() {
     const c = L / 2;
     const lote = { SO: [x - c, z + c], SE: [x + c, z + c], NE: [x + c, z - c], NO: [x - c, z - c] };
     for (const q of ['SO', 'SE', 'NE', 'NO']) {
+      if (LOTES_VENDA.some((l) => l.q === `${cx},${cz}` && l.lote === q)) continue;   // lote à venda (etapa 4)
       const tipo = lotes[q]; const [lx, lz] = lote[q];
       if (tipo === 'arvores') { colocarArvore(lx - 4 + rng() * 2, lz - 3 + rng() * 2); colocarArvore(lx + 4 - rng() * 2, lz + 3 - rng() * 2, 0.9); continue; }
       if (tipo === 'patio_caixas') {
@@ -533,9 +535,26 @@ function prepararClipes(anims) {
   }
   const sub = THREE.AnimationUtils.subclip;
   if (clipes.shoot) clipes.mirar = sub(clipes.shoot, 'mirar', 78, 117, 30);
-  if (clipes.carry_walk) clipes.carregar_parado = sub(clipes.carry_walk, 'carregar_parado', 4, 9, 30);
+  // parado segurando: braços e tronco congelados na pose de carregar, pernas da animação parada
+  if (clipes.carry_walk && clipes.idle) clipes.carregar_parado = poseSuperior(clipes.idle, clipes.carry_walk, 0.2, 'carregar_parado');
   if (clipes.pickup) clipes.pegar = sub(clipes.pickup, 'pegar', 21, 72, 30);
   return clipes;
+}
+
+const OSSOS_SUPERIORES = /Spine|Neck|Head|Shoulder|Arm|Hand/;
+function poseSuperior(base, fonte, t, nome) {
+  const tracks = base.tracks.map((tr) => {
+    const osso = tr.name.split('.')[0];
+    if (tr.name.endsWith('.quaternion') && OSSOS_SUPERIORES.test(osso)) {
+      const src = fonte.tracks.find((x) => x.name === tr.name);
+      if (src) {
+        const v = Array.from(src.createInterpolant().evaluate(t));
+        return new THREE.QuaternionKeyframeTrack(tr.name, [0, base.duration], [...v, ...v]);
+      }
+    }
+    return tr.clone();
+  });
+  return new THREE.AnimationClip(nome, base.duration, tracks);
 }
 
 class Avatar {
@@ -617,6 +636,10 @@ function resolverColisao(p, raio) {
   if (caminhaoMovel) {
     const dx = p.x - caminhaoMovel.obj.position.x, dz = p.z - caminhaoMovel.obj.position.z, r = raio + 2.3, d2 = dx * dx + dz * dz;
     if (d2 < r * r && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = caminhaoMovel.obj.position.x + dx / d * r; p.z = caminhaoMovel.obj.position.z + dz / d * r; }
+  }
+  for (const c of caminhoes.values()) {
+    const q = c.obj.position, dx = p.x - q.x, dz = p.z - q.z, rr = raio + 2.2, d2 = dx * dx + dz * dz;
+    if (d2 < rr * rr && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = q.x + dx / d * rr; p.z = q.z + dz / d * rr; }
   }
   for (const r of remotos.values()) {
     if (!r.av?.raiz.visible) continue;
@@ -731,7 +754,8 @@ function livre() {
 
 function acaoContexto() {
   if (jogador.trava > 0 || !livre()) return;
-  if (pertoContratante()) { aviso('Contratante: "Ainda não tenho cargas para você. Volte quando as transportadoras abrirem."', 4); return; }
+  if (jogador.carregando?.userData.pedido) { acaoCaixaPedido(); return; }
+  if (pertoContratante()) { abrirMissoes(); return; }
   if (pontoProximo(pontos.lojas, 3.2)) { abrirJanela('loja'); return; }
   if (jogador.carregando) {
     if (pontoProximo(pontos.docas, 3.4)) { entregar(); return; }
@@ -741,6 +765,12 @@ function acaoContexto() {
   if (c) { if (jogador.armado) { aviso('Guarde a arma para carregar caixas.'); return; } pegarOuSoltar(c); return; }
   const b = pontoProximo(pontos.bancadas, 2.6);
   if (b) { if (jogador.armado) { aviso('Guarde a arma para trabalhar.'); return; } embalar(b); return; }
+  const be = pontoProximo(pontos.bancadasEmp, 2.6);
+  if (be) { if (jogador.armado) { aviso('Guarde a arma para trabalhar.'); return; } embalarFabrica(be); return; }
+  const dep = pontoProximo(pontos.depositos, 3);
+  if (dep) { retirarDoDeposito(dep); return; }
+  const lt = pontoProximo(pontos.lotes, 4);
+  if (lt) { abrirCompra(lt.lote); return; }
   if (pontoProximo(pontos.sucata, 4)) { if (jogador.armado) { aviso('Guarde a arma para trabalhar.'); return; } coletar(); }
 }
 
@@ -1053,6 +1083,8 @@ async function iniciarJogo(perfil) {
   conectarMultiplayer(perfil);
   rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando, inventario: recarregarInventario });
   iniciarLoja({ perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); } });
+  iniciarEmpresa({ perfil: () => jogador.perfil, agora: agoraServidor, definirMinhaEmpresa: (id) => { minhaEmpresa = id; } });
+  iniciarLogistica();
   iniciarPainel({
     perfil: () => jogador.perfil,
     online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta.nome })),
@@ -1172,6 +1204,280 @@ async function salvarAgora() {
   try { await rede.salvarPosicao(jogador.perfil.id, Math.round(jogador.pos.x * 10) / 10, Math.round(jogador.pos.z * 10) / 10, jogador.fome); } catch { /* tenta de novo depois */ }
 }
 
+// ================================================================= LOGÍSTICA (etapa 4)
+const empresas = new Map();        // id -> linha da tabela empresas
+const visuaisLote = new Map();     // lote -> { objs: [], predio }
+const caminhoes = new Map();       // id -> { obj, d, rotaCache }
+let minhaEmpresa = null;           // empresa onde trabalho
+let offsetServidor = 0;            // ms entre o relógio do servidor e o do aparelho
+const agoraServidor = () => Date.now() + offsetServidor;
+const LOTE_L = (QB - CW * 2) / 2;  // 19 m
+
+function centroLote(l) {
+  const [cx, cz] = l.q.split(',').map(Number);
+  const c = LOTE_L / 2, x = quadC(cx), z = quadC(cz);
+  return { x: l.lote === 'SO' ? x - c : x + c, z: l.lote === 'NE' || l.lote === 'NO' ? z - c : z + c };
+}
+
+function limparLote(id) {
+  const v = visuaisLote.get(id); if (!v) return;
+  for (const o of v.objs) scene.remove(o);
+  if (v.predio) {
+    const i = predios.indexOf(v.predio); if (i >= 0) predios.splice(i, 1);
+  }
+  for (const c of v.colisores || []) { const i = colisores.indexOf(c); if (i >= 0) colisores.splice(i, 1); }
+  for (const it of v.mapa || []) { const i = itensMapa.indexOf(it); if (i >= 0) itensMapa.splice(i, 1); }
+  for (const k of ['lotes', 'bancadasEmp', 'depositos']) pontos[k] = pontos[k].filter((p) => p.lote !== id);
+  visuaisLote.delete(id);
+}
+
+function desenharLote(l) {
+  limparLote(l.id);
+  const e = [...empresas.values()].find((x) => x.lote === l.id);
+  const { x, z } = centroLote(l);
+  const v = { objs: [], colisores: [], mapa: [] };
+  visuaisLote.set(l.id, v);
+  if (!e) {
+    const chao = new THREE.Mesh(new THREE.PlaneGeometry(LOTE_L - 1, LOTE_L - 1), new THREE.MeshStandardMaterial({ color: '#9b8766', roughness: 1 }));
+    chao.rotation.x = -Math.PI / 2; chao.position.set(x, 0.19, z); chao.receiveShadow = true; scene.add(chao); v.objs.push(chao);
+    const placa = textoSprite('Lote à venda · 20.000', { escala: 0.75, fundo: 'rgba(30,90,50,.9)' }); placa.position.set(x, 2.4, z + 6.5); scene.add(placa); v.objs.push(placa);
+    pontos.lotes.push({ x, z: z + 7.5, lote: l.id });
+    return;
+  }
+  const modelo = e.tipo === 'fabrica' ? 'empresa' : 'transportadora';
+  const obj = colocarPredio(modelo, x, z, 0);
+  const b0 = new THREE.Box3().setFromObject(obj);
+  obj.position.z += (z + LOTE_L / 2 - 0.4) - b0.max.z; obj.updateMatrixWorld(true);
+  // colocarPredio registrou colisor e mapa com a posição antiga: refaz
+  const pr = predios[predios.length - 1];
+  colisores.splice(colisores.length - 1, 1); itensMapa.splice(itensMapa.length - 1, 1);
+  pr.caixa = addColisorCaixa(obj, 0.8);
+  const it = { tipo: modelo, x0: pr.caixa.min.x, x1: pr.caixa.max.x, z0: pr.caixa.min.z, z1: pr.caixa.max.z };
+  itensMapa.push(it);
+  v.objs.push(obj); v.predio = pr; v.colisores.push(colisores[colisores.length - 1]); v.mapa.push(it);
+  const nome = textoSprite(e.nome, { escala: 1, cor: '#ffd9a0', fundo: 'rgba(20,24,34,.85)' });
+  nome.position.set(x, pr.caixa.max.y + 1.2, z); scene.add(nome); v.objs.push(nome);
+  if (e.tipo === 'fabrica') {
+    const bx = x - LOTE_L / 2 + 1.3, bz = z + 4;
+    const banc = clonar('bancada'); banc.position.set(bx, 0.18, bz); scene.add(banc); banc.updateMatrixWorld(true);
+    v.objs.push(banc); v.colisores.push(addColisorCaixa(banc, 0.1) && colisores[colisores.length - 1]);
+    pontos.bancadasEmp.push({ x: bx, z: bz, empresa: e.id, lote: l.id });
+    const est = textoSprite(`${PRODUTOS[e.produto].nome} · estoque ${e.estoque}`, { escala: 0.6, fundo: 'rgba(60,40,15,.85)', cor: '#ffd9a0' });
+    est.position.set(bx, 2.4, bz); scene.add(est); v.objs.push(est);
+    pontos.depositos.push({ x: l.portao.x, z: l.portao.z - 1.8, empresa: e.id, lote: l.id });
+    const dep = textoSprite('Depósito', { escala: 0.55, fundo: 'rgba(120,80,10,.9)' }); dep.position.set(l.portao.x, 2.2, l.portao.z - 1.8); scene.add(dep); v.objs.push(dep);
+  } else {
+    const faixa = new THREE.Mesh(new THREE.PlaneGeometry(6, 2.4), new THREE.MeshStandardMaterial({ color: '#e3b23c', roughness: 0.8, transparent: true, opacity: 0.85 }));
+    faixa.rotation.x = -Math.PI / 2; faixa.position.set(l.portao.x, 0.19, l.portao.z - 1.6); scene.add(faixa); v.objs.push(faixa);
+  }
+}
+
+function redesenharLotes() { for (const l of LOTES_VENDA) desenharLote(l); desenharFundoMapa(); }
+
+// ---------------------------------------------------------------- caminhões dos jogadores
+// rota pela grade de ruas: sai do ponto, entra na rua mais próxima, segue em L pelos cruzamentos
+function rotaGrade(a, b) {
+  const R = []; for (let i = 0; i <= N; i++) R.push(ruaC(i));
+  const prox = (v) => R.reduce((m, r) => (Math.abs(r - v) < Math.abs(m - v) ? r : m), R[0]);
+  const entrar = (p) => {
+    const rz = prox(p.z), rx = prox(p.x);
+    return Math.abs(p.z - rz) <= Math.abs(p.x - rx)
+      ? { x: THREE.MathUtils.clamp(p.x, -METADE, METADE), z: rz, h: true }
+      : { x: rx, z: THREE.MathUtils.clamp(p.z, -METADE, METADE), h: false };
+  };
+  const ea = entrar(a), eb = entrar(b);
+  let meio;
+  if (ea.h && eb.h) meio = ea.z === eb.z ? [] : (() => { const x = prox((ea.x + eb.x) / 2); return [{ x, z: ea.z }, { x, z: eb.z }]; })();
+  else if (!ea.h && !eb.h) meio = ea.x === eb.x ? [] : (() => { const z = prox((ea.z + eb.z) / 2); return [{ x: ea.x, z }, { x: eb.x, z }]; })();
+  else if (ea.h) meio = [{ x: eb.x, z: ea.z }];
+  else meio = [{ x: ea.x, z: eb.z }];
+  const out = [];
+  for (const p of [a, ea, ...meio, eb, b]) { const u = out[out.length - 1]; if (!u || Math.hypot(u.x - p.x, u.z - p.z) > 0.05) out.push({ x: p.x, z: p.z }); }
+  // mão direita: desloca o caminho 2,4 m para a direita (com esquinas em meia-esquadria)
+  const W = 2.4;
+  const normal = (p, q) => { const dx = q.x - p.x, dz = q.z - p.z, d = Math.hypot(dx, dz) || 1; return { x: -dz / d, z: dx / d }; };
+  return out.map((p, i) => {
+    const nIn = i > 0 ? normal(out[i - 1], p) : null, nOut = i < out.length - 1 ? normal(p, out[i + 1]) : null;
+    const n1 = nIn || nOut, n2 = nOut || nIn;
+    let mx = n1.x + n2.x, mz = n1.z + n2.z; const ml = Math.hypot(mx, mz);
+    if (ml < 1e-6) return { x: p.x + n1.x * W, z: p.z + n1.z * W };
+    mx /= ml; mz /= ml;
+    const k = W / Math.max(0.5, mx * n1.x + mz * n1.z);
+    return { x: p.x + mx * k, z: p.z + mz * k };
+  });
+}
+function ponto(pts, f) {
+  let total = 0; const seg = [];
+  for (let i = 0; i < pts.length - 1; i++) { const l = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].z - pts[i].z); seg.push(l); total += l; }
+  let alvo = THREE.MathUtils.clamp(f, 0, 1) * total;
+  for (let i = 0; i < seg.length; i++) {
+    if (alvo <= seg[i] || i === seg.length - 1) {
+      const t = seg[i] ? Math.min(1, alvo / seg[i]) : 1;
+      const a = pts[i], b = pts[i + 1];
+      return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, ang: Math.atan2(b.x - a.x, b.z - a.z) };
+    }
+    alvo -= seg[i];
+  }
+  const u = pts[pts.length - 1]; return { x: u.x, z: u.z, ang: 0 };
+}
+function pernas(c) {
+  const r = c.d.rota; if (!r) return null;
+  if (c.rotaCache?.id === c.d.partida) return c.rotaCache.pernas;
+  const T = { x: r.t[0], z: r.t[1] }, F = { x: r.f[0], z: r.f[1] }, D = { x: r.d[0], z: r.d[1] };
+  const p = [
+    { pts: rotaGrade(T, F), dur: r.d1 }, { parado: true, dur: r.carga },
+    { pts: rotaGrade(F, D), dur: r.d2 }, { parado: true, dur: r.descarga },
+    { pts: rotaGrade(D, T), dur: r.d3 },
+  ];
+  c.rotaCache = { id: c.d.partida, pernas: p };
+  return p;
+}
+function posicaoEstacionado(c) {
+  const e = empresas.get(c.d.empresa); const l = e && LOTES_VENDA.find((x) => x.id === e.lote); if (!l) return null;
+  const meus = [...caminhoes.values()].filter((k) => k.d.empresa === c.d.empresa && k.d.status === 'parado').map((k) => k.d.id).sort((a, b) => a - b);
+  const i = Math.max(0, meus.indexOf(c.d.id));
+  return { x: l.portao.x - 6 + i * 7.5, z: l.portao.z + 2.6, ang: Math.PI / 2 };
+}
+function sincronizarCaminhao(d) {
+  let c = caminhoes.get(d.id);
+  if (!c) { const obj = clonar('caminhao'); scene.add(obj); c = { obj, d }; caminhoes.set(d.id, c); }
+  c.d = d;
+}
+let ultimoProcessar = 0;
+function atualizarCaminhoes(dt) {
+  const agora = agoraServidor();
+  let atrasado = false;
+  for (const c of caminhoes.values()) {
+    let alvo = null;
+    if (c.d.status !== 'parado' && c.d.partida) {
+      const p = pernas(c);
+      let t = (agora - Date.parse(c.d.partida)) / 1000, anterior = null;
+      for (const perna of p || []) {
+        if (t <= perna.dur) {
+          if (perna.parado) { const u = anterior.pts; alvo = { ...ponto(u, 1), parado: true }; }
+          else alvo = ponto(perna.pts, t / perna.dur);
+          break;
+        }
+        if (!perna.parado) anterior = perna;
+        t -= perna.dur;
+      }
+      if (!alvo && p) { const u = p[p.length - 1].pts; alvo = { ...u[u.length - 1], ang: c.obj.rotation.y }; }
+      if ((c.d.status === 'em_rota' && agora > Date.parse(c.d.chegada) + 1500) || (c.d.status === 'voltando' && agora > Date.parse(c.d.retorno) + 1500)) atrasado = true;
+    }
+    if (!alvo) alvo = posicaoEstacionado(c);
+    if (!alvo) continue;
+    if (!c.posicionado) { c.obj.position.set(alvo.x, 0.02, alvo.z); c.obj.rotation.y = alvo.ang || 0; c.posicionado = true; }
+    c.obj.position.x += (alvo.x - c.obj.position.x) * Math.min(1, dt * 8);
+    c.obj.position.z += (alvo.z - c.obj.position.z) * Math.min(1, dt * 8);
+    if (alvo.ang !== undefined) c.obj.rotation.y = suavizarAngulo(c.obj.rotation.y, alvo.ang, dt * 6);
+  }
+  // viagens vencidas: pede ao banco para concluir (qualquer jogador pode; o banco decide)
+  if (atrasado && performance.now() - ultimoProcessar > 8000) {
+    ultimoProcessar = performance.now();
+    rede.logistica.processar().catch(() => {});
+  }
+}
+
+async function iniciarLogistica() {
+  try {
+    const t0 = Date.now(); const srv = await rede.logistica.agora(); const t1 = Date.now();
+    offsetServidor = Date.parse(srv) - (t0 + t1) / 2;
+  } catch { offsetServidor = 0; }
+  try {
+    const [lista, frota, minha] = await Promise.all([rede.listarEmpresas(), rede.listarCaminhoes(), rede.minhaEmpresaId(jogador.perfil.id)]);
+    for (const e of lista) empresas.set(e.id, e);
+    for (const c of frota) sincronizarCaminhao(c);
+    minhaEmpresa = minha;
+  } catch (e) { console.warn('logística', e); }
+  redesenharLotes();
+  rede.escutarLogistica({
+    empresa: ({ eventType, new: n }) => {
+      if (eventType === 'DELETE') return;
+      const antes = empresas.get(n.id);
+      empresas.set(n.id, { ...antes, ...n });
+      if (!antes || antes.estoque !== n.estoque || antes.nome !== n.nome) {
+        const l = LOTES_VENDA.find((x) => x.id === n.lote); if (l) { desenharLote(l); if (!antes) desenharFundoMapa(); }
+      }
+      atualizarJanelaEmpresa();
+    },
+    caminhao: ({ eventType, new: n, old: o }) => {
+      if (eventType === 'DELETE') { const c = caminhoes.get(o.id); if (c) { scene.remove(c.obj); caminhoes.delete(o.id); } return; }
+      sincronizarCaminhao(n);
+    },
+    membro: ({ eventType, new: n, old: o }) => {
+      if (eventType === 'DELETE' && o.jogador === jogador.perfil.id) minhaEmpresa = null;
+      else if (n?.jogador === jogador.perfil.id) minhaEmpresa = n.empresa;
+      atualizarJanelaEmpresa();
+    },
+    pedido: () => atualizarJanelaEmpresa(),
+  });
+}
+
+// ---------------------------------------------------------------- tarefas das empresas dos jogadores
+async function embalarFabrica(b) {
+  if (minhaEmpresa !== b.empresa) { aviso(`Bancada da ${empresas.get(b.empresa)?.nome || 'empresa'}. Peça emprego ao dono para trabalhar aqui.`, 3.5); return; }
+  if (ocupado) return; ocupado = true;
+  try {
+    const pago = await rede.logistica.embalar();
+    virarPara(b.x, b.z); jogador.alvo = null;
+    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 0.6, fade: 0.15 });
+    jogador.trava = 2.8;
+    jogador.eventos.push({ t: 2.7, fn: () => aviso(pago > 0 ? `Caixa no estoque! +${pago} moedas` : 'Caixa embalada e guardada no estoque.') });
+  } catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
+}
+
+async function retirarDoDeposito(dep) {
+  if (ocupado) return; ocupado = true;
+  try {
+    const minha = empresas.get(minhaEmpresa);
+    if (!minha || minha.tipo !== 'transportadora') { aviso('Só funcionários de transportadora retiram cargas aqui.'); return; }
+    const aceitos = await rede.pedidosAceitosDe(minha.id);
+    const pd = aceitos.find((p) => p.fabrica === dep.empresa && p.qtd - p.entregues - p.em_transito > 0);
+    if (!pd) { aviso('Sua transportadora não tem pedido aceito desta fábrica.', 3.5); return; }
+    const produto = await rede.logistica.retirar(pd.id);
+    virarPara(dep.x, dep.z); jogador.alvo = null;
+    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 1.5, fade: 0.15 });
+    jogador.trava = 1.1;
+    jogador.eventos.push({ t: 0.7, fn: () => {
+      const cx = criarCaixa(produto); cx.userData.pedido = { id: pd.id, destino: pd.destino };
+      jogador.carregando = cx;
+      aviso(`Leve a caixa até: ${DESTINOS[pd.destino]?.nome || pd.destino}.`, 4);
+    } });
+  } catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
+}
+
+function pertoDestino(dest) {
+  const d = DESTINOS[dest]; if (!d) return false;
+  if (dest === 'loja') return Math.hypot(d.x - jogador.pos.x, d.z - jogador.pos.z) < 6 || !!pontoProximo(pontos.lojas.filter((l) => Math.hypot(l.x - d.x, l.z - d.z) < 8), 3.5);
+  return Math.hypot(d.x - jogador.pos.x, d.z - jogador.pos.z) < 6 || pertoContratante();
+}
+
+let confirmaDesistir = 0;
+async function acaoCaixaPedido() {
+  const cx = jogador.carregando, pd = cx.userData.pedido;
+  if (pertoDestino(pd.destino)) {
+    if (ocupado) return; ocupado = true;
+    try {
+      const pago = await rede.logistica.entregar();
+      jogador.carregando = null; scene.remove(cx);
+      aviso(pago > 0 ? `Carga entregue! +${pago} moedas` : 'Carga entregue!');
+    } catch (e) { aviso(e.message, 3.5); }
+    finally { ocupado = false; }
+    return;
+  }
+  if (performance.now() - confirmaDesistir < 3000) {
+    confirmaDesistir = 0;
+    try { await rede.logistica.desistir(); } catch { /* volta sozinha em 10 min */ }
+    jogador.carregando = null; scene.remove(cx);
+    aviso('Você largou a carga; ela voltou para o pedido.');
+    return;
+  }
+  confirmaDesistir = performance.now();
+  aviso(`Leve até: ${DESTINOS[pd.destino]?.nome}. Aperte de novo para largar a carga.`, 3);
+}
+
 // ================================================================= MUDANÇAS VINDAS DO BANCO
 const LOCAIS = [];
 function montarLocais() {
@@ -1198,6 +1504,7 @@ function teleportar(x, z) {
 
 function aoComando(c) {
   if (c.tipo === 'teleporte' && c.dados) { teleportar(Number(c.dados.x), Number(c.dados.z)); aviso('Você foi teleportado pela equipe.'); }
+  if (c.tipo === 'aviso' && c.dados?.texto) { aviso(c.dados.texto, 5); atualizarJanelaEmpresa(); }
 }
 
 function solto() {
@@ -1400,7 +1707,9 @@ function atualizarHUD(dt) {
 
 // texto da dica e do botão de ação conforme o que está perto
 function contexto() {
-  if (pertoContratante()) return ['falar com o Contratante', 'Falar'];
+  const pd = jogador.carregando?.userData.pedido;
+  if (pd) return pertoDestino(pd.destino) ? ['entregar a carga', 'Entregar'] : [`levar a carga até: ${DESTINOS[pd.destino]?.nome}`, 'Largar'];
+  if (pertoContratante()) return ['ver missões do Contratante', 'Falar'];
   if (pontoProximo(pontos.lojas, 3.2)) return ['abrir a loja', 'Loja'];
   if (jogador.carregando) {
     if (pontoProximo(pontos.docas, 3.4)) return jogador.carregando.userData.tipo ? ['entregar a caixa', 'Entregar'] : ['caixa vazia: embale na bancada', 'Soltar'];
@@ -1411,6 +1720,11 @@ function contexto() {
   const b = pontoProximo(pontos.bancadas, 2.6);
   if (b) return [`embalar ${PRODUTOS[b.produto].nome.toLowerCase()}`, 'Embalar'];
   if (pontoProximo(pontos.sucata, 4)) return ['coletar sucata', 'Coletar'];
+  const be = pontoProximo(pontos.bancadasEmp, 2.6);
+  if (be) return [`embalar na ${empresas.get(be.empresa)?.nome || 'fábrica'}`, 'Embalar'];
+  const dep = pontoProximo(pontos.depositos, 3);
+  if (dep) return [`retirar carga da ${empresas.get(dep.empresa)?.nome || 'fábrica'}`, 'Retirar'];
+  if (pontoProximo(pontos.lotes, 4)) return ['comprar este lote', 'Comprar'];
   return ['', ''];
 }
 
@@ -1434,6 +1748,7 @@ function quadro() {
   const dt = Math.min(relogio.getDelta(), 0.05);
   atualizarJogador(dt);
   atualizarCaminhao(dt);
+  atualizarCaminhoes(dt);
   atualizarNPCs(dt);
   atualizarRemotos(dt);
   enviarEstado(dt);

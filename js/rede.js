@@ -132,6 +132,38 @@ function traduzirRpc(m) {
     'isso nao se come': 'Isso não se come.',
     'quantidade invalida': 'Quantidade inválida.',
     'produto invalido': 'Produto inválido.',
+    'saia da empresa atual antes': 'Saia da empresa em que trabalha antes de fundar outra.',
+    'lote invalido': 'Lote inválido.',
+    'lote ja vendido': 'Esse lote já foi vendido.',
+    'tipo invalido': 'Tipo de empresa inválido.',
+    'nome invalido': 'Nome inválido (3 a 24 letras, números, espaço, . & -).',
+    'nome de empresa em uso': 'Já existe uma empresa com esse nome.',
+    'voce nao e dono de empresa': 'Você não é dono de empresa.',
+    'sua empresa nao e desse tipo': 'Sua empresa não é desse tipo.',
+    'valor invalido': 'Valor inválido.',
+    'caixa insuficiente': 'O caixa da empresa não tem saldo suficiente.',
+    'jogador banido': 'Esse jogador está banido.',
+    'jogador ja trabalha em uma empresa': 'Esse jogador já trabalha em uma empresa.',
+    'limite de funcionarios': 'Limite de 20 funcionários.',
+    'o dono nao pode se demitir': 'O dono não pode se demitir.',
+    'jogador nao e seu funcionario': 'Esse jogador não é seu funcionário.',
+    'o dono nao pode sair da propria empresa': 'O dono não pode sair da própria empresa.',
+    'voce nao trabalha em uma fabrica': 'Você não trabalha nesta fábrica.',
+    'a empresa esta sem caixa para pagar': 'A empresa está sem caixa para pagar. Avise o dono.',
+    'transportadora invalida': 'Transportadora inválida.',
+    'frete invalido': 'Frete inválido (de 0 até o valor da caixa).',
+    'estoque insuficiente': 'Estoque insuficiente.',
+    'pedido indisponivel': 'Esse pedido não está mais disponível.',
+    'ha caixas a caminho': 'Há caixas a caminho; espere chegarem.',
+    'voce nao trabalha em uma transportadora': 'Você não trabalha em uma transportadora.',
+    'voce ja esta carregando uma caixa': 'Você já está carregando uma caixa.',
+    'todas as caixas ja foram retiradas': 'Todas as caixas desse pedido já saíram.',
+    'voce nao esta carregando caixa de pedido': 'Você não está carregando caixa de pedido.',
+    'limite de caminhoes': 'Limite de 5 caminhões por empresa.',
+    'caminhao invalido': 'Caminhão inválido.',
+    'caminhao em viagem': 'Esse caminhão está em viagem.',
+    'missao indisponivel': 'Essa missão não está mais disponível.',
+    'sua fabrica nao produz esse item': 'Sua fábrica não produz esse item.',
   };
   const espera = /^aguarde (\d+) s$/.exec(m);
   if (espera) return `Aguarde ${espera[1]} s.`;
@@ -188,4 +220,53 @@ export async function carregarInventario(id) {
   if (error) throw new Error(error.message);
   const inv = {}; for (const r of data) inv[r.item] = r.qtd;
   return inv;
+}
+
+// ---------------------------------------------------------------- logística (etapa 4)
+export const logistica = {
+  comprarLote: (lote, nome, tipo, produto) => rpc('comprar_lote', { p_lote: lote, p_nome: nome, p_tipo: tipo, p_produto: produto }),
+  depositar: (valor) => rpc('empresa_depositar', { valor }),
+  sacar: (valor) => rpc('empresa_sacar', { valor }),
+  pagamento: (valor) => rpc('empresa_pagamento', { valor }),
+  contratar: (nome) => rpc('contratar', { p_nome: nome }),
+  demitir: (jogador) => rpc('demitir', { p_jogador: jogador }),
+  sair: () => rpc('sair_empresa'),
+  embalar: () => rpc('embalar_fabrica'),
+  criarPedido: (transportadora, qtd, frete) => rpc('criar_pedido', { p_transportadora: transportadora, p_qtd: qtd, p_frete: frete }),
+  responder: (pedido, aceitar) => rpc('responder_pedido', { p_pedido: pedido, aceitar }),
+  cancelar: (pedido) => rpc('cancelar_pedido', { p_pedido: pedido }),
+  retirar: (pedido) => rpc('retirar_caixa', { p_pedido: pedido }),
+  entregar: () => rpc('entregar_caixa'),
+  desistir: () => rpc('desistir_caixa'),
+  comprarCaminhao: () => rpc('comprar_caminhao'),
+  despachar: (caminhao, pedido) => rpc('despachar_caminhao', { p_caminhao: caminhao, p_pedido: pedido }),
+  processar: () => rpc('processar_caminhoes'),
+  missoes: () => rpc('listar_missoes'),
+  aceitarMissao: (missao, transportadora, frete) => rpc('aceitar_missao', { p_missao: missao, p_transportadora: transportadora, p_frete: frete }),
+  agora: () => rpc('agora'),
+};
+async function sel(q) { const { data, error } = await q; if (error) throw new Error(error.message); return data; }
+export const listarEmpresas = () => sel(sb.from('empresas').select('*, dono_perfil:perfis!empresas_dono_fkey(nome)').order('id'));
+export const listarCaminhoes = () => sel(sb.from('caminhoes').select('*').order('id'));
+export const listarMercado = () => sel(sb.from('mercado').select('*'));
+export async function minhaEmpresaId(id) {
+  const d = await sel(sb.from('membros').select('empresa').eq('jogador', id).maybeSingle());
+  return d?.empresa ?? null;
+}
+export const membrosDe = (empresa) => sel(sb.from('membros').select('jogador, desde, perfil:perfis!membros_jogador_fkey(nome)').eq('empresa', empresa).order('desde'));
+export const pedidosDe = (empresa) => sel(sb.from('pedidos')
+  .select('*, fab:empresas!pedidos_fabrica_fkey(nome,lote), tra:empresas!pedidos_transportadora_fkey(nome)')
+  .or(`fabrica.eq.${empresa},transportadora.eq.${empresa}`).order('id', { ascending: false }).limit(30));
+export const pedidosAceitosDe = (transportadora) => sel(sb.from('pedidos').select('*, fab:empresas!pedidos_fabrica_fkey(nome,lote)')
+  .eq('transportadora', transportadora).eq('status', 'aceito').order('id'));
+
+// mudanças públicas: prédios, caminhões, equipe e pedidos
+export function escutarLogistica(eventos) {
+  const canal = sb.channel('logistica')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'empresas' }, (p) => eventos.empresa?.(p))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'caminhoes' }, (p) => eventos.caminhao?.(p))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'membros' }, (p) => eventos.membro?.(p))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, (p) => eventos.pedido?.(p))
+    .subscribe();
+  return () => sb.removeChannel(canal);
 }

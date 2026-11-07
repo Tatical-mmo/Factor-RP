@@ -71,3 +71,23 @@ export const PRODUTOS = {
   remedio: { nome: 'Remédio', cor: '#eef3ff', codigo: 3 },
 };
 export const FOME_POR_SEGUNDO = 100 / 3600;   // esvazia em 1 hora
+
+// Etapa 4: logística. Mesmas coordenadas da tabela public.lotes / public.destinos no banco.
+export const LOTES_VENDA = [
+  { id: 1, q: '0,0', lote: 'SE', portao: { x: -71.5, z: -58.0 } },
+  { id: 2, q: '1,0', lote: 'SO', portao: { x: -36.5, z: -58.0 } },
+  { id: 3, q: '2,0', lote: 'SE', portao: { x: 36.5, z: -58.0 } },
+  { id: 4, q: '3,1', lote: 'SO', portao: { x: 71.5, z: -4.0 } },
+  { id: 5, q: '0,1', lote: 'SE', portao: { x: -71.5, z: -4.0 } },
+  { id: 6, q: '0,2', lote: 'SO', portao: { x: -90.5, z: 50.0 } },
+  { id: 7, q: '3,2', lote: 'SE', portao: { x: 90.5, z: 50.0 } },
+  { id: 8, q: '1,3', lote: 'SO', portao: { x: -36.5, z: 104.0 } },
+  { id: 9, q: '2,3', lote: 'SE', portao: { x: 36.5, z: 104.0 } },
+  { id: 10, q: '3,3', lote: 'SO', portao: { x: 71.5, z: 104.0 } },
+];
+export const DESTINOS = {
+  loja: { nome: 'Mercado (Loja da Rua do Comércio)', x: -17.5, z: -4 },
+  contratante: { nome: 'Praça do Contratante', x: -4, z: 27 },
+};
+export const CAPACIDADE_CAMINHAO = 20;
+export const PRECO_CAMINHAO = 15000;
