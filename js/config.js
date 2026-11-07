@@ -24,7 +24,7 @@ export const PERSONAGENS = [
 export const ROBOS = ['Rusty_Scout_Bot', 'Rustbolt_Sentinel'];
 
 export const MODELOS = [
-  'caminhao', 'caminhao_danificado', 'viatura', 'van_policia', 'caixa', 'arma_paintball', 'algemas',
+  'caminhao', 'viatura', 'van_policia', 'caixa', 'arma_paintball', 'algemas',
   'bancada', 'base_cla', 'loja', 'delegacia', 'transportadora', 'casa', 'empresa', 'arvore', 'poste',
 ];
 

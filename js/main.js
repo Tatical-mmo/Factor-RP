@@ -433,7 +433,7 @@ function montarQuarteiroes() {
     const placa = textoSprite('Território livre', { escala: 1.1, cor: '#ffd9a0' }); placa.position.set(s * BASE_X, 13, ruaC(2)); scene.add(placa);
     itensMapa.push({ tipo: 'territorio', x: s * BASE_X, z: ruaC(2), r: 24 });
   }
-  colocarVeiculo('caminhao_danificado', BASE_X - 14, ruaC(2) + 12, 0.6);
+  // o caminhão danificado só aparece quando uma carga for roubada (etapa 5)
   // árvores espalhadas fora da cidade
   for (let k = 0; k < 18; k++) {
     const a = rng() * Math.PI * 2, r = METADE + 15 + rng() * 60;
