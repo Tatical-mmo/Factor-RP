@@ -42,7 +42,7 @@ function desenhar() {
     c.innerHTML = `<p class="dica">Você tem <b>${moedas()}</b> moedas.</p>
       <div class="sub">Comprar</div><div class="lista">${venda.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
-          <span class="nm"><b>${esc(p.nome)}</b><small>${p.compra} moedas${p.fome ? ` · enche ${p.fome}% da fome` : ''}${p.item === 'remedio' ? ' · cura (em breve)' : ''}</small></span>
+          <span class="nm"><b>${esc(p.nome)}</b><small>${p.compra} moedas${p.fome ? ` · enche ${p.fome}% da fome` : ''}${p.item === 'remedio' ? ' · cura 50 de vida' : ''}</small></span>
           <span class="bts"><button data-comprar="${p.item}" data-q="1">+1</button><button data-comprar="${p.item}" data-q="5">+5</button></span></div>`).join('')}</div>
       <div class="sub">Vender</div><div class="lista">${compra.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
@@ -53,11 +53,14 @@ function desenhar() {
   } else {
     $('janelaTitulo').textContent = 'Mochila';
     const itens = precos.filter((p) => inv[p.item] > 0);
-    c.innerHTML = `<p class="dica">Fome: <b>${Math.round(ctx.fome())}%</b> · Moedas: <b>${moedas()}</b></p>
+    c.innerHTML = `<p class="dica">Vida: <b>${Math.round(ctx.vida?.() ?? 100)}</b> · Fome: <b>${Math.round(ctx.fome())}%</b> · Moedas: <b>${moedas()}</b></p>
       <div class="lista">${itens.length ? itens.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${inv[p.item]} na mochila</small></span>
-          <span class="bts">${p.fome ? `<button data-comer="${p.item}">Comer</button>` : ''}</span></div>`).join('') : '<span class="vazio">Mochila vazia. Colete sucata no ferro-velho ou compre na loja.</span>'}</div>`;
+          <span class="bts">${p.fome ? `<button data-comer="${p.item}">Comer</button>` : ''}${p.item === 'remedio' ? '<button data-curar="1">Usar (+50 vida)</button>' : ''}</span></div>`).join('') : '<span class="vazio">Mochila vazia. Colete sucata no ferro-velho ou compre na loja.</span>'}</div>`;
+    c.querySelectorAll('[data-curar]').forEach((b) => {
+      b.onclick = () => executar(async () => { if (!(await ctx.curar())) throw new Error('Sua vida já está cheia.'); }, 'Remédio usado: +50 de vida.');
+    });
     c.querySelectorAll('[data-comer]').forEach((b) => {
       b.onclick = () => executar(async () => { const f = await rede.economia.consumir(b.dataset.comer); ctx.definirFome(Number(f)); return f; }, (f) => `Fome agora: ${Math.round(f)}%.`);
     });

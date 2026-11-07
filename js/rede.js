@@ -70,9 +70,10 @@ export function conectarCidade(perfil, eventos) {
   });
   canal.on('broadcast', { event: 'pos' }, ({ payload }) => eventos.pos?.(payload));
   canal.on('broadcast', { event: 'tiro' }, ({ payload }) => eventos.tiro?.(payload));
+  canal.on('broadcast', { event: 'dano' }, ({ payload }) => eventos.dano?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
-      await canal.track({ nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
+      await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
       eventos.conectado?.(true);
     } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
       eventos.conectado?.(false);
@@ -174,6 +175,35 @@ function traduzirRpc(m) {
     'fabricas de produtos diferentes': 'Não dá para fundir fábricas de produtos diferentes.',
     'termine os pedidos da empresa absorvida antes': 'Termine ou cancele os pedidos da empresa absorvida antes.',
     'ha caminhoes em viagem': 'Há caminhões em viagem; espere voltarem.',
+    'policial nao rouba carga': 'Policial não rouba carga.',
+    'caminhao sem carga': 'Esse caminhão não está levando carga.',
+    'esse caminhao e seu': 'Esse caminhão é seu.',
+    'quem tem crimes nao entra na policia': 'Quem está procurado não entra na polícia.',
+    'a equipe nao entra na policia': 'A equipe não entra na polícia.',
+    'saia do cla para entrar na policia': 'Saia do clã para entrar na polícia.',
+    'voce nao esta em servico': 'Você não está em serviço.',
+    'esse jogador nao e procurado': 'Esse jogador não é procurado.',
+    'ja esta preso': 'Já está preso.',
+    'voce nao esta preso': 'Você não está preso.',
+    'policial nao entra em cla': 'Policial não entra em clã.',
+    'voce ja esta em um cla': 'Você já está em um clã.',
+    'nome de cla em uso': 'Já existe um clã com esse nome.',
+    'voce nao e lider de cla': 'Só o líder do clã pode fazer isso.',
+    'jogador ja esta em um cla': 'Esse jogador já está em um clã.',
+    'limite de membros': 'Limite de 15 membros.',
+    'o lider nao pode se expulsar': 'O líder não pode se expulsar.',
+    'jogador nao e do seu cla': 'Esse jogador não é do seu clã.',
+    'voce nao esta em um cla': 'Você não está em um clã.',
+    'territorio invalido': 'Território inválido.',
+    'o territorio ja e do seu cla': 'O território já é do seu clã.',
+    'territorio recem capturado': 'Território recém-capturado; espere 3 minutos.',
+    'captura nao iniciada': 'A captura não foi iniciada.',
+    'captura incompleta': 'Ainda falta tempo para capturar.',
+    'robos insuficientes': 'Robôs insuficientes.',
+    'o territorio nao e do seu cla': 'O território não é do seu clã.',
+    'voce ja tem uma casa': 'Você já tem uma casa.',
+    'casa invalida': 'Casa inválida.',
+    'casa ja vendida': 'Essa casa já tem dono.',
   };
   const espera = /^aguarde (\d+) s$/.exec(m);
   if (espera) return `Aguarde ${espera[1]} s.`;
@@ -253,7 +283,7 @@ export const logistica = {
   entregar: () => rpc('entregar_caixa'),
   desistir: () => rpc('desistir_caixa'),
   comprarCaminhao: (empresa) => rpc('comprar_caminhao', { p_empresa: empresa }),
-  despachar: (caminhao, pedido) => rpc('despachar_caminhao', { p_caminhao: caminhao, p_pedido: pedido }),
+  despachar: (caminhao, pedido, escolta = false) => rpc('despachar_caminhao', { p_caminhao: caminhao, p_pedido: pedido, p_escolta: escolta }),
   processar: () => rpc('processar_caminhoes'),
   missoes: () => rpc('listar_missoes'),
   aceitarMissao: (missao, fabrica, transportadora, frete) => rpc('aceitar_missao', { p_missao: missao, p_fabrica: fabrica, p_transportadora: transportadora, p_frete: frete }),
@@ -283,6 +313,47 @@ export function escutarLogistica(eventos) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'membros' }, (p) => eventos.membro?.(p))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, (p) => eventos.pedido?.(p))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'unidades' }, (p) => eventos.unidade?.(p))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'territorios' }, (p) => eventos.territorio?.(p))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'casas' }, (p) => eventos.casa?.(p))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'clas' }, (p) => eventos.cla?.(p))
     .subscribe();
   return () => sb.removeChannel(canal);
 }
+
+// ---------------------------------------------------------------- combate, polícia, clãs e casas (etapas 5 a 7)
+export const combate = {
+  agressao: (alvo) => rpc('registrar_agressao', { p_alvo: alvo }),
+  morrer: (assassino) => rpc('morrer', { p_assassino: assassino }),
+  atacarCaminhao: (id) => rpc('atacar_caminhao', { p_caminhao: id }),
+  usarRemedio: () => rpc('usar_remedio'),
+};
+export const policia = {
+  entrar: () => rpc('entrar_policia'),
+  sair: () => rpc('sair_policia'),
+  salario: () => rpc('receber_salario_policia'),
+  prender: (alvo) => rpc('prender_suspeito', { p_alvo: alvo }),
+  fianca: () => rpc('pagar_fianca'),
+};
+export const cla = {
+  criar: (nome, cor) => rpc('criar_cla', { p_nome: nome, p_cor: cor }),
+  adicionar: (nome) => rpc('cla_adicionar', { p_nome: nome }),
+  expulsar: (jogador) => rpc('cla_expulsar', { p_jogador: jogador }),
+  sair: () => rpc('cla_sair'),
+  depositar: (valor) => rpc('cla_depositar', { valor }),
+  sacar: (valor) => rpc('cla_sacar', { valor }),
+  comprarRobo: () => rpc('cla_comprar_robo'),
+  retirar: (item, qtd) => rpc('cla_retirar', { p_item: item, p_qtd: qtd }),
+  vender: (item, qtd) => rpc('cla_vender', { p_item: item, p_qtd: qtd }),
+  iniciarCaptura: (t) => rpc('iniciar_captura', { p_territorio: t }),
+  concluirCaptura: (t) => rpc('concluir_captura', { p_territorio: t }),
+  atacar: (t, robos) => rpc('atacar_territorio', { p_territorio: t, p_robos: robos }),
+  defender: (t, robos) => rpc('defender_territorio', { p_territorio: t, p_robos: robos }),
+  processar: () => rpc('processar_territorios'),
+};
+export const casas = { comprar: (id) => rpc('comprar_casa', { p_casa: id }) };
+export const perdoar = (alvo) => rpc('admin_perdoar', { alvo });
+export const listarClas = () => sel(sb.from('clas').select('*, lider_perfil:perfis!clas_lider_fkey(nome)').order('id'));
+export const membrosDoCla = (id) => sel(sb.from('membros_cla').select('jogador, desde, perfil:perfis!membros_cla_jogador_fkey(nome)').eq('cla', id).order('desde'));
+export async function meuClaId(id) { const d = await sel(sb.from('membros_cla').select('cla').eq('jogador', id).maybeSingle()); return d?.cla ?? null; }
+export const listarTerritorios = () => sel(sb.from('territorios').select('*').order('id'));
+export const listarCasas = () => sel(sb.from('casas').select('id, x, z, preco, dono, dono_perfil:perfis!casas_dono_fkey(nome)').order('id'));

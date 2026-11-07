@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { FERRO_VELHOS, FABRICAS, PRODUTOS, FOME_POR_SEGUNDO, LOTES_VENDA, DESTINOS } from './config.js';
+import { iniciarCla, atualizarCla } from './cla.js';
 import { iniciarEmpresa, abrirCompra, abrirMissoes, atualizar as atualizarJanelaEmpresa } from './empresa.js';
 import { iniciarLoja, abrir as abrirJanela, recarregarInventario } from './loja.js';
 import { PERSONAGENS, ROBOS, MODELOS, CIDADE, RUAS_HORIZONTAIS, RUAS_VERTICAIS, QUARTEIROES_ESPECIAIS, VELOCIDADE, CONTROLES_PC } from './config.js';
@@ -425,6 +426,8 @@ function criarCadeia(caixaDelegacia) {
   const aro = new THREE.Mesh(new THREE.TorusGeometry(RAIO_CADEIA + 0.3, 0.06, 6, 48), mat);
   aro.rotation.x = Math.PI / 2; aro.position.set(cadeia.x, 2.75, cadeia.z); scene.add(aro);
   const placa = textoSprite('Cadeia', { escala: 0.7, cor: '#ffb4a8' }); placa.position.set(cadeia.x, 3.3, cadeia.z); scene.add(placa);
+  pontos.delegacia = { x: (caixaDelegacia.min.x + caixaDelegacia.max.x) / 2, z: caixaDelegacia.max.z + 1.3 };
+  const pd = textoSprite('Delegacia · serviço policial', { escala: 0.65, fundo: 'rgba(30,70,160,.92)' }); pd.position.set(pontos.delegacia.x, 2.6, pontos.delegacia.z); scene.add(pd);
 }
 
 function montarQuarteiroes() {
@@ -443,7 +446,7 @@ function montarQuarteiroes() {
       contratante = { x, z };
       continue;
     }
-    const lotes = esp || { SO: 'casa', SE: 'casa', NE: rng() < 0.6 ? 'casa' : 'arvores', NO: 'arvores' };
+    const lotes = esp || { SO: 'casa', SE: 'casa', NE: 'casa', NO: 'arvores' };
     if (!esp && FERRO_VELHOS.includes(`${cx},${cz}`)) lotes.NO = 'ferro_velho';
     // centro de cada lote
     const c = L / 2;
@@ -503,9 +506,7 @@ function montarQuarteiroes() {
   // bases de clã fora da cidade
   for (const s of [-1, 1]) {
     colocarPredio('base_cla', s * BASE_X, ruaC(2), s > 0 ? -Math.PI / 2 : Math.PI / 2);
-    const anel = new THREE.Mesh(new THREE.RingGeometry(23, 24, 64), new THREE.MeshBasicMaterial({ color: s > 0 ? '#d24b4b' : '#4b7bd2', transparent: true, opacity: 0.55 }));
-    anel.rotation.x = -Math.PI / 2; anel.position.set(s * BASE_X, 0.04, ruaC(2)); scene.add(anel);
-    const placa = textoSprite('Território livre', { escala: 1.1, cor: '#ffd9a0' }); placa.position.set(s * BASE_X, 13, ruaC(2)); scene.add(placa);
+    // o anel e a placa do território vêm do banco (dono e defesa), em carregarCidadeSocial
     itensMapa.push({ tipo: 'territorio', x: s * BASE_X, z: ruaC(2), r: 24 });
   }
   // o caminhão danificado só aparece quando uma carga for roubada (etapa 5)
@@ -613,6 +614,7 @@ const jogador = {
   trava: 0, armado: false, carregando: null, eventos: [], recarga: 0, alvo: null, soco: 0,
   arma: null, etiqueta: null, perfil: null,
   algemado: false, pena: 0, algemas: null, sincPena: 10, fome: 100,
+  vida: 100, morto: false, ultimoAgressor: null, agredidos: new Map(), cla: null, claInfo: null, casa: null, statusPol: null,
 };
 
 function resolverColisao(p, raio) {
@@ -747,6 +749,7 @@ function caixaProxima() {
 function pertoContratante() { return contratante && Math.hypot(contratante.x - jogador.pos.x, contratante.z - jogador.pos.z) < 3.4; }
 
 function livre() {
+  if (jogador.morto) return false;
   if (jogador.algemado) { aviso('Você está algemado.'); return false; }
   if (jogador.pena > 0) { aviso('Você está preso.'); return false; }
   return true;
@@ -755,6 +758,8 @@ function livre() {
 function acaoContexto() {
   if (jogador.trava > 0 || !livre()) return;
   if (jogador.carregando?.userData.pedido) { acaoCaixaPedido(); return; }
+  if (jogador.perfil.policial) { const alvo = procuradoProximo(2.4); if (alvo) { prenderProcurado(alvo); return; } }
+  if (pertoDelegacia()) { alternarServico(); return; }
   if (pertoContratante()) { abrirMissoes(); return; }
   if (pontoProximo(pontos.lojas, 3.2)) { abrirJanela('loja'); return; }
   if (jogador.carregando) {
@@ -771,6 +776,8 @@ function acaoContexto() {
   if (dep) { retirarDoDeposito(dep); return; }
   const lt = pontoProximo(pontos.lotes, 4);
   if (lt) { abrirCompra(lt.lote); return; }
+  const casa = casaProxima(3.2);
+  if (casa) { acaoCasa(casa); return; }
   if (pontoProximo(pontos.sucata, 4)) { if (jogador.armado) { aviso('Guarde a arma para trabalhar.'); return; } coletar(); }
 }
 
@@ -844,6 +851,7 @@ function socar() {
   jogador.soco = (jogador.soco + 1) % 2;
   jogador.avatar.tocar(jogador.soco ? 'punch_right' : 'punch_left', { umaVez: true, velocidade: 1.7, fade: 0.08 });
   jogador.trava = 0.72;
+  jogador.eventos.push({ t: 0.3, fn: golpeSoco });
 }
 
 function alternarArma() {
@@ -872,15 +880,15 @@ function atirar(alvo) {
   const dir = new THREE.Vector3(Math.sin(jogador.yaw), 0, Math.cos(jogador.yaw));
   const cor = CORES_TINTA[Math.floor(Math.random() * CORES_TINTA.length)];
   const v = dir.multiplyScalar(24).add(new THREE.Vector3(0, 1.2, 0));
-  criarBola(boca, v, cor);
+  criarBola(boca, v, cor, true);
   const r2 = (n) => Math.round(n * 100) / 100;
   conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: cor });
   jogador.recarga = 0.28;
 }
-function criarBola(pos, vel, cor) {
+function criarBola(pos, vel, cor, minha = false) {
   const m = new THREE.Mesh(geoBola, new THREE.MeshStandardMaterial({ color: cor, roughness: 0.3 }));
   m.position.copy(pos); scene.add(m);
-  bolas.push({ m, v: vel.clone(), vida: 1.4, cor });
+  bolas.push({ m, v: vel.clone(), vida: 1.4, cor, minha });
 }
 function manchar(p, normal, cor) {
   const m = new THREE.Mesh(geoMancha, new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
@@ -893,7 +901,8 @@ function atualizarBolas(dt) {
     const b = bolas[i]; b.vida -= dt; b.v.y -= 9.8 * dt;
     const ant = b.m.position.clone(); b.m.position.addScaledVector(b.v, dt);
     let fim = false;
-    for (const c of colisores) {
+    if (b.minha) fim = acertoDaBola(b);
+    if (!fim) for (const c of colisores) {
       if (c.tipo !== 'caixa') continue;
       const p = b.m.position;
       if (p.x > c.x0 - 0.2 && p.x < c.x1 + 0.2 && p.z > c.z0 - 0.2 && p.z < c.z1 + 0.2 && p.y < 7) {
@@ -1037,7 +1046,8 @@ async function iniciarJogo(perfil) {
   montarChao();
   const carregamentos = MODELOS.map(async (m) => { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb`)).scene); });
   const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
-  const avatarP = criarAvatar(pastaJogador, id);
+  const skin = perfil.policial ? SKIN_POLICIA : id;
+  const avatarP = criarAvatar(ROBOS.includes(skin) ? 'robos' : pastaJogador, skin);
   const roboP = criarAvatar('robos', 'Rusty_Scout_Bot');
   await Promise.all(carregamentos);
   montarQuarteiroes();
@@ -1082,7 +1092,7 @@ async function iniciarJogo(perfil) {
   criarNPCs(id);
   conectarMultiplayer(perfil);
   rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando, inventario: recarregarInventario });
-  iniciarLoja({ perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); } });
+  iniciarLoja({ perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, curar: usarRemedio, vida: () => jogador.vida });
   iniciarEmpresa({
     perfil: () => jogador.perfil, agora: agoraServidor,
     definirEmprego: (id) => { emprego = id; },
@@ -1091,6 +1101,10 @@ async function iniciarJogo(perfil) {
     recarregar: () => { tempoLogistica = 0; },
   });
   iniciarLogistica();
+  iniciarCla({ perfil: () => jogador.perfil, recarregar: () => { tempoSocial = 0; }, definirCla: (id, info) => { jogador.cla = id; if ((info?.nome || null) !== (jogador.claInfo?.nome || null)) { jogador.claInfo = info; conexao?.rastrear(metaPresenca()); } } });
+  carregarCidadeSocial().catch(() => {});
+  criarPoliciaNPC();
+  $('btFianca').onclick = async () => { try { await rede.policia.fianca(); aviso('Fiança paga. Você está livre.'); } catch (e) { aviso(e.message); } };
   iniciarPainel({
     perfil: () => jogador.perfil,
     online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta.nome })),
@@ -1109,7 +1123,8 @@ function atualizarInfo() {
   const p = jogador.perfil;
   const tags = (p.cargo !== 'jogador' ? `<i class="tagc ${p.cargo}">${p.cargo}</i>` : '') + (p.imortal ? '<i class="tagc imortal">imortal</i>' : '');
   $('info').innerHTML = `<b>${escapar(p.nome)}</b>${tags}<br>Moedas: ${p.moedas.toLocaleString('pt-BR')}<br>`
-    + `Fome <span class="fome" id="barFome"><i></i></span><br>`
+    + `Vida <span class="vida" id="barVida"><i></i></span> Fome <span class="fome" id="barFome"><i></i></span><br>`
+    + (p.policial ? '<span style="color:#7fb8ff">● Em serviço (polícia)</span><br>' : '') + (p.crimes > 0 ? `<span style="color:#ff6b6b">● PROCURADO (${p.crimes})</span><br>` : '')
     + `<span class="online">● ${online} online</span>${conectado ? '' : ' <small>(conectando…)</small>'}<br><button id="btSair">Sair da conta</button>`;
   $('btSair').onclick = async () => { await salvarAgora(); await rede.sair(); location.reload(); };
   desenharFome();
@@ -1119,7 +1134,7 @@ function atualizarInfo() {
 const remotos = new Map();     // id -> { meta, av, arma, alvo, anim, caixa }
 let conexao = null, online = 1, conectado = false;
 let envioTimer = 0, ultimoEnvio = null, tempoKeepAlive = 0, tempoSalvar = 15;
-const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7 };
+const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1 };
 const ANIM_VEL = { walk_shoot: 1.25 };
 
 function conectarMultiplayer(perfil) {
@@ -1133,12 +1148,15 @@ function conectarMultiplayer(perfil) {
         if (r && (r.meta.personagem !== meta.personagem || r.meta.cargo !== meta.cargo || r.meta.nome !== meta.nome)) {
           const alvo = r.alvo; removerRemoto(id); adicionarRemoto(id, meta).then(() => { const n = remotos.get(id); if (n && alvo && !n.alvo) n.alvo = alvo; });
         } else if (!r) adicionarRemoto(id, meta);
+        else if (r.meta.crimes !== meta.crimes || r.meta.policial !== meta.policial || r.meta.cla !== meta.cla) { r.meta = meta; etiquetaStatus(r); }
       }
       for (const id of [...remotos.keys()]) if (!lista[id]) removerRemoto(id);
       atualizarInfo();
     },
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
     tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c),
+    dano: (d) => receberDano(d),
+    meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
   window.addEventListener('pagehide', salvarAgora);
@@ -1155,7 +1173,7 @@ async function adicionarRemoto(id, meta) {
     const et = textoSprite(meta.nome, { escala: 0.8, cor: meta.cargo === 'admin' ? '#ff6b6b' : meta.cargo === 'moderador' ? '#7fb8ff' : '#ffffff' });
     et.position.y = 2.15; av.raiz.add(et);
     av.raiz.visible = false; scene.add(av.raiz); av.tocar('idle');
-    r.av = av; r.arma = arma;
+    r.av = av; r.arma = arma; etiquetaStatus(r);
   } catch (e) { console.warn('jogador remoto não carregou', e); }
 }
 
@@ -1377,8 +1395,17 @@ function atualizarRobos(dt) {
 }
 function sincronizarCaminhao(d) {
   let c = caminhoes.get(d.id);
-  if (!c) { const obj = clonar('caminhao'); scene.add(obj); c = { obj, d }; caminhoes.set(d.id, c); }
+  if (!c) { const obj = clonar('caminhao'); scene.add(obj); c = { obj, d, roubadoVisual: false }; caminhoes.set(d.id, c); }
   c.d = d;
+  // caminhão roubado volta amassado; a escolta (viatura) acompanha a viagem
+  if (!!d.roubado !== c.roubadoVisual) {
+    const novo = clonar(d.roubado ? 'caminhao_danificado' : 'caminhao');
+    novo.position.copy(c.obj.position); novo.rotation.copy(c.obj.rotation);
+    scene.remove(c.obj); scene.add(novo); c.obj = novo; c.roubadoVisual = !!d.roubado;
+  }
+  const escolta = d.escolta && d.status !== 'parado';
+  if (escolta && !c.escolta) { c.escolta = clonar('viatura'); c.escolta.position.copy(c.obj.position); scene.add(c.escolta); }
+  if (!escolta && c.escolta) { scene.remove(c.escolta); c.escolta = null; }
 }
 let ultimoProcessar = 0;
 function atualizarCaminhoes(dt) {
@@ -1407,6 +1434,11 @@ function atualizarCaminhoes(dt) {
     c.obj.position.x += (alvo.x - c.obj.position.x) * Math.min(1, dt * 8);
     c.obj.position.z += (alvo.z - c.obj.position.z) * Math.min(1, dt * 8);
     if (alvo.ang !== undefined) c.obj.rotation.y = suavizarAngulo(c.obj.rotation.y, alvo.ang, dt * 6);
+    if (c.escolta) {
+      const ry = c.obj.rotation.y, ex = c.obj.position.x - Math.sin(ry) * 7.5, ez = c.obj.position.z - Math.cos(ry) * 7.5;
+      c.escolta.position.x += (ex - c.escolta.position.x) * Math.min(1, dt * 4); c.escolta.position.z += (ez - c.escolta.position.z) * Math.min(1, dt * 4);
+      c.escolta.rotation.y = suavizarAngulo(c.escolta.rotation.y, ry, dt * 4);
+    }
   }
   // viagens vencidas: pede ao banco para concluir (qualquer jogador pode; o banco decide)
   if (atrasado && performance.now() - ultimoProcessar > 8000) {
@@ -1428,7 +1460,7 @@ async function carregarLogistica() {
   for (const l of LOTES_VENDA) if (antes.get(l.id) !== assinatura(l.id)) { desenharLote(l); mudou = true; }
   if (mudou) desenharFundoMapa();
   const ids = new Set(frota.map((c) => c.id));
-  for (const [id, c] of caminhoes) if (!ids.has(id)) { scene.remove(c.obj); caminhoes.delete(id); }
+  for (const [id, c] of caminhoes) if (!ids.has(id)) { scene.remove(c.obj); if (c.escolta) scene.remove(c.escolta); caminhoes.delete(id); }
   for (const c of frota) sincronizarCaminhao(c);
 }
 
@@ -1453,6 +1485,9 @@ async function iniciarLogistica() {
     caminhao: ({ eventType, new: n }) => { if (eventType !== 'DELETE') sincronizarCaminhao(n); else recarregar(); },
     membro: () => { recarregar(); atualizarJanelaEmpresa(); },
     pedido: () => atualizarJanelaEmpresa(),
+    territorio: () => { tempoSocial = Math.min(tempoSocial, 0.3); atualizarCla(); },
+    casa: () => { tempoSocial = Math.min(tempoSocial, 0.3); },
+    cla: () => { tempoSocial = Math.min(tempoSocial, 0.3); atualizarCla(); },
   });
 }
 
@@ -1526,6 +1561,263 @@ async function acaoCaixaPedido() {
   aviso(`Leve até: ${DESTINOS[pd.destino]?.nome}. Aperte de novo para largar a carga.`, 3);
 }
 
+// ================================================================= COMBATE (etapa 5)
+const SKIN_POLICIA = 'Rustbolt_Sentinel';
+const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfil?.personagem);
+function metaPresenca() {
+  const p = jogador.perfil;
+  return { nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null };
+}
+// etiqueta acima do nome: procurado, polícia ou clã
+function etiquetaStatus(r) {
+  if (!r.av) return;
+  if (r.status) { r.av.raiz.remove(r.status); r.status = null; }
+  const m = r.meta;
+  const txt = m.crimes > 0 ? `PROCURADO ${'★'.repeat(Math.min(5, m.crimes))}` : m.policial ? 'POLÍCIA' : m.cla ? `[${m.cla}]` : null;
+  if (!txt) return;
+  r.status = textoSprite(txt, { escala: 0.6, cor: '#ffffff', fundo: m.crimes > 0 ? 'rgba(170,30,30,.92)' : m.policial ? 'rgba(30,70,160,.92)' : 'rgba(40,40,40,.85)' });
+  r.status.position.y = 2.6; r.av.raiz.add(r.status);
+}
+
+function aplicarDanoRemoto(id, valor) {
+  conexao?.enviar('dano', { alvo: id, v: valor, de: jogador.perfil.id });
+  const ultimo = jogador.agredidos.get(id) || 0;
+  if (performance.now() - ultimo > 60000) { jogador.agredidos.set(id, performance.now()); rede.combate.agressao(id).catch(() => {}); }
+}
+function golpeSoco() {
+  const f = new THREE.Vector3(Math.sin(jogador.yaw), 0, Math.cos(jogador.yaw));
+  for (const [id, r] of remotos) {
+    if (!r.av?.raiz.visible) continue;
+    const d = new THREE.Vector3().subVectors(r.av.raiz.position, jogador.pos); d.y = 0;
+    const dist = d.length();
+    if (dist < 1.7 && dist > 0.01 && d.normalize().dot(f) > 0.5) { aplicarDanoRemoto(id, 10); return; }
+  }
+  const c = caminhaoProximo(3.4);
+  if (c) atacarCaminhao(c);
+}
+function acertoDaBola(b) {
+  const p = b.m.position;
+  for (const [id, r] of remotos) {
+    if (!r.av?.raiz.visible) continue;
+    const q = r.av.raiz.position;
+    if (Math.hypot(p.x - q.x, p.z - q.z) < 0.5 && p.y > q.y + 0.1 && p.y < q.y + 1.9) {
+      aplicarDanoRemoto(id, 20); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true;
+    }
+  }
+  for (const c of caminhoes.values()) {
+    if (c.d.status !== 'em_rota' || c.d.roubado) continue;
+    if (Math.hypot(p.x - c.obj.position.x, p.z - c.obj.position.z) < 2.3 && p.y < 3.5) {
+      atacarCaminhao(c); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true;
+    }
+  }
+  return false;
+}
+function caminhaoProximo(raio) {
+  let melhor = null, dm = raio;
+  for (const c of caminhoes.values()) {
+    if (c.d.status !== 'em_rota' || c.d.roubado) continue;
+    const d = Math.hypot(c.obj.position.x - jogador.pos.x, c.obj.position.z - jogador.pos.z);
+    if (d < dm) { dm = d; melhor = c; }
+  }
+  return melhor;
+}
+let ultimoAtaqueCaminhao = 0;
+async function atacarCaminhao(c) {
+  if (performance.now() - ultimoAtaqueCaminhao < 950) return;
+  ultimoAtaqueCaminhao = performance.now();
+  try {
+    const vida = await rede.combate.atacarCaminhao(c.d.id);
+    if (vida > 0) aviso(`Caminhão: ${vida} de vida`, 1.2);
+    else if (vida === 0) { aviso('Carga roubada!', 3); tempoLogistica = 0; }
+  } catch (e) { aviso(e.message); }
+}
+
+function receberDano(d) {
+  if (d.alvo !== jogador.perfil?.id || jogador.morto || !jogador.avatar) return;
+  if (jogador.perfil.imortal || jogador.pena > 0) return;
+  const r = remotos.get(d.de);
+  if (!r?.av || r.av.raiz.position.distanceTo(jogador.pos) > 30) return;     // golpe de longe demais: ignora
+  const v = Math.max(0, Math.min(25, Number(d.v) || 0));
+  jogador.vida -= v; jogador.ultimoAgressor = d.de;
+  desenharFome();
+  if (jogador.vida <= 0) { morrerLocal(); return; }
+  if (jogador.trava <= 0) { jogador.avatar.tocar('hit', { umaVez: true, velocidade: 1.4, fade: 0.08 }); jogador.trava = 0.45; }
+}
+
+async function morrerLocal() {
+  const j = jogador; j.morto = true; j.vida = 0; j.alvo = null;
+  if (j.armado) alternarArmaForcado(false);
+  if (j.carregando) { scene.remove(j.carregando); j.carregando = null; }
+  j.avatar.tocar('death', { umaVez: true, velocidade: 1, fade: 0.1 });
+  j.trava = 5;
+  const quem = remotos.get(j.ultimoAgressor)?.meta.nome;
+  try {
+    const perdeu = await rede.combate.morrer(j.ultimoAgressor || null);
+    aviso(`Você morreu${quem ? ' para ' + quem : ''}.${perdeu ? ` Perdeu ${perdeu} moedas.` : ''} Renascendo…`, 4.5);
+  } catch { aviso('Você morreu. Renascendo…', 4.5); }
+  setTimeout(renascer, 5000);
+}
+function renascer() {
+  const j = jogador;
+  const destino = j.casa ? { x: j.casa.x + 2, z: j.casa.z } : { x: contratante.x + 6, z: contratante.z + 6 };
+  teleportar(destino.x, destino.z);
+  j.vida = 100; j.morto = false; j.trava = 0; j.ultimoAgressor = null;
+  j.avatar.tocar('idle', { fade: 0.3 }); desenharFome();
+  aviso(j.casa ? 'Você renasceu em casa.' : 'Você renasceu na praça.');
+}
+
+async function usarRemedio() {
+  if (jogador.vida >= 100) { aviso('Sua vida já está cheia.'); return false; }
+  await rede.combate.usarRemedio();
+  jogador.vida = Math.min(100, jogador.vida + 50); desenharFome();
+  return true;
+}
+
+// ================================================================= POLÍCIA (etapa 6)
+async function criarPoliciaNPC() {
+  if (!cadeia) return;
+  const d = QB / 2 - 1.1, cx = quadC(1), cz = quadC(1);
+  const rotas = [[[cx - d, cz + d], [cx + d, cz + d], [cx + d, cz - d], [cx - d, cz - d]], [[cx + d, cz - d], [cx + d, cz + d], [cx - d, cz + d], [cx - d, cz - d]]];
+  for (const rota of rotas) {
+    try {
+      const av = await criarAvatar('robos', SKIN_POLICIA);
+      av.raiz.position.set(rota[0][0], 0.18, rota[0][1]); scene.add(av.raiz); av.tocar('walk', { velocidade: 0.85 });
+      const et = textoSprite('Polícia', { escala: 0.6, fundo: 'rgba(30,70,160,.92)' }); et.position.y = 2.2; av.raiz.add(et);
+      npcs.push({ av, rota, i: 1, vel: 1.5 });
+    } catch { /* sem policiais NPC */ }
+  }
+}
+function pertoDelegacia() { return pontos.delegacia && Math.hypot(pontos.delegacia.x - jogador.pos.x, pontos.delegacia.z - jogador.pos.z) < 3.2; }
+async function alternarServico() {
+  if (ocupado) return; ocupado = true;
+  try {
+    if (jogador.perfil.policial) { const pago = await rede.policia.sair(); aviso(`Fim do expediente.${pago ? ` +${pago} moedas` : ''}`); }
+    else await rede.policia.entrar();
+  } catch (e) { aviso(e.message, 3.5); }
+  finally { ocupado = false; }
+}
+function procuradoProximo(raio) {
+  let melhor = null, dm = raio;
+  for (const [id, r] of remotos) {
+    if (!r.av?.raiz.visible || !(r.meta.crimes > 0)) continue;
+    const d = r.av.raiz.position.distanceTo(jogador.pos);
+    if (d < dm) { dm = d; melhor = { id, r }; }
+  }
+  return melhor;
+}
+async function prenderProcurado(alvo) {
+  if (ocupado) return; ocupado = true;
+  try {
+    virarPara(alvo.r.av.raiz.position.x, alvo.r.av.raiz.position.z);
+    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 2, fade: 0.1 }); jogador.trava = 0.9;
+    const min = await rede.policia.prender(alvo.id);
+    aviso(`${alvo.r.meta.nome} foi algemado e preso por ${min} min. +800 moedas`, 4);
+  } catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
+}
+let tempoSalarioPolicia = 180;
+function atualizarPolicia(dt) {
+  if (jogador.perfil?.policial) {
+    tempoSalarioPolicia -= dt;
+    if (tempoSalarioPolicia <= 0) { tempoSalarioPolicia = 180; rede.policia.salario().then((v) => { if (v > 0) aviso(`Salário da polícia: +${v} moedas`); }).catch(() => {}); }
+  }
+  const f = $('btFianca');
+  const preso = jogador.pena > 0 && jogador.perfil?.fianca > 0;
+  f.classList.toggle('oculto', !preso);
+  if (preso) f.textContent = `Pagar fiança (${jogador.perfil.fianca.toLocaleString('pt-BR')})`;
+}
+
+// ================================================================= TERRITÓRIOS E CASAS (etapa 7)
+const territorios = new Map();   // id -> { d, anel, placa }
+const casasMundo = new Map();    // id -> { d, placa }
+let captura = null;              // { id, fim }
+function corDoCla(id) { return clasCache.get(id)?.cor || '#888888'; }
+const clasCache = new Map();
+async function carregarCidadeSocial() {
+  const [ts, cs, clas, meuCla] = await Promise.all([rede.listarTerritorios(), rede.listarCasas(), rede.listarClas(), rede.meuClaId(jogador.perfil.id)]);
+  clasCache.clear(); for (const c of clas) clasCache.set(c.id, c);
+  const info = clasCache.get(meuCla) || null;
+  if ((info?.nome || null) !== (jogador.claInfo?.nome || null)) { jogador.claInfo = info; conexao?.rastrear(metaPresenca()); }
+  jogador.cla = meuCla; jogador.claInfo = info;
+  for (const t of ts) {
+    let v = territorios.get(t.id);
+    const nome = t.dono_cla ? clasCache.get(t.dono_cla)?.nome || 'clã' : null;
+    const chave = `${t.dono_cla}|${t.defesa}|${nome}`;
+    if (v && v.chave === chave) { v.d = t; continue; }
+    if (v) { scene.remove(v.placa); }
+    else {
+      const anel = new THREE.Mesh(new THREE.RingGeometry(23, 24, 64), new THREE.MeshBasicMaterial({ color: '#888888', transparent: true, opacity: 0.6 }));
+      anel.rotation.x = -Math.PI / 2; anel.position.set(t.x, 0.05, t.z); scene.add(anel);
+      v = { anel }; territorios.set(t.id, v);
+    }
+    v.d = t; v.chave = chave;
+    v.anel.material.color.set(t.dono_cla ? corDoCla(t.dono_cla) : '#888888');
+    v.placa = textoSprite(nome ? `${t.nome}: ${nome}${t.defesa ? ` · ${t.defesa} robôs` : ''}` : `${t.nome}: livre`, { escala: 1.05, cor: '#ffd9a0' });
+    v.placa.position.set(t.x, 13.5, t.z); scene.add(v.placa);
+  }
+  for (const c of cs) {
+    let v = casasMundo.get(c.id);
+    const chave = `${c.dono}|${c.dono_perfil?.nome}`;
+    if (v && v.chave === chave) continue;
+    if (v) scene.remove(v.placa);
+    v = { d: c, chave }; casasMundo.set(c.id, v);
+    const minha = c.dono === jogador.perfil.id;
+    v.placa = textoSprite(c.dono ? (minha ? 'Sua casa' : `Casa de ${c.dono_perfil?.nome || '?'}`) : 'Casa à venda · 35.000',
+      { escala: 0.6, fundo: c.dono ? (minha ? 'rgba(30,110,60,.92)' : 'rgba(40,40,40,.85)') : 'rgba(30,90,50,.9)' });
+    v.placa.position.set(c.x + 0.5, 2.4, c.z); scene.add(v.placa);
+  }
+  const minha = cs.find((c) => c.dono === jogador.perfil.id);
+  jogador.casa = minha ? { x: minha.x, z: minha.z } : null;
+}
+function casaProxima(raio) {
+  let melhor = null, dm = raio;
+  for (const v of casasMundo.values()) { const d = Math.hypot(v.d.x - jogador.pos.x, v.d.z - jogador.pos.z); if (d < dm) { dm = d; melhor = v.d; } }
+  return melhor;
+}
+let confirmaCasa = 0;
+async function acaoCasa(c) {
+  if (c.dono === jogador.perfil.id) { aviso('Sua casa. Você renasce aqui quando morre.'); return; }
+  if (c.dono) { aviso(`Casa de ${c.dono_perfil?.nome || 'outro jogador'}.`); return; }
+  if (performance.now() - confirmaCasa > 3000) { confirmaCasa = performance.now(); aviso('Casa à venda por 35.000. Aperte de novo para comprar.', 3); return; }
+  confirmaCasa = 0;
+  try { await rede.casas.comprar(c.id); aviso('Casa comprada! Agora você renasce aqui.', 4); tempoSocial = 0; }
+  catch (e) { aviso(e.message); }
+}
+function territorioAtual() {
+  for (const v of territorios.values()) if (Math.hypot(v.d.x - jogador.pos.x, v.d.z - jogador.pos.z) < 23) return v.d;
+  return null;
+}
+async function atualizarCaptura() {
+  const el = $('captura');
+  const t = territorioAtual();
+  if (!t || !jogador.cla || t.dono_cla === jogador.cla || jogador.morto || jogador.pena > 0) {
+    if (captura) { captura = null; }
+    el.classList.add('oculto');
+    if (t && t.dono_cla === jogador.cla) { el.textContent = `${t.nome} é do seu clã`; el.classList.remove('oculto'); }
+    return;
+  }
+  if (!captura || captura.id !== t.id) {
+    captura = { id: t.id, fim: null, total: 0, pedindo: true };
+    try { const seg = await rede.cla.iniciarCaptura(t.id); captura.total = seg; captura.fim = performance.now() + seg * 1000; }
+    catch (e) { aviso(e.message); captura = { id: t.id, fim: Infinity, total: 0 }; }
+  }
+  if (!captura.fim || captura.fim === Infinity) { el.textContent = 'Captura indisponível agora'; el.classList.remove('oculto'); return; }
+  const falta = Math.max(0, (captura.fim - performance.now()) / 1000);
+  el.innerHTML = `Capturando ${t.nome}… ${Math.ceil(falta)} s<i style="width:${(100 * (1 - falta / captura.total)).toFixed(0)}%"></i>`;
+  el.classList.remove('oculto');
+  if (falta <= 0 && !captura.concluindo) {
+    captura.concluindo = true;
+    try { await rede.cla.concluirCaptura(t.id); aviso(`O ${t.nome} agora é do seu clã!`, 4); tempoSocial = 0; }
+    catch (e) { aviso(e.message); captura.fim = performance.now() + 5000; captura.concluindo = false; }
+  }
+}
+let tempoSocial = 0, tempoCaptura = 0;
+function atualizarSocial(dt) {
+  tempoSocial -= dt; tempoCaptura -= dt;
+  if (tempoSocial <= 0) { tempoSocial = 15; carregarCidadeSocial().catch(() => {}); rede.cla.processar().catch(() => {}); }
+  if (tempoCaptura <= 0) { tempoCaptura = 0.5; atualizarCaptura(); }
+}
+
 // ================================================================= MUDANÇAS VINDAS DO BANCO
 const LOCAIS = [];
 function montarLocais() {
@@ -1586,9 +1878,11 @@ function aplicarPerfil(novo) {
     setTimeout(async () => { await rede.sair(); location.reload(); }, 5000);
     return;
   }
-  if (novo.personagem !== antigo.personagem) trocarAvatar(novo.personagem);
-  if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome) {
-    conexao?.rastrear({ nome: novo.nome, personagem: novo.personagem, cargo: novo.cargo });
+  if (novo.personagem !== antigo.personagem || novo.policial !== antigo.policial) trocarAvatar(skinAtual());
+  if (novo.policial !== antigo.policial) aviso(novo.policial ? 'Você está em serviço na polícia. Prenda os procurados (em vermelho)!' : 'Você saiu do serviço da polícia.', 4);
+  if ((novo.crimes || 0) > (antigo.crimes || 0)) aviso('Você está PROCURADO pela polícia.', 4);
+  if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome || novo.crimes !== antigo.crimes || novo.policial !== antigo.policial) {
+    conexao?.rastrear(metaPresenca());
   }
   if (novo.algemado !== antigo.algemado) {
     jogador.algemado = novo.algemado; mostrarAlgemas(novo.algemado);
@@ -1638,7 +1932,7 @@ function atualizarJogador(dt) {
   if (teclas.has('d') || teclas.has('arrowright')) ix += 1;
   if (teclas.has('a') || teclas.has('arrowleft')) ix -= 1;
   if (joy.ativo) { ix = joy.x; iy = joy.y; }
-  if (j.algemado) { ix = 0; iy = 0; j.alvo = null; }
+  if (j.algemado || j.morto) { ix = 0; iy = 0; j.alvo = null; }
   const dir = new THREE.Vector3().addScaledVector(direita, ix).addScaledVector(frente, iy);
   let forca = Math.min(1, dir.length());
   if (forca > 0.01) { dir.normalize(); j.alvo = null; }
@@ -1662,7 +1956,8 @@ function atualizarJogador(dt) {
       resolverColisao(j.pos, j.raio);
     }
     // animação conforme o estado
-    if (vel > 0) {
+    if (j.morto) { /* fica caído */ }
+    else if (vel > 0) {
       if (j.carregando) av.tocar('carry_walk', { velocidade: 1 });
       else if (j.armado) av.tocar('walk_shoot', { velocidade: 1.25 });
       else if (correr) av.tocar('run', { velocidade: 1 });
@@ -1757,6 +2052,9 @@ function atualizarHUD(dt) {
 function contexto() {
   const pd = jogador.carregando?.userData.pedido;
   if (pd) return pertoDestino(pd.destino) ? ['entregar a carga', 'Entregar'] : [`levar a carga até: ${DESTINOS[pd.destino]?.nome}`, 'Largar'];
+  if (jogador.morto) return ['', ''];
+  if (jogador.perfil?.policial && procuradoProximo(2.4)) return ['algemar e prender o procurado', 'Prender'];
+  if (pertoDelegacia()) return [jogador.perfil?.policial ? 'sair do serviço policial' : 'entrar em serviço na polícia', 'Polícia'];
   if (pertoContratante()) return ['ver missões do Contratante', 'Falar'];
   if (pontoProximo(pontos.lojas, 3.2)) return ['abrir a loja', 'Loja'];
   if (jogador.carregando) {
@@ -1773,6 +2071,9 @@ function contexto() {
   const dep = pontoProximo(pontos.depositos, 3);
   if (dep) return [`retirar carga da ${empresas.get(dep.empresa)?.nome || 'fábrica'}`, 'Retirar'];
   if (pontoProximo(pontos.lotes, 4)) return ['comprar este lote', 'Comprar'];
+  const casa = casaProxima(3.2);
+  if (casa) return [casa.dono === jogador.perfil.id ? 'sua casa' : casa.dono ? `casa de ${casa.dono_perfil?.nome || '?'}` : 'comprar esta casa (35.000)', 'Casa'];
+  if (caminhaoProximo(3.4)) return ['F: atacar o caminhão e roubar a carga', ''];
   return ['', ''];
 }
 
@@ -1786,6 +2087,7 @@ function atualizarFome(dt) {
 }
 let tempoInfo = 1;
 function desenharFome() {
+  const v = $('barVida'); if (v) { v.firstChild.style.width = Math.max(0, jogador.vida).toFixed(0) + '%'; v.classList.toggle('baixa', jogador.vida < 35); }
   const b = $('barFome'); if (!b) return;
   b.firstChild.style.width = jogador.fome.toFixed(0) + '%';
   b.classList.toggle('vazia', jogador.fome < 15);
@@ -1799,6 +2101,8 @@ function quadro() {
   atualizarCaminhoes(dt);
   atualizarRobos(dt);
   atualizarLogistica(dt);
+  atualizarPolicia(dt);
+  atualizarSocial(dt);
   atualizarNPCs(dt);
   atualizarRemotos(dt);
   enviarEstado(dt);

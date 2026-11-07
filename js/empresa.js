@@ -197,12 +197,13 @@ async function telaCaminhoes(c, e) {
     <div class="botoes"><button id="eComprarCam">Comprar caminhão</button></div>
     <div class="sub">Frota (${meus.length}/${lim(e, 'caminhoes')})</div>
     <div class="lista">${meus.length ? meus.map((k, i) => `<div class="linha"><b>Caminhão ${i + 1}</b> <small>${estado(k)}</small>
-      ${k.status === 'parado' && disponiveis.length ? `<div class="form"><select data-sel="${k.id}">${disponiveis.map((p) => `<option value="${p.id}">#${p.id} · ${p.qtd - p.entregues - p.em_transito} caixas de ${esc(p.fab?.nome)} → ${esc(DESTINOS[p.destino]?.nome || p.destino)}</option>`).join('')}</select><button data-despachar="${k.id}">Despachar</button></div>` : ''}</div>`).join('') : '<span class="vazio">Nenhum caminhão.</span>'}</div>
+      ${k.status === 'parado' && disponiveis.length ? `<div class="form"><select data-sel="${k.id}">${disponiveis.map((p) => `<option value="${p.id}">#${p.id} · ${p.qtd - p.entregues - p.em_transito} caixas de ${esc(p.fab?.nome)} → ${esc(DESTINOS[p.destino]?.nome || p.destino)}</option>`).join('')}</select><label class="check"><input type="checkbox" data-esc="${k.id}"> Escolta armada (400): caminhão aguenta mais ataques</label><button data-despachar="${k.id}">Despachar</button></div>` : ''}</div>`).join('') : '<span class="vazio">Nenhum caminhão.</span>'}</div>
     ${!disponiveis.length ? '<p class="dica">Nenhum pedido aceito com caixas para levar.</p>' : ''}`;
   $('eComprarCam').onclick = () => executar(() => rede.logistica.comprarCaminhao(e.id), 'Caminhão comprado! Ele fica no portão da transportadora.');
   c.querySelectorAll('[data-despachar]').forEach((b) => {
     b.onclick = () => { const p = Number(c.querySelector(`[data-sel="${b.dataset.despachar}"]`).value);
-      executar(() => rede.logistica.despachar(Number(b.dataset.despachar), p), 'Caminhão despachado! Acompanhe pelo mapa.'); };
+      const esc2 = !!c.querySelector(`[data-esc="${b.dataset.despachar}"]`)?.checked;
+      executar(() => rede.logistica.despachar(Number(b.dataset.despachar), p, esc2), esc2 ? 'Caminhão despachado com escolta!' : 'Caminhão despachado! Acompanhe pelo mapa.'); };
   });
 }
 

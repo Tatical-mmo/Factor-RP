@@ -1,6 +1,6 @@
 # Fator RP
 
-MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 4**, com empresas dos jogadores, funcionários, pedidos de frete, caminhões e missões do Contratante.
+MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, completa: cidade, multiplayer, trabalho, logística, combate, polícia, clãs, territórios e casas.
 
 ## O que já funciona
 
@@ -28,7 +28,7 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 4**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` e as partes `supabase/05a…05d`, nessa ordem.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a` e `08b`, nessa ordem.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
 
 ## Etapa 3: trabalho e produção
@@ -66,6 +66,27 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 4**, co
 - **Robôs:** comprar (8.000) ou alugar por 24 h (1.200). Na fábrica, cada robô embala 1 caixa a cada 90 s (acumula até 4 h). Na transportadora, cada robô soma 5 caixas à capacidade dos caminhões (máximo 60).
 - **Fusão:** o dono junta duas empresas dele; a absorvida vira uma unidade da principal. Fábrica + transportadora vira um **grupo** (produz, transporta e não paga frete a si mesmo). Fábricas no nível 3 também podem ter caminhões.
 - O jogo confere caminhões e empresas no banco a cada 10 s, além do tempo real.
+
+## Etapa 5: combate
+
+- **Vida 100.** Soco tira 10; tiro de paintball tira 20. Remédio (mochila) cura 50. Quem tem modo imortal ou está preso não leva dano.
+- **Morte:** perde o que tem nas mãos e até 100 moedas, que vão para quem matou. Renasce em 5 s em casa (se tiver) ou na praça.
+- **Marcação:** quem mata alguém que não o atacou nos últimos 2 minutos fica **PROCURADO** (etiqueta vermelha para todos).
+- **Roubo de caminhão:** soco ou tiro no caminhão em viagem. Cada golpe tira 10 (1 por segundo por jogador). Vida: 100 + 60 por robô da transportadora + 200 com **escolta** (viatura, 400 do caixa). A carga vai para o clã de quem roubou (ou para a mochila), o caminhão volta amassado e o ladrão fica procurado.
+
+## Etapa 6: polícia
+
+- Na **delegacia**, qualquer jogador sem crimes e fora de clã entra em serviço: vira robô policial e ganha **100 moedas a cada 3 minutos**.
+- Policial algema e prende procurados (E perto deles): pena de **7 min, dobrando por crime**, e **+800** de bônus. A prisão zera a ficha.
+- O preso pode pagar **fiança de 2.000 por crime**. A pena só corre online.
+- Policial que mata inocente perde o distintivo e vira procurado. A equipe pode **perdoar** pelo painel.
+- Dois robôs policiais NPC patrulham o quarteirão da delegacia.
+
+## Etapa 7: clãs, territórios e casas
+
+- **Clã** (botão ⚔ Clã): fundar custa 5.000; até 15 membros; caixa do clã; estoque das cargas roubadas (membros pegam, o líder vende).
+- **Territórios Leste e Oeste:** cada um rende **400 por hora** ao clã dono. Para tomar, o clã fica dentro do círculo por **60 s + 20 s por robô defensor**. Ou o líder **ataca com robôs** (8.000 cada, até 20): vence quem tiver mais força, e os defensores valem 30% a mais.
+- **Casas:** 12 casas à venda por **35.000** (uma por jogador). Quem tem casa renasce nela.
 
 ## Painel da equipe
 
@@ -127,6 +148,7 @@ js/rede.js              contas, perfis e tempo real (Supabase)
 js/painel.js            painel da equipe
 js/loja.js              loja e mochila
 js/empresa.js           empresas, pedidos, caminhões e missões
+js/cla.js               clãs e territórios
 supabase/               SQL do banco de dados
 assets/personagens/     17 personagens com as 13 animações
 assets/robos/           robôs (polícia, admin, moderadores, Contratante)

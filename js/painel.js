@@ -13,6 +13,7 @@ const PODERES = [
   ['imortal', 'Modo imortal'],
 ];
 const ACOES = {
+  perdoar: 'perdoou',
   moedas: 'mudou as moedas de', banir: 'baniu', desbanir: 'desbaniu', algemar: 'algemou', soltar_algemas: 'tirou as algemas de',
   prender: 'prendeu', soltar: 'soltou da cadeia', teleporte: 'teleportou', cargo: 'mudou o cargo de',
 };
@@ -90,6 +91,8 @@ function etiquetas(j, online) {
   if (j.banido) t.push('<i class="tag ruim">banido</i>');
   if (j.algemado) t.push('<i class="tag ruim">algemado</i>');
   if (j.pena_seg > 0) t.push(`<i class="tag ruim">preso ${Math.ceil(j.pena_seg / 60)} min</i>`);
+  if (j.crimes > 0) t.push(`<i class="tag ruim">procurado (${j.crimes})</i>`);
+  if (j.policial) t.push('<i class="tag moderador">policial</i>');
   return t.join(' ');
 }
 
@@ -122,7 +125,8 @@ async function abrirJogador(id) {
   if (!souEu && !equipe) {
     if (pode('algemar')) h += `<div class="sub">Algemas</div><div class="botoes"><button id="pAlgemar">${j.algemado ? 'Tirar as algemas' : 'Algemar'}</button></div>`;
     if (pode('prender')) h += `<div class="sub">Cadeia</div><div class="botoes">
-      ${j.pena_seg > 0 ? '<button id="pSoltar">Soltar agora</button>' : '<input id="pMin" type="number" min="1" max="1440" value="7" inputmode="numeric"><button id="pPrender">Prender (min)</button>'}</div>`;
+      ${j.pena_seg > 0 ? '<button id="pSoltar">Soltar agora</button>' : '<input id="pMin" type="number" min="1" max="1440" value="7" inputmode="numeric"><button id="pPrender">Prender (min)</button>'}
+      ${j.crimes > 0 ? '<button id="pPerdoar">Perdoar (zerar crimes)</button>' : ''}</div>`;
   }
   if (!souEu && pode('banir') && (eu.cargo === 'admin' ? j.cargo !== 'admin' : !equipe)) {
     h += `<div class="sub">Banimento</div><div class="botoes">
@@ -149,6 +153,7 @@ async function abrirJogador(id) {
   on('pAlgemar', () => executar(() => rede.painel.algemar(j.id, !j.algemado), j.algemado ? 'Algemas retiradas.' : `${j.nome} foi algemado.`));
   on('pPrender', () => { const m = Math.floor(Number($('pMin').value)); if (m > 0) executar(() => rede.painel.prender(j.id, m), `${j.nome} preso por ${m} min.`); });
   on('pSoltar', () => executar(() => rede.painel.prender(j.id, 0), `${j.nome} foi solto.`));
+  on('pPerdoar', () => executar(() => rede.perdoar(j.id), `${j.nome} foi perdoado.`));
   on('pBanir', () => { if (confirmarDuplo('pBanir')) executar(() => rede.painel.banir(j.id, $('pMotivo').value.trim()), `${j.nome} foi banido.`); });
   on('pDesbanir', () => executar(() => rede.painel.desbanir(j.id), `${j.nome} foi desbanido.`));
   on('pCargo', () => executar(() => rede.painel.definirCargo(j.id, j.cargo === 'moderador' ? 'jogador' : 'moderador', {}, 0),

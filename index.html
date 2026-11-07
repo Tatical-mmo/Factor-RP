@@ -65,7 +65,7 @@
   #ajuda kbd { color:var(--texto); font-family:inherit; font-weight:700; }
   #aviso { position:absolute; left:50%; top:22%; transform:translateX(-50%); font-size:15px; max-width:86vw; text-align:center; transition:opacity .3s; }
 
-  #btPainel { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(242px + env(safe-area-inset-top)); pointer-events:auto;
+  #btPainel { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(288px + env(safe-area-inset-top)); pointer-events:auto;
     font-size:14px; font-weight:700; padding:8px 14px; border-radius:10px; border:1px solid var(--borda); background:#3a2a10; color:#ffd08a; cursor:pointer; }
   #bloqueio { position:absolute; left:50%; bottom:calc(200px + env(safe-area-inset-bottom)); transform:translateX(-50%); font-size:16px; font-weight:700;
     background:rgba(120,20,20,.85); border:1px solid #ff8a7a; border-radius:12px; padding:8px 16px; white-space:nowrap; }
@@ -112,6 +112,14 @@
   #btEmpresa { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(196px + env(safe-area-inset-top)); pointer-events:auto;
     font-size:14px; font-weight:700; padding:8px 14px; border-radius:10px; border:1px solid var(--borda); background:#1f2c45; color:#bcd4ff; cursor:pointer; }
   .modal .abas:empty { display:none; }
+  #btCla { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(242px + env(safe-area-inset-top)); pointer-events:auto;
+    font-size:14px; font-weight:700; padding:8px 14px; border-radius:10px; border:1px solid var(--borda); background:#3a1f22; color:#ffc2c2; cursor:pointer; }
+  #btFianca { position:absolute; left:50%; transform:translateX(-50%); bottom:calc(250px + env(safe-area-inset-bottom)); pointer-events:auto;
+    font-size:15px; font-weight:700; padding:10px 18px; border-radius:10px; border:0; background:var(--destaque); color:#20160a; cursor:pointer; }
+  #captura { position:absolute; left:50%; transform:translateX(-50%); top:calc(60px + env(safe-area-inset-top)); font-size:14px; min-width:220px; text-align:center; }
+  #captura i { display:block; height:6px; margin-top:6px; border-radius:3px; background:var(--destaque); }
+  .vida { display:inline-block; width:70px; height:8px; border-radius:4px; background:#3a2020; vertical-align:middle; overflow:hidden; margin-left:4px; }
+  .vida i { display:block; height:100%; background:#4cc26f; } .vida.baixa i { background:#e05a4f; }
   .cartoes { display:flex; gap:8px; flex-wrap:wrap; } .cartoes div { flex:1; min-width:90px; background:#1b2130; border:1px solid var(--borda); border-radius:10px; padding:8px 10px; }
   .cartoes small { display:block; color:var(--suave); font-size:12px; } .cartoes b { font-size:20px; }
   .form { display:flex; flex-direction:column; gap:8px; margin-top:6px; }
@@ -119,6 +127,7 @@
   .modal select, .modal .form input { font-size:15px; padding:9px 10px; border-radius:8px; border:1px solid var(--borda); background:#0f131b; color:var(--texto); }
   .form button, .linha .bts button { padding:9px 13px; border-radius:9px; border:0; background:#2d3650; color:var(--texto); font-weight:700; cursor:pointer; }
   .form button { background:var(--destaque); color:#20160a; }
+  .form label.check { flex-direction:row; align-items:center; gap:8px; }
   .linha .bts { display:flex; gap:6px; margin-top:6px; }
   .botoes button.perigo { background:#8a2525 !important; }
   .fome { display:inline-block; width:70px; height:8px; border-radius:4px; background:#3a2a20; vertical-align:middle; overflow:hidden; margin-left:4px; }
@@ -186,6 +195,9 @@
   <div id="ajuda" class="painel oculto"></div>
   <button id="btMochila">🎒 Mochila</button>
   <button id="btEmpresa">🏢 Empresa</button>
+  <button id="btCla">⚔ Clã</button>
+  <button id="btFianca" class="oculto">Pagar fiança</button>
+  <div id="captura" class="painel oculto"></div>
   <button id="btPainel" class="oculto">🛡 Painel</button>
   <div id="bloqueio" class="oculto"></div>
 </div>
@@ -205,6 +217,12 @@
   <div class="abas" id="empresaAbas"></div>
   <div id="empresaConteudo" class="conteudo"></div>
   <div id="empresaMsg" class="msg"></div>
+</div>
+
+<div id="claJanela" class="modal oculto">
+  <div class="topo"><b id="claTitulo">Clã</b><button id="fecharCla" aria-label="Fechar">✕</button></div>
+  <div id="claConteudo" class="conteudo"></div>
+  <div id="claMsg" class="msg"></div>
 </div>
 
 <div id="janela" class="modal oculto">

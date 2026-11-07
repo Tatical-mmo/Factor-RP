@@ -24,7 +24,7 @@ export const PERSONAGENS = [
 export const ROBOS = ['Rusty_Scout_Bot', 'Rustbolt_Sentinel'];
 
 export const MODELOS = [
-  'caminhao', 'viatura', 'van_policia', 'caixa', 'arma_paintball', 'algemas',
+  'caminhao', 'caminhao_danificado', 'viatura', 'van_policia', 'caixa', 'arma_paintball', 'algemas',
   'bancada', 'base_cla', 'loja', 'delegacia', 'transportadora', 'casa', 'empresa', 'arvore', 'poste',
 ];
 
@@ -56,6 +56,7 @@ export const CONTROLES_PC = [
   ['Clique no chão', 'ir até o ponto'],
   ['E', 'agir (pegar, embalar, entregar, coletar, loja)'],
   ['M', 'mochila'],
+  ['F perto de caminhão', 'atacar a carga'],
   ['F', 'soco'],
   ['Q', 'sacar / guardar arma'],
   ['Clique (armado)', 'atirar'],
