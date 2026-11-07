@@ -1,0 +1,108 @@
+# Rob么 separador: junta as partes do pacote, extrai e organiza o reposit贸rio.
+# Envie para a raiz do reposit贸rio arquivos chamados:
+#   pacote-QUALQUERNOME.zip              (pacote inteiro, at茅 25 MB)
+#   pacote-QUALQUERNOME.zip.parte1de3    (pacote dividido em partes)
+# Quando todas as partes estiverem no reposit贸rio, o rob么 extrai,
+# copia os arquivos para os lugares certos, apaga o pacote e faz o commit.
+
+name: Rob么 separador
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: robo-separador
+  cancel-in-progress: false
+
+jobs:
+  separar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar reposit贸rio
+        uses: actions/checkout@v4
+
+      - name: Procurar pacotes
+        id: busca
+        shell: bash
+        run: |
+          shopt -s nullglob
+          inteiros=(pacote-*.zip)
+          partes=(pacote-*.zip.parte*de*)
+          if [ ${#inteiros[@]} -eq 0 ] && [ ${#partes[@]} -eq 0 ]; then
+            echo "Nenhum pacote encontrado. Nada a fazer."
+            echo "achou=nao" >> "$GITHUB_OUTPUT"
+          else
+            echo "achou=sim" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Juntar, extrair e organizar
+        if: steps.busca.outputs.achou == 'sim'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p /tmp/pacotes /tmp/extraido
+          processados=()
+
+          # pacotes divididos em partes
+          for base in $(ls pacote-*.zip.parte*de* 2>/dev/null | sed -E 's/\.parte[0-9]+de[0-9]+$//' | sort -u); do
+            total=$(ls "$base".parte*de* | head -n1 | sed -E 's/.*de([0-9]+)$/\1/')
+            achadas=$(ls "$base".parte*de* | wc -l)
+            if [ "$achadas" -lt "$total" ]; then
+              echo "::warning::$base: chegaram $achadas de $total partes. Esperando o resto."
+              continue
+            fi
+            for i in $(seq 1 "$total"); do
+              cat "$base.parte${i}de${total}"
+            done > "/tmp/pacotes/$(basename "$base")"
+            processados+=("$base".parte*de*)
+            echo "Juntei $total partes de $base"
+          done
+
+          # pacotes inteiros
+          for z in pacote-*.zip; do
+            cp "$z" /tmp/pacotes/
+            processados+=("$z")
+          done
+
+          if [ ${#processados[@]} -eq 0 ]; then
+            echo "Nenhum pacote completo ainda."
+            exit 0
+          fi
+
+          for z in /tmp/pacotes/*.zip; do
+            destino="/tmp/extraido/$(basename "$z" .zip)"
+            mkdir -p "$destino"
+            unzip -q -o "$z" -d "$destino"
+            # se o zip tiver uma 煤nica pasta por cima de tudo, usa o conte煤do dela
+            itens=("$destino"/*)
+            if [ ${#itens[@]} -eq 1 ] && [ -d "${itens[0]}" ]; then
+              origem="${itens[0]}"
+            else
+              origem="$destino"
+            fi
+            echo "Copiando $(basename "$z") para o reposit贸rio"
+            cp -a "$origem"/. .
+          done
+
+          git rm -q --cached --ignore-unmatch "${processados[@]}"
+          rm -f "${processados[@]}"
+
+      - name: Salvar no reposit贸rio
+        if: steps.busca.outputs.achou == 'sim'
+        shell: bash
+        run: |
+          git config user.name "Rob么 separador"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nada mudou."
+          else
+            git commit -m "Rob么 separador: pacote extra铆do e organizado"
+            git push
+          fi
