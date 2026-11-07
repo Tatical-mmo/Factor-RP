@@ -1083,7 +1083,13 @@ async function iniciarJogo(perfil) {
   conectarMultiplayer(perfil);
   rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando, inventario: recarregarInventario });
   iniciarLoja({ perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); } });
-  iniciarEmpresa({ perfil: () => jogador.perfil, agora: agoraServidor, definirMinhaEmpresa: (id) => { minhaEmpresa = id; } });
+  iniciarEmpresa({
+    perfil: () => jogador.perfil, agora: agoraServidor,
+    definirEmprego: (id) => { emprego = id; },
+    lotesOcupados: () => unidades.size,
+    lotesDe: (id) => [...unidades.entries()].filter(([, u]) => u.empresa === id).map(([l]) => l),
+    recarregar: () => { tempoLogistica = 0; },
+  });
   iniciarLogistica();
   iniciarPainel({
     perfil: () => jogador.perfil,
@@ -1206,9 +1212,13 @@ async function salvarAgora() {
 
 // ================================================================= LOGÍSTICA (etapa 4)
 const empresas = new Map();        // id -> linha da tabela empresas
+const unidades = new Map();        // lote -> { empresa, funcao }
 const visuaisLote = new Map();     // lote -> { objs: [], predio }
 const caminhoes = new Map();       // id -> { obj, d, rotaCache }
-let minhaEmpresa = null;           // empresa onde trabalho
+const robosMundo = [];             // robôs trabalhando ao lado dos prédios
+let emprego = null;                // empresa onde sou funcionário
+const trabalhoEm = (id) => empresas.get(id)?.dono === jogador.perfil.id || emprego === id;
+const robosAtivos = (e) => e.robos + (e.aluguel_ate && Date.parse(e.aluguel_ate) > agoraServidor() ? e.robos_alugados : 0);
 let offsetServidor = 0;            // ms entre o relógio do servidor e o do aparelho
 const agoraServidor = () => Date.now() + offsetServidor;
 const LOTE_L = (QB - CW * 2) / 2;  // 19 m
@@ -1222,18 +1232,19 @@ function centroLote(l) {
 function limparLote(id) {
   const v = visuaisLote.get(id); if (!v) return;
   for (const o of v.objs) scene.remove(o);
-  if (v.predio) {
-    const i = predios.indexOf(v.predio); if (i >= 0) predios.splice(i, 1);
-  }
+  if (v.predio) { const i = predios.indexOf(v.predio); if (i >= 0) predios.splice(i, 1); }
   for (const c of v.colisores || []) { const i = colisores.indexOf(c); if (i >= 0) colisores.splice(i, 1); }
   for (const it of v.mapa || []) { const i = itensMapa.indexOf(it); if (i >= 0) itensMapa.splice(i, 1); }
   for (const k of ['lotes', 'bancadasEmp', 'depositos']) pontos[k] = pontos[k].filter((p) => p.lote !== id);
+  for (let i = robosMundo.length - 1; i >= 0; i--) if (robosMundo[i].lote === id) { scene.remove(robosMundo[i].av.raiz); robosMundo.splice(i, 1); }
+  v.removido = true;
   visuaisLote.delete(id);
 }
 
 function desenharLote(l) {
   limparLote(l.id);
-  const e = [...empresas.values()].find((x) => x.lote === l.id);
+  const u = unidades.get(l.id);
+  const e = u && empresas.get(u.empresa);
   const { x, z } = centroLote(l);
   const v = { objs: [], colisores: [], mapa: [] };
   visuaisLote.set(l.id, v);
@@ -1244,8 +1255,10 @@ function desenharLote(l) {
     pontos.lotes.push({ x, z: z + 7.5, lote: l.id });
     return;
   }
-  const modelo = e.tipo === 'fabrica' ? 'empresa' : 'transportadora';
+  const fabrica = u.funcao === 'fabrica';
+  const modelo = fabrica ? 'empresa' : 'transportadora';
   const obj = colocarPredio(modelo, x, z, 0);
+  obj.scale.setScalar(1 + (e.nivel - 1) * 0.06); obj.updateMatrixWorld(true);
   const b0 = new THREE.Box3().setFromObject(obj);
   obj.position.z += (z + LOTE_L / 2 - 0.4) - b0.max.z; obj.updateMatrixWorld(true);
   // colocarPredio registrou colisor e mapa com a posição antiga: refaz
@@ -1255,13 +1268,13 @@ function desenharLote(l) {
   const it = { tipo: modelo, x0: pr.caixa.min.x, x1: pr.caixa.max.x, z0: pr.caixa.min.z, z1: pr.caixa.max.z };
   itensMapa.push(it);
   v.objs.push(obj); v.predio = pr; v.colisores.push(colisores[colisores.length - 1]); v.mapa.push(it);
-  const nome = textoSprite(e.nome, { escala: 1, cor: '#ffd9a0', fundo: 'rgba(20,24,34,.85)' });
+  const nome = textoSprite(`${e.nome} ${'★'.repeat(e.nivel)}`, { escala: 1, cor: '#ffd9a0', fundo: 'rgba(20,24,34,.85)' });
   nome.position.set(x, pr.caixa.max.y + 1.2, z); scene.add(nome); v.objs.push(nome);
-  if (e.tipo === 'fabrica') {
-    const bx = x - LOTE_L / 2 + 1.3, bz = z + 4;
+  const bx = x - LOTE_L / 2 + 1.1, bz = z + 4;
+  if (fabrica) {
     const banc = clonar('bancada'); banc.position.set(bx, 0.18, bz); scene.add(banc); banc.updateMatrixWorld(true);
-    v.objs.push(banc); v.colisores.push(addColisorCaixa(banc, 0.1) && colisores[colisores.length - 1]);
-    pontos.bancadasEmp.push({ x: bx, z: bz, empresa: e.id, lote: l.id });
+    addColisorCaixa(banc, 0.1); v.objs.push(banc); v.colisores.push(colisores[colisores.length - 1]);
+    pontos.bancadasEmp.push({ x: bx + 1.2, z: bz, empresa: e.id, lote: l.id });
     const est = textoSprite(`${PRODUTOS[e.produto].nome} · estoque ${e.estoque}`, { escala: 0.6, fundo: 'rgba(60,40,15,.85)', cor: '#ffd9a0' });
     est.position.set(bx, 2.4, bz); scene.add(est); v.objs.push(est);
     pontos.depositos.push({ x: l.portao.x, z: l.portao.z - 1.8, empresa: e.id, lote: l.id });
@@ -1270,9 +1283,20 @@ function desenharLote(l) {
     const faixa = new THREE.Mesh(new THREE.PlaneGeometry(6, 2.4), new THREE.MeshStandardMaterial({ color: '#e3b23c', roughness: 0.8, transparent: true, opacity: 0.85 }));
     faixa.rotation.x = -Math.PI / 2; faixa.position.set(l.portao.x, 0.19, l.portao.z - 1.6); scene.add(faixa); v.objs.push(faixa);
   }
+  // robôs trabalhando (até 2 visíveis por unidade)
+  const n = Math.min(2, robosAtivos(e));
+  for (let i = 0; i < n; i++) {
+    const rota = fabrica ? [[bx + 1.4, bz - 1 + i], [l.portao.x + 2 - i * 3, l.portao.z - 2.2]] : [[l.portao.x - 3 + i * 4, l.portao.z - 2.5], [l.portao.x - 3 + i * 4, l.portao.z - 2.5]];
+    criarAvatar('robos', fabrica ? 'Rusty_Scout_Bot' : 'Rustbolt_Sentinel').then((av) => {
+      if (v.removido) return;
+      av.raiz.position.set(rota[0][0], 0.18, rota[0][1]); av.raiz.scale.setScalar(0.85);
+      scene.add(av.raiz);
+      av.tocar(fabrica ? 'carry_walk' : 'idle_long');
+      robosMundo.push({ av, rota, i: 1, lote: l.id, anda: fabrica });
+    }).catch(() => {});
+  }
 }
 
-function redesenharLotes() { for (const l of LOTES_VENDA) desenharLote(l); desenharFundoMapa(); }
 
 // ---------------------------------------------------------------- caminhões dos jogadores
 // rota pela grade de ruas: sai do ponto, entra na rua mais próxima, segue em L pelos cruzamentos
@@ -1333,10 +1357,23 @@ function pernas(c) {
   return p;
 }
 function posicaoEstacionado(c) {
-  const e = empresas.get(c.d.empresa); const l = e && LOTES_VENDA.find((x) => x.id === e.lote); if (!l) return null;
+  const meusLotes = [...unidades.entries()].filter(([, u]) => u.empresa === c.d.empresa).sort((a, b) => (b[1].funcao === 'transportadora') - (a[1].funcao === 'transportadora') || a[0] - b[0]);
+  const l = meusLotes.length && LOTES_VENDA.find((x) => x.id === meusLotes[0][0]); if (!l) return null;
   const meus = [...caminhoes.values()].filter((k) => k.d.empresa === c.d.empresa && k.d.status === 'parado').map((k) => k.d.id).sort((a, b) => a - b);
   const i = Math.max(0, meus.indexOf(c.d.id));
   return { x: l.portao.x - 6 + i * 7.5, z: l.portao.z + 2.6, ang: Math.PI / 2 };
+}
+
+function atualizarRobos(dt) {
+  for (const r of robosMundo) {
+    if (r.anda) {
+      const [tx, tz] = r.rota[r.i]; const p = r.av.raiz.position;
+      const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz);
+      if (d < 0.3) r.i = (r.i + 1) % r.rota.length;
+      else { p.x += dx / d * 1.3 * dt; p.z += dz / d * 1.3 * dt; r.av.raiz.rotation.y = suavizarAngulo(r.av.raiz.rotation.y, Math.atan2(dx, dz), dt * 6); }
+    }
+    r.av.mixer.update(dt);
+  }
 }
 function sincronizarCaminhao(d) {
   let c = caminhoes.get(d.id);
@@ -1378,47 +1415,53 @@ function atualizarCaminhoes(dt) {
   }
 }
 
+async function carregarLogistica() {
+  const [lista, frota, unis, emp] = await Promise.all([rede.listarEmpresas(), rede.listarCaminhoes(), rede.listarUnidades(), rede.minhaEmpresaId(jogador.perfil.id)]);
+  emprego = emp;
+  // lotes que mudaram (dono, nome, nível, robôs, estoque) são redesenhados
+  const assinatura = (lote) => { const u = unidades.get(lote); const e = u && empresas.get(u.empresa);
+    return u ? `${u.empresa}|${u.funcao}|${e?.nome}|${e?.nivel}|${e?.estoque}|${e && robosAtivos(e)}` : ''; };
+  const antes = new Map(LOTES_VENDA.map((l) => [l.id, visuaisLote.has(l.id) ? assinatura(l.id) : null]));
+  empresas.clear(); for (const e of lista) empresas.set(e.id, e);
+  unidades.clear(); for (const u of unis) unidades.set(u.lote, u);
+  let mudou = false;
+  for (const l of LOTES_VENDA) if (antes.get(l.id) !== assinatura(l.id)) { desenharLote(l); mudou = true; }
+  if (mudou) desenharFundoMapa();
+  const ids = new Set(frota.map((c) => c.id));
+  for (const [id, c] of caminhoes) if (!ids.has(id)) { scene.remove(c.obj); caminhoes.delete(id); }
+  for (const c of frota) sincronizarCaminhao(c);
+}
+
+let tempoLogistica = 0, tempoProcessar = 60;
+function atualizarLogistica(dt) {
+  tempoLogistica -= dt; tempoProcessar -= dt;
+  if (tempoLogistica <= 0) { tempoLogistica = 10; carregarLogistica().catch(() => {}); }
+  // mantém robôs produzindo e viagens fechando mesmo sem ninguém abrir a empresa
+  if (tempoProcessar <= 0) { tempoProcessar = 60; rede.logistica.processar().catch(() => {}); }
+}
+
 async function iniciarLogistica() {
   try {
     const t0 = Date.now(); const srv = await rede.logistica.agora(); const t1 = Date.now();
     offsetServidor = Date.parse(srv) - (t0 + t1) / 2;
   } catch { offsetServidor = 0; }
-  try {
-    const [lista, frota, minha] = await Promise.all([rede.listarEmpresas(), rede.listarCaminhoes(), rede.minhaEmpresaId(jogador.perfil.id)]);
-    for (const e of lista) empresas.set(e.id, e);
-    for (const c of frota) sincronizarCaminhao(c);
-    minhaEmpresa = minha;
-  } catch (e) { console.warn('logística', e); }
-  redesenharLotes();
+  try { await carregarLogistica(); } catch (e) { console.warn('logística', e); for (const l of LOTES_VENDA) desenharLote(l); }
+  const recarregar = () => { tempoLogistica = Math.min(tempoLogistica, 0.3); };
   rede.escutarLogistica({
-    empresa: ({ eventType, new: n }) => {
-      if (eventType === 'DELETE') return;
-      const antes = empresas.get(n.id);
-      empresas.set(n.id, { ...antes, ...n });
-      if (!antes || antes.estoque !== n.estoque || antes.nome !== n.nome) {
-        const l = LOTES_VENDA.find((x) => x.id === n.lote); if (l) { desenharLote(l); if (!antes) desenharFundoMapa(); }
-      }
-      atualizarJanelaEmpresa();
-    },
-    caminhao: ({ eventType, new: n, old: o }) => {
-      if (eventType === 'DELETE') { const c = caminhoes.get(o.id); if (c) { scene.remove(c.obj); caminhoes.delete(o.id); } return; }
-      sincronizarCaminhao(n);
-    },
-    membro: ({ eventType, new: n, old: o }) => {
-      if (eventType === 'DELETE' && o.jogador === jogador.perfil.id) minhaEmpresa = null;
-      else if (n?.jogador === jogador.perfil.id) minhaEmpresa = n.empresa;
-      atualizarJanelaEmpresa();
-    },
+    empresa: () => { recarregar(); atualizarJanelaEmpresa(); },
+    unidade: () => recarregar(),
+    caminhao: ({ eventType, new: n }) => { if (eventType !== 'DELETE') sincronizarCaminhao(n); else recarregar(); },
+    membro: () => { recarregar(); atualizarJanelaEmpresa(); },
     pedido: () => atualizarJanelaEmpresa(),
   });
 }
 
 // ---------------------------------------------------------------- tarefas das empresas dos jogadores
 async function embalarFabrica(b) {
-  if (minhaEmpresa !== b.empresa) { aviso(`Bancada da ${empresas.get(b.empresa)?.nome || 'empresa'}. Peça emprego ao dono para trabalhar aqui.`, 3.5); return; }
+  if (!trabalhoEm(b.empresa)) { aviso(`Bancada da ${empresas.get(b.empresa)?.nome || 'empresa'}. Peça emprego ao dono para trabalhar aqui.`, 3.5); return; }
   if (ocupado) return; ocupado = true;
   try {
-    const pago = await rede.logistica.embalar();
+    const pago = await rede.logistica.embalar(b.empresa);
     virarPara(b.x, b.z); jogador.alvo = null;
     jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 0.6, fade: 0.15 });
     jogador.trava = 2.8;
@@ -1430,11 +1473,16 @@ async function embalarFabrica(b) {
 async function retirarDoDeposito(dep) {
   if (ocupado) return; ocupado = true;
   try {
-    const minha = empresas.get(minhaEmpresa);
-    if (!minha || minha.tipo !== 'transportadora') { aviso('Só funcionários de transportadora retiram cargas aqui.'); return; }
-    const aceitos = await rede.pedidosAceitosDe(minha.id);
-    const pd = aceitos.find((p) => p.fabrica === dep.empresa && p.qtd - p.entregues - p.em_transito > 0);
-    if (!pd) { aviso('Sua transportadora não tem pedido aceito desta fábrica.', 3.5); return; }
+    // empresas em que posso levar carga: as minhas com frota e a do meu emprego
+    const candidatas = [...empresas.values()].filter((e) => (e.dono === jogador.perfil.id && (e.transporte || e.nivel >= 3)) || (e.id === emprego && e.transporte));
+    if (!candidatas.length) { aviso('Só quem trabalha em transportadora retira cargas aqui.'); return; }
+    let pd = null;
+    for (const e of candidatas) {
+      const aceitos = await rede.pedidosAceitosDe(e.id);
+      pd = aceitos.find((p) => p.fabrica === dep.empresa && p.qtd - p.entregues - p.em_transito > 0);
+      if (pd) break;
+    }
+    if (!pd) { aviso('Não há pedido aceito desta fábrica para a sua transportadora.', 3.5); return; }
     const produto = await rede.logistica.retirar(pd.id);
     virarPara(dep.x, dep.z); jogador.alvo = null;
     jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 1.5, fade: 0.15 });
@@ -1749,6 +1797,8 @@ function quadro() {
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);
+  atualizarRobos(dt);
+  atualizarLogistica(dt);
   atualizarNPCs(dt);
   atualizarRemotos(dt);
   enviarEstado(dt);

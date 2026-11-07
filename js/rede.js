@@ -164,6 +164,16 @@ function traduzirRpc(m) {
     'caminhao em viagem': 'Esse caminhão está em viagem.',
     'missao indisponivel': 'Essa missão não está mais disponível.',
     'sua fabrica nao produz esse item': 'Sua fábrica não produz esse item.',
+    'voce nao e dono dessa empresa': 'Você não é dono dessa empresa.',
+    'limite de empresas': 'Limite de 5 empresas por dono.',
+    'o dono ja trabalha na empresa': 'O dono já trabalha na empresa.',
+    'nivel maximo': 'A empresa já está no nível máximo.',
+    'limite de robos': 'Limite de robôs deste nível. Evolua a empresa para ter mais.',
+    'so transportadoras ou empresas nivel 3 compram caminhao': 'Só transportadoras, grupos ou empresas nível 3 compram caminhão.',
+    'escolha duas empresas diferentes': 'Escolha duas empresas diferentes.',
+    'fabricas de produtos diferentes': 'Não dá para fundir fábricas de produtos diferentes.',
+    'termine os pedidos da empresa absorvida antes': 'Termine ou cancele os pedidos da empresa absorvida antes.',
+    'ha caminhoes em viagem': 'Há caminhões em viagem; espere voltarem.',
   };
   const espera = /^aguarde (\d+) s$/.exec(m);
   if (espera) return `Aguarde ${espera[1]} s.`;
@@ -225,29 +235,34 @@ export async function carregarInventario(id) {
 // ---------------------------------------------------------------- logística (etapa 4)
 export const logistica = {
   comprarLote: (lote, nome, tipo, produto) => rpc('comprar_lote', { p_lote: lote, p_nome: nome, p_tipo: tipo, p_produto: produto }),
-  depositar: (valor) => rpc('empresa_depositar', { valor }),
-  sacar: (valor) => rpc('empresa_sacar', { valor }),
-  pagamento: (valor) => rpc('empresa_pagamento', { valor }),
-  contratar: (nome) => rpc('contratar', { p_nome: nome }),
-  demitir: (jogador) => rpc('demitir', { p_jogador: jogador }),
+  depositar: (empresa, valor) => rpc('empresa_depositar', { p_empresa: empresa, valor }),
+  sacar: (empresa, valor) => rpc('empresa_sacar', { p_empresa: empresa, valor }),
+  pagamento: (empresa, valor) => rpc('empresa_pagamento', { p_empresa: empresa, valor }),
+  contratar: (empresa, nome) => rpc('contratar', { p_empresa: empresa, p_nome: nome }),
+  demitir: (empresa, jogador) => rpc('demitir', { p_empresa: empresa, p_jogador: jogador }),
   sair: () => rpc('sair_empresa'),
-  embalar: () => rpc('embalar_fabrica'),
-  criarPedido: (transportadora, qtd, frete) => rpc('criar_pedido', { p_transportadora: transportadora, p_qtd: qtd, p_frete: frete }),
+  embalar: (empresa) => rpc('embalar_fabrica', { p_empresa: empresa }),
+  evoluir: (empresa) => rpc('evoluir_empresa', { p_empresa: empresa }),
+  comprarRobo: (empresa) => rpc('comprar_robo', { p_empresa: empresa }),
+  alugarRobo: (empresa) => rpc('alugar_robo', { p_empresa: empresa }),
+  fundir: (principal, absorvida) => rpc('fundir_empresas', { p_principal: principal, p_absorvida: absorvida }),
+  criarPedido: (fabrica, transportadora, qtd, frete) => rpc('criar_pedido', { p_fabrica: fabrica, p_transportadora: transportadora, p_qtd: qtd, p_frete: frete }),
   responder: (pedido, aceitar) => rpc('responder_pedido', { p_pedido: pedido, aceitar }),
   cancelar: (pedido) => rpc('cancelar_pedido', { p_pedido: pedido }),
   retirar: (pedido) => rpc('retirar_caixa', { p_pedido: pedido }),
   entregar: () => rpc('entregar_caixa'),
   desistir: () => rpc('desistir_caixa'),
-  comprarCaminhao: () => rpc('comprar_caminhao'),
+  comprarCaminhao: (empresa) => rpc('comprar_caminhao', { p_empresa: empresa }),
   despachar: (caminhao, pedido) => rpc('despachar_caminhao', { p_caminhao: caminhao, p_pedido: pedido }),
   processar: () => rpc('processar_caminhoes'),
   missoes: () => rpc('listar_missoes'),
-  aceitarMissao: (missao, transportadora, frete) => rpc('aceitar_missao', { p_missao: missao, p_transportadora: transportadora, p_frete: frete }),
+  aceitarMissao: (missao, fabrica, transportadora, frete) => rpc('aceitar_missao', { p_missao: missao, p_fabrica: fabrica, p_transportadora: transportadora, p_frete: frete }),
   agora: () => rpc('agora'),
 };
 async function sel(q) { const { data, error } = await q; if (error) throw new Error(error.message); return data; }
 export const listarEmpresas = () => sel(sb.from('empresas').select('*, dono_perfil:perfis!empresas_dono_fkey(nome)').order('id'));
 export const listarCaminhoes = () => sel(sb.from('caminhoes').select('*').order('id'));
+export const listarUnidades = () => sel(sb.from('unidades').select('*'));
 export const listarMercado = () => sel(sb.from('mercado').select('*'));
 export async function minhaEmpresaId(id) {
   const d = await sel(sb.from('membros').select('empresa').eq('jogador', id).maybeSingle());
@@ -267,6 +282,7 @@ export function escutarLogistica(eventos) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'caminhoes' }, (p) => eventos.caminhao?.(p))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'membros' }, (p) => eventos.membro?.(p))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, (p) => eventos.pedido?.(p))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'unidades' }, (p) => eventos.unidade?.(p))
     .subscribe();
   return () => sb.removeChannel(canal);
 }
