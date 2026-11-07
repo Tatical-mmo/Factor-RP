@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1b1f2a">
+<title>Fator RP</title>
+<style>
+  :root { --bg:#1b1f2a; --painel:rgba(20,24,34,.86); --borda:rgba(255,255,255,.12); --texto:#f1ede4; --suave:#a9b0bd; --destaque:#f2a33a; --verde:#5cc28a; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--texto);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; touch-action:none; user-select:none; -webkit-user-select:none; }
+  #jogo { position:fixed; inset:0; display:block; }
+  .oculto { display:none !important; }
+
+  /* Tela de escolha */
+  #escolha { position:fixed; inset:0; z-index:20; overflow-y:auto; touch-action:pan-y;
+    background: radial-gradient(1200px 600px at 50% -10%, #3a4560 0%, var(--bg) 60%); padding: 24px 16px 120px; }
+  #escolha h1 { margin:8px 0 2px; font-size: clamp(28px, 6vw, 44px); letter-spacing:1px; text-align:center; }
+  #escolha h1 span { color:var(--destaque); }
+  #escolha p.sub { margin:0 0 18px; text-align:center; color:var(--suave); }
+  .grade { display:grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap:10px; max-width:980px; margin:0 auto; }
+  .carta { background:rgba(255,255,255,.05); border:2px solid transparent; border-radius:14px; padding:6px 6px 8px; cursor:pointer;
+    text-align:center; transition: transform .12s, border-color .12s, background .12s; }
+  .carta:hover { transform: translateY(-2px); background:rgba(255,255,255,.09); }
+  .carta.sel { border-color:var(--destaque); background:rgba(242,163,58,.14); }
+  .carta img { width:100%; aspect-ratio:1; object-fit:contain; display:block; }
+  .carta div { font-size:13px; margin-top:2px; }
+  #barraEscolha { position:fixed; left:0; right:0; bottom:0; z-index:21; display:flex; gap:10px; justify-content:center; align-items:center;
+    padding:14px 16px calc(14px + env(safe-area-inset-bottom)); background:var(--painel); border-top:1px solid var(--borda); flex-wrap:wrap; }
+  #nome { font-size:17px; padding:12px 14px; border-radius:10px; border:1px solid var(--borda); background:#0f131b; color:var(--texto); width:min(260px, 60vw); }
+  .btn { font-size:16px; font-weight:700; padding:12px 20px; border-radius:10px; border:0; background:var(--destaque); color:#20160a; cursor:pointer; }
+  .btn:disabled { opacity:.45; cursor:default; }
+  #erroNome { width:100%; text-align:center; color:#ff8a7a; font-size:13px; min-height:16px; margin:-4px 0 0; }
+
+  /* Carregando */
+  #carregando { position:fixed; inset:0; z-index:30; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:var(--bg); }
+  #carregando .barra { width:min(320px, 70vw); height:10px; border-radius:6px; background:#2b3242; overflow:hidden; }
+  #carregando .barra i { display:block; height:100%; width:0; background:var(--destaque); transition:width .15s; }
+  #carregando small { color:var(--suave); }
+
+  /* HUD */
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:10; }
+  .painel { background:var(--painel); border:1px solid var(--borda); border-radius:12px; padding:8px 12px; }
+  #info { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(10px + env(safe-area-inset-top)); font-size:14px; line-height:1.45; }
+  #info b { color:var(--destaque); }
+  #rua { position:absolute; left:50%; transform:translateX(-50%); top:calc(10px + env(safe-area-inset-top)); font-size:14px; white-space:nowrap; }
+  #mapa { position:absolute; right:calc(10px + env(safe-area-inset-right)); top:calc(10px + env(safe-area-inset-top)); border-radius:12px; border:1px solid var(--borda); width:150px; height:150px; }
+  #dica { position:absolute; left:50%; transform:translateX(-50%); bottom:calc(150px + env(safe-area-inset-bottom)); font-size:15px; }
+  #ajuda { position:absolute; left:calc(10px + env(safe-area-inset-left)); bottom:calc(10px + env(safe-area-inset-bottom)); font-size:12.5px; color:var(--suave); line-height:1.5; }
+  #ajuda kbd { color:var(--texto); font-family:inherit; font-weight:700; }
+  #aviso { position:absolute; left:50%; top:22%; transform:translateX(-50%); font-size:15px; max-width:86vw; text-align:center; transition:opacity .3s; }
+
+  /* Controles de toque */
+  #toque { position:fixed; inset:0; pointer-events:none; z-index:11; }
+  #joy { position:absolute; left:calc(22px + env(safe-area-inset-left)); bottom:calc(22px + env(safe-area-inset-bottom)); width:130px; height:130px; border-radius:50%;
+    background:rgba(255,255,255,.08); border:2px solid rgba(255,255,255,.18); pointer-events:auto; touch-action:none; }
+  #joy i { position:absolute; left:50%; top:50%; width:56px; height:56px; margin:-28px 0 0 -28px; border-radius:50%; background:rgba(255,255,255,.35); }
+  #botoes { position:absolute; right:calc(16px + env(safe-area-inset-right)); bottom:calc(18px + env(safe-area-inset-bottom)); display:grid; grid-template-columns:repeat(2, 66px); gap:10px; pointer-events:auto; }
+  .bt { width:66px; height:66px; border-radius:50%; border:2px solid rgba(255,255,255,.25); background:rgba(20,24,34,.7); color:var(--texto);
+    font-size:12.5px; font-weight:700; touch-action:none; }
+  .bt:active, .bt.ativo { background:rgba(242,163,58,.55); }
+  #girar { position:absolute; right:calc(10px + env(safe-area-inset-right)); top:calc(170px + env(safe-area-inset-top)); display:flex; gap:8px; pointer-events:auto; }
+  #girar .bt { width:46px; height:46px; font-size:18px; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="jogo"></canvas>
+
+<section id="escolha">
+  <h1>FATOR <span>RP</span></h1>
+  <p class="sub">Escolha seu personagem e o nome que a cidade vai conhecer.</p>
+  <div class="grade" id="grade"></div>
+</section>
+<div id="barraEscolha">
+  <input id="nome" maxlength="16" placeholder="Seu nome no jogo" autocomplete="off">
+  <button class="btn" id="entrar" disabled>Entrar na cidade</button>
+  <div id="erroNome"></div>
+</div>
+
+<div id="carregando" class="oculto">
+  <div>Carregando a cidade…</div>
+  <div class="barra"><i id="progresso"></i></div>
+  <small id="progressoTxt">0%</small>
+</div>
+
+<div id="hud" class="oculto">
+  <div id="info" class="painel"></div>
+  <div id="rua" class="painel">—</div>
+  <canvas id="mapa" width="300" height="300"></canvas>
+  <div id="dica" class="painel oculto"></div>
+  <div id="aviso" class="painel" style="opacity:0"></div>
+  <div id="ajuda" class="painel oculto"></div>
+</div>
+
+<div id="toque" class="oculto">
+  <div id="joy"><i></i></div>
+  <div id="botoes">
+    <button class="bt" id="btAcao">Pegar</button>
+    <button class="bt" id="btSoco">Soco</button>
+    <button class="bt" id="btArma">Arma</button>
+    <button class="bt" id="btTiro">Atirar</button>
+  </div>
+  <div id="girar"><button class="bt" id="btGiraE">⟲</button><button class="bt" id="btGiraD">⟳</button></div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

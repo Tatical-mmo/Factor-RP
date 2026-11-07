@@ -1,2 +1,71 @@
-# Factor-RP
-RP
+# Fator RP
+
+MMO sandbox de negócios, conflito e vida urbana. Esta é a **etapa 1**: a cidade isométrica com o personagem andando, sem multiplayer ainda.
+
+## O que já funciona
+
+- Tela de escolha com 17 personagens e nome do jogador (fica salvo no navegador).
+- Cidade central 4 x 4 com 10 ruas nomeadas, calçadas, postes e árvores.
+- Delegacia, lojas, empresas, transportadora e casas com a frente virada para a rua.
+- Praça do Contratante, com o robô NPC.
+- Duas bases de clã fora da cidade, com território marcado.
+- Um caminhão circulando pelas ruas, que para quando há alguém na frente.
+- Quatro moradores andando pelas calçadas.
+- Personagem com andar, correr, pegar e soltar caixa, carregar, soco, sacar a arma, andar armado e atirar paintball (a tinta mancha o chão e as paredes).
+- Câmera isométrica que acompanha o jogador, gira de 90 em 90 graus e tem zoom.
+- Prédios ficam transparentes quando escondem o jogador.
+- Minimapa e nome da rua onde o jogador está.
+- Controles de PC (teclado e mouse) e de celular (joystick e botões).
+
+## Controles no PC
+
+| Tecla | Ação |
+| --- | --- |
+| W A S D ou setas | andar |
+| Shift | correr |
+| Clique no chão | ir até o ponto |
+| E | pegar ou soltar caixa, falar com o Contratante |
+| F | soco |
+| Q | sacar ou guardar a arma |
+| Clique (armado) | atirar |
+| Z / X | girar a câmera |
+| Roda do mouse | zoom |
+
+No celular: joystick à esquerda (empurrar até o fim corre), botões à direita, toque no chão para andar até o ponto e pinça para zoom.
+
+## Como publicar no GitHub Pages
+
+1. Envie todo o conteúdo desta pasta para a raiz do repositório.
+2. No GitHub, abra **Settings → Pages**.
+3. Em **Source**, escolha **Deploy from a branch**, a branch principal e a pasta **/ (root)**.
+4. Em um ou dois minutos o jogo fica em `https://<usuário>.github.io/<repositório>/`.
+
+## Como testar no computador
+
+O jogo precisa de um servidor (abrir o `index.html` direto não funciona). Na pasta do jogo:
+
+```
+npx serve .
+```
+
+ou
+
+```
+python -m http.server 8000
+```
+
+Depois abra o endereço que aparecer no terminal.
+
+## Estrutura
+
+```
+index.html              telas, HUD e estilos
+js/config.js            personagens, ruas, layout da cidade, velocidades
+js/main.js              motor do jogo (Three.js 0.170 via CDN)
+assets/personagens/     17 personagens com as 13 animações
+assets/robos/           robôs (polícia, admin, moderadores, Contratante)
+assets/modelos/         prédios, veículos e objetos
+assets/miniaturas/      imagens da tela de escolha
+```
+
+Animações de cada personagem: `idle`, `idle_long`, `walk`, `run`, `carry_walk`, `pickup`, `punch_left`, `punch_right`, `punch_combo`, `shoot`, `walk_shoot`, `hit`, `death`.
