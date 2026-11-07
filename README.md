@@ -1,6 +1,6 @@
 # Fator RP
 
-MMO sandbox de negócios, conflito e vida urbana. Esta é a **etapa 1**: a cidade isométrica com o personagem andando, sem multiplayer ainda.
+MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 2**, com contas, perfil salvo e jogadores se vendo na cidade em tempo real.
 
 ## O que já funciona
 
@@ -16,6 +16,20 @@ MMO sandbox de negócios, conflito e vida urbana. Esta é a **etapa 1**: a cidad
 - Prédios ficam transparentes quando escondem o jogador.
 - Minimapa e nome da rua onde o jogador está.
 - Controles de PC (teclado e mouse) e de celular (joystick e botões).
+
+## Etapa 2: contas e multiplayer
+
+- Login e cadastro por e-mail e senha (Supabase Auth).
+- Perfil salvo no banco: nome único, personagem, moedas, cargo e última posição.
+- O jogador volta para onde parou (a posição é salva a cada 15 s e ao sair).
+- Jogadores online aparecem na cidade com nome, animações, arma e caixa nas mãos.
+- Tiros de paintball aparecem para todos.
+- Contador de jogadores online e botão de sair da conta.
+
+### Configuração do Supabase (uma vez só)
+
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**.
+2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
 
 ## Controles no PC
 
@@ -62,6 +76,8 @@ Depois abra o endereço que aparecer no terminal.
 index.html              telas, HUD e estilos
 js/config.js            personagens, ruas, layout da cidade, velocidades
 js/main.js              motor do jogo (Three.js 0.170 via CDN)
+js/rede.js              contas, perfis e tempo real (Supabase)
+supabase/               SQL do banco de dados
 assets/personagens/     17 personagens com as 13 animações
 assets/robos/           robôs (polícia, admin, moderadores, Contratante)
 assets/modelos/         prédios, veículos e objetos

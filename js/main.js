@@ -2,31 +2,56 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { PERSONAGENS, MODELOS, CIDADE, RUAS_HORIZONTAIS, RUAS_VERTICAIS, QUARTEIROES_ESPECIAIS, VELOCIDADE, CONTROLES_PC } from './config.js';
+import { PERSONAGENS, ROBOS, MODELOS, CIDADE, RUAS_HORIZONTAIS, RUAS_VERTICAIS, QUARTEIROES_ESPECIAIS, VELOCIDADE, CONTROLES_PC } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const TOQUE = window.matchMedia('(pointer: coarse)').matches;
 
-// ---------------------------------------------------------------- armazenamento local
-const salvo = (() => { try { return JSON.parse(localStorage.getItem('fatorrp') || '{}'); } catch { return {}; } })();
-function salvar(dados) { try { localStorage.setItem('fatorrp', JSON.stringify(dados)); } catch { /* sem armazenamento */ } }
+import * as rede from './rede.js';
 
-// ================================================================= TELA DE ESCOLHA
-let escolhido = salvo.personagem || null;
+// ================================================================= CONTA E PERFIL
+let escolhido = null;
+let sessao = null;
+const msgLogin = (t, ok = false) => { const m = $('msgLogin'); m.textContent = t; m.classList.toggle('ok', ok); };
+
+function mostrar(id) {
+  for (const t of ['login', 'escolha', 'barraEscolha', 'carregando']) $(t).classList.toggle('oculto', !(id === t || (id === 'escolha' && t === 'barraEscolha')));
+}
+
+async function aposLogin(s) {
+  sessao = s;
+  msgLogin('Carregando perfil…', true);
+  const perfil = await rede.carregarPerfil(s.user.id);
+  if (perfil) comecar(perfil);
+  else { mostrar('escolha'); validar(); }
+}
+
+function montarLogin() {
+  const acao = async (fn) => {
+    const email = $('email').value.trim(), senha = $('senha').value;
+    if (!email || !senha) { msgLogin('Preencha e-mail e senha.'); return; }
+    $('btEntrar').disabled = $('btCriar').disabled = true; msgLogin('Aguarde…', true);
+    try { await aposLogin(await fn(email, senha)); }
+    catch (e) { msgLogin(e.message, e.message.startsWith('Conta criada')); }
+    finally { $('btEntrar').disabled = $('btCriar').disabled = false; }
+  };
+  $('btEntrar').onclick = () => acao(rede.entrar);
+  $('btCriar').onclick = () => acao(rede.cadastrar);
+  $('senha').addEventListener('keydown', (e) => { if (e.key === 'Enter') acao(rede.entrar); });
+}
+
 function montarEscolha() {
   const grade = $('grade');
   for (const p of PERSONAGENS) {
     const c = document.createElement('div');
-    c.className = 'carta' + (p.id === escolhido ? ' sel' : '');
+    c.className = 'carta';
     c.innerHTML = `<img src="assets/miniaturas/${p.id}.webp" alt="" loading="lazy"><div>${p.nome}</div>`;
     c.onclick = () => { escolhido = p.id; document.querySelectorAll('.carta').forEach(e => e.classList.remove('sel')); c.classList.add('sel'); validar(); };
     grade.appendChild(c);
   }
-  $('nome').value = salvo.nome || '';
   $('nome').addEventListener('input', validar);
-  $('nome').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !$('entrar').disabled) entrar(); });
-  $('entrar').onclick = entrar;
-  validar();
+  $('nome').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !$('entrar').disabled) criar(); });
+  $('entrar').onclick = criar;
 }
 function nomeValido(n) { return /^[\p{L}\p{N} _.-]{3,16}$/u.test(n); }
 function validar() {
@@ -37,13 +62,19 @@ function validar() {
   $('erroNome').textContent = erro;
   $('entrar').disabled = !(escolhido && nomeValido(n));
 }
-function entrar() {
-  const nome = $('nome').value.trim();
-  salvar({ nome, personagem: escolhido });
-  $('escolha').classList.add('oculto'); $('barraEscolha').classList.add('oculto');
-  iniciarJogo(nome, escolhido).catch((e) => { console.error(e); $('progressoTxt').textContent = 'Erro ao carregar: ' + e.message; });
+async function criar() {
+  $('entrar').disabled = true; $('erroNome').textContent = 'Criando…';
+  try { comecar(await rede.criarPerfil(sessao.user.id, $('nome').value.trim(), escolhido)); }
+  catch (e) { $('erroNome').textContent = e.message; validar(); $('erroNome').textContent = e.message; }
 }
+function comecar(perfil) {
+  mostrar('carregando');
+  iniciarJogo(perfil).catch((e) => { console.error(e); $('progressoTxt').textContent = 'Erro ao carregar: ' + e.message; });
+}
+
+montarLogin();
 montarEscolha();
+rede.sessaoAtual().then((s) => { if (s) aposLogin(s).catch((e) => { mostrar('login'); msgLogin(e.message); }); });
 
 // ================================================================= MOTOR
 const canvas = $('jogo');
@@ -62,9 +93,9 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.55;
 
-const hemi = new THREE.HemisphereLight('#dfeeff', '#8a7457', 1.1);
+const hemi = new THREE.HemisphereLight('#dfeeff', '#8a7457', 1.3);
 scene.add(hemi);
-const sol = new THREE.DirectionalLight('#fff2dc', 2.4);
+const sol = new THREE.DirectionalLight('#fff2dc', 2.1);
 sol.castShadow = true;
 sol.shadow.mapSize.set(TOQUE ? 1024 : 2048, TOQUE ? 1024 : 2048);
 const SOMBRA = 34;
@@ -141,42 +172,76 @@ function montarChao() {
   const terra = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), materialChao('#bda783'));
   terra.rotation.x = -Math.PI / 2; terra.receiveShadow = true; scene.add(terra);
 
-  const asfalto = materialChao('#3b3f47', 0.9);
-  const calc = materialChao('#c9c2b4', 0.92);
-  const grama = materialChao('#7fa45a');
-  const pateo = materialChao('#a99b84');
+  const asfaltoTex = texturaCanvas(256, (g, t) => {
+    g.fillStyle = '#41454d'; g.fillRect(0, 0, t, t);
+    ruido(g, t, 9000, 0.06, 1.6);
+    g.strokeStyle = 'rgba(25,27,31,.45)'; g.lineWidth = 1.2;
+    for (let k = 0; k < 4; k++) { g.beginPath(); let x = Math.random() * t, y = Math.random() * t; g.moveTo(x, y); for (let n = 0; n < 6; n++) { x += (Math.random() - 0.5) * 30; y += (Math.random() - 0.5) * 30; g.lineTo(x, y); } g.stroke(); }
+  });
+  const calcTex = texturaCanvas(256, (g, t) => {
+    const n = 4, l = t / n;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const v = 200 + Math.floor(Math.random() * 14); g.fillStyle = `rgb(${v + 6},${v},${v - 12})`; g.fillRect(i * l, j * l, l, l);
+    }
+    ruido(g, t, 3000, 0.05, 1.2);
+    g.strokeStyle = 'rgba(120,112,98,.55)'; g.lineWidth = 2;
+    for (let i = 0; i <= n; i++) { g.beginPath(); g.moveTo(i * l, 0); g.lineTo(i * l, t); g.moveTo(0, i * l); g.lineTo(t, i * l); g.stroke(); }
+  });
+  const gramaTex = texturaCanvas(256, (g, t) => { g.fillStyle = '#7aa357'; g.fillRect(0, 0, t, t); ruido(g, t, 12000, 0.1, 2, [40, 70, 20]); });
+  const pateoTex = texturaCanvas(256, (g, t) => { g.fillStyle = '#ab9c82'; g.fillRect(0, 0, t, t); ruido(g, t, 9000, 0.08, 1.8, [70, 55, 35]); });
   const comp = TOTAL;
+  const matTex = (tex, rx, ry, rug = 0.92) => { const t = tex.clone(); t.needsUpdate = true; t.repeat.set(rx, ry); return new THREE.MeshStandardMaterial({ map: t, roughness: rug, metalness: 0 }); };
+  const asfH = matTex(asfaltoTex, comp / 7, RW / 7, 0.88), asfV = matTex(asfaltoTex, RW / 7, comp / 7, 0.88);
   for (let i = 0; i <= N; i++) {
-    const h = new THREE.Mesh(new THREE.PlaneGeometry(comp, RW), asfalto);
+    const h = new THREE.Mesh(new THREE.PlaneGeometry(comp, RW), asfH);
     h.rotation.x = -Math.PI / 2; h.position.set(0, 0.02, ruaC(i)); h.receiveShadow = true; scene.add(h);
-    const v = new THREE.Mesh(new THREE.PlaneGeometry(RW, comp), asfalto);
+    const v = new THREE.Mesh(new THREE.PlaneGeometry(RW, comp), asfV);
     v.rotation.x = -Math.PI / 2; v.position.set(ruaC(i), 0.021, 0); v.receiveShadow = true; scene.add(v);
   }
   // estradas de terra até as bases de clã
   for (const s of [-1, 1]) {
-    const e = new THREE.Mesh(new THREE.PlaneGeometry(BASE_X - METADE, RW * 0.8), materialChao('#8f7d62'));
+    const e = new THREE.Mesh(new THREE.PlaneGeometry(BASE_X - METADE, RW * 0.8), matTex(pateoTex, (BASE_X - METADE) / 8, 1));
     e.rotation.x = -Math.PI / 2; e.position.set(s * (METADE + (BASE_X - METADE) / 2), 0.015, ruaC(2)); e.receiveShadow = true; scene.add(e);
   }
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), um = new THREE.Vector3(1, 1, 1);
+  const instancias = (geo, mat, lista, y) => {
+    const im = new THREE.InstancedMesh(geo, mat, lista.length);
+    lista.forEach(([x, z, rot, sx = 1, sz = 1], k) => {
+      e.set(-Math.PI / 2, 0, rot); q.setFromEuler(e);
+      m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sz, 1)); im.setMatrixAt(k, m);
+    });
+    im.receiveShadow = true; scene.add(im); return im;
+  };
+  const tinta = new THREE.MeshStandardMaterial({ color: '#efe7cf', roughness: 0.7 });
   // faixas tracejadas
-  const traco = new THREE.PlaneGeometry(0.22, 2.2);
-  const posicoes = [];
+  const tracos = [];
   for (let i = 0; i <= N; i++) {
     for (let t = -METADE + 1.5; t < METADE; t += 4.5) {
       let cruz = false;
-      for (let j = 0; j <= N; j++) if (Math.abs(t - ruaC(j)) < RW / 2 + 1.2) cruz = true;
-      if (cruz) continue;
-      posicoes.push([t, ruaC(i), 0], [ruaC(i), t, 1]);
+      for (let j = 0; j <= N; j++) if (Math.abs(t - ruaC(j)) < RW / 2 + 3.8) cruz = true;
+      if (!cruz) tracos.push([t, ruaC(i), Math.PI / 2], [ruaC(i), t, 0]);
     }
   }
-  const faixas = new THREE.InstancedMesh(traco, new THREE.MeshStandardMaterial({ color: '#f3e6b0', roughness: 0.6 }), posicoes.length);
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
-  posicoes.forEach(([x, z, vert], k) => {
-    e.set(-Math.PI / 2, 0, vert ? 0 : Math.PI / 2); q.setFromEuler(e);
-    m.compose(new THREE.Vector3(x, 0.03, z), q, new THREE.Vector3(1, 1, 1)); faixas.setMatrixAt(k, m);
-  });
-  faixas.receiveShadow = true; scene.add(faixas);
+  instancias(new THREE.PlaneGeometry(0.22, 2.2), tinta, tracos, 0.03);
+  // faixas de pedestre
+  const zebra = [];
+  for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+    const X = ruaC(i), Z = ruaC(j);
+    for (const s of [-1, 1]) {
+      const px = X + s * (RW / 2 + 1.7), pz = Z + s * (RW / 2 + 1.7);
+      for (let w = -RW / 2 + 0.8; w <= RW / 2 - 0.7; w += 0.95) {
+        if (Math.abs(px) < METADE) zebra.push([px, Z + w, Math.PI / 2, 0.45, 2.6]);
+        if (Math.abs(pz) < METADE) zebra.push([X + w, pz, 0, 0.45, 2.6]);
+      }
+    }
+  }
+  instancias(new THREE.PlaneGeometry(1, 1), tinta, zebra, 0.031);
 
-  // quarteirões: calçada + miolo
+  // quarteirões: calçada + meio-fio + miolo
+  const calc = matTex(calcTex, QB / 3, QB / 3);
+  const grama = matTex(gramaTex, 6, 6, 1), pateo = matTex(pateoTex, 5, 5, 1);
+  const meioFio = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: '#97928a', roughness: 0.85 }), N * N * 4);
+  let k = 0;
   for (let cx = 0; cx < N; cx++) for (let cz = 0; cz < N; cz++) {
     const x = quadC(cx), z = quadC(cz);
     const esp = QUARTEIROES_ESPECIAIS[`${cx},${cz}`] || {};
@@ -184,6 +249,26 @@ function montarChao() {
     borda.position.set(x, 0.09, z); borda.receiveShadow = true; scene.add(borda);
     const miolo = new THREE.Mesh(new THREE.PlaneGeometry(QB - CW * 2, QB - CW * 2), esp.parque ? grama : pateo);
     miolo.rotation.x = -Math.PI / 2; miolo.position.set(x, 0.185, z); miolo.receiveShadow = true; scene.add(miolo);
+    for (const [dx, dz, sx, sz] of [[QB / 2 - 0.15, 0, 0.3, QB], [-(QB / 2 - 0.15), 0, 0.3, QB], [0, QB / 2 - 0.15, QB, 0.3], [0, -(QB / 2 - 0.15), QB, 0.3]]) {
+      m.compose(new THREE.Vector3(x + dx, 0.1, z + dz), new THREE.Quaternion(), new THREE.Vector3(sx, 0.21, sz)); meioFio.setMatrixAt(k++, m);
+    }
+  }
+  meioFio.receiveShadow = true; meioFio.castShadow = true; scene.add(meioFio);
+}
+
+function texturaCanvas(tam, desenhar) {
+  const c = document.createElement('canvas'); c.width = c.height = tam;
+  desenhar(c.getContext('2d'), tam);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return t;
+}
+function ruido(g, t, n, forca, tam, cor = null) {
+  for (let i = 0; i < n; i++) {
+    const claro = Math.random() < 0.5;
+    g.fillStyle = cor ? `rgba(${cor[0]},${cor[1]},${cor[2]},${Math.random() * forca * 2})` : (claro ? `rgba(255,255,255,${Math.random() * forca})` : `rgba(0,0,0,${Math.random() * forca})`);
+    g.fillRect(Math.random() * t, Math.random() * t, tam, tam);
   }
 }
 
@@ -202,13 +287,26 @@ function textoSprite(texto, { cor = '#ffffff', fundo = 'rgba(20,24,34,.78)', tam
   return s;
 }
 
+const placas = [];
 function montarPlacasRuas() {
-  for (let i = 0; i <= N; i++) {
-    for (let j = 0; j < N; j++) {
-      const meio = quadC(j);
-      const a = textoSprite(RUAS_HORIZONTAIS[i], { escala: 0.7 }); a.position.set(meio, 0.6, ruaC(i)); scene.add(a);
-      const b = textoSprite(RUAS_VERTICAIS[i], { escala: 0.7 }); b.position.set(ruaC(i), 0.6, meio); scene.add(b);
-    }
+  const poste = new THREE.MeshStandardMaterial({ color: '#2e3238', roughness: 0.6, metalness: 0.4 });
+  const geo = new THREE.CylinderGeometry(0.05, 0.05, 2.7, 8);
+  for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+    const X = ruaC(i), Z = ruaC(j);
+    // esquina do quarteirão mais próximo do centro (sempre dentro da cidade)
+    const sx = i < N / 2 ? 1 : -1, sz = j < N / 2 ? 1 : -1;
+    const px = X + sx * (RW / 2 + 0.7), pz = Z + sz * (RW / 2 + 0.7);
+    const p = new THREE.Mesh(geo, poste); p.position.set(px, 0.18 + 1.35, pz); p.castShadow = true; scene.add(p);
+    colisores.push({ tipo: 'circ', x: px, z: pz, r: 0.12 });
+    const a = textoSprite(RUAS_HORIZONTAIS[j], { escala: 0.5, fundo: '#1f6b3a' }); a.position.set(px, 3.15, pz); scene.add(a);
+    const b = textoSprite(RUAS_VERTICAIS[i], { escala: 0.5, fundo: '#1f6b3a' }); b.position.set(px, 2.72, pz); scene.add(b);
+    placas.push(a, b);
+  }
+}
+function atualizarPlacas() {
+  for (const s of placas) {
+    const d = Math.hypot(s.position.x - jogador.pos.x, s.position.z - jogador.pos.z);
+    s.material.opacity = THREE.MathUtils.clamp((d - 2.5) / 3, 0.15, 1);
   }
 }
 
@@ -420,6 +518,11 @@ function resolverColisao(p, raio) {
     const dx = p.x - caminhaoMovel.obj.position.x, dz = p.z - caminhaoMovel.obj.position.z, r = raio + 2.3, d2 = dx * dx + dz * dz;
     if (d2 < r * r && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = caminhaoMovel.obj.position.x + dx / d * r; p.z = caminhaoMovel.obj.position.z + dz / d * r; }
   }
+  for (const r of remotos.values()) {
+    if (!r.av?.raiz.visible) continue;
+    const q = r.av.raiz.position, dx = p.x - q.x, dz = p.z - q.z, rr = raio * 2, d2 = dx * dx + dz * dz;
+    if (d2 < rr * rr && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = q.x + dx / d * rr; p.z = q.z + dz / d * rr; }
+  }
   const lim = BASE_X + 40; p.x = Math.max(-lim, Math.min(lim, p.x)); p.z = Math.max(-lim, Math.min(lim, p.z));
 }
 
@@ -577,10 +680,16 @@ function atirar(alvo) {
   const boca = jogador.arma.localToWorld(new THREE.Vector3(0, 0.22, 0.3));
   const dir = new THREE.Vector3(Math.sin(jogador.yaw), 0, Math.cos(jogador.yaw));
   const cor = CORES_TINTA[Math.floor(Math.random() * CORES_TINTA.length)];
-  const m = new THREE.Mesh(geoBola, new THREE.MeshStandardMaterial({ color: cor, roughness: 0.3 }));
-  m.position.copy(boca); scene.add(m);
-  bolas.push({ m, v: dir.multiplyScalar(24).add(new THREE.Vector3(0, 1.2, 0)), vida: 1.4, cor });
+  const v = dir.multiplyScalar(24).add(new THREE.Vector3(0, 1.2, 0));
+  criarBola(boca, v, cor);
+  const r2 = (n) => Math.round(n * 100) / 100;
+  conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: cor });
   jogador.recarga = 0.28;
+}
+function criarBola(pos, vel, cor) {
+  const m = new THREE.Mesh(geoBola, new THREE.MeshStandardMaterial({ color: cor, roughness: 0.3 }));
+  m.position.copy(pos); scene.add(m);
+  bolas.push({ m, v: vel.clone(), vida: 1.4, cor });
 }
 function manchar(p, normal, cor) {
   const m = new THREE.Mesh(geoMancha, new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
@@ -703,6 +812,7 @@ function desenharMapa() {
   g.drawImage(fundoMapa, 0, 0);
   const desenhar = (x, z, cor, r) => { const [mx, mz] = mapaXY(x, z, w); g.fillStyle = cor; g.beginPath(); g.arc(mx, mz, r, 0, 7); g.fill(); };
   for (const n of npcs) desenhar(n.av.raiz.position.x, n.av.raiz.position.z, '#ffffffaa', 3.5);
+  for (const r of remotos.values()) if (r.av?.raiz.visible) desenhar(r.av.raiz.position.x, r.av.raiz.position.z, '#4fa3ff', 5);
   if (caminhaoMovel) desenhar(caminhaoMovel.obj.position.x, caminhaoMovel.obj.position.z, '#e39b3a', 5);
   const [mx, mz] = mapaXY(jogador.pos.x, jogador.pos.z, w);
   g.save(); g.translate(mx, mz); g.rotate(-jogador.yaw + Math.PI);
@@ -729,11 +839,14 @@ function nomeDaRua(x, z) {
 }
 
 // ================================================================= INÍCIO
-async function iniciarJogo(nome, id) {
+async function iniciarJogo(perfil) {
+  const { nome, personagem: id } = perfil;
+  jogador.perfil = perfil;
   $('carregando').classList.remove('oculto');
   montarChao();
   const carregamentos = MODELOS.map(async (m) => { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb`)).scene); });
-  const avatarP = criarAvatar('personagens', id);
+  const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
+  const avatarP = criarAvatar(pastaJogador, id);
   const roboP = criarAvatar('robos', 'Rusty_Scout_Bot');
   await Promise.all(carregamentos);
   montarQuarteiroes();
@@ -744,10 +857,12 @@ async function iniciarJogo(nome, id) {
   const av = await avatarP;
   jogador.avatar = av; jogador.nome = nome;
   const arma = clonar('arma_paintball');
-  arma.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   av.encaixarArma(arma); arma.visible = false; jogador.arma = arma;
-  jogador.pos.set(quadC(1) + QB / 2 + RW / 2, 0, quadC(2));     // começa na rua ao lado da praça
+  jogador.pos.set(perfil.pos_x ?? 0, 0, perfil.pos_z ?? quadC(2));
+  resolverColisao(jogador.pos, jogador.raio);
+  jogador.pos.y = alturaChao(jogador.pos.x, jogador.pos.z);
   jogador.yaw = Math.PI;
+  alvoCam.set(jogador.pos.x, 0.9, jogador.pos.z);
   scene.add(av.raiz);
   const etiqueta = textoSprite(nome, { escala: 0.8, cor: '#f2a33a' }); etiqueta.position.y = 2.15; av.raiz.add(etiqueta);
   av.tocar('idle');
@@ -762,16 +877,110 @@ async function iniciarJogo(nome, id) {
   colisores.push({ tipo: 'circ', x: contratante.x, z: contratante.z + 2, r: 0.5 });
 
   desenharFundoMapa();
-  $('info').innerHTML = `<b>${escapar(nome)}</b><br>Moedas: 500`;
+  atualizarInfo();
   if (TOQUE) { $('toque').classList.remove('oculto'); configurarJoystick(); $('btTiro').classList.add('oculto'); }
   else { $('ajuda').innerHTML = CONTROLES_PC.map(([k, t]) => `<kbd>${k}</kbd> ${t}`).join('<br>'); $('ajuda').classList.remove('oculto'); }
   $('hud').classList.remove('oculto');
   $('carregando').classList.add('oculto');
   aviso(`Bem-vindo à cidade, ${nome}!`);
   criarNPCs(id);
+  conectarMultiplayer(perfil);
   relogio.start();
   renderer.setAnimationLoop(quadro);
 }
+
+function atualizarInfo() {
+  const p = jogador.perfil;
+  $('info').innerHTML = `<b>${escapar(p.nome)}</b><br>Moedas: ${p.moedas.toLocaleString('pt-BR')}<br>`
+    + `<span class="online">● ${online} online</span>${conectado ? '' : ' <small>(conectando…)</small>'}<br><button id="btSair">Sair da conta</button>`;
+  $('btSair').onclick = async () => { await salvarAgora(); await rede.sair(); location.reload(); };
+}
+
+// ================================================================= MULTIPLAYER
+const remotos = new Map();     // id -> { meta, av, arma, alvo, anim, caixa }
+let conexao = null, online = 1, conectado = false;
+let envioTimer = 0, ultimoEnvio = null, tempoKeepAlive = 0, tempoSalvar = 15;
+const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7 };
+const ANIM_VEL = { walk_shoot: 1.25 };
+
+function conectarMultiplayer(perfil) {
+  conexao = rede.conectarCidade(perfil, {
+    conectado: (ok) => { conectado = ok; atualizarInfo(); if (ok) ultimoEnvio = null; },
+    presenca: (lista) => {
+      online = Object.keys(lista).length || 1;
+      for (const [id, meta] of Object.entries(lista)) if (id !== perfil.id && !remotos.has(id)) adicionarRemoto(id, meta);
+      for (const id of [...remotos.keys()]) if (!lista[id]) removerRemoto(id);
+      atualizarInfo();
+    },
+    pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
+    tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c),
+  });
+  window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
+  window.addEventListener('pagehide', salvarAgora);
+}
+
+async function adicionarRemoto(id, meta) {
+  const r = { meta, av: null, arma: null, alvo: null, anim: '', caixa: null };
+  remotos.set(id, r);
+  try {
+    const pasta = ROBOS.includes(meta.personagem) ? 'robos' : 'personagens';
+    const av = await criarAvatar(pasta, meta.personagem);
+    if (remotos.get(id) !== r) return;          // saiu enquanto carregava
+    const arma = clonar('arma_paintball'); av.encaixarArma(arma); arma.visible = false;
+    const et = textoSprite(meta.nome, { escala: 0.8, cor: meta.cargo === 'admin' ? '#ff6b6b' : meta.cargo === 'moderador' ? '#7fb8ff' : '#ffffff' });
+    et.position.y = 2.15; av.raiz.add(et);
+    av.raiz.visible = false; scene.add(av.raiz); av.tocar('idle');
+    r.av = av; r.arma = arma;
+  } catch (e) { console.warn('jogador remoto não carregou', e); }
+}
+
+function removerRemoto(id) {
+  const r = remotos.get(id); remotos.delete(id);
+  if (!r) return;
+  if (r.av) scene.remove(r.av.raiz);
+  if (r.caixa) scene.remove(r.caixa);
+}
+
+function atualizarRemotos(dt) {
+  for (const r of remotos.values()) {
+    if (!r.av || !r.alvo) continue;
+    const raiz = r.av.raiz, a = r.alvo;
+    if (!raiz.visible || Math.hypot(a.x - raiz.position.x, a.z - raiz.position.z) > 8) { raiz.position.set(a.x, a.y, a.z); raiz.visible = true; }
+    const k = Math.min(1, dt * 10);
+    raiz.position.x += (a.x - raiz.position.x) * k; raiz.position.y += (a.y - raiz.position.y) * k; raiz.position.z += (a.z - raiz.position.z) * k;
+    raiz.rotation.y = suavizarAngulo(raiz.rotation.y, a.r, dt * 12);
+    if (a.a !== r.anim) {
+      r.anim = a.a;
+      const umaVez = a.a in ANIM_UMA_VEZ;
+      r.av.tocar(a.a, { umaVez, velocidade: ANIM_UMA_VEZ[a.a] || ANIM_VEL[a.a] || 1, fade: umaVez ? 0.1 : 0.2 });
+    }
+    r.arma.visible = !!a.ar;
+    if (a.cx && !r.caixa) { r.caixa = clonar('caixa'); r.caixa.scale.setScalar(0.72); scene.add(r.caixa); }
+    if (!a.cx && r.caixa) { scene.remove(r.caixa); r.caixa = null; }
+    r.av.mixer.update(dt);
+    raiz.updateMatrixWorld(true);
+    if (r.caixa) posicionarCaixa(r.av, r.caixa, raiz.rotation.y);
+  }
+}
+
+function enviarEstado(dt) {
+  if (!conexao || !conectado) return;
+  envioTimer -= dt; tempoKeepAlive -= dt;
+  if (envioTimer > 0) return;
+  envioTimer = 0.15;
+  const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: j.carregando ? 1 : 0 };
+  const u = ultimoEnvio;
+  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx;
+  if (!mudou && tempoKeepAlive > 0) return;
+  conexao.enviar('pos', est); ultimoEnvio = est; tempoKeepAlive = 3;
+}
+
+async function salvarAgora() {
+  if (!jogador.perfil || !jogador.avatar) return;
+  try { await rede.salvarPosicao(jogador.perfil.id, Math.round(jogador.pos.x * 10) / 10, Math.round(jogador.pos.z * 10) / 10); } catch { /* tenta de novo depois */ }
+}
+
 function escapar(s) { return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
 // ================================================================= LAÇO PRINCIPAL
@@ -835,13 +1044,14 @@ function atualizarJogador(dt) {
   av.raiz.updateMatrixWorld(true);
 
   // caixa entre as mãos
-  if (j.carregando) {
-    tmpA.setFromMatrixPosition(av.maoD.matrixWorld); tmpB.setFromMatrixPosition(av.maoE.matrixWorld);
-    const meio = tmpA.add(tmpB).multiplyScalar(0.5);
-    const f = new THREE.Vector3(Math.sin(j.yaw), 0, Math.cos(j.yaw));
-    j.carregando.position.set(meio.x + f.x * 0.06, meio.y - 0.15, meio.z + f.z * 0.06);
-    j.carregando.rotation.set(0, j.yaw, 0);
-  }
+  if (j.carregando) posicionarCaixa(av, j.carregando, j.yaw);
+}
+
+function posicionarCaixa(av, caixa, yaw) {
+  tmpA.setFromMatrixPosition(av.maoD.matrixWorld); tmpB.setFromMatrixPosition(av.maoE.matrixWorld);
+  const meio = tmpA.add(tmpB).multiplyScalar(0.5);
+  caixa.position.set(meio.x + Math.sin(yaw) * 0.06, meio.y - 0.15, meio.z + Math.cos(yaw) * 0.06);
+  caixa.rotation.set(0, yaw, 0);
 }
 
 function atualizarCamera(dt) {
@@ -878,6 +1088,7 @@ function atualizarHUD(dt) {
   const el = $('dica'); el.textContent = dica; el.classList.toggle('oculto', !dica || TOQUE);
   if (TOQUE) $('btAcao').textContent = pertoContratante() ? 'Falar' : jogador.carregando ? 'Soltar' : 'Pegar';
   if (avisoTimer > 0) { avisoTimer -= dt; if (avisoTimer <= 0) $('aviso').style.opacity = 0; }
+  atualizarPlacas();
   if (contratante?.excl) contratante.excl.position.y = 3.0 + Math.sin(performance.now() / 300) * 0.12;
 }
 
@@ -886,6 +1097,9 @@ function quadro() {
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarNPCs(dt);
+  atualizarRemotos(dt);
+  enviarEstado(dt);
+  tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
   atualizarBolas(dt);
   atualizarCamera(dt);

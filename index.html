@@ -31,6 +31,20 @@
   #nome { font-size:17px; padding:12px 14px; border-radius:10px; border:1px solid var(--borda); background:#0f131b; color:var(--texto); width:min(260px, 60vw); }
   .btn { font-size:16px; font-weight:700; padding:12px 20px; border-radius:10px; border:0; background:var(--destaque); color:#20160a; cursor:pointer; }
   .btn:disabled { opacity:.45; cursor:default; }
+  #login { position:fixed; inset:0; z-index:22; display:flex; align-items:center; justify-content:center; padding:16px;
+    background: radial-gradient(1200px 600px at 50% -10%, #3a4560 0%, var(--bg) 60%); }
+  #login .cartao { width:min(380px, 100%); display:flex; flex-direction:column; gap:12px; }
+  #login h1 { margin:0; font-size: clamp(34px, 9vw, 48px); text-align:center; letter-spacing:1px; }
+  #login h1 span, #escolha h1 span { color:var(--destaque); }
+  #login .sub { margin:0 0 6px; text-align:center; color:var(--suave); }
+  #login input { font-size:17px; padding:13px 14px; border-radius:10px; border:1px solid var(--borda); background:#0f131b; color:var(--texto); }
+  #login .linha { display:flex; gap:10px; } #login .linha .btn { flex:1; }
+  .btn.sec { background:#2d3445; color:var(--texto); }
+  #msgLogin { min-height:20px; text-align:center; font-size:14px; color:#ffb4a8; }
+  #msgLogin.ok { color:var(--verde); }
+  #info { pointer-events:auto; }
+  #info .online { color:var(--verde); }
+  #btSair { margin-top:4px; font-size:12px; padding:4px 10px; border-radius:8px; border:1px solid var(--borda); background:transparent; color:var(--suave); cursor:pointer; }
   #erroNome { width:100%; text-align:center; color:#ff8a7a; font-size:13px; min-height:16px; margin:-4px 0 0; }
 
   /* Carregando */
@@ -66,21 +80,36 @@
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+  "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"
 } }
 </script>
 </head>
 <body>
 <canvas id="jogo"></canvas>
 
-<section id="escolha">
+<section id="login">
+  <div class="cartao">
+    <h1>FATOR <span>RP</span></h1>
+    <p class="sub">Entre na sua conta ou crie uma nova.</p>
+    <input id="email" type="email" placeholder="E-mail" autocomplete="email">
+    <input id="senha" type="password" placeholder="Senha (mínimo 6 caracteres)" autocomplete="current-password">
+    <div class="linha">
+      <button class="btn" id="btEntrar">Entrar</button>
+      <button class="btn sec" id="btCriar">Criar conta</button>
+    </div>
+    <div id="msgLogin"></div>
+  </div>
+</section>
+
+<section id="escolha" class="oculto">
   <h1>FATOR <span>RP</span></h1>
-  <p class="sub">Escolha seu personagem e o nome que a cidade vai conhecer.</p>
+  <p class="sub">Escolha seu personagem e o nome que a cidade vai conhecer. O nome não pode ser repetido.</p>
   <div class="grade" id="grade"></div>
 </section>
-<div id="barraEscolha">
+<div id="barraEscolha" class="oculto">
   <input id="nome" maxlength="16" placeholder="Seu nome no jogo" autocomplete="off">
-  <button class="btn" id="entrar" disabled>Entrar na cidade</button>
+  <button class="btn" id="entrar" disabled>Criar personagem</button>
   <div id="erroNome"></div>
 </div>
 
