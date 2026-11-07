@@ -202,7 +202,7 @@ function montarChao() {
     const h = new THREE.Mesh(new THREE.PlaneGeometry(comp, RW), asfH);
     h.rotation.x = -Math.PI / 2; h.position.set(0, 0.02, ruaC(i)); h.receiveShadow = true; scene.add(h);
     const v = new THREE.Mesh(new THREE.PlaneGeometry(RW, comp), asfV);
-    v.rotation.x = -Math.PI / 2; v.position.set(ruaC(i), 0.021, 0); v.receiveShadow = true; scene.add(v);
+    v.rotation.x = -Math.PI / 2; v.position.set(ruaC(i), 0.026, 0); v.receiveShadow = true; scene.add(v);
   }
   // estradas de terra até as bases de clã
   for (const s of [-1, 1]) {
@@ -228,7 +228,7 @@ function montarChao() {
       if (!cruz) tracos.push([t, ruaC(i), Math.PI / 2], [ruaC(i), t, 0]);
     }
   }
-  instancias(new THREE.PlaneGeometry(0.22, 2.2), tinta, tracos, 0.03);
+  instancias(new THREE.PlaneGeometry(0.22, 2.2), tinta, tracos, 0.034);
   // faixas de pedestre
   const zebra = [];
   for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
@@ -241,7 +241,7 @@ function montarChao() {
       }
     }
   }
-  instancias(new THREE.PlaneGeometry(1, 1), tinta, zebra, 0.031);
+  instancias(new THREE.PlaneGeometry(1, 1), tinta, zebra, 0.036);
 
   // quarteirões: calçada + meio-fio + miolo
   const calc = matTex(calcTex, QB / 3, QB / 3);
@@ -255,8 +255,10 @@ function montarChao() {
     borda.position.set(x, 0.09, z); borda.receiveShadow = true; scene.add(borda);
     const miolo = new THREE.Mesh(new THREE.PlaneGeometry(QB - CW * 2, QB - CW * 2), esp.parque ? grama : pateo);
     miolo.rotation.x = -Math.PI / 2; miolo.position.set(x, 0.185, z); miolo.receiveShadow = true; scene.add(miolo);
-    for (const [dx, dz, sx, sz] of [[QB / 2 - 0.15, 0, 0.3, QB], [-(QB / 2 - 0.15), 0, 0.3, QB], [0, QB / 2 - 0.15, QB, 0.3], [0, -(QB / 2 - 0.15), QB, 0.3]]) {
-      m.compose(new THREE.Vector3(x + dx, 0.1, z + dz), new THREE.Quaternion(), new THREE.Vector3(sx, 0.21, sz)); meioFio.setMatrixAt(k++, m);
+    // o meio-fio sai 1 cm para fora da calçada e os lados não se sobrepõem nos cantos (evita o pisca)
+    const f = QB / 2 - 0.14;
+    for (const [dx, dz, sx, sz] of [[f, 0, 0.3, QB - 0.62], [-f, 0, 0.3, QB - 0.62], [0, f, QB + 0.02, 0.3], [0, -f, QB + 0.02, 0.3]]) {
+      m.compose(new THREE.Vector3(x + dx, 0.11, z + dz), new THREE.Quaternion(), new THREE.Vector3(sx, 0.2, sz)); meioFio.setMatrixAt(k++, m);
     }
   }
   meioFio.receiveShadow = true; meioFio.castShadow = true; scene.add(meioFio);
