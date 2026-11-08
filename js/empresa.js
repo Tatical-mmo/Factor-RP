@@ -64,8 +64,12 @@ async function executar(fn, sucesso) {
 }
 const inteiro = (id) => Math.floor(Number($(id)?.value) || 0);
 
+let telaAnterior = '';
 async function desenhar(auto = false) {
   const c = $('empresaConteudo'), abas = $('empresaAbas');
+  const tela = `${modo}|${aba}|${selecionada}`, rolagem = tela === telaAnterior ? c.scrollTop : 0;
+  telaAnterior = tela;
+  const voltarRolagem = () => { c.scrollTop = rolagem; setTimeout(() => { c.scrollTop = rolagem; }, 0); };
   if (auto && digitando('empresaJanela')) { pendente = true; return; }
   if (!$('empresaJanela').dataset.foco) { $('empresaJanela').dataset.foco = '1'; $('empresaJanela').addEventListener('focusout', depoisDeDigitar); }
   try {
@@ -106,6 +110,7 @@ async function desenhar(auto = false) {
     else if (aba === 'robos') telaRobos(c, e);
     else if (aba === 'fundir') telaFundir(c, e, minhas);
     c.insertAdjacentHTML('afterbegin', topo); ligarSeletor(c);
+    voltarRolagem();
   } catch (err) { c.textContent = err.message; }
 }
 function ligarSeletor(c) { c.querySelectorAll('[data-emp]').forEach((b) => { b.onclick = () => { selecionada = Number(b.dataset.emp); desenhar(); }; }); }
@@ -250,6 +255,7 @@ async function telaCaminhoes(c, e) {
 }
 
 // ------------------------------------------------------------ robôs e nível
+const cachePreco = new Map();
 function telaRobos(c, e) {
   const alugadosAtivos = e.aluguel_ate && Date.parse(e.aluguel_ate) > Date.now() ? e.robos_alugados : 0;
   const custo = lim(e, 'evoluir');
@@ -275,7 +281,8 @@ function telaRobos(c, e) {
     <p class="dica">Tudo sai do caixa da empresa (${num(e.caixa)}).</p>
     ${ctx.perfil().cargo === 'admin' ? `<div class="sub">Administrador</div><div class="botoes"><input id="admNv" type="number" min="1" max="15" value="${e.nivel}" inputmode="numeric"><button id="admNvOk">Definir nível (teste do visual)</button></div>` : ''}`;
   const adm = $('admNvOk'); if (adm) adm.onclick = () => executar(() => rede.painel.nivelEmpresa(e.id, Math.floor(Number($('admNv').value))), 'Nível definido.');
-  rede.precoRobo(e.id).then((p) => {
+  const precoGuardado = cachePreco.get(e.id);
+  (precoGuardado && precoGuardado.t > Date.now() - 30000 ? Promise.resolve(precoGuardado.p) : rede.precoRobo(e.id).then((p) => { cachePreco.set(e.id, { p, t: Date.now() }); return p; })).then((p) => {
     const el = $('rPreco'); if (!el) return;
     el.innerHTML = p <= 8000 ? 'Robô de uma <b>fábrica de robôs</b> da cidade: <b>8.000</b>.' : 'Nenhuma fábrica de robôs tem estoque: o robô vem de fora por <b>12.000</b>.';
     const b = $('rComprar'); if (b) b.textContent = `Comprar robô (${num(p)})`;

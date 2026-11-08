@@ -34,7 +34,7 @@ async function executar(fn, sucesso) {
 const inteiro = (id) => Math.floor(Number($(id)?.value) || 0);
 
 async function desenhar(auto = false) {
-  const c = $('claConteudo');
+  const c = $('claConteudo'), rolagem = c.scrollTop;
   const travado = () => { if (auto && digitando('claJanela')) { pendente = true; return true; } return false; };
   if (travado()) return;
   try {
@@ -100,6 +100,7 @@ async function desenhar(auto = false) {
     c.querySelectorAll('[data-vend]').forEach((b) => { b.onclick = () => { const q = meu[b.dataset.vend]; if (q > 0) executar(() => rede.cla.vender(b.dataset.vend, q), (r) => `Vendido por ${num(r)} (caixa do clã).`); else msg('Nada para vender.', false); }; });
     c.querySelectorAll('[data-exp]').forEach((b) => { b.onclick = () => executar(() => rede.cla.expulsar(b.dataset.exp), 'Membro expulso.'); });
     c.querySelectorAll('[data-def]').forEach((b) => { b.onclick = () => executar(() => rede.cla.defender(b.dataset.def, Number(b.dataset.n)), 'Defesa atualizada.'); });
+    c.scrollTop = rolagem;
     c.querySelectorAll('[data-atk]').forEach((b) => {
       b.onclick = () => { const n = inteiro('clAtkN'); if (n < 1) { msg('Escolha quantos robôs.', false); return; }
         executar(() => rede.cla.atacar(b.dataset.atk, n), (r) => r.startsWith('vitoria') ? `Vitória! O território é seu, com ${r.split(':')[1]} robôs na defesa.` : 'Derrota: os robôs foram destruídos.'); };
