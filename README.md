@@ -282,3 +282,9 @@ Rode no SQL Editor: `27_recompensas.sql`.
 - Atropelar mata: a partir de ~43 km/h é morte na hora (abaixo disso tira vida). Vale para carros, vans, caminhões, ambulância e bombeiros. O trem em movimento mata quem estiver no trilho, a pé ou de carro.
 - Muito procurados: a cada 5 mortes de jogadores sem ser preso (fora de guerra e sem legítima defesa) somam 10.000 de recompensa. O nome aparece nos 2 outdoors mais perto de onde a pessoa foi vista e na etiqueta 🎯 PROCURADO. Quem matar ou prender leva a recompensa (matar um procurado com recompensa não é crime). Ser preso zera a sequência.
 - Polícia robô: persegue o procurado que vê (25 m) e prende quem alcança a pé. Se ele se esconder em casa durante a perseguição, o robô espera na porta por até 1 ciclo (32 min), mesmo se o jogador sair do jogo e voltar.
+
+## Versão 08/11 (w) · direção suave
+- Velocidades menores (Popular 36 km/h, SUV 40, Esportivo 50, caminhão 32, van 38, ambulância 43, bombeiros 36, helicóptero 65), aceleração e freio graduais e ré lenta.
+- Volante com resposta gradual e menos giro em alta velocidade.
+- Dirigindo, a câmera fica atrás do veículo: ◀ ▶ viram sempre para a esquerda/direita da tela. Ao descer, a câmera volta ao normal.
+- Atropelamento mata a partir de ~29 km/h.

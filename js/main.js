@@ -166,6 +166,7 @@ const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 600);
 let zoom = TOQUE ? 26 : 30;            // altura visível em metros
 let anguloCam = 0;                      // 0..3 (90° cada)
 let anguloCamSuave = 0;
+let camAtras = false;
 const alvoCam = new THREE.Vector3();
 function ajustarCamera() {
   const a = window.innerWidth / window.innerHeight;
@@ -1080,19 +1081,22 @@ function dirigir(dt) {
   const c = jogador.carro, max = c.max || civico.CARROS[c.modelo]?.vel || 15;
   const acel = pedais.acel || teclas.has('w') || teclas.has('arrowup'), freio = pedais.freio || teclas.has('s') || teclas.has('arrowdown');
   const volante = (pedais.dir || teclas.has('d') || teclas.has('arrowright') ? 1 : 0) - (pedais.esq || teclas.has('a') || teclas.has('arrowleft') ? 1 : 0);
-  if (acel && !freio) c.vel = c.vel < 0 ? Math.min(0, c.vel + 14 * dt) : Math.min(max, c.vel + 8 * dt);
-  else if (freio) c.vel = c.vel > 0.3 ? Math.max(0, c.vel - 18 * dt) : Math.max(-max * 0.35, c.vel - 6 * dt);   // freia; parado, dá ré
-  else c.vel = c.vel > 0 ? Math.max(0, c.vel - 5 * dt) : Math.min(0, c.vel + 5 * dt);
-  // direita no volante vira para a direita do veículo (na ré, a frente vai para o outro lado, como num carro)
-  jogador.yaw -= volante * 2.2 * dt * Math.min(1, Math.abs(c.vel) / 4) * Math.sign(c.vel || 1);
+  // aceleração suave; freio firme; parado, o freio vira ré (devagar)
+  if (acel && !freio) c.vel = c.vel < 0 ? Math.min(0, c.vel + 10 * dt) : Math.min(max, c.vel + (c.vel < max * 0.5 ? 4.5 : 2.5) * dt);
+  else if (freio) c.vel = c.vel > 0.3 ? Math.max(0, c.vel - 11 * dt) : Math.max(-Math.min(4, max * 0.35), c.vel - 3 * dt);
+  else c.vel = c.vel > 0 ? Math.max(0, c.vel - 3 * dt) : Math.min(0, c.vel + 3 * dt);
+  // volante com resposta gradual; vira menos quando está rápido (não roda no lugar)
+  c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * 7);
+  const vAbs = Math.abs(c.vel), giro = 1.5 * Math.min(1, vAbs / 2.5) / (1 + vAbs / 12);
+  jogador.yaw -= c.volante * giro * dt * Math.sign(c.vel || 1);
   if (c.servico) civico.atualizarSirenes(performance.now() / 1000, c.mesh);
   const antes = { x: jogador.pos.x, z: jogador.pos.z };
   jogador.pos.x += Math.sin(jogador.yaw) * c.vel * dt; jogador.pos.z += Math.cos(jogador.yaw) * c.vel * dt;
   if (!c.voa) { resolverColisao(jogador.pos, c.raio || 1.3); colidirVeiculo(c); }
   const andou = Math.hypot(jogador.pos.x - antes.x, jogador.pos.z - antes.z), esperado = Math.abs(c.vel) * dt;
   if (esperado > 0.01 && andou < esperado * 0.6) {          // bateu
-    if (Math.abs(c.vel) > 8 && performance.now() - (c.batida || 0) > 1200) { c.batida = performance.now(); aviso('💥 Batida!', 1.2); tremor = 0.35; }
-    c.vel *= Math.abs(c.vel) > 8 ? 0.15 : 0.5;
+    if (Math.abs(c.vel) > 6 && performance.now() - (c.batida || 0) > 1200) { c.batida = performance.now(); aviso('💥 Batida!', 1.2); tremor = 0.35; }
+    c.vel *= Math.abs(c.vel) > 6 ? 0.15 : 0.5;
   }
   const chao = alturaChao(jogador.pos.x, jogador.pos.z);
   if (c.voa) {   // helicóptero: sobe quando anda e pousa quando para
@@ -2594,7 +2598,7 @@ async function atacarCaminhao(c) {
 
 // ---------------------------------------------------------------- veículos de empresa: robô motorista, sequestro e direção
 const NOME_VEICULO = { caminhao: 'Caminhão', van: 'Van', helicoptero: 'Helicóptero' };
-const VEL_VEICULO = { caminhao: 13, van: 16, helicoptero: 26 };
+const VEL_VEICULO = { caminhao: 9, van: 10.5, helicoptero: 18 };
 const pilotos = new Map();      // caminhão -> última posição transmitida por quem dirige
 const ejetados = [];
 // o robô motorista é arrancado do banco e cai fora do veículo; some depois de 3 s
@@ -2775,7 +2779,7 @@ function colidirVeiculo(c) {
       const chave = o.pessoa || o.npc;
       if (performance.now() - (atropelados.get(chave) || 0) > 1500) {
         atropelados.set(chave, performance.now());
-        const dano = Math.abs(c.vel) >= 12 ? 100 : Math.round(Math.abs(c.vel) * 6);    // rápido mata na hora
+        const dano = Math.abs(c.vel) >= 8 ? 100 : Math.round(Math.abs(c.vel) * 9);    // rápido mata na hora
         if (o.pessoa) { conexao?.enviar('atropelo', { alvo: o.pessoa, v: dano, de: jogador.perfil.id }); rede.combate.agressao(o.pessoa).catch(() => {}); }
         else acertarPoliciaNPC(o.npc, dano);
         aviso('💥 Atropelamento!', 1.2); tremor = 0.3;
@@ -3740,7 +3744,14 @@ function posicionarCaixa(av, caixa, yaw) {
 }
 
 function atualizarCamera(dt) {
-  anguloCamSuave += (anguloCam - anguloCamSuave) * Math.min(1, dt * 8);
+  // dirigindo, a câmera gira para ficar atrás do veículo: a frente dele aponta sempre para cima da tela
+  const dirigindo = jogador.carro && !jogador.carro.taxi;
+  if (dirigindo) {
+    let alvo = (jogador.yaw - Math.PI * 1.25) / (Math.PI / 2);
+    alvo += 4 * Math.round((anguloCamSuave - alvo) / 4);
+    anguloCam = alvo; camAtras = true;
+  } else if (camAtras) { anguloCam = Math.round(anguloCamSuave); camAtras = false; }
+  anguloCamSuave += (anguloCam - anguloCamSuave) * Math.min(1, dt * (dirigindo ? 3 : 8));
   alvoCam.lerp(new THREE.Vector3(jogador.pos.x, 0.9, jogador.pos.z), Math.min(1, dt * 6));
   const off = offsetCamera(anguloCamSuave);
   camera.position.copy(alvoCam).addScaledVector(off, 150);

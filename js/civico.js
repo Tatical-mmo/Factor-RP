@@ -8,12 +8,12 @@ export const BANCO = { x: 81, z: -135, balcao: { x: 75, z: -124 }, empregos: { x
 export const HOSPITAL = { x: -135, z: 135, balcao: { x: -131, z: 125 }, saida: { x: -139, z: 124 }, vaga: { x: -145, z: 126, ang: -Math.PI / 2 }, veiculo: null };
 export const BOMBEIROS = { x: -81, z: 135, balcao: { x: -88, z: 125 }, vaga: { x: -77, z: 125.5, ang: Math.PI + 0.15 }, veiculo: null };
 export const CARROS = {
-  popular: { nome: 'Popular', preco: 40000, vel: 15 },
-  suv: { nome: 'SUV', preco: 95000, vel: 17 },
-  esportivo: { nome: 'Esportivo', preco: 180000, vel: 24 },
-  ambulancia: { nome: 'Ambulância', preco: 0, vel: 19 },
-  bombeiros: { nome: 'Caminhão dos bombeiros', preco: 0, vel: 15 },
-  presidencial: { nome: 'Presidencial', preco: 0, vel: 20 },
+  popular: { nome: 'Popular', preco: 40000, vel: 10 },
+  suv: { nome: 'SUV', preco: 95000, vel: 11 },
+  esportivo: { nome: 'Esportivo', preco: 180000, vel: 14 },
+  ambulancia: { nome: 'Ambulância', preco: 0, vel: 12 },
+  bombeiros: { nome: 'Caminhão dos bombeiros', preco: 0, vel: 10 },
+  presidencial: { nome: 'Presidencial', preco: 0, vel: 12 },
 };
 export const CORES_CARRO = ['#c0392b', '#2c3e50', '#ecf0f1', '#f1c40f', '#2980b9', '#16a085', '#8e44ad', '#1f1f1f', '#d35400'];
 
