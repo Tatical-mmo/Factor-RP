@@ -51,7 +51,9 @@ export function abrirCompra(lote) { modo = 'comprar'; loteCompra = lote; mostrar
 export function abrirMissoes() { modo = 'missoes'; mostrar(); }
 export function empresaAberta() { return !!modo; }
 const digitando = (id) => { const f = document.activeElement; return !!f && ['INPUT', 'SELECT', 'TEXTAREA'].includes(f.tagName) && !!$(id)?.contains(f); };
-export function atualizar() { if (modo && !digitando('empresaJanela')) desenhar(); }
+let pendente = false;
+export function atualizar() { if (modo) desenhar(true); }
+function depoisDeDigitar() { setTimeout(() => { if (pendente && modo && !digitando('empresaJanela')) { pendente = false; desenhar(true); } }, 400); }
 function mostrar() { $('empresaJanela').classList.remove('oculto'); desenhar(); }
 function fechar() { modo = null; $('empresaJanela').classList.add('oculto'); }
 
@@ -62,16 +64,21 @@ async function executar(fn, sucesso) {
 }
 const inteiro = (id) => Math.floor(Number($(id)?.value) || 0);
 
-async function desenhar() {
+async function desenhar(auto = false) {
   const c = $('empresaConteudo'), abas = $('empresaAbas');
-  abas.innerHTML = '';
+  if (auto && digitando('empresaJanela')) { pendente = true; return; }
+  if (!$('empresaJanela').dataset.foco) { $('empresaJanela').dataset.foco = '1'; $('empresaJanela').addEventListener('focusout', depoisDeDigitar); }
   try {
     if (modo === 'comprar') {
       try { const eu = ctx.perfil().id; minhasCache = (await rede.listarEmpresas()).filter((e) => e.dono === eu); } catch { minhasCache = []; }
+      if (auto && digitando('empresaJanela')) { pendente = true; return; }
+      abas.innerHTML = '';
       return telaCompra(c);
     }
     const meuId = ctx.perfil().id;
     const [empresas, emprego] = await Promise.all([rede.listarEmpresas(), rede.minhaEmpresaId(meuId)]);
+    if (auto && digitando('empresaJanela')) { pendente = true; return; }
+    abas.innerHTML = '';
     ctx.definirEmprego(emprego);
     const minhas = empresas.filter((e) => e.dono === meuId);
     if (modo === 'missoes') return await telaMissoes(c, minhas, empresas);

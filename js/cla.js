@@ -15,12 +15,16 @@ export function iniciarCla(contexto) {
   ctx = contexto;
   $('btCla').onclick = abrir;
   $('fecharCla').onclick = fechar;
+  $('claJanela').addEventListener('focusout', depoisDeDigitar);
 }
 export function abrir() { aberta = true; $('claJanela').classList.remove('oculto'); desenhar(); }
 function fechar() { aberta = false; $('claJanela').classList.add('oculto'); }
 const digitando = (id) => { const f = document.activeElement; return !!f && ['INPUT', 'SELECT', 'TEXTAREA'].includes(f.tagName) && !!$(id)?.contains(f); };
 // não redesenha enquanto o jogador digita (as atualizações em tempo real apagavam o campo)
-export function atualizarCla() { if (aberta && !digitando('claJanela')) desenhar(); }
+// atualizações automáticas esperam o jogador sair do campo (redesenhar fecha o teclado do celular)
+let pendente = false;
+export function atualizarCla() { if (aberta) desenhar(true); }
+function depoisDeDigitar() { setTimeout(() => { if (pendente && aberta && !digitando('claJanela')) { pendente = false; desenhar(true); } }, 400); }
 
 function msg(t, ok = true) { const m = $('claMsg'); m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'erro'); clearTimeout(msg.t); msg.t = setTimeout(() => { m.textContent = ''; }, 4000); }
 async function executar(fn, sucesso) {
@@ -29,11 +33,14 @@ async function executar(fn, sucesso) {
 }
 const inteiro = (id) => Math.floor(Number($(id)?.value) || 0);
 
-async function desenhar() {
+async function desenhar(auto = false) {
   const c = $('claConteudo');
+  const travado = () => { if (auto && digitando('claJanela')) { pendente = true; return true; } return false; };
+  if (travado()) return;
   try {
     const eu = ctx.perfil().id;
     const [clas, meuId, territorios] = await Promise.all([rede.listarClas(), rede.meuClaId(eu), rede.listarTerritorios()]);
+    if (travado()) return;
     ctx.definirCla(meuId, clas.find((x) => x.id === meuId) || null);
     const meu = clas.find((x) => x.id === meuId);
     const nomeCla = (id) => clas.find((x) => x.id === id)?.nome;
@@ -52,6 +59,7 @@ async function desenhar() {
     }
     const lider = meu.lider === eu;
     const membros = await rede.membrosDoCla(meu.id);
+    if (travado()) return;
     $('claTitulo').textContent = `${meu.nome} · Nv ${meu.nivel || 1}`;
     const nv = meu.nivel || 1, L = limCla(nv), prox = nv + 1;
     const naDefesa = territorios.filter((t) => t.dono_cla === meu.id).reduce((a, t) => a + (t.defesa || 0), 0);

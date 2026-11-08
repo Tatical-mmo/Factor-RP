@@ -13,14 +13,18 @@ let modo = null;          // 'loja' | 'mochila'
 export async function iniciarLoja(contexto) {
   ctx = contexto;
   $('fecharJanela').onclick = fechar;
+  $('janela').addEventListener('focusout', () => setTimeout(() => { if (pendenteJanela && modo && !digitandoJanela()) { pendenteJanela = false; desenhar(); } }, 400));
   $('btMochila').onclick = () => abrir('mochila');
   try { precos = await rede.carregarPrecos(); } catch (e) { console.warn('preços', e); }
   await recarregarInventario();
 }
 export async function recarregarInventario() {
   try { inv = await rede.carregarInventario(ctx.perfil().id); } catch { /* tenta depois */ }
+  if (modo && digitandoJanela()) { pendenteJanela = true; return; }
   if (modo) desenhar();
 }
+let pendenteJanela = false;
+const digitandoJanela = () => { const f = document.activeElement; return !!f && ['INPUT', 'SELECT', 'TEXTAREA'].includes(f.tagName) && !!$('janela')?.contains(f); };
 export function abrir(m) { modo = m; $('janela').classList.remove('oculto'); desenhar(); }
 let bau = {};
 export function fechar() { modo = null; $('janela').classList.add('oculto'); }
