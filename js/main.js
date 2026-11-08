@@ -1108,6 +1108,94 @@ function desenharCentroNoMapa(g) {
   }
   if (contratante) { g.fillStyle = '#ffd23e'; g.beginPath(); g.arc(contratante.x, contratante.z, 5, 0, 7); g.fill(); }
 }
+// ---------------------------------------------------------------- mapa grande e rastreio
+const NOMES_REGIAO = ['Metrópole', 'Vila Serra', 'Porto Sul'];
+let rastreio = null, regiaoMapaG = 0, beacon = null;
+function alvosRastreio() {
+  const eu = jogador.perfil?.id, r = [];
+  for (const [lote, u] of unidades) {
+    const e = empresas.get(u.empresa); if (!e || (e.dono !== eu && e.id !== emprego)) continue;
+    const l = LOTES_VENDA.find((x) => x.id === lote); if (!l) continue;
+    r.push({ icone: '🏭', nome: e.nome, x: l.portao.x, z: l.portao.z - 1.5 });
+  }
+  for (const d of casasLista) if (moraEm(d)) r.push({ icone: '🏠', nome: d.rotulo || 'Sua casa', x: d.x, z: d.z });
+  if (jogador.cla) for (const v of territorios.values()) if (v.d.dono_cla === jogador.cla) r.push({ icone: '🚩', nome: v.d.nome, x: v.d.x, z: v.d.z });
+  for (const l of ferrovia.linhas) for (const lado of ['centro', 'destino']) { const p = l.plataformas[lado]; r.push({ icone: '🚆', nome: p.nome, x: 0, z: p.zSaida }); }
+  if (contratante) r.push({ icone: '📋', nome: 'Contratante', x: contratante.x, z: contratante.z });
+  return r;
+}
+function rastrear(alvo) {
+  rastreio = alvo;
+  if (beacon) { scene.remove(beacon); beacon = null; }
+  if (alvo) {
+    beacon = new THREE.Group();
+    const feixe = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 40, 16, 1, true), new THREE.MeshBasicMaterial({ color: '#ffd23e', transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+    feixe.position.y = 20; beacon.add(feixe);
+    const anel = new THREE.Mesh(new THREE.RingGeometry(1.4, 1.9, 32), new THREE.MeshBasicMaterial({ color: '#ffd23e', transparent: true, opacity: 0.8, side: THREE.DoubleSide }));
+    anel.rotation.x = -Math.PI / 2; anel.position.y = 0.3; beacon.add(anel);
+    beacon.position.set(alvo.x, 0, alvo.z); scene.add(beacon);
+    aviso(`Rastreando: ${alvo.nome}`);
+  }
+  $('rastreio').classList.toggle('oculto', !alvo);
+}
+// quando o destino fica em outra cidade, o caminho passa pela estação
+function proximoPasso() {
+  if (!rastreio) return null;
+  const rp = regiaoMapa(jogador.pos.x, jogador.pos.z), ra = regiaoMapa(rastreio.x, rastreio.z);
+  if (rp === ra || rp < 0) return rastreio;
+  const linha = (ra === 1 || rp === 1) ? ferrovia.linhas[0] : ferrovia.linhas[1];
+  const lado = rp === 0 ? 'centro' : 'destino', p = linha.plataformas[lado];
+  return { x: 0, z: p.zSaida, nome: `${p.nome} (trem para ${ra === 0 ? 'a Metrópole' : NOMES_REGIAO[ra]})`, estacao: true };
+}
+function atualizarRastreio(dt) {
+  if (!rastreio) return;
+  const passo = proximoPasso(), d = Math.hypot(passo.x - jogador.pos.x, passo.z - jogador.pos.z);
+  if (beacon) {
+    beacon.position.set(passo.x, alturaChao(passo.x, passo.z), passo.z);
+    beacon.children[0].material.opacity = 0.22 + Math.sin(performance.now() / 300) * 0.08;
+    beacon.visible = regiaoMapa(passo.x, passo.z) === regiaoMapa(jogador.pos.x, jogador.pos.z);
+  }
+  atualizarRastreio.t = (atualizarRastreio.t || 0) - dt;
+  if (atualizarRastreio.t <= 0) {
+    atualizarRastreio.t = 0.3;
+    $('rastreio').innerHTML = `📍 ${passo.estacao ? 'Vá até ' : ''}<b>${passo.nome}</b> · ${Math.round(d)} m <small>(toque para parar)</small>`;
+  }
+  if (!passo.estacao && d < 5) { aviso(`Você chegou: ${rastreio.nome}`); rastrear(null); }
+}
+function abrirMapaGrande() {
+  regiaoMapaG = Math.max(0, regiaoMapa(jogador.pos.x, jogador.pos.z));
+  $('mapaJanela').classList.remove('oculto');
+  desenharMapaGrande();
+}
+function desenharMapaGrande() {
+  const abas = $('mapaAbas');
+  abas.innerHTML = NOMES_REGIAO.map((n, i) => `<button data-reg="${i}" class="${i === regiaoMapaG ? 'sel' : ''}">${n}</button>`).join('');
+  abas.querySelectorAll('[data-reg]').forEach((b) => { b.onclick = () => { regiaoMapaG = Number(b.dataset.reg); desenharMapaGrande(); }; });
+  const c = $('mapaG'), g = c.getContext('2d'), w = c.width, r = REGIOES_MAPA[regiaoMapaG];
+  g.fillStyle = '#86a95c'; g.fillRect(0, 0, w, w);
+  const lado = Math.max(r.x1 - r.x0, r.z1 - r.z0), esc = w / lado, ox = (r.x0 + r.x1) / 2 - lado / 2, oz = (r.z0 + r.z1) / 2 - lado / 2;
+  if (fundosMapa[regiaoMapaG]) g.drawImage(fundosMapa[regiaoMapaG], ((r.x1 - r.x0) - lado) / 2 > 0 ? 0 : 0, 0, fundosMapa[regiaoMapaG].width, fundosMapa[regiaoMapaG].height, (r.x0 - ox) * esc, (r.z0 - oz) * esc, (r.x1 - r.x0) * esc, (r.z1 - r.z0) * esc);
+  const tela = (x, z) => [(x - ox) * esc, (z - oz) * esc];
+  const ponto = (x, z, cor, raio, txt) => {
+    const [mx, mz] = tela(x, z); if (mx < 0 || mz < 0 || mx > w || mz > w) return;
+    g.fillStyle = cor; g.strokeStyle = '#111'; g.lineWidth = 2; g.beginPath(); g.arc(mx, mz, raio, 0, 7); g.fill(); g.stroke();
+    if (txt) { g.font = 'bold 20px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#fff'; g.strokeStyle = 'rgba(0,0,0,.8)'; g.lineWidth = 4; g.strokeText(txt, mx, mz - raio - 6); g.fillText(txt, mx, mz - raio - 6); }
+  };
+  const alvos = alvosRastreio();
+  for (const a of alvos) ponto(a.x, a.z, '#f2f2f2', 7, a.icone);
+  if (rastreio) ponto(rastreio.x, rastreio.z, '#ffd23e', 10, '📍');
+  ponto(jogador.pos.x, jogador.pos.z, '#5cc28a', 9, 'Você');
+  c.onpointerdown = (ev) => {
+    const b = c.getBoundingClientRect(), mx = (ev.clientX - b.left) / b.width * w, mz = (ev.clientY - b.top) / b.height * w;
+    rastrear({ nome: 'Ponto marcado', x: mx / esc + ox, z: mz / esc + oz }); desenharMapaGrande();
+  };
+  const lista = $('mapaAlvos');
+  lista.innerHTML = alvos.map((a, i) => `<button data-alvo="${i}" class="${rastreio && rastreio.nome === a.nome ? 'sel' : ''}">${a.icone} ${a.nome}</button>`).join('')
+    + (rastreio ? '<button data-parar="1">✕ Parar rastreio</button>' : '');
+  lista.querySelectorAll('[data-alvo]').forEach((b) => { b.onclick = () => { rastrear(alvos[Number(b.dataset.alvo)]); $('mapaJanela').classList.add('oculto'); }; });
+  const pr = lista.querySelector('[data-parar]'); if (pr) pr.onclick = () => { rastrear(null); desenharMapaGrande(); };
+}
+
 function desenharMapa() {
   const c = $('mapa'), g = c.getContext('2d'), w = c.width;
   const px = jogador.pos.x, pz = jogador.pos.z, ri = regiaoMapa(px, pz);
@@ -1129,6 +1217,18 @@ function desenharMapa() {
   for (const r of remotos.values()) if (r.av?.raiz.visible) desenhar(r.av.raiz.position.x, r.av.raiz.position.z, '#4fa3ff', 5);
   if (caminhaoMovel) desenhar(caminhaoMovel.obj.position.x, caminhaoMovel.obj.position.z, '#e39b3a', 5);
   for (const [x, z] of ferrovia.marcadores()) desenhar(x, z, '#c8282e', 7);
+  const passo = proximoPasso();
+  if (passo) {
+    // destino: ponto dourado ou seta na borda quando estiver longe
+    let mx = ((passo.x - px) / MAPA_R * 0.5 + 0.5) * w, mz = ((passo.z - pz) / MAPA_R * 0.5 + 0.5) * w;
+    const dentro = mx > 8 && mz > 8 && mx < w - 8 && mz < w - 8;
+    if (dentro) { g.fillStyle = '#ffd23e'; g.strokeStyle = '#111'; g.lineWidth = 2; g.beginPath(); g.arc(mx, mz, 8, 0, 7); g.fill(); g.stroke(); }
+    else {
+      const a = Math.atan2(mz - w / 2, mx - w / 2), rr = w / 2 - 14; mx = w / 2 + Math.cos(a) * rr; mz = w / 2 + Math.sin(a) * rr;
+      g.save(); g.translate(mx, mz); g.rotate(a); g.fillStyle = '#ffd23e'; g.strokeStyle = '#111'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(12, 0); g.lineTo(-8, -9); g.lineTo(-8, 9); g.closePath(); g.fill(); g.stroke(); g.restore();
+    }
+  }
   g.save(); g.translate(w / 2, w / 2); g.rotate(-jogador.yaw + Math.PI);
   g.fillStyle = '#5cc28a'; g.strokeStyle = '#0b1a10'; g.lineWidth = 2;
   g.beginPath(); g.moveTo(0, -11); g.lineTo(8, 8); g.lineTo(0, 4); g.lineTo(-8, 8); g.closePath(); g.fill(); g.stroke(); g.restore();
@@ -1235,6 +1335,9 @@ async function iniciarJogo(perfil) {
     recarregar: () => { tempoLogistica = 0; },
   });
   iniciarLogistica();
+  $('mapa').addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); abrirMapaGrande(); });
+  $('fecharMapa').onclick = () => $('mapaJanela').classList.add('oculto');
+  $('rastreio').addEventListener('pointerdown', (ev) => { ev.preventDefault(); rastrear(null); });
   iniciarCla({ perfil: () => jogador.perfil, recarregar: () => { tempoSocial = 0; }, definirCla: (id, info) => { jogador.cla = id; if ((info?.nome || null) !== (jogador.claInfo?.nome || null)) { jogador.claInfo = info; conexao?.rastrear(metaPresenca()); } } });
   carregarCidadeSocial().catch(() => {});
   criarPoliciaNPC();
@@ -1437,6 +1540,36 @@ function desenharLote(l) {
   const nome = textoSprite(`${e.nome} · ${nivelTexto(e.nivel)}`, { escala: 1, cor: '#ffd9a0', fundo: 'rgba(20,24,34,.85)' });
   nome.position.set(x, pr.caixa.max.y + 1.2, z); scene.add(nome); v.objs.push(nome);
   extrasDoLote(l, e, v, fabrica, x - LOTE_L / 2 + 1.1, z + 4);
+  enfeitesNivel(x, z, e, v);
+}
+// níveis 2 a 4: bandeiras (2), cerca e vagas pintadas (3), contêineres e holofotes (4)
+function enfeitesNivel(x, z, e, v) {
+  const cor = sedes.corDaEmpresa(e.id), g = new THREE.Group(), H = LOTE_L / 2;
+  const mat = (c, extra = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, ...extra });
+  const bloco = (m, w, h, d, px, py, pz) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(px, py, pz); o.castShadow = true; o.receiveShadow = true; g.add(o); return o; };
+  if (e.nivel >= 2) {
+    for (const sx of [-1, 1]) {
+      const px = x + sx * (H - 0.6), pz = z + H - 0.6;
+      bloco(mat('#d8d8d8', { metalness: 0.6, roughness: 0.3 }), 0.12, 6, 0.12, px, 3.18, pz);
+      const b = bloco(mat(cor, { side: THREE.DoubleSide }), 1.8, 1.1, 0.04, px + 0.9 * -sx, 5.5, pz); b.castShadow = false;
+    }
+  }
+  if (e.nivel >= 3) {
+    const cerca = mat('#5a6068', { metalness: 0.5 });
+    bloco(cerca, LOTE_L - 0.4, 1.3, 0.08, x, 0.83, z - H + 0.2);
+    bloco(cerca, 0.08, 1.3, 10, x - H + 0.2, 0.83, z - H + 5.2);
+    const faixa = mat('#f2f2ea');
+    for (let k = 0; k < 4; k++) { const f = bloco(faixa, 0.15, 0.02, 2.6, x - 7 + k * 3.6, 0.2, z - H + 3.3); f.castShadow = false; }
+  }
+  if (e.nivel >= 4) {
+    const cores = [cor.getStyle(), '#c43b3b', '#3b6fd2'];
+    for (let k = 0; k < 3; k++) bloco(mat(cores[k], { roughness: 0.7 }), 1.7, 1.7, 3.6, x - H + 1.2, 1.03 + (k === 2 ? 1.7 : 0), z - H + 2.4 + (k === 1 ? 3.7 : 0));
+    const poste = mat('#33383f', { metalness: 0.5 });
+    bloco(poste, 0.15, 7, 0.15, x + H - 0.5, 3.68, z - H + 0.5);
+    bloco(mat('#fff3d6', { emissive: '#ffe2a8', emissiveIntensity: 1.2 }), 0.9, 0.35, 0.5, x + H - 0.9, 7.1, z - H + 0.8);
+  }
+  if (!g.children.length) return;
+  scene.add(g); v.objs.push(g);
 }
 // prédio por fase (níveis 5, 10 e 15): galpão com docas, complexo industrial ou sede gigante
 function desenharSede(l, e, u, v, fabrica, modelo) {
@@ -2626,6 +2759,7 @@ function quadro() {
   atualizarCeu(agoraServidor() / 1000);
   mundo.atualizar(dt);
   sedes.atualizar(dt);
+  if (jogador.avatar) atualizarRastreio(dt);
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);

@@ -59,7 +59,12 @@
   #info { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(10px + env(safe-area-inset-top)); font-size:14px; line-height:1.45; }
   #info b { color:var(--destaque); }
   #rua { position:absolute; left:50%; transform:translateX(-50%); top:calc(10px + env(safe-area-inset-top)); font-size:14px; white-space:nowrap; }
-  #mapa { position:absolute; right:calc(10px + env(safe-area-inset-right)); top:calc(10px + env(safe-area-inset-top)); border-radius:12px; border:1px solid var(--borda); width:150px; height:150px; }
+  #mapa { position:absolute; right:calc(10px + env(safe-area-inset-right)); top:calc(10px + env(safe-area-inset-top)); border-radius:12px; border:1px solid var(--borda); width:150px; height:150px; pointer-events:auto; cursor:pointer; }
+  #rastreio { position:absolute; right:calc(10px + env(safe-area-inset-right)); top:calc(166px + env(safe-area-inset-top)); max-width:190px; font-size:12.5px; pointer-events:auto; cursor:pointer; }
+  #mapaG { width:100%; aspect-ratio:1; border-radius:10px; border:1px solid var(--borda); touch-action:none; display:block; }
+  .alvos { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .alvos button { padding:8px 10px; border-radius:9px; border:1px solid var(--borda); background:#202737; color:var(--texto); font-weight:600; cursor:pointer; }
+  .alvos button.sel { background:var(--destaque); color:#20160a; }
   #dica { position:absolute; left:50%; transform:translateX(-50%); bottom:calc(150px + env(safe-area-inset-bottom)); font-size:15px; }
   #ajuda { position:absolute; left:calc(10px + env(safe-area-inset-left)); bottom:calc(10px + env(safe-area-inset-bottom)); font-size:12.5px; color:var(--suave); line-height:1.5; }
   #ajuda kbd { color:var(--texto); font-family:inherit; font-weight:700; }
@@ -152,16 +157,16 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261108h",
-  "./js/mundo.js": "./js/mundo.js?v=20261108h",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261108h",
-  "./js/cla.js": "./js/cla.js?v=20261108h",
-  "./js/config.js": "./js/config.js?v=20261108h",
-  "./js/empresa.js": "./js/empresa.js?v=20261108h",
-  "./js/loja.js": "./js/loja.js?v=20261108h",
-  "./js/painel.js": "./js/painel.js?v=20261108h",
-  "./js/rede.js": "./js/rede.js?v=20261108h",
-  "./js/sedes.js": "./js/sedes.js?v=20261108h"
+  "./js/main.js": "./js/main.js?v=20261108i",
+  "./js/mundo.js": "./js/mundo.js?v=20261108i",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261108i",
+  "./js/cla.js": "./js/cla.js?v=20261108i",
+  "./js/config.js": "./js/config.js?v=20261108i",
+  "./js/empresa.js": "./js/empresa.js?v=20261108i",
+  "./js/loja.js": "./js/loja.js?v=20261108i",
+  "./js/painel.js": "./js/painel.js?v=20261108i",
+  "./js/rede.js": "./js/rede.js?v=20261108i",
+  "./js/sedes.js": "./js/sedes.js?v=20261108i"
 } }
 </script>
 </head>
@@ -203,6 +208,7 @@
   <div id="info" class="painel"></div>
   <div id="rua" class="painel">—</div>
   <canvas id="mapa" width="300" height="300"></canvas>
+  <div id="rastreio" class="painel oculto"></div>
   <div id="dica" class="painel oculto"></div>
   <div id="aviso" class="painel" style="opacity:0"></div>
   <div id="ajuda" class="painel oculto"></div>
@@ -238,6 +244,14 @@
   <div id="claMsg" class="msg"></div>
 </div>
 
+<div id="mapaJanela" class="modal oculto">
+  <div class="topo"><b>Mapa</b><button id="fecharMapa" aria-label="Fechar">✕</button></div>
+  <div class="abas" id="mapaAbas"></div>
+  <div class="conteudo"><canvas id="mapaG" width="720" height="720"></canvas>
+    <p class="dica">Toque num destino abaixo ou em qualquer ponto do mapa para rastrear.</p>
+    <div class="alvos" id="mapaAlvos"></div></div>
+</div>
+
 <div id="janela" class="modal oculto">
   <div class="topo"><b id="janelaTitulo">Loja</b><button id="fecharJanela" aria-label="Fechar">✕</button></div>
   <div id="janelaConteudo" class="conteudo"></div>
@@ -255,7 +269,7 @@
   <div id="girar"><button class="bt" id="btGiraE">⟲</button><button class="bt" id="btGiraD">⟳</button></div>
 </div>
 
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 08/11 · teclado</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 08/11 · mapa</div>
 <script type="module">import './js/main.js';</script>
 </body>
 </html>

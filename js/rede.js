@@ -221,6 +221,8 @@ export const painel = {
   definirCargo: (alvo, novo_cargo, novos_poderes, novo_salario) => rpc('admin_definir_cargo', { alvo, novo_cargo, novos_poderes, novo_salario }),
   skin: (novo) => rpc('staff_skin', { novo }),
   imortal: (ligado) => rpc('staff_imortal', { ligado }),
+  nivelEmpresa: (empresa, nivel) => rpc('admin_nivel_empresa', { p_empresa: empresa, p_nivel: nivel }),
+  nivelCla: (cla, nivel) => rpc('admin_nivel_cla', { p_cla: cla, p_nivel: nivel }),
 };
 export const cumprirPena = () => rpc('cumprir_pena');
 export const receberSalario = () => rpc('receber_salario');

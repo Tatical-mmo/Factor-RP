@@ -81,6 +81,7 @@ async function desenhar(auto = false) {
       ${L.evoluir ? `<p class="dica">Nível ${prox}: até ${limCla(prox).membros} membros e ${limCla(prox).robos} robôs${FASES_CLA[prox] ? `; ${FASES_CLA[prox]}` : ''}. Custa ${num(L.evoluir)} do caixa do clã.</p>
         ${prox % 5 === 0 ? '<p class="aviso-item">🔓 Precisa de 1 <b>Desbloqueio Corporativo</b> na mochila do líder (vende na loja).</p>' : ''}
         ${lider ? `<div class="botoes"><button id="clEvoluir">Evoluir para o nível ${prox}</button></div>` : ''}` : '<p class="dica">Nível máximo.</p>'}
+      ${ctx.perfil().cargo === 'admin' ? `<div class="sub">Administrador</div><div class="botoes"><input id="admNvCla" type="number" min="1" max="15" value="${nv}" inputmode="numeric"><button id="admNvClaOk">Definir nível (teste)</button></div>` : ''}
       <div class="sub">Membros (${membros.length}/${L.membros})</div>
       ${lider ? '<div class="botoes"><input id="clNome" placeholder="Nome do jogador"><button id="clAdd">Adicionar</button></div>' : ''}
       <div class="lista">${membros.map((m) => `<div class="linha item"><span class="nm"><b>${esc(m.perfil?.nome)}</b><small>${m.jogador === meu.lider ? 'líder' : 'membro'}</small></span>
@@ -90,6 +91,7 @@ async function desenhar(auto = false) {
     on('clDep', () => { const v = inteiro('clValor'); if (v > 0) executar(() => rede.cla.depositar(v), `Depositado: ${num(v)}.`); });
     on('clSaq', () => { const v = inteiro('clValor'); if (v > 0) executar(() => rede.cla.sacar(v), `Sacado: ${num(v)}.`); });
     on('clRobo', () => executar(() => rede.cla.comprarRobo(), 'Robô de combate comprado.'));
+    on('admNvClaOk', () => executar(() => rede.painel.nivelCla(meu.id, Math.floor(Number($('admNvCla').value))), 'Nível do clã definido.'));
     on('clEvoluir', () => executar(() => rede.cla.evoluir(), (n) => `O clã chegou ao nível ${n}!`));
     if (lider) rede.precoRobo().then((p) => { const el = $('clPreco'); if (el) el.innerHTML = p <= 8000 ? 'Robô de uma fábrica de robôs da cidade: <b>8.000</b>.' : 'Sem estoque nas fábricas de robôs: vem de fora por <b>12.000</b>.'; const b = $('clRobo'); if (b) b.textContent = `Comprar robô (${num(p)})`; }).catch(() => {});
     on('clAdd', () => { const n = $('clNome').value.trim(); if (n) executar(() => rede.cla.adicionar(n), `${n} entrou no clã.`); });

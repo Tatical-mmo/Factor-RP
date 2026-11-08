@@ -259,7 +259,9 @@ function telaRobos(c, e) {
       ${precisaItem ? '<p class="aviso-item">🔓 Precisa de 1 <b>Desbloqueio Corporativo</b> na sua mochila (vende na loja por 50.000).</p>' : ''}
       <div class="botoes"><button id="rEvoluir">Evoluir para o nível ${prox} por ${num(custo)}</button></div>` : '<p class="dica">Nível máximo. Abra filiais pelas placas "Lote à venda".</p>'}
     ${e.nivel >= 10 ? `<p class="dica">Filiais: ${ctx.lotesDe(e.id).length}/${unidadesMax(e.nivel)} lotes. Para abrir uma, vá até uma placa "Lote à venda".</p>` : ''}
-    <p class="dica">Tudo sai do caixa da empresa (${num(e.caixa)}).</p>`;
+    <p class="dica">Tudo sai do caixa da empresa (${num(e.caixa)}).</p>
+    ${ctx.perfil().cargo === 'admin' ? `<div class="sub">Administrador</div><div class="botoes"><input id="admNv" type="number" min="1" max="15" value="${e.nivel}" inputmode="numeric"><button id="admNvOk">Definir nível (teste do visual)</button></div>` : ''}`;
+  const adm = $('admNvOk'); if (adm) adm.onclick = () => executar(() => rede.painel.nivelEmpresa(e.id, Math.floor(Number($('admNv').value))), 'Nível definido.');
   rede.precoRobo(e.id).then((p) => {
     const el = $('rPreco'); if (!el) return;
     el.innerHTML = p <= 8000 ? 'Robô de uma <b>fábrica de robôs</b> da cidade: <b>8.000</b>.' : 'Nenhuma fábrica de robôs tem estoque: o robô vem de fora por <b>12.000</b>.';
