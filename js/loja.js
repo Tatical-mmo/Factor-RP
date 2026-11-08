@@ -47,10 +47,8 @@ function desenharTerreno(c) {
   c.innerHTML = `<p class="dica">Escolha o que construir. Trocar de modelo depois cobra o preço do novo. Moedas: <b>${moedas()}</b>.</p>
     <div class="lista">${MODELOS.map((m) => `<div class="linha item"><span class="nm"><b>${m.nome}</b><small>${m.texto} · ${m.preco.toLocaleString('pt-BR')} moedas${t.modelo === m.id ? ' · construída' : ''}</small></span>
       <span class="bts">${t.modelo === m.id ? '' : `<button data-mod="${m.id}">Construir</button>`}</span></div>`).join('')}</div>
-    <div class="botoes" style="margin-top:12px"><button id="tVender" class="perigo">Vender o terreno</button></div>`;
-  c.querySelectorAll('[data-mod]').forEach((b) => { b.onclick = () => executar(() => rede.casas.construir(b.dataset.mod), () => { ctx.casaVendida?.(); return 'Construção pronta!'; }); });
-  $('tVender').onclick = () => { const b = $('tVender'); if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Toque de novo para vender'; return; }
-    executar(() => rede.casas.vender(), (v) => { ctx.casaVendida?.(); fechar(); return `Vendido por ${Number(v).toLocaleString('pt-BR')}.`; }); };
+`;
+  c.querySelectorAll('[data-mod]').forEach((b) => { b.onclick = () => executar(() => rede.casas.construir(t.id, b.dataset.mod), () => { ctx.casaVendida?.(); return 'Construção pronta!'; }); });
 }
 
 async function desenharBau(c) {
@@ -65,17 +63,37 @@ async function desenharBau(c) {
         <span class="nm"><b>${esc(p.nome)}</b><small>mochila ${inv[p.item] || 0} · baú ${bau[p.item] || 0}</small></span>
         <span class="bts"><button data-guardar="${p.item}" ${inv[p.item] ? '' : 'disabled'}>Guardar</button><button data-tirar="${p.item}" ${bau[p.item] ? '' : 'disabled'}>Pegar</button></span></div>`).join('')
       : '<span class="vazio">Mochila e baú vazios.</span>'}</div>
-    <div class="sub">Casa</div><div class="botoes"><button id="bVender" class="perigo">Vender a casa (recebe 20.000)</button></div>`;
-  c.querySelectorAll('[data-guardar]').forEach((b) => { b.onclick = () => executar(() => rede.casas.guardar(b.dataset.guardar, inv[b.dataset.guardar]), 'Guardado no baú.'); });
-  c.querySelectorAll('[data-tirar]').forEach((b) => { b.onclick = () => executar(() => rede.casas.retirar(b.dataset.tirar, bau[b.dataset.tirar]), 'Na sua mochila.'); });
-  $('bVender').onclick = () => { const b = $('bVender'); if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Toque de novo para vender'; return; }
-    executar(async () => { await rede.casas.vender(); ctx.casaVendida?.(); }, 'Casa vendida por 20.000.'); };
+    <p class="dica">Para vender esta moradia, saia e toque na porta dela.</p>`;
+  c.querySelectorAll('[data-guardar]').forEach((b) => { b.onclick = () => executar(() => rede.casas.guardar(casa, b.dataset.guardar, inv[b.dataset.guardar]), 'Guardado no baú.'); });
+  c.querySelectorAll('[data-tirar]').forEach((b) => { b.onclick = () => executar(() => rede.casas.retirar(casa, b.dataset.tirar, bau[b.dataset.tirar]), 'Na sua mochila.'); });
+}
+
+// porta da sua moradia: entrar, construir (terreno) ou vender
+const VALOR_VENDA = { simples: 10000, sobrado: 22500, mansao: 45000 };
+const valorVenda = (c) => (c.tipo === 'apto' ? 8000 : c.tipo === 'terreno' ? 6000 + (VALOR_VENDA[c.modelo] || 0) : 20000);
+function desenharPorta(c) {
+  const m = ctx.portaAtual?.();
+  if (!m) { fechar(); return; }
+  const nome = m.tipo === 'apto' ? 'Seu apartamento' : m.tipo === 'terreno' ? (m.modelo ? 'Sua casa (terreno)' : 'Seu terreno') : 'Sua casa';
+  $('janelaTitulo').textContent = m.rotulo || nome;
+  c.innerHTML = `<p class="dica">${nome}. Você pode ter até 3 moradias (casa, apartamento ou terreno). Cada uma tem o seu baú com cama.</p>
+    <div class="botoes">${m.tipo !== 'terreno' || m.modelo ? '<button id="pEntrar">Entrar</button>' : ''}
+      ${m.tipo === 'terreno' ? `<button id="pConstruir">${m.modelo ? 'Trocar a casa' : 'Construir a casa'}</button>` : ''}</div>
+    <div class="sub">Vender</div>
+    <p class="dica">Recebe <b>${valorVenda(m).toLocaleString('pt-BR')}</b>. O que estiver no baú volta para a sua mochila.</p>
+    <div class="botoes"><button id="pVender" class="perigo">Vender</button></div>`;
+  const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
+  on('pEntrar', () => { fechar(); ctx.entrarMoradia(m); });
+  on('pConstruir', () => abrir('terreno'));
+  on('pVender', () => { const b = $('pVender'); if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Toque de novo para confirmar'; return; }
+    executar(() => rede.casas.vender(m.id), (v) => { ctx.casaVendida?.(); fechar(); return `Vendido por ${Number(v).toLocaleString('pt-BR')}.`; }); });
 }
 
 function desenhar() {
   const c = $('janelaConteudo');
   if (modo === 'bau') { desenharBau(c); return; }
   if (modo === 'terreno') { desenharTerreno(c); return; }
+  if (modo === 'porta') { desenharPorta(c); return; }
   if (modo === 'loja') {
     $('janelaTitulo').textContent = 'Loja';
     const venda = precos.filter((p) => p.compra != null);

@@ -1219,8 +1219,10 @@ async function iniciarJogo(perfil) {
   conectarMultiplayer(perfil);
   rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando, inventario: recarregarInventario });
   iniciarLoja({ perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, curar: usarRemedio, vida: () => jogador.vida,
-    casaId: () => [...casasMundo.values()].find((v) => v.d.dono === jogador.perfil.id)?.d.id,
-    meuTerreno: () => [...casasMundo.values()].map((v) => v.d).find((d) => d.dono === jogador.perfil.id && d.tipo === 'terreno'),
+    casaId: () => jogador.dentroCasa || null,
+    meuTerreno: () => { const d = casasMundo.get(portaAberta)?.d; return d?.tipo === 'terreno' && d.dono === jogador.perfil.id ? d : null; },
+    portaAtual: () => { const d = casasMundo.get(portaAberta)?.d; return d?.dono === jogador.perfil.id ? d : null; },
+    entrarMoradia: (d) => entrarEmCasa(d),
     casaVendida: () => { tempoSocial = 0; if (jogador.dentroCasa) sairDeCasa(); } });
   iniciarEmpresa({
     perfil: () => jogador.perfil, agora: agoraServidor,
@@ -2123,8 +2125,9 @@ async function carregarCidadeSocial() {
   }
   const minha = cs.find((c) => c.dono === eu);
   jogador.casa = minha ? { x: minha.x, z: minha.z } : null;
-  jogador.moradia = minha || null;
+  jogador.moradias = cs.filter((c) => c.dono === eu).length;
 }
+let portaAberta = null;
 const placasTorre = new Map();
 const num = (n) => Number(n || 0).toLocaleString('pt-BR');
 // casa construída num terreno (simples, sobrado ou mansão), de frente para a rua
@@ -2194,17 +2197,14 @@ function unidadeNaPorta(c) {
 function nomeMoradia(c) { return c.tipo === 'apto' ? 'apartamento' : c.tipo === 'terreno' ? 'terreno' : 'casa'; }
 async function acaoCasa(c0) {
   const c = unidadeNaPorta(c0);
-  if (c.dono === jogador.perfil.id) {
-    if (c.tipo === 'terreno' && !c.modelo) { abrirJanela('terreno'); return; }
-    entrarEmCasa(c); return;
-  }
+  if (c.dono === jogador.perfil.id) { portaAberta = c.id; abrirJanela('porta'); return; }
   if (c.dono) { aviso(c.tipo === 'apto' ? 'Prédio lotado: todos os apartamentos têm dono.' : `${nomeMoradia(c)} de ${c.dono_perfil?.nome || 'outro jogador'}. A porta está trancada.`); return; }
-  if (jogador.moradia) { aviso('Você já tem uma moradia. Venda a atual pelo baú para comprar outra.'); return; }
+  if (jogador.moradias >= 3) { aviso('Você já tem 3 moradias. Para vender uma, toque na porta dela e escolha Vender.', 4); return; }
   if (performance.now() - confirmaCasa > 3000) { confirmaCasa = performance.now(); aviso(`${c.rotulo || 'Casa'} à venda por ${num(c.preco)}. Aperte de novo para comprar.`, 3); return; }
   confirmaCasa = 0;
   try {
     await rede.casas.comprar(c.id); tempoSocial = 0;
-    aviso(c.tipo === 'terreno' ? 'Terreno comprado! Aperte de novo na placa para escolher a casa.' : `${c.tipo === 'apto' ? 'Apartamento' : 'Casa'} comprado! Agora você renasce aqui.`, 4);
+    aviso(c.tipo === 'terreno' ? 'Terreno comprado! Toque na placa de novo para construir a casa.' : `${c.tipo === 'apto' ? 'Apartamento' : 'Casa'} comprado! Agora você renasce aqui.`, 4);
   } catch (e) { aviso(e.message); }
 }
 function territorioAtual() {
@@ -2527,7 +2527,7 @@ function contexto() {
   const casa = casaProxima(3.2);
   if (casa) {
     const u = unidadeNaPorta(casa), minha = u.dono === jogador.perfil.id, nm = nomeMoradia(u);
-    if (minha) return u.tipo === 'terreno' && !u.modelo ? ['escolher a casa para construir', 'Construir'] : [`entrar no seu ${nm === 'casa' ? 'lar' : nm}`, 'Entrar'];
+    if (minha) return [`seu ${nm}: entrar, construir ou vender`, 'Porta'];
     if (u.dono) return [u.tipo === 'apto' ? 'prédio lotado' : `${nm} de ${u.dono_perfil?.nome || '?'}`, 'Casa'];
     return [`comprar ${u.rotulo || 'esta casa'} (${num(u.preco)})`, 'Comprar'];
   }

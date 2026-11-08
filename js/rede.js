@@ -358,10 +358,10 @@ export const cla = {
 };
 export const casas = {
   comprar: (id) => rpc('comprar_casa', { p_casa: id }),
-  guardar: (item, qtd) => rpc('guardar_no_bau', { p_item: item, p_qtd: qtd }),
-  retirar: (item, qtd) => rpc('retirar_do_bau', { p_item: item, p_qtd: qtd }),
-  vender: () => rpc('vender_casa'),
-  construir: (modelo) => rpc('construir_casa', { p_modelo: modelo }),
+  guardar: (casa, item, qtd) => rpc('guardar_no_bau', { p_casa: casa, p_item: item, p_qtd: qtd }),
+  retirar: (casa, item, qtd) => rpc('retirar_do_bau', { p_casa: casa, p_item: item, p_qtd: qtd }),
+  vender: (casa) => rpc('vender_casa', { p_casa: casa }),
+  construir: (casa, modelo) => rpc('construir_casa', { p_casa: casa, p_modelo: modelo }),
 };
 export async function listarBau(casa) {
   const d = await sel(sb.from('bau').select('item, qtd').eq('casa', casa));
