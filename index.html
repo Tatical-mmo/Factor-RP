@@ -114,6 +114,9 @@
   .linha-form input { width:7.5em; }
   #btRanking { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(288px + env(safe-area-inset-top)); pointer-events:auto;
     font-size:14px; font-weight:700; padding:8px 14px; border-radius:10px; border:1px solid var(--borda); background:#3a3320; color:#ffe7a8; cursor:pointer; }
+  #btVeiculos { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(380px + env(safe-area-inset-top)); pointer-events:auto;
+    font-size:14px; font-weight:700; padding:8px 14px; border-radius:10px; border:1px solid var(--borda); background:#1f3040; color:#bfe3ff; cursor:pointer; }
+  body.passageiro #joy, body.passageiro #btSoco, body.passageiro #btArma, body.passageiro #btTiro { display:none; }
   #btRanking.alerta { box-shadow:0 0 0 3px #ffd23e; animation:pisca 1.2s infinite; }
   @keyframes pisca { 50% { box-shadow:0 0 0 6px rgba(255,210,62,.35); } }
   .barra { display:block; height:6px; border-radius:4px; background:#202737; margin-top:4px; overflow:hidden; }
@@ -172,6 +175,19 @@
   .bt:active, .bt.ativo { background:rgba(242,163,58,.55); }
   #girar { position:absolute; right:calc(10px + env(safe-area-inset-right)); top:calc(170px + env(safe-area-inset-top)); display:flex; gap:8px; pointer-events:auto; }
   #girar .bt { width:46px; height:46px; font-size:18px; }
+  /* Volante e pedais (aparecem ao entrar num veículo) */
+  #volante { position:absolute; inset:0; pointer-events:none; display:none; }
+  body.dirigindo #volante { display:block; }
+  body.dirigindo #joy, body.dirigindo #btSoco, body.dirigindo #btArma, body.dirigindo #btTiro { display:none; }
+  body.dirigindo #botoes { bottom:calc(200px + env(safe-area-inset-bottom)); grid-template-columns:66px; }
+  #setas { position:absolute; left:calc(18px + env(safe-area-inset-left)); bottom:calc(24px + env(safe-area-inset-bottom)); display:flex; gap:14px; pointer-events:auto; }
+  #pedais { position:absolute; right:calc(16px + env(safe-area-inset-right)); bottom:calc(24px + env(safe-area-inset-bottom)); display:flex; gap:12px; align-items:flex-end; pointer-events:auto; }
+  .pd { border:2px solid rgba(255,255,255,.3); background:rgba(20,24,34,.72); color:#fff; font-weight:800; touch-action:none; user-select:none; -webkit-user-select:none; }
+  #setas .pd { width:84px; height:84px; border-radius:50%; font-size:34px; }
+  #vFreio { width:76px; height:96px; border-radius:16px; font-size:12px; }
+  #vAcel { width:80px; height:140px; border-radius:18px; font-size:12px; background:rgba(40,120,60,.75); }
+  #vFreio { background:rgba(150,40,40,.75); }
+  .pd.ativo { filter:brightness(1.6); transform:scale(.96); }
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#141925">
@@ -186,20 +202,20 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261108r",
-  "./js/mundo.js": "./js/mundo.js?v=20261108r",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261108r",
-  "./js/cla.js": "./js/cla.js?v=20261108r",
-  "./js/config.js": "./js/config.js?v=20261108r",
-  "./js/empresa.js": "./js/empresa.js?v=20261108r",
-  "./js/loja.js": "./js/loja.js?v=20261108r",
-  "./js/painel.js": "./js/painel.js?v=20261108r",
-  "./js/rede.js": "./js/rede.js?v=20261108r",
-  "./js/sedes.js": "./js/sedes.js?v=20261108r",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261108r",
-  "./js/civico.js": "./js/civico.js?v=20261108r",
-  "./js/governo.js": "./js/governo.js?v=20261108r",
-  "./js/servicos.js": "./js/servicos.js?v=20261108r"
+  "./js/main.js": "./js/main.js?v=20261108t",
+  "./js/mundo.js": "./js/mundo.js?v=20261108t",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261108t",
+  "./js/cla.js": "./js/cla.js?v=20261108t",
+  "./js/config.js": "./js/config.js?v=20261108t",
+  "./js/empresa.js": "./js/empresa.js?v=20261108t",
+  "./js/loja.js": "./js/loja.js?v=20261108t",
+  "./js/painel.js": "./js/painel.js?v=20261108t",
+  "./js/rede.js": "./js/rede.js?v=20261108t",
+  "./js/sedes.js": "./js/sedes.js?v=20261108t",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261108t",
+  "./js/civico.js": "./js/civico.js?v=20261108t",
+  "./js/governo.js": "./js/governo.js?v=20261108t",
+  "./js/servicos.js": "./js/servicos.js?v=20261108t"
 } }
 </script>
 </head>
@@ -253,6 +269,7 @@
   <div id="captura" class="painel oculto"></div>
   <button id="btPainel" class="oculto">🛡 Painel</button>
   <button id="btRanking">🏆 Metas</button>
+  <button id="btVeiculos">🚗 Veículos</button>
   <div id="appBotoes"><button id="btTela" title="Tela cheia">⛶</button><button id="btInstalar" class="oculto">📲 Instalar</button></div>
   <div id="bloqueio" class="oculto"></div>
 </div>
@@ -317,9 +334,13 @@
     <button class="bt" id="btTiro">Atirar</button>
   </div>
   <div id="girar"><button class="bt" id="btGiraE">⟲</button><button class="bt" id="btGiraD">⟳</button></div>
+  <div id="volante">
+    <div id="setas"><button class="pd" id="vEsq">◀</button><button class="pd" id="vDir">▶</button></div>
+    <div id="pedais"><button class="pd" id="vFreio">FREIO<br>RÉ</button><button class="pd" id="vAcel">ACELERAR</button></div>
+  </div>
 </div>
 
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 08/11 · veículos 3D e sequestro</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 08/11 · táxi aéreo e trânsito</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

@@ -5,12 +5,14 @@ let ctx = null;
 export const PREFEITURA = { x: -135, z: -135, porta: { x: -135, z: -120.5 }, prf: { x: -146, z: -115 } };
 export const CONCESSIONARIA = { x: 135, z: -135, balcao: { x: 135, z: -127.5 } };
 export const BANCO = { x: 81, z: -135, balcao: { x: 75, z: -124 }, empregos: { x: 88, z: -124 } };
-export const HOSPITAL = { x: -135, z: 135, balcao: { x: -131, z: 125 }, saida: { x: -139, z: 124 } };
-export const BOMBEIROS = { x: -81, z: 135, balcao: { x: -88, z: 125 } };
+export const HOSPITAL = { x: -135, z: 135, balcao: { x: -131, z: 125 }, saida: { x: -139, z: 124 }, vaga: { x: -145, z: 126, ang: -Math.PI / 2 }, veiculo: null };
+export const BOMBEIROS = { x: -81, z: 135, balcao: { x: -88, z: 125 }, vaga: { x: -77, z: 125.5, ang: Math.PI + 0.15 }, veiculo: null };
 export const CARROS = {
-  popular: { nome: 'Popular', preco: 12000, vel: 15 },
-  suv: { nome: 'SUV', preco: 30000, vel: 17 },
-  esportivo: { nome: 'Esportivo', preco: 55000, vel: 24 },
+  popular: { nome: 'Popular', preco: 40000, vel: 15 },
+  suv: { nome: 'SUV', preco: 95000, vel: 17 },
+  esportivo: { nome: 'Esportivo', preco: 180000, vel: 24 },
+  ambulancia: { nome: 'Ambulância', preco: 0, vel: 19 },
+  bombeiros: { nome: 'Caminhão dos bombeiros', preco: 0, vel: 15 },
   presidencial: { nome: 'Presidencial', preco: 0, vel: 20 },
 };
 export const CORES_CARRO = ['#c0392b', '#2c3e50', '#ecf0f1', '#f1c40f', '#2980b9', '#16a085', '#8e44ad', '#1f1f1f', '#d35400'];
@@ -21,7 +23,8 @@ function bloco(g, m, w, h, d, x, y, z) {
 }
 
 export function iniciar(contexto) { ctx = contexto; }
-const GLB_CARRO = { popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial' };
+const GLB_CARRO = { popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros' };
+const SEM_TINTA = new Set(['presidencial', 'ambulancia', 'bombeiros']);
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
 export function montarPrefeitura() {
@@ -110,11 +113,11 @@ export function montarHospital() {
   bloco(amb, mat('#1b2633'), 1.8, 0.6, 0.05, 0, 1.6, 2.62); bloco(amb, verm, 2.12, 0.3, 3.42, 0, 1.4, -0.6);
   bloco(amb, mat('#2266dd', { emissive: '#2266dd', emissiveIntensity: 1 }), 1.2, 0.2, 0.3, 0, 2.7, 0.8);
   for (const sx of [-1, 1]) for (const sz of [-1.6, 1.6]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.3, 12).rotateZ(Math.PI / 2), mat('#161616')); p.position.set(sx, 0.4, sz); amb.add(p); }
-  g.add(amb);
+  HOSPITAL.veiculo = veiculoDeServico('ambulancia', HOSPITAL.vaga);
+  if (!HOSPITAL.veiculo) g.add(amb);
   ctx.scene.add(g); ctx.janelas.push(vidro);
   const t = ctx.textoSprite('✚ HOSPITAL', { escala: 1.3, fundo: 'rgba(200,30,30,.92)' }); t.position.set(HOSPITAL.x, 21, HOSPITAL.z - 2); ctx.scene.add(t);
   ctx.colisores.push({ tipo: 'caixa', x0: HOSPITAL.x - 15, x1: HOSPITAL.x + 15, z0: HOSPITAL.z - 3.2, z1: HOSPITAL.z + 13 });
-  ctx.colisores.push({ tipo: 'caixa', x0: HOSPITAL.x - 11.8, x1: HOSPITAL.x - 8.2, z0: HOSPITAL.z - 9.6, z1: HOSPITAL.z - 6.4 });
   ctx.balcao(HOSPITAL.balcao.x, HOSPITAL.balcao.z, '#d62828', 'Hospital', 'Tratamento e plantão médico');
 }
 
@@ -135,13 +138,34 @@ export function montarBombeiros() {
   for (let k = 0; k < 8; k++) bloco(cam, mat('#bfc5ca', { metalness: 0.7 }), 0.9, 0.08, 0.08, 0, 3.0, -3.3 + k * 0.75);
   bloco(cam, mat('#2266dd', { emissive: '#ff2020', emissiveIntensity: 1 }), 1.6, 0.2, 0.3, 0, 2.25, 4.0);
   for (const sx of [-1.15, 1.15]) for (const sz of [-2.8, 0, 3.4]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.35, 12).rotateZ(Math.PI / 2), mat('#161616')); p.position.set(sx, 0.5, sz); cam.add(p); }
-  g.add(cam);
+  BOMBEIROS.veiculo = veiculoDeServico('bombeiros', BOMBEIROS.vaga);
+  if (!BOMBEIROS.veiculo) g.add(cam);
   ctx.scene.add(g);
   const t = ctx.textoSprite('🚒 BOMBEIROS', { escala: 1.2, fundo: 'rgba(170,30,20,.92)' }); t.position.set(BOMBEIROS.x, 11, BOMBEIROS.z - 2); ctx.scene.add(t);
   ctx.colisores.push({ tipo: 'caixa', x0: BOMBEIROS.x - 9, x1: BOMBEIROS.x + 13, z0: BOMBEIROS.z - 3.2, z1: BOMBEIROS.z + 13 });
   ctx.colisores.push({ tipo: 'caixa', x0: BOMBEIROS.x - 13.3, x1: BOMBEIROS.x - 8.7, z0: BOMBEIROS.z + 5.7, z1: BOMBEIROS.z + 10.3 });
-  ctx.colisores.push({ tipo: 'caixa', x0: BOMBEIROS.x + 1.5, x1: BOMBEIROS.x + 6.5, z0: BOMBEIROS.z - 12.6, z1: BOMBEIROS.z - 5 });
   ctx.balcao(BOMBEIROS.balcao.x, BOMBEIROS.balcao.z, '#c81e1e', 'Quartel dos Bombeiros', 'Entre em serviço e apague incêndios');
+}
+
+// luzes de sirene (piscam em atualizarSirenes)
+function sirene(g, pos) {
+  if (!pos) return;
+  const [y, z] = pos;
+  for (const [sx, cor] of [[-0.45, '#ff2020'], [0.45, '#2266ff']]) {
+    const l = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.3), new THREE.MeshBasicMaterial({ color: cor }));
+    l.position.set(sx, y, z); l.userData.sirene = sx < 0 ? 0 : 1; g.add(l);
+  }
+}
+export function atualizarSirenes(t, raiz) {
+  const fase = Math.floor(t * 4) % 2;
+  raiz.traverse((o) => { if (o.userData.sirene !== undefined) o.visible = o.userData.sirene === fase; });
+}
+// ambulância e caminhão dos bombeiros parados na base (somem enquanto alguém dirige)
+function veiculoDeServico(modelo, vaga) {
+  if (!ctx.modelo?.(GLB_CARRO[modelo])) return null;
+  const m = modeloCarro(modelo, '#ffffff');
+  m.position.set(vaga.x, 0.18, vaga.z); m.rotation.y = vaga.ang; ctx.scene.add(m);
+  return m;
 }
 
 // carros: frente em +Z, chão em y = 0
@@ -152,13 +176,15 @@ export function modeloCarro(modelo, cor) {
   const base = ctx?.modelo?.(GLB_CARRO[modelo]);
   if (base) {   // modelo 3D: pinta de leve com a cor escolhida (o presidencial fica como é)
     const g = base.clone(true);
-    if (modelo !== 'presidencial') g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), 0.45); } });
+    if (SEM_TINTA.has(modelo)) sirene(g, { ambulancia: [3.4, 0.9], bombeiros: [3.15, 2.5] }[modelo]);
+    else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), 0.45); } });
     cacheCarro.set(chave, g);
     return g.clone();
   }
   const g = new THREE.Group();
   const pint = mat(cor, { roughness: 0.25, metalness: 0.55 }), vidro = mat('#1b2633', { roughness: 0.1, metalness: 0.6 }), pneu = mat('#161616', { roughness: 0.9 });
   const luz = mat('#fff6d0', { emissive: '#fff1c8', emissiveIntensity: 1.4 }), lanterna = mat('#c81e1e', { emissive: '#c81e1e', emissiveIntensity: 0.8 });
+  if (!{ popular: 1, suv: 1, esportivo: 1, presidencial: 1 }[modelo]) modelo = 'suv';
   const dims = { popular: [1.7, 0.6, 3.9, 1.5, 0.55, 2.0, 0.34], suv: [1.95, 0.85, 4.6, 1.8, 0.75, 2.7, 0.42], esportivo: [1.95, 0.5, 4.5, 1.6, 0.42, 1.8, 0.36], presidencial: [2.0, 0.7, 6.4, 1.85, 0.62, 3.6, 0.4] }[modelo];
   const [w, h, l, cw, ch, cl, r] = dims;
   bloco(g, pint, w, h, l, 0, r + h / 2 + 0.1, 0);

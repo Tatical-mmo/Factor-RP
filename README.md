@@ -28,7 +28,7 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b`, `21c`, `22a`, `22b`, `23a`, `23b`, `23c`, `23d` e `24`, nessa ordem.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b`, `21c`, `22a`, `22b`, `23a`, `23b`, `23c`, `23d`, `24`, `25` e `26`, nessa ordem.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
 
 ## Etapa 3: trabalho e produção
@@ -256,3 +256,23 @@ Rode no SQL Editor: `24_veiculos_roubo.sql`.
 - Veículo parado por 5 minutos volta sozinho para a garagem. Policial que acha um veículo roubado abandonado devolve ao dono (+300).
 - O dono dirige qualquer veículo dele quando quiser: chegue perto do veículo, ou do portão da empresa para tirar um da garagem. Ao descer, o robô leva de volta.
 - Prefeitura e Concessionária aparecem no mapa grande para rastrear.
+
+## Versão 08/11 (s) · volante, ré, ambulância e bombeiros NPC
+Rode no SQL Editor: `25_servicos_npc.sql`.
+- Dentro de qualquer veículo o controle vira volante: setas ◀ ▶ à esquerda, ACELERAR e FREIO/RÉ à direita (no PC: W/S/A/D ou setas). Ao descer, volta o joystick.
+- Ré: segure FREIO com o veículo parado.
+- Fogo novo: partículas de chama, fumaça subindo e brilho no chão.
+- Carros: Popular 40.000, SUV 95.000, Esportivo 180.000.
+- Ambulância e caminhão dos bombeiros em 3D. Médico em serviço dirige a ambulância (fica na frente do hospital); bombeiro dirige o caminhão (na frente do quartel), com jato de alcance maior.
+- NPCs: quem morre recebe uma ambulância NPC, que vem pelas ruas e atende no local (conta de até 100). Fogo sem bombeiro é atendido pelo caminhão NPC depois de 1 min; a prefeitura apaga em 3 min e cobra 300 do dono.
+
+## Versão 08/11 (t) · chamar veículos, bloqueio, táxi aéreo, trânsito e polícia NPC
+Rode no SQL Editor: `26_chamar_bloquear.sql`.
+- Botão **🚗 Veículos** (lado esquerdo): lista seus carros e os veículos das empresas.
+  - **Chamar**: o robô motorista traz o veículo pelas ruas até você (veículo de empresa espera 5 min).
+  - **Recolher**: volta para a garagem (carros vão para a Concessionária).
+  - **Bloquear**: trava um veículo roubado; em 20 s o ladrão é jogado para fora e o veículo volta para a garagem.
+  - **Táxi aéreo** (helicóptero parado): o piloto robô busca você, você embarca, escolhe o destino na lista e ele leva, pousa e volta sozinho. Membros do clã do dono e funcionários da empresa podem embarcar como passageiros quando ele pousa.
+- Trânsito: caminhões de entrega, ambulância e bombeiros NPC param quando há veículo ou pessoa na frente e recuperam o atraso depois.
+- Batidas: quem dirige bate nos outros veículos (a câmera treme); atropelar tira vida de jogadores e da polícia NPC.
+- Polícia NPC: dá para bater e atirar nela. Cada agressão é crime; ela persegue e atira de volta por 30 s; derrubada, levanta em 20 s.

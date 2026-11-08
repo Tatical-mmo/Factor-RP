@@ -149,6 +149,10 @@ function traduzirRpc(m) {
     'o dono nao pode se demitir': 'O dono não pode se demitir.',
     'cla nao encontrado': 'Clã não encontrado.',
     'veiculo invalido': 'Veículo inválido.',
+    'o veiculo foi roubado: use o bloqueio': 'O veículo foi roubado: use o Bloqueio.',
+    'o veiculo esta ocupado': 'O veículo está ocupado (em entrega ou com alguém).',
+    'o veiculo nao esta na rua': 'O veículo não está na rua.',
+    'o veiculo nao esta roubado': 'O veículo não está roubado.',
     'alguem esta dirigindo': 'Alguém está dirigindo esse veículo.',
     'esse veiculo nao e seu': 'Esse veículo não é seu.',
     'voce nao esta nesse veiculo': 'Você não está nesse veículo.',
@@ -308,6 +312,7 @@ export const crime = {
   cancelar: () => rpc('cancelar_assalto'),
   abertas: () => sel(sb.from('ocorrencias').select('*').eq('status', 'aberta').gt('criada_em', new Date(Date.now() - 15 * 60000).toISOString()).order('id', { ascending: false }).limit(20)),
   atender: (id) => rpc('atender_ocorrencia', { p_ocorrencia: id }),
+  agredirNpc: () => rpc('agredir_policia_npc'),
 };
 export const guerra = {
   listar: () => sel(sb.from('guerras').select('*').in('status', ['proposta', 'aceita']).order('inicio')),
@@ -330,6 +335,9 @@ export const veiculos = {
   mover: (id, x, z, ang) => rpc('mover_veiculo', { p_caminhao: id, p_x: x, p_z: z, p_ang: ang }),
   sair: (id, x, z, ang) => rpc('sair_veiculo', { p_caminhao: id, p_x: x, p_z: z, p_ang: ang }),
   descarregar: (id, x, z) => rpc('descarregar_roubo', { p_caminhao: id, p_x: x, p_z: z }),
+  chamar: (id, x, z) => rpc('chamar_veiculo', { p_caminhao: id, p_x: x, p_z: z }),
+  recolher: (id) => rpc('recolher_veiculo', { p_caminhao: id }),
+  bloquear: (id) => rpc('bloquear_veiculo', { p_caminhao: id }),
 };
 export const banco = {
   estado: () => rpc('banco_estado'),

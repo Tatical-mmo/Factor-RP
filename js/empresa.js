@@ -243,7 +243,7 @@ async function telaPedidos(c, e) {
 const VEICULOS = {
   van: { nome: 'Van', icone: '🚐', cap: 10, robo: 2, max: 20, sistema: 9000, fabrica: 7200, nivel: 1, texto: 'rápida e barata, leva pouco' },
   caminhao: { nome: 'Caminhão', icone: '🚚', cap: 20, robo: 5, max: 60, sistema: 15000, fabrica: 12000, nivel: 1, texto: 'o equilíbrio entre carga e preço' },
-  helicoptero: { nome: 'Helicóptero', icone: '🚁', cap: 15, robo: 3, max: 30, sistema: 75000, fabrica: 60000, nivel: 10, texto: 'voa em linha reta, muito rápido e não pode ser roubado; ganha heliporto no telhado' },
+  helicoptero: { nome: 'Helicóptero', icone: '🚁', cap: 15, robo: 3, max: 30, sistema: 75000, fabrica: 60000, nivel: 10, texto: 'voa em linha reta e muito rápido; só pode ser roubado no chão; serve de táxi aéreo para o dono (botão 🚗 Veículos); ganha heliporto no telhado' },
 };
 async function telaCaminhoes(c, e) {
   const [frota, aceitos] = await Promise.all([rede.listarCaminhoes(), rede.pedidosAceitosDe(e.id)]);
