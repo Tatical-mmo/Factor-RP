@@ -12,6 +12,8 @@ const $ = (id) => document.getElementById(id);
 const TOQUE = window.matchMedia('(pointer: coarse)').matches;
 
 import * as rede from './rede.js';
+import * as mundo from './mundo.js';
+import * as ferrovia from './ferrovia.js';
 import { iniciarPainel, atualizarBotao } from './painel.js';
 
 // ================================================================= CONTA E PERFIL
@@ -179,7 +181,7 @@ const rng = (() => { let s = 1337; return () => (s = (s * 16807) % 2147483647) /
 function materialChao(cor, rugosidade = 0.95) { return new THREE.MeshStandardMaterial({ color: cor, roughness: rugosidade, metalness: 0 }); }
 
 function montarChao() {
-  const terra = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), materialChao('#bda783'));
+  const terra = new THREE.Mesh(new THREE.PlaneGeometry(1800, 1300), materialChao('#bda783'));
   terra.rotation.x = -Math.PI / 2; terra.receiveShadow = true; scene.add(terra);
 
   const asfaltoTex = texturaCanvas(256, (g, t) => {
@@ -510,13 +512,14 @@ function montarQuarteiroes() {
     itensMapa.push({ tipo: 'territorio', x: s * BASE_X, z: ruaC(2), r: 24 });
   }
   // o caminhão danificado só aparece quando uma carga for roubada (etapa 5)
-  // árvores espalhadas fora da cidade
-  for (let k = 0; k < 18; k++) {
-    const a = rng() * Math.PI * 2, r = METADE + 15 + rng() * 60;
-    const x = Math.cos(a) * r, z = Math.sin(a) * r;
-    if (Math.abs(z - ruaC(2)) < 30 && Math.abs(x) > METADE) continue;
-    colocarArvore(x, z, 1.1);
-  }
+}
+// loja nas cidades vizinhas (frente virada para +Z)
+function colocarLojaExtra(x, z) {
+  colocarPredio('loja', x, z, 0);
+  const p = predios[predios.length - 1];
+  const frente = { x: (p.caixa.min.x + p.caixa.max.x) / 2, z: p.caixa.max.z + 1.3 };
+  pontos.lojas.push(frente);
+  const pl = textoSprite('Loja', { escala: 0.8, fundo: 'rgba(140,30,30,.85)' }); pl.position.set(frente.x, 2.6, frente.z); scene.add(pl);
 }
 
 // ================================================================= PERSONAGENS
@@ -618,7 +621,14 @@ const jogador = {
 };
 
 function resolverColisao(p, raio) {
-  for (const c of colisores) {
+  colidirLista(colisores, p, raio);
+  mundo.colidir(p, raio, colidirLista);
+  if (!jogador.trem) ferrovia.empurrar(p, raio);
+  resolverMoveis(p, raio);
+  mundo.limitar(p);
+}
+function colidirLista(lista, p, raio) {
+  for (const c of lista) {
     if (c.tipo === 'caixa') {
       const qx = Math.max(c.x0, Math.min(p.x, c.x1)), qz = Math.max(c.z0, Math.min(p.z, c.z1));
       const dx = p.x - qx, dz = p.z - qz, d2 = dx * dx + dz * dz;
@@ -634,6 +644,8 @@ function resolverColisao(p, raio) {
       if (d2 < r * r && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = c.x + dx / d * r; p.z = c.z + dz / d * r; }
     }
   }
+}
+function resolverMoveis(p, raio) {
   // caminhão em movimento
   if (caminhaoMovel) {
     const dx = p.x - caminhaoMovel.obj.position.x, dz = p.z - caminhaoMovel.obj.position.z, r = raio + 2.3, d2 = dx * dx + dz * dz;
@@ -648,10 +660,10 @@ function resolverColisao(p, raio) {
     const q = r.av.raiz.position, dx = p.x - q.x, dz = p.z - q.z, rr = raio * 2, d2 = dx * dx + dz * dz;
     if (d2 < rr * rr && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = q.x + dx / d * rr; p.z = q.z + dz / d * rr; }
   }
-  const lim = BASE_X + 40; p.x = Math.max(-lim, Math.min(lim, p.x)); p.z = Math.max(-lim, Math.min(lim, p.z));
 }
 
 function alturaChao(x, z) {
+  const h = mundo.altura(x, z); if (h !== null) return h;
   // calçadas e quarteirões ficam 18 cm acima da rua
   for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
     if (Math.abs(x - quadC(i)) < QB / 2 && Math.abs(z - quadC(j)) < QB / 2) return 0.18;
@@ -750,14 +762,29 @@ function pertoContratante() { return contratante && Math.hypot(contratante.x - j
 
 function livre() {
   if (jogador.morto) return false;
+  if (jogador.trem) { aviso('Você está no trem.'); return false; }
   if (jogador.algemado) { aviso('Você está algemado.'); return false; }
   if (jogador.pena > 0) { aviso('Você está preso.'); return false; }
   return true;
 }
 
 function acaoContexto() {
+  if (jogador.trem) {
+    const est = ferrovia.estadoDe(jogador.trem.li, jogador.trem.k);
+    if (est?.parado === jogador.trem.origem) desembarcar(jogador.trem.origem); else aviso(contexto()[0]);
+    return;
+  }
   if (jogador.trava > 0 || !livre()) return;
   if (jogador.carregando?.userData.pedido) { acaoCaixaPedido(); return; }
+  if (jogador.dentroCasa) {
+    if (pontoInterior('porta', 1.8)) sairDeCasa();
+    else if (pontoInterior('cama', 2)) descansar();
+    else if (pontoInterior('bau', 1.8)) abrirJanela('bau');
+    return;
+  }
+  const pl = ferrovia.plataformaEm(jogador.pos.x, jogador.pos.z);
+  if (pl && pl.trem !== null && pl.resta > 2) { embarcar(pl); return; }
+  if (pl) { aviso(contexto()[0]); return; }
   if (jogador.perfil.policial) { const alvo = procuradoProximo(2.4); if (alvo) { prenderProcurado(alvo); return; } }
   if (pertoDelegacia()) { alternarServico(); return; }
   if (pertoContratante()) { abrirMissoes(); return; }
@@ -779,6 +806,36 @@ function acaoContexto() {
   const casa = casaProxima(3.2);
   if (casa) { acaoCasa(casa); return; }
   if (pontoProximo(pontos.sucata, 4)) { if (jogador.armado) { aviso('Guarde a arma para trabalhar.'); return; } coletar(); }
+}
+
+// ---------------------------------------------------------------- trem
+function embarcar(pl) {
+  if (jogador.carregando) { aviso('Largue a caixa antes de embarcar.'); return; }
+  if (jogador.armado) alternarArma();
+  const l = pl.linha;
+  jogador.trem = { li: l.id, k: pl.trem, v: Math.floor(Math.random() * ferrovia.VAGAS_POR_TREM), origem: pl.lado, destino: pl.lado === 'centro' ? 'destino' : 'centro' };
+  jogador.alvo = null;
+  ferrovia.ocultarTeto(l.id, pl.trem, true);
+  aviso(`Você embarcou. Próxima parada: ${ferrovia.nomeParada(l, jogador.trem.destino)}.`, 3);
+}
+function desembarcar(lado) {
+  const t = jogador.trem; if (!t) return;
+  const w = ferrovia.vaga(t.li, t.k, t.v);
+  ferrovia.ocultarTeto(t.li, t.k, false);
+  jogador.trem = null;
+  const p = ferrovia.pontoDeSaida(t.li, lado, w ? w.x : 0);
+  jogador.pos.set(p.x, alturaChao(p.x, p.z), p.z);
+  // vira para o lado da cidade
+  jogador.yaw = (lado === 'centro') === (p.z < 0) ? 0 : Math.PI;
+  if (lado === t.destino) aviso(`Você chegou: ${ferrovia.nomeParada(ferrovia.linhas[t.li], lado)}.`, 3);
+}
+function seguirTrem() {
+  const t = jogador.trem, est = ferrovia.estadoDe(t.li, t.k);
+  if (est?.parado === t.destino) { desembarcar(t.destino); return false; }
+  const w = ferrovia.vaga(t.li, t.k, t.v);
+  if (!w) { jogador.trem = null; return false; }
+  jogador.pos.set(w.x, w.y, w.z); jogador.yaw = w.yaw;
+  return true;
 }
 
 // ---------------------------------------------------------------- trabalho (etapa 3)
@@ -982,40 +1039,60 @@ function suavizarAngulo(a, b, t) {
 }
 
 // ================================================================= MINIMAPA
-let fundoMapa = null;
-const MAPA_ALCANCE = BASE_X + 30;
-function mapaXY(x, z, w) { return [(x / MAPA_ALCANCE * 0.5 + 0.5) * w, (z / MAPA_ALCANCE * 0.5 + 0.5) * w]; }
+const MAPA_ESC = 1.2, MAPA_R = 110;             // pixels por metro no fundo; raio visível em metros
+const REGIOES_MAPA = [
+  { x0: -mundo.FIM_HORIZONTE, z0: -mundo.FIM_HORIZONTE, x1: mundo.FIM_HORIZONTE, z1: mundo.FIM_HORIZONTE },
+  { x0: -170, z0: -1190, x1: 170, z1: -810 },
+  { x0: -170, z0: 810, x1: 170, z1: 1190 },
+];
+let fundosMapa = [];
+function regiaoMapa(x, z) { return REGIOES_MAPA.findIndex((r) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1); }
 function desenharFundoMapa() {
-  const w = 300; fundoMapa = document.createElement('canvas'); fundoMapa.width = fundoMapa.height = w;
-  const g = fundoMapa.getContext('2d');
-  g.fillStyle = '#b8a27f'; g.fillRect(0, 0, w, w);
-  const s = w / (MAPA_ALCANCE * 2);
-  g.fillStyle = '#d8d1c3';
-  const [ax, az] = mapaXY(-METADE, -METADE, w); g.fillRect(ax, az, TOTAL * s, TOTAL * s);
+  fundosMapa = REGIOES_MAPA.map((r) => {
+    const c = document.createElement('canvas');
+    c.width = Math.ceil((r.x1 - r.x0) * MAPA_ESC); c.height = Math.ceil((r.z1 - r.z0) * MAPA_ESC);
+    const g = c.getContext('2d');
+    g.setTransform(MAPA_ESC, 0, 0, MAPA_ESC, -r.x0 * MAPA_ESC, -r.z0 * MAPA_ESC);
+    g.fillStyle = '#86a95c'; g.fillRect(r.x0, r.z0, r.x1 - r.x0, r.z1 - r.z0);
+    mundo.desenharMapa(g);
+    ferrovia.desenharMapa(g);
+    desenharCentroNoMapa(g);
+    return c;
+  });
+}
+function desenharCentroNoMapa(g) {
+  g.fillStyle = '#d8d1c3'; g.fillRect(-METADE, -METADE, TOTAL, TOTAL);
   g.fillStyle = '#4a4e57';
-  for (let i = 0; i <= N; i++) {
-    const [x0, z0] = mapaXY(-METADE, ruaC(i) - RW / 2, w); g.fillRect(x0, z0, TOTAL * s, RW * s);
-    const [x1, z1] = mapaXY(ruaC(i) - RW / 2, -METADE, w); g.fillRect(x1, z1, RW * s, TOTAL * s);
-  }
-  const [px, pz] = mapaXY(quadC(1) - QB / 2 + CW, quadC(2) - QB / 2 + CW, w); g.fillStyle = '#7fa45a'; g.fillRect(px, pz, (QB - 2 * CW) * s, (QB - 2 * CW) * s);
+  for (let i = 0; i <= N; i++) { g.fillRect(-METADE, ruaC(i) - RW / 2, TOTAL, RW); g.fillRect(ruaC(i) - RW / 2, -METADE, RW, TOTAL); }
+  g.fillStyle = '#7fa45a'; g.fillRect(quadC(1) - QB / 2 + CW, quadC(2) - QB / 2 + CW, QB - 2 * CW, QB - 2 * CW);
   for (const it of itensMapa) {
-    if (it.tipo === 'territorio') {
-      const [x, z] = mapaXY(it.x, it.z, w); g.strokeStyle = it.x > 0 ? '#d24b4b' : '#4b7bd2'; g.lineWidth = 3; g.beginPath(); g.arc(x, z, it.r * s, 0, 7); g.stroke(); continue;
-    }
-    const [x0, z0] = mapaXY(it.x0, it.z0, w); g.fillStyle = CORES_MAPA[it.tipo] || '#888';
-    g.fillRect(x0, z0, (it.x1 - it.x0) * s, (it.z1 - it.z0) * s);
+    if (it.tipo === 'territorio') { g.strokeStyle = it.x > 0 ? '#d24b4b' : '#4b7bd2'; g.lineWidth = 3; g.beginPath(); g.arc(it.x, it.z, it.r, 0, 7); g.stroke(); continue; }
+    g.fillStyle = CORES_MAPA[it.tipo] || '#888'; g.fillRect(it.x0, it.z0, it.x1 - it.x0, it.z1 - it.z0);
   }
-  if (contratante) { const [x, z] = mapaXY(contratante.x, contratante.z, w); g.fillStyle = '#ffd23e'; g.beginPath(); g.arc(x, z, 6, 0, 7); g.fill(); }
+  if (contratante) { g.fillStyle = '#ffd23e'; g.beginPath(); g.arc(contratante.x, contratante.z, 5, 0, 7); g.fill(); }
 }
 function desenharMapa() {
   const c = $('mapa'), g = c.getContext('2d'), w = c.width;
-  g.drawImage(fundoMapa, 0, 0);
-  const desenhar = (x, z, cor, r) => { const [mx, mz] = mapaXY(x, z, w); g.fillStyle = cor; g.beginPath(); g.arc(mx, mz, r, 0, 7); g.fill(); };
+  const px = jogador.pos.x, pz = jogador.pos.z, ri = regiaoMapa(px, pz);
+  g.fillStyle = '#86a95c'; g.fillRect(0, 0, w, w);
+  if (ri >= 0 && fundosMapa[ri]) {
+    // recorta a janela dentro do fundo (alguns navegadores não desenham se ela sair da borda)
+    const r = REGIOES_MAPA[ri], f = fundosMapa[ri], k = w / (MAPA_R * 2 * MAPA_ESC);
+    let sx = (px - MAPA_R - r.x0) * MAPA_ESC, sy = (pz - MAPA_R - r.z0) * MAPA_ESC, sw = MAPA_R * 2 * MAPA_ESC, sh = sw, dx = 0, dy = 0;
+    if (sx < 0) { dx = -sx * k; sw += sx; sx = 0; } if (sy < 0) { dy = -sy * k; sh += sy; sy = 0; }
+    sw = Math.min(sw, f.width - sx); sh = Math.min(sh, f.height - sy);
+    if (sw > 1 && sh > 1) g.drawImage(f, sx, sy, sw, sh, dx, dy, sw * k, sh * k);
+  }
+  const desenhar = (x, z, cor, raio) => {
+    const mx = ((x - px) / MAPA_R * 0.5 + 0.5) * w, mz = ((z - pz) / MAPA_R * 0.5 + 0.5) * w;
+    if (mx < -8 || mz < -8 || mx > w + 8 || mz > w + 8) return;
+    g.fillStyle = cor; g.beginPath(); g.arc(mx, mz, raio, 0, 7); g.fill();
+  };
   for (const n of npcs) desenhar(n.av.raiz.position.x, n.av.raiz.position.z, '#ffffffaa', 3.5);
   for (const r of remotos.values()) if (r.av?.raiz.visible) desenhar(r.av.raiz.position.x, r.av.raiz.position.z, '#4fa3ff', 5);
   if (caminhaoMovel) desenhar(caminhaoMovel.obj.position.x, caminhaoMovel.obj.position.z, '#e39b3a', 5);
-  const [mx, mz] = mapaXY(jogador.pos.x, jogador.pos.z, w);
-  g.save(); g.translate(mx, mz); g.rotate(-jogador.yaw + Math.PI);
+  for (const [x, z] of ferrovia.marcadores()) desenhar(x, z, '#c8282e', 7);
+  g.save(); g.translate(w / 2, w / 2); g.rotate(-jogador.yaw + Math.PI);
   g.fillStyle = '#5cc28a'; g.strokeStyle = '#0b1a10'; g.lineWidth = 2;
   g.beginPath(); g.moveTo(0, -11); g.lineTo(8, 8); g.lineTo(0, 4); g.lineTo(-8, 8); g.closePath(); g.fill(); g.stroke(); g.restore();
 }
@@ -1028,8 +1105,14 @@ function nomeDaRua(x, z) {
   }
   if (h && v) return `Esquina da ${h} com ${v}`;
   if (h || v) return h || v;
-  if (Math.abs(x) > METADE + 15) return x > 0 ? 'Território Leste' : 'Território Oeste';
-  if (Math.abs(x) > METADE || Math.abs(z) > METADE) return 'Arredores da cidade';
+  if (x > 1500) return 'Sua casa';
+  const pl = ferrovia.plataformaEm(x, z); if (pl) return pl.plat.nome;
+  if (Math.abs(z) > 700) return z < 0 ? 'Vila Serra' : 'Porto Sul';
+  if (Math.abs(x) < mundo.CORREDOR && Math.abs(z) > METADE) return Math.abs(z) < 200 ? (z < 0 ? 'Estação Norte' : 'Estação Sul') : 'Ferrovia';
+  if (Math.abs(x) > METADE && Math.abs(x) < 216 && Math.abs(z) < 54) return x > 0 ? 'Território Leste' : 'Território Oeste';
+  if (z < -METADE) return 'Zona Norte';
+  if (z > METADE) return 'Zona Sul';
+  if (Math.abs(x) > METADE) return x > 0 ? 'Zona Leste' : 'Zona Oeste';
   for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
     if (Math.abs(x - quadC(i)) < QB / 2 && Math.abs(z - quadC(j)) < QB / 2) {
       return QUARTEIROES_ESPECIAIS[`${i},${j}`]?.parque ? 'Praça do Contratante' : `Calçada da ${RUAS_HORIZONTAIS[j + 1]}`;
@@ -1052,6 +1135,10 @@ async function iniciarJogo(perfil) {
   await Promise.all(carregamentos);
   montarQuarteiroes();
   montarPlacasRuas();
+  mundo.montar({ scene, texturaCanvas, ruido, textoSprite });
+  ferrovia.montar({ scene, textoSprite });
+  mundo.finalizar();
+  for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   criarCaminhaoMovel();
 
   // jogador
@@ -1060,6 +1147,7 @@ async function iniciarJogo(perfil) {
   const arma = clonar('arma_paintball');
   av.encaixarArma(arma); arma.visible = false; jogador.arma = arma;
   jogador.pos.set(perfil.pos_x ?? 0, 0, perfil.pos_z ?? quadC(2));
+  if (jogador.pos.x > 1500) jogador.pos.set(contratante.x + 6, 0, contratante.z + 6);
   jogador.pena = perfil.pena_seg || 0;
   jogador.fome = typeof perfil.fome === 'number' ? perfil.fome : 100;
   if (jogador.pena > 0 && cadeia) jogador.pos.set(cadeia.x, 0, cadeia.z);
@@ -1092,7 +1180,9 @@ async function iniciarJogo(perfil) {
   criarNPCs(id);
   conectarMultiplayer(perfil);
   rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando, inventario: recarregarInventario });
-  iniciarLoja({ perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, curar: usarRemedio, vida: () => jogador.vida });
+  iniciarLoja({ perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, curar: usarRemedio, vida: () => jogador.vida,
+    casaId: () => [...casasMundo.values()].find((v) => v.d.dono === jogador.perfil.id)?.d.id,
+    casaVendida: () => { tempoSocial = 0; if (jogador.dentroCasa) sairDeCasa(); } });
   iniciarEmpresa({
     perfil: () => jogador.perfil, agora: agoraServidor,
     definirEmprego: (id) => { emprego = id; },
@@ -1189,6 +1279,14 @@ function atualizarRemotos(dt) {
   for (const r of remotos.values()) {
     if (!r.av || !r.alvo) continue;
     const raiz = r.av.raiz, a = r.alvo;
+    if (a.tr) {   // dentro do trem: a posição vem do horário, igual para todos
+      const [li, k, v] = String(a.tr).split('.').map(Number), w = ferrovia.vaga(li, k, v);
+      if (w) {
+        raiz.position.set(w.x, w.y, w.z); raiz.rotation.y = w.yaw; raiz.visible = true;
+        if (r.anim !== 'idle') { r.anim = 'idle'; r.av.tocar('idle', { fade: 0.2 }); }
+        r.arma.visible = false; r.av.mixer.update(dt); continue;
+      }
+    }
     if (!raiz.visible || Math.hypot(a.x - raiz.position.x, a.z - raiz.position.z) > 8) { raiz.position.set(a.x, a.y, a.z); raiz.visible = true; }
     const k = Math.min(1, dt * 10);
     raiz.position.x += (a.x - raiz.position.x) * k; raiz.position.y += (a.y - raiz.position.y) * k; raiz.position.z += (a.z - raiz.position.z) * k;
@@ -1216,16 +1314,19 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0 };
   const u = ultimoEnvio;
-  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al;
+  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr;
   if (!mudou && tempoKeepAlive > 0) return;
   conexao.enviar('pos', est); ultimoEnvio = est; tempoKeepAlive = 3;
 }
 
 async function salvarAgora() {
   if (!jogador.perfil || !jogador.avatar) return;
-  try { await rede.salvarPosicao(jogador.perfil.id, Math.round(jogador.pos.x * 10) / 10, Math.round(jogador.pos.z * 10) / 10, jogador.fome); } catch { /* tenta de novo depois */ }
+  const c = jogador.dentroCasa ? casasMundo.get(jogador.dentroCasa)?.d : null;
+  let x = c ? c.x + 2 : jogador.pos.x, z = c ? c.z : jogador.pos.z;
+  if (jogador.trem) { const p = ferrovia.pontoDeSaida(jogador.trem.li, jogador.trem.origem, 0); x = p.x; z = p.z; }
+  try { await rede.salvarPosicao(jogador.perfil.id, Math.round(x * 10) / 10, Math.round(z * 10) / 10, jogador.fome); } catch { /* tenta de novo depois */ }
 }
 
 // ================================================================= LOGÍSTICA (etapa 4)
@@ -1276,7 +1377,8 @@ function desenharLote(l) {
   const fabrica = u.funcao === 'fabrica';
   const modelo = fabrica ? 'empresa' : 'transportadora';
   const obj = colocarPredio(modelo, x, z, 0);
-  obj.scale.setScalar(1 + (e.nivel - 1) * 0.06); obj.updateMatrixWorld(true);
+  // prédio um pouco menor para sobrar pátio atrás (estacionamento) e corredor na lateral
+  obj.scale.setScalar(0.85 * (1 + (e.nivel - 1) * 0.04)); obj.updateMatrixWorld(true);
   const b0 = new THREE.Box3().setFromObject(obj);
   obj.position.z += (z + LOTE_L / 2 - 0.4) - b0.max.z; obj.updateMatrixWorld(true);
   // colocarPredio registrou colisor e mapa com a posição antiga: refaz
@@ -1315,6 +1417,82 @@ function desenharLote(l) {
   }
 }
 
+
+// ---------------------------------------------------------------- interior das casas (só o dono entra)
+const interiores = new Map();    // casa -> { base, pontos }
+const SALA = { w: 12, d: 10 };
+function criarInterior(casaId) {
+  if (interiores.has(casaId)) return interiores.get(casaId);
+  const bx = 2000 + casaId * 40, bz = 0;
+  const g = new THREE.Group(); g.position.set(bx, 0, bz); scene.add(g);
+  const mat = (cor, r = 0.8) => new THREE.MeshStandardMaterial({ color: cor, roughness: r });
+  const caixa = (w, h, d, cor, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(cor)); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
+  const piso = texturaCanvas(256, (gx, t) => { for (let i = 0; i < 8; i++) { gx.fillStyle = i % 2 ? '#8a5a35' : '#7d5030'; gx.fillRect(0, i * t / 8, t, t / 8); } ruido(gx, t, 3000, 0.08, 1.4); });
+  piso.repeat.set(3, 2.5);
+  const chao = new THREE.Mesh(new THREE.PlaneGeometry(SALA.w, SALA.d), new THREE.MeshStandardMaterial({ map: piso, roughness: 0.85 }));
+  chao.rotation.x = -Math.PI / 2; chao.receiveShadow = true; g.add(chao);
+  // só as paredes do fundo e da esquerda, para a câmera enxergar dentro
+  caixa(SALA.w, 3.2, 0.25, '#d9c9a8', 0, 1.6, -SALA.d / 2);
+  caixa(0.25, 3.2, SALA.d, '#cdbb98', -SALA.w / 2, 1.6, 0);
+  caixa(SALA.w, 0.15, 0.3, '#6b4a2e', 0, 0.08, -SALA.d / 2 + 0.2);
+  // cama
+  caixa(2.2, 0.45, 3.2, '#6b4a2e', -4.4, 0.23, -3.1);
+  caixa(2.0, 0.25, 2.9, '#e8e2d6', -4.4, 0.57, -3.0);
+  caixa(2.0, 0.28, 1.2, '#3f6fb0', -4.4, 0.62, -2.2);
+  caixa(1.4, 0.22, 0.6, '#f5f2ea', -4.4, 0.78, -4.1);
+  // baú
+  caixa(1.6, 0.8, 0.9, '#7a4a22', 4.2, 0.4, -4.2);
+  caixa(1.7, 0.12, 1.0, '#5a361a', 4.2, 0.86, -4.2);
+  caixa(0.25, 0.25, 0.05, '#d8b04a', 4.2, 0.55, -3.73);
+  // mesa e tapete
+  caixa(2.2, 0.08, 1.3, '#8a5a35', 0.8, 0.9, -0.5); for (const [x, z] of [[-0.2, -1], [1.8, -1], [-0.2, 0], [1.8, 0]]) caixa(0.1, 0.9, 0.1, '#5a361a', x, 0.45, z);
+  const tapete = new THREE.Mesh(new THREE.PlaneGeometry(4, 3), mat('#9b3d3d', 1)); tapete.rotation.x = -Math.PI / 2; tapete.position.set(0.8, 0.01, 1.2); g.add(tapete);
+  // porta de saída
+  caixa(1.4, 0.05, 1.0, '#3b2a1a', 5, 0.03, 4.3);
+  const luz = new THREE.PointLight('#ffd9a0', 6, 14, 1.6); luz.position.set(0, 2.8, 0); g.add(luz);
+  const placa = (txt, x, z, y = 2) => { const sp = textoSprite(txt, { escala: 0.55 }); sp.position.set(x, y, z); g.add(sp); };
+  placa('Cama · descansar', -4.4, -3, 1.7); placa('Baú', 4.2, -4.2, 1.6); placa('Sair', 5, 4.3, 1.4);
+  const i = { base: { x: bx, z: bz }, pontos: {
+    cama: { x: bx - 2.9, z: bz - 3 }, bau: { x: bx + 4.2, z: bz - 3.2 }, porta: { x: bx + 5, z: bz + 4.3 } } };
+  interiores.set(casaId, i);
+  return i;
+}
+function entrarEmCasa(c) {
+  const i = criarInterior(c.id);
+  jogador.dentroCasa = c.id;
+  if (jogador.carregando) { scene.remove(jogador.carregando); jogador.carregando = null; }
+  teleportar(i.base.x + 4, i.base.z + 3);
+  aviso('Bem-vindo à sua casa. Use a cama para recuperar a vida.', 3);
+}
+function sairDeCasa() {
+  const c = casasMundo.get(jogador.dentroCasa)?.d;
+  jogador.dentroCasa = null;
+  if (c) teleportar(c.x + 2, c.z); else teleportar(contratante.x + 6, contratante.z + 6);
+}
+function pontoInterior(nome, raio) {
+  if (!jogador.dentroCasa) return false;
+  const p = interiores.get(jogador.dentroCasa)?.pontos[nome];
+  return !!p && Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z) < raio;
+}
+function descansar() {
+  jogador.alvo = null; jogador.trava = 3;
+  jogador.avatar.tocar('idle_long', { fade: 0.3 });
+  aviso('Descansando…', 3);
+  jogador.eventos.push({ t: 3, fn: () => { jogador.vida = 100; desenharFome(); aviso('Vida recuperada!'); } });
+}
+function limitarInterior(p) {
+  const i = interiores.get(jogador.dentroCasa); if (!i) return;
+  p.x = THREE.MathUtils.clamp(p.x, i.base.x - SALA.w / 2 + 0.5, i.base.x + SALA.w / 2 - 0.5);
+  p.z = THREE.MathUtils.clamp(p.z, i.base.z - SALA.d / 2 + 0.5, i.base.z + SALA.d / 2 - 0.5);
+  // não atravessa cama, baú e mesa
+  for (const [x0, x1, z0, z1] of [[-5.5, -3.3, -4.8, -1.4], [3.4, 5.0, -4.8, -3.7], [-0.3, 1.9, -1.2, 0.2]]) {
+    const ax = i.base.x + x0, bx = i.base.x + x1, az = i.base.z + z0, bz = i.base.z + z1;
+    if (p.x > ax && p.x < bx && p.z > az && p.z < bz) {
+      const op = [[p.x - ax, 'x', ax], [bx - p.x, 'x', bx], [p.z - az, 'z', az], [bz - p.z, 'z', bz]].sort((a, b) => a[0] - b[0])[0];
+      p[op[1]] = op[2];
+    }
+  }
+}
 
 // ---------------------------------------------------------------- caminhões dos jogadores
 // rota pela grade de ruas: sai do ponto, entra na rua mais próxima, segue em L pelos cruzamentos
@@ -1374,12 +1552,32 @@ function pernas(c) {
   c.rotaCache = { id: c.d.partida, pernas: p };
   return p;
 }
+// vagas da empresa: 4 no pátio atrás de cada prédio (entrada pelo corredor lateral) e 2 na faixa da frente do lote
+function vagasDaEmpresa(id) {
+  const lotes = [...unidades.entries()].filter(([, u]) => u.empresa === id)
+    .sort((a, b) => (b[1].funcao === 'transportadora') - (a[1].funcao === 'transportadora') || a[0] - b[0]);
+  const fundo = [], frente = [];
+  for (const [loteId] of lotes) {
+    const l = LOTES_VENDA.find((x) => x.id === loteId); if (!l) continue;
+    const { x, z } = centroLote(l), zb = z - LOTE_L / 2;
+    const corredor = x + LOTE_L / 2 - 1.6, rua = l.portao.z + 2.6;
+    for (const [dx, dz] of [[-4, 1.8], [3.2, 1.8], [-4, 4.6], [3.2, 4.6]]) fundo.push({ x: x + dx, z: zb + dz, ang: Math.PI / 2, fundo: true, corredor, rua });
+    for (const dx of [-4.5, 3.5]) frente.push({ x: x + dx, z: rua, ang: Math.PI / 2, fundo: false, corredor, rua });
+  }
+  return [...fundo, ...frente];
+}
 function posicaoEstacionado(c) {
-  const meusLotes = [...unidades.entries()].filter(([, u]) => u.empresa === c.d.empresa).sort((a, b) => (b[1].funcao === 'transportadora') - (a[1].funcao === 'transportadora') || a[0] - b[0]);
-  const l = meusLotes.length && LOTES_VENDA.find((x) => x.id === meusLotes[0][0]); if (!l) return null;
+  const vagas = vagasDaEmpresa(c.d.empresa); if (!vagas.length) return null;
   const meus = [...caminhoes.values()].filter((k) => k.d.empresa === c.d.empresa && k.d.status === 'parado').map((k) => k.d.id).sort((a, b) => a - b);
-  const i = Math.max(0, meus.indexOf(c.d.id));
-  return { x: l.portao.x - 6 + i * 7.5, z: l.portao.z + 2.6, ang: Math.PI / 2 };
+  return vagas[Math.min(vagas.length - 1, Math.max(0, meus.indexOf(c.d.id)))];
+}
+// manobra: segue uma lista de pontos a 6 m/s (entrar e sair do pátio pelo corredor)
+function andarManobra(c, dt) {
+  const m = c.manobra, alvo = m.pts[m.i], p = c.obj.position;
+  const dx = alvo.x - p.x, dz = alvo.z - p.z, d = Math.hypot(dx, dz), passo = 6 * dt;
+  if (d <= passo) { p.x = alvo.x; p.z = alvo.z; m.i++; if (m.i >= m.pts.length) { c.naFundo = m.fimFundo; c.manobra = null; } return; }
+  p.x += dx / d * passo; p.z += dz / d * passo;
+  c.obj.rotation.y = suavizarAngulo(c.obj.rotation.y, Math.atan2(dx, dz), dt * 8);
 }
 
 function atualizarRobos(dt) {
@@ -1428,9 +1626,20 @@ function atualizarCaminhoes(dt) {
       if (!alvo && p) { const u = p[p.length - 1].pts; alvo = { ...u[u.length - 1], ang: c.obj.rotation.y }; }
       if ((c.d.status === 'em_rota' && agora > Date.parse(c.d.chegada) + 1500) || (c.d.status === 'voltando' && agora > Date.parse(c.d.retorno) + 1500)) atrasado = true;
     }
+    const estacionado = !alvo;
     if (!alvo) alvo = posicaoEstacionado(c);
     if (!alvo) continue;
-    if (!c.posicionado) { c.obj.position.set(alvo.x, 0.02, alvo.z); c.obj.rotation.y = alvo.ang || 0; c.posicionado = true; }
+    if (!c.posicionado) { c.obj.position.set(alvo.x, 0.02, alvo.z); c.obj.rotation.y = alvo.ang || 0; c.posicionado = true; c.naFundo = !!alvo.fundo; c.vaga = alvo; }
+    if (estacionado) c.vaga = alvo;
+    // saindo do pátio para viajar: corredor lateral até a rua
+    if (!estacionado && c.naFundo && !c.manobra && c.vaga) {
+      c.manobra = { i: 0, fimFundo: false, pts: [{ x: c.vaga.corredor, z: c.vaga.z }, { x: c.vaga.corredor, z: c.vaga.rua }] };
+    }
+    // voltando para a vaga do pátio: entra pelo corredor
+    if (estacionado && alvo.fundo && !c.naFundo && !c.manobra && Math.hypot(alvo.x - c.obj.position.x, alvo.z - c.obj.position.z) > 1) {
+      c.manobra = { i: 0, fimFundo: true, pts: [{ x: alvo.corredor, z: alvo.rua }, { x: alvo.corredor, z: alvo.z }, { x: alvo.x, z: alvo.z }] };
+    }
+    if (c.manobra) { andarManobra(c, dt); continue; }
     c.obj.position.x += (alvo.x - c.obj.position.x) * Math.min(1, dt * 8);
     c.obj.position.z += (alvo.z - c.obj.position.z) * Math.min(1, dt * 8);
     if (alvo.ang !== undefined) c.obj.rotation.y = suavizarAngulo(c.obj.rotation.y, alvo.ang, dt * 6);
@@ -1776,8 +1985,8 @@ function casaProxima(raio) {
 }
 let confirmaCasa = 0;
 async function acaoCasa(c) {
-  if (c.dono === jogador.perfil.id) { aviso('Sua casa. Você renasce aqui quando morre.'); return; }
-  if (c.dono) { aviso(`Casa de ${c.dono_perfil?.nome || 'outro jogador'}.`); return; }
+  if (c.dono === jogador.perfil.id) { entrarEmCasa(c); return; }
+  if (c.dono) { aviso(`Casa de ${c.dono_perfil?.nome || 'outro jogador'}. A porta está trancada.`); return; }
   if (performance.now() - confirmaCasa > 3000) { confirmaCasa = performance.now(); aviso('Casa à venda por 35.000. Aperte de novo para comprar.', 3); return; }
   confirmaCasa = 0;
   try { await rede.casas.comprar(c.id); aviso('Casa comprada! Agora você renasce aqui.', 4); tempoSocial = 0; }
@@ -1793,7 +2002,7 @@ async function atualizarCaptura() {
   if (!t || !jogador.cla || t.dono_cla === jogador.cla || jogador.morto || jogador.pena > 0) {
     if (captura) { captura = null; }
     el.classList.add('oculto');
-    if (t && t.dono_cla === jogador.cla) { el.textContent = `${t.nome} é do seu clã`; el.classList.remove('oculto'); }
+    if (t && jogador.cla && t.dono_cla === jogador.cla) { el.textContent = `${t.nome} é do seu clã`; el.classList.remove('oculto'); }
     return;
   }
   if (!captura || captura.id !== t.id) {
@@ -1831,10 +2040,13 @@ function montarLocais() {
   if (pontos.bancadas[0]) LOCAIS.push({ nome: 'Bancada (chocolate)', x: pontos.bancadas[0].x, z: pontos.bancadas[0].z + 2.5 });
   LOCAIS.push({ nome: 'Base Leste', x: BASE_X - 26, z: ruaC(2) });
   LOCAIS.push({ nome: 'Base Oeste', x: -BASE_X + 26, z: ruaC(2) });
+  for (const l of ferrovia.linhas) for (const lado of ['centro', 'destino']) { const p = l.plataformas[lado]; LOCAIS.push({ nome: p.nome, x: 0, z: p.zSaida }); }
 }
 
 function teleportar(x, z) {
+  if (jogador.trem) { ferrovia.ocultarTeto(jogador.trem.li, jogador.trem.k, false); jogador.trem = null; }
   if (jogador.pena > 0 && cadeia) { x = cadeia.x; z = cadeia.z; }
+  if (x < 1500) jogador.dentroCasa = null;     // interiores ficam em x >= 2000
   jogador.pos.set(x, alturaChao(x, z), z);
   resolverColisao(jogador.pos, jogador.raio);
   jogador.alvo = null;
@@ -1921,6 +2133,11 @@ function atualizarJogador(dt) {
   const j = jogador, av = j.avatar;
   for (let i = j.eventos.length - 1; i >= 0; i--) { j.eventos[i].t -= dt; if (j.eventos[i].t <= 0) { j.eventos[i].fn(); j.eventos.splice(i, 1); } }
   j.recarga = Math.max(0, j.recarga - dt);
+  if (j.trem && seguirTrem()) {
+    av.tocar('idle'); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw;
+    av.mixer.update(dt); av.raiz.updateMatrixWorld(true);
+    return;
+  }
 
   // direção de entrada relativa à câmera
   const off = offsetCamera(anguloCamSuave);
@@ -1969,6 +2186,7 @@ function atualizarJogador(dt) {
     }
   }
   resolverColisao(j.pos, j.raio);
+  if (j.dentroCasa) limitarInterior(j.pos);
   if (j.pena > 0 && cadeia) {
     const dx = j.pos.x - cadeia.x, dz = j.pos.z - cadeia.z, d = Math.hypot(dx, dz);
     if (d > RAIO_CADEIA) { j.pos.x = cadeia.x + dx / d * RAIO_CADEIA; j.pos.z = cadeia.z + dz / d * RAIO_CADEIA; }
@@ -2051,8 +2269,26 @@ function atualizarHUD(dt) {
 // texto da dica e do botão de ação conforme o que está perto
 function contexto() {
   const pd = jogador.carregando?.userData.pedido;
+  if (jogador.trem) {
+    const t = jogador.trem, est = ferrovia.estadoDe(t.li, t.k), dest = ferrovia.nomeParada(ferrovia.linhas[t.li], t.destino);
+    if (est?.parado === t.origem) return [`descer do trem (parte para ${dest} em ${Math.ceil(est.resta)} s)`, 'Descer'];
+    return [`a caminho da ${dest}: chega em ${Math.ceil(est?.chega ?? 0)} s`, `Chega ${Math.ceil(est?.chega ?? 0)}s`];
+  }
   if (pd) return pertoDestino(pd.destino) ? ['entregar a carga', 'Entregar'] : [`levar a carga até: ${DESTINOS[pd.destino]?.nome}`, 'Largar'];
   if (jogador.morto) return ['', ''];
+  if (jogador.dentroCasa) {
+    if (pontoInterior('porta', 1.8)) return ['sair de casa', 'Sair'];
+    if (pontoInterior('cama', 2)) return ['descansar (vida cheia)', 'Dormir'];
+    if (pontoInterior('bau', 1.8)) return ['abrir o baú', 'Baú'];
+    return ['', ''];
+  }
+  const pl = ferrovia.plataformaEm(jogador.pos.x, jogador.pos.z);
+  if (pl) {
+    const dest = ferrovia.nomeParada(pl.linha, pl.lado === 'centro' ? 'destino' : 'centro');
+    if (pl.trem !== null && pl.resta > 2) return [`embarcar no trem para ${dest} (parte em ${Math.ceil(pl.resta)} s)`, 'Embarcar'];
+    const n = Math.ceil(ferrovia.proxima(pl.linha, pl.lado, agoraServidor() / 1000));
+    return [`o trem para ${dest} chega em ${n} s`, `Trem ${n}s`];
+  }
   if (jogador.perfil?.policial && procuradoProximo(2.4)) return ['algemar e prender o procurado', 'Prender'];
   if (pertoDelegacia()) return [jogador.perfil?.policial ? 'sair do serviço policial' : 'entrar em serviço na polícia', 'Polícia'];
   if (pertoContratante()) return ['ver missões do Contratante', 'Falar'];
@@ -2072,7 +2308,7 @@ function contexto() {
   if (dep) return [`retirar carga da ${empresas.get(dep.empresa)?.nome || 'fábrica'}`, 'Retirar'];
   if (pontoProximo(pontos.lotes, 4)) return ['comprar este lote', 'Comprar'];
   const casa = casaProxima(3.2);
-  if (casa) return [casa.dono === jogador.perfil.id ? 'sua casa' : casa.dono ? `casa de ${casa.dono_perfil?.nome || '?'}` : 'comprar esta casa (35.000)', 'Casa'];
+  if (casa) return [casa.dono === jogador.perfil.id ? 'entrar em casa' : casa.dono ? `casa de ${casa.dono_perfil?.nome || '?'}` : 'comprar esta casa (35.000)', 'Casa'];
   if (caminhaoProximo(3.4)) return ['F: atacar o caminhão e roubar a carga', ''];
   return ['', ''];
 }
@@ -2096,6 +2332,7 @@ function desenharFome() {
 
 function quadro() {
   const dt = Math.min(relogio.getDelta(), 0.05);
+  ferrovia.atualizar(agoraServidor() / 1000);
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);
@@ -2110,6 +2347,7 @@ function quadro() {
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
   atualizarBolas(dt);
   atualizarCamera(dt);
+  mundo.atualizarOclusao(dt, jogador.pos, offsetCamera(anguloCamSuave));
   atualizarHUD(dt);
   renderer.render(scene, camera);
 }

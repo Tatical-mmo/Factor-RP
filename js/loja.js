@@ -22,6 +22,7 @@ export async function recarregarInventario() {
   if (modo) desenhar();
 }
 export function abrir(m) { modo = m; $('janela').classList.remove('oculto'); desenhar(); }
+let bau = {};
 export function fechar() { modo = null; $('janela').classList.add('oculto'); }
 export function janelaAberta() { return !!modo; }
 export const inventario = () => inv;
@@ -33,8 +34,28 @@ async function executar(fn, sucesso) {
 }
 const moedas = () => Number(ctx.perfil().moedas || 0).toLocaleString('pt-BR');
 
+async function desenharBau(c) {
+  $('janelaTitulo').textContent = 'Baú da casa';
+  const casa = ctx.casaId?.();
+  if (!casa) { c.textContent = 'Você não tem casa.'; return; }
+  try { bau = await rede.listarBau(casa); } catch (e) { c.textContent = e.message; return; }
+  const linhas = precos.filter((p) => (inv[p.item] || 0) > 0 || (bau[p.item] || 0) > 0);
+  c.innerHTML = `<p class="dica">O baú guarda até 200 de cada item, protegido em casa.</p>
+    <div class="lista">${linhas.length ? linhas.map((p) => `
+      <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
+        <span class="nm"><b>${esc(p.nome)}</b><small>mochila ${inv[p.item] || 0} · baú ${bau[p.item] || 0}</small></span>
+        <span class="bts"><button data-guardar="${p.item}" ${inv[p.item] ? '' : 'disabled'}>Guardar</button><button data-tirar="${p.item}" ${bau[p.item] ? '' : 'disabled'}>Pegar</button></span></div>`).join('')
+      : '<span class="vazio">Mochila e baú vazios.</span>'}</div>
+    <div class="sub">Casa</div><div class="botoes"><button id="bVender" class="perigo">Vender a casa (recebe 20.000)</button></div>`;
+  c.querySelectorAll('[data-guardar]').forEach((b) => { b.onclick = () => executar(() => rede.casas.guardar(b.dataset.guardar, inv[b.dataset.guardar]), 'Guardado no baú.'); });
+  c.querySelectorAll('[data-tirar]').forEach((b) => { b.onclick = () => executar(() => rede.casas.retirar(b.dataset.tirar, bau[b.dataset.tirar]), 'Na sua mochila.'); });
+  $('bVender').onclick = () => { const b = $('bVender'); if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Toque de novo para vender'; return; }
+    executar(async () => { await rede.casas.vender(); ctx.casaVendida?.(); }, 'Casa vendida por 20.000.'); };
+}
+
 function desenhar() {
   const c = $('janelaConteudo');
+  if (modo === 'bau') { desenharBau(c); return; }
   if (modo === 'loja') {
     $('janelaTitulo').textContent = 'Loja';
     const venda = precos.filter((p) => p.compra != null);

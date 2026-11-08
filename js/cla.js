@@ -16,7 +16,9 @@ export function iniciarCla(contexto) {
 }
 export function abrir() { aberta = true; $('claJanela').classList.remove('oculto'); desenhar(); }
 function fechar() { aberta = false; $('claJanela').classList.add('oculto'); }
-export function atualizarCla() { if (aberta) desenhar(); }
+const digitando = (id) => { const f = document.activeElement; return !!f && ['INPUT', 'SELECT', 'TEXTAREA'].includes(f.tagName) && !!$(id)?.contains(f); };
+// não redesenha enquanto o jogador digita (as atualizações em tempo real apagavam o campo)
+export function atualizarCla() { if (aberta && !digitando('claJanela')) desenhar(); }
 
 function msg(t, ok = true) { const m = $('claMsg'); m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'erro'); clearTimeout(msg.t); msg.t = setTimeout(() => { m.textContent = ''; }, 4000); }
 async function executar(fn, sucesso) {

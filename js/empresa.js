@@ -31,7 +31,8 @@ export function abrirEmpresa(id = null) { modo = 'empresa'; aba = 'resumo'; if (
 export function abrirCompra(lote) { modo = 'comprar'; loteCompra = lote; mostrar(); }
 export function abrirMissoes() { modo = 'missoes'; mostrar(); }
 export function empresaAberta() { return !!modo; }
-export function atualizar() { if (modo) desenhar(); }
+const digitando = (id) => { const f = document.activeElement; return !!f && ['INPUT', 'SELECT', 'TEXTAREA'].includes(f.tagName) && !!$(id)?.contains(f); };
+export function atualizar() { if (modo && !digitando('empresaJanela')) desenhar(); }
 function mostrar() { $('empresaJanela').classList.remove('oculto'); desenhar(); }
 function fechar() { modo = null; $('empresaJanela').classList.add('oculto'); }
 

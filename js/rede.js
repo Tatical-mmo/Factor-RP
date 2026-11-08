@@ -204,6 +204,8 @@ function traduzirRpc(m) {
     'voce ja tem uma casa': 'Você já tem uma casa.',
     'casa invalida': 'Casa inválida.',
     'casa ja vendida': 'Essa casa já tem dono.',
+    'voce nao tem casa': 'Você não tem casa.',
+    'bau cheio': 'O baú está cheio (200 de cada item).',
   };
   const espera = /^aguarde (\d+) s$/.exec(m);
   if (espera) return `Aguarde ${espera[1]} s.`;
@@ -350,7 +352,16 @@ export const cla = {
   defender: (t, robos) => rpc('defender_territorio', { p_territorio: t, p_robos: robos }),
   processar: () => rpc('processar_territorios'),
 };
-export const casas = { comprar: (id) => rpc('comprar_casa', { p_casa: id }) };
+export const casas = {
+  comprar: (id) => rpc('comprar_casa', { p_casa: id }),
+  guardar: (item, qtd) => rpc('guardar_no_bau', { p_item: item, p_qtd: qtd }),
+  retirar: (item, qtd) => rpc('retirar_do_bau', { p_item: item, p_qtd: qtd }),
+  vender: () => rpc('vender_casa'),
+};
+export async function listarBau(casa) {
+  const d = await sel(sb.from('bau').select('item, qtd').eq('casa', casa));
+  const b = {}; for (const r of d) b[r.item] = r.qtd; return b;
+}
 export const perdoar = (alvo) => rpc('admin_perdoar', { alvo });
 export const listarClas = () => sel(sb.from('clas').select('*, lider_perfil:perfis!clas_lider_fkey(nome)').order('id'));
 export const membrosDoCla = (id) => sel(sb.from('membros_cla').select('jogador, desde, perfil:perfis!membros_cla_jogador_fkey(nome)').eq('cla', id).order('desde'));
