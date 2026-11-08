@@ -148,7 +148,16 @@
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
-  "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"
+  "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
+  "./js/main.js": "./js/main.js?v=20261108c",
+  "./js/mundo.js": "./js/mundo.js?v=20261108c",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261108c",
+  "./js/cla.js": "./js/cla.js?v=20261108c",
+  "./js/config.js": "./js/config.js?v=20261108c",
+  "./js/empresa.js": "./js/empresa.js?v=20261108c",
+  "./js/loja.js": "./js/loja.js?v=20261108c",
+  "./js/painel.js": "./js/painel.js?v=20261108c",
+  "./js/rede.js": "./js/rede.js?v=20261108c"
 } }
 </script>
 </head>
@@ -242,6 +251,7 @@
   <div id="girar"><button class="bt" id="btGiraE">⟲</button><button class="bt" id="btGiraD">⟳</button></div>
 </div>
 
-<script type="module" src="js/main.js"></script>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 08/11 · ferrovia</div>
+<script type="module">import './js/main.js';</script>
 </body>
 </html>
