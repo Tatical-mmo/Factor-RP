@@ -150,6 +150,9 @@ function traduzirRpc(m) {
     'o dono nao pode se demitir': 'O dono não pode se demitir.',
     'cla nao encontrado': 'Clã não encontrado.',
     'veiculo invalido': 'Veículo inválido.',
+    'so jornalistas em servico': 'Só jornalistas em serviço.',
+    'esse acontecimento ja passou': 'Esse acontecimento já passou.',
+    'outro jornalista ja fez essa reportagem': 'Outro jornalista já fez essa reportagem.',
     'o veiculo foi roubado: use o bloqueio': 'O veículo foi roubado: use o Bloqueio.',
     'o veiculo esta ocupado': 'O veículo está ocupado (em entrega ou com alguém).',
     'o veiculo nao esta na rua': 'O veículo não está na rua.',
@@ -339,6 +342,10 @@ export const veiculos = {
   chamar: (id, x, z) => rpc('chamar_veiculo', { p_caminhao: id, p_x: x, p_z: z }),
   recolher: (id) => rpc('recolher_veiculo', { p_caminhao: id }),
   bloquear: (id) => rpc('bloquear_veiculo', { p_caminhao: id }),
+};
+export const jornal = {
+  publicar: (tipo, ref, titulo, x, z) => rpc('publicar_noticia', { p_tipo: tipo, p_ref: ref, p_titulo: titulo, p_x: x, p_z: z }),
+  ultimas: () => sel(sb.from('noticias').select('*').order('id', { ascending: false }).limit(12)),
 };
 export const recompensas = {
   procurados: () => rpc('mais_procurados'),

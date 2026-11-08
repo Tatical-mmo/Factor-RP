@@ -795,8 +795,11 @@ function configurarJoystick() {
   // volante: setas e pedais (cada botão com o próprio dedo)
   for (const [id, k] of [['vEsq', 'esq'], ['vDir', 'dir'], ['vAcel', 'acel'], ['vFreio', 'freio']]) {
     const b = $(id);
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); b.setPointerCapture(e.pointerId); pedais[k] = true; b.classList.add('ativo'); });
-    const solta = () => { pedais[k] = false; b.classList.remove('ativo'); };
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch { /* sem captura */ } pedais[k] = true; b.dataset.dedo = e.pointerId; b.classList.add('ativo'); });
+    const solta = () => { pedais[k] = false; delete b.dataset.dedo; b.classList.remove('ativo'); };
+    window.addEventListener('pointerup', (e) => { if (b.dataset.dedo === String(e.pointerId)) solta(); });
+    window.addEventListener('pointercancel', (e) => { if (b.dataset.dedo === String(e.pointerId)) solta(); });
+    document.addEventListener('visibilitychange', solta);
     b.addEventListener('pointerup', solta); b.addEventListener('pointercancel', solta); b.addEventListener('lostpointercapture', solta);
   }
   toque('btAcao', acaoContexto); toque('btSoco', socar); toque('btArma', alternarArma);
@@ -863,6 +866,8 @@ function acaoContexto() {
   if (perto(civico.BANCO.empregos, 3.2)) { abrirServico('empregos'); return; }
   if (perto(civico.HOSPITAL.balcao, 3.2)) { abrirServico('hospital'); return; }
   if (perto(civico.BOMBEIROS.balcao, 3.2)) { abrirServico('bombeiros'); return; }
+  if (jogador.perfil.profissao === 'jornalista') { const rp = reportagemProxima(); if (rp) { reportar(rp); return; } }
+  if (perto(civico.PREFEITURA.jornal, 3.2)) { abrirServico('jornal'); return; }
   if (perto(civico.PREFEITURA.porta, 3.2)) { abrirPrefeitura(); return; }
   if (perto(civico.PREFEITURA.prf, 3.2)) { abrirPrefeitura('prf'); return; }
   if (perto(civico.CONCESSIONARIA.balcao, 3.2)) { abrirConcessionaria(); return; }
@@ -1092,7 +1097,7 @@ function dirigir(dt) {
   if (c.servico) civico.atualizarSirenes(performance.now() / 1000, c.mesh);
   const antes = { x: jogador.pos.x, z: jogador.pos.z };
   jogador.pos.x += Math.sin(jogador.yaw) * c.vel * dt; jogador.pos.z += Math.cos(jogador.yaw) * c.vel * dt;
-  if (!c.voa) { resolverColisao(jogador.pos, c.raio || 1.3); colidirVeiculo(c); }
+  if (!c.voa) { colidirVeiculo(c); resolverColisao(jogador.pos, c.raio || 1.3); }
   const andou = Math.hypot(jogador.pos.x - antes.x, jogador.pos.z - antes.z), esperado = Math.abs(c.vel) * dt;
   if (esperado > 0.01 && andou < esperado * 0.6) {          // bateu
     if (Math.abs(c.vel) > 6 && performance.now() - (c.batida || 0) > 1200) { c.batida = performance.now(); aviso('💥 Batida!', 1.2); tremor = 0.35; }
@@ -2522,7 +2527,7 @@ function etiquetaStatus(r) {
   const m = r.meta;
   const inimigo = m.cla && inimigos.has(m.cla);
   const txt = m.ferido ? '✚ FERIDO' : m.recompensa > 0 ? `🎯 PROCURADO · ${Number(m.recompensa).toLocaleString('pt-BR')}` : inimigo ? `⚔️ INIMIGO [${m.cla}]` : m.crimes > 0 ? `PROCURADO${m.eleitoral ? ' (PRF)' : ''} ${'★'.repeat(Math.min(5, m.crimes))}` : m.prefeito ? '★ PREFEITO ★'
-    : m.policial ? 'POLÍCIA' : m.prf ? 'PRF' : m.profissao === 'medico' ? '✚ MÉDICO' : m.profissao === 'bombeiro' ? '🚒 BOMBEIRO' : m.cla ? `[${m.cla}]` : null;
+    : m.policial ? 'POLÍCIA' : m.prf ? 'PRF' : m.profissao === 'medico' ? '✚ MÉDICO' : m.profissao === 'bombeiro' ? '🚒 BOMBEIRO' : m.profissao === 'jornalista' ? '📰 IMPRENSA' : m.cla ? `[${m.cla}]` : null;
   if (!txt) return;
   const fundo = m.ferido ? 'rgba(200,40,40,.95)' : m.recompensa > 0 ? 'rgba(110,0,0,.97)' : inimigo ? 'rgba(140,10,10,.95)' : m.crimes > 0 ? 'rgba(170,30,30,.92)' : m.prefeito ? 'rgba(242,194,48,.95)' : m.policial ? 'rgba(30,70,160,.92)'
     : m.prf ? 'rgba(20,40,90,.95)' : m.profissao === 'medico' ? 'rgba(240,240,240,.95)' : m.profissao === 'bombeiro' ? 'rgba(200,60,20,.95)' : 'rgba(40,40,40,.85)';
@@ -3030,6 +3035,48 @@ function descerPassageiro() {
   if (o) { jogador.pos.set(o.position.x - Math.cos(o.rotation.y) * 3, 0, o.position.z + Math.sin(o.rotation.y) * 3); jogador.pos.y = alturaChao(jogador.pos.x, jogador.pos.z); resolverColisao(jogador.pos, jogador.raio); }
   jogador.avatar.raiz.visible = true;
   aviso('Você desceu do helicóptero.', 2);
+}
+
+// ---------------------------------------------------------------- jornalista e o Jornal da Cidade
+const reportados = new Set();
+function reportagemProxima() {
+  const p = jogador.pos, perto = (x, z, r) => Math.hypot(x - p.x, z - p.z) < r;
+  for (const f of servicos.listaIncendios()) if (!reportados.has('incendio' + f.id) && perto(f.x, f.z, 22)) return { tipo: 'incendio', ref: String(f.id), titulo: `🔥 Incêndio atinge ${f.nome}`, x: f.x, z: f.z };
+  for (const o of ocorrencias) if (!reportados.has('ocorrencia' + o.id) && perto(o.x, o.z, 20) && Date.now() - Date.parse(o.criada_em) < 900000)
+    return { tipo: 'ocorrencia', ref: String(o.id), titulo: `🚨 ${o.local}: polícia é chamada`, x: o.x, z: o.z };
+  for (const [id, r] of remotos) {
+    if (!r.meta.ferido || !r.av) continue;
+    const ref = `${id}:${Math.floor(agoraServidor() / 120000)}`;
+    if (!reportados.has('ferido' + ref) && perto(r.av.raiz.position.x, r.av.raiz.position.z, 12)) return { tipo: 'ferido', ref, titulo: `🚑 ${r.meta.nome} é encontrado ferido na cidade`, x: r.av.raiz.position.x, z: r.av.raiz.position.z };
+  }
+  return null;
+}
+async function reportar(rp) {
+  if (ocupado) return; ocupado = true;
+  reportados.add(rp.tipo + rp.ref);
+  const flash = document.createElement('div');
+  flash.style.cssText = 'position:fixed;inset:0;background:#fff;opacity:.85;z-index:40;pointer-events:none;transition:opacity .5s';
+  document.body.appendChild(flash); setTimeout(() => { flash.style.opacity = 0; }, 60); setTimeout(() => flash.remove(), 600);
+  try { const v = await rede.jornal.publicar(rp.tipo, rp.ref, rp.titulo, rp.x, rp.z); aviso(`📰 Reportagem publicada: +${v} moedas`, 3); tempoJornal = 0.5; }
+  catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
+}
+// faixa de manchetes no alto da tela (as 5 mais recentes da última hora, uma de cada vez)
+let tempoJornal = 2, manchetes = [], mancheteI = 0, tempoManchete = 0, faixaJornal = null;
+function atualizarJornal(dt) {
+  if (!faixaJornal) {
+    faixaJornal = document.createElement('div');
+    faixaJornal.style.cssText = 'position:fixed;top:calc(40px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:12;max-width:70vw;background:rgba(40,32,16,.88);color:#ffe7a8;padding:4px 10px;border-radius:8px;font:600 12px system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;display:none';
+    document.body.appendChild(faixaJornal);
+  }
+  tempoJornal -= dt; tempoManchete -= dt;
+  if (tempoJornal <= 0) {
+    tempoJornal = 25;
+    rede.jornal.ultimas().then((l) => { manchetes = l.filter((n) => Date.now() - Date.parse(n.criada_em) < 3600000).slice(0, 5); }).catch(() => {});
+  }
+  if (!manchetes.length) { faixaJornal.style.display = 'none'; return; }
+  if (tempoManchete <= 0) { tempoManchete = 7; mancheteI = (mancheteI + 1) % manchetes.length; faixaJornal.textContent = `📰 ${manchetes[mancheteI].titulo} · ${manchetes[mancheteI].autor_nome}`; }
+  faixaJornal.style.display = 'block';
 }
 
 // ---------------------------------------------------------------- muito procurados e perseguição da polícia robô
@@ -3607,7 +3654,7 @@ function aplicarPerfil(novo) {
   if ((novo.crimes || 0) > (antigo.crimes || 0)) aviso('Você está PROCURADO pela polícia.', 4);
   if (novo.prf !== antigo.prf) aviso(novo.prf ? 'Você está em serviço na PRF. Investigue a prefeitura!' : 'Você saiu do serviço da PRF.', 4);
   if (novo.eleitoral && !antigo.eleitoral) aviso('CRIME ELEITORAL comprovado: você perdeu o mandato e está procurado!', 5);
-  if (novo.profissao !== antigo.profissao) aviso(novo.profissao === 'medico' ? 'Plantão médico: socorra os feridos (✚) pela cidade. +250 por socorro.' : novo.profissao === 'bombeiro' ? 'Você está em serviço nos bombeiros. Apague os incêndios (🔥). +400 por fogo.' : 'Você saiu do serviço público.', 4);
+  if (novo.profissao !== antigo.profissao) aviso(novo.profissao === 'medico' ? 'Plantão médico: socorra os feridos (✚) pela cidade. +250 por socorro.' : novo.profissao === 'bombeiro' ? 'Você está em serviço nos bombeiros. Apague os incêndios (🔥). +400 por fogo.' : novo.profissao === 'jornalista' ? 'Você é jornalista: vá até incêndios, ocorrências e feridos e toque em Reportar (+200).' : 'Você saiu do serviço público.', 4);
   if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome || novo.crimes !== antigo.crimes || novo.policial !== antigo.policial || novo.prf !== antigo.prf || novo.eleitoral !== antigo.eleitoral || novo.profissao !== antigo.profissao || novo.recompensa !== antigo.recompensa) {
     conexao?.rastrear(metaPresenca());
   }
@@ -3833,6 +3880,8 @@ function contexto() {
   if (perto(civico.BANCO.empregos, 3.2)) return ['agência de empregos: vagas nas empresas', 'Vagas'];
   if (perto(civico.HOSPITAL.balcao, 3.2)) return ['hospital: tratamento e plantão médico', 'Hospital'];
   if (perto(civico.BOMBEIROS.balcao, 3.2)) return ['quartel dos bombeiros', 'Bombeiros'];
+  if (jogador.perfil?.profissao === 'jornalista' && reportagemProxima()) return [`reportar: ${reportagemProxima().titulo} (+200)`, 'Reportar'];
+  if (perto(civico.PREFEITURA.jornal, 3.2)) return ['Jornal da Cidade: virar jornalista e ler as notícias', 'Jornal'];
   if (perto(civico.PREFEITURA.porta, 3.2)) return ['prefeitura: prefeito, eleição, outdoors e PRF', 'Prefeitura'];
   if (perto(civico.PREFEITURA.prf, 3.2)) return ['posto da PRF', 'PRF'];
   if (perto(civico.CONCESSIONARIA.balcao, 3.2)) return ['comprar carro', 'Carros'];
@@ -3898,7 +3947,7 @@ function quadro() {
   atualizarCeu(agoraServidor() / 1000);
   mundo.atualizar(dt);
   sedes.atualizar(dt);
-  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); checarTrem(); atualizarProcurados(dt); }
+  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); checarTrem(); atualizarProcurados(dt); atualizarJornal(dt); }
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);

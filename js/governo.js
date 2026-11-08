@@ -151,6 +151,7 @@ const SERVICOS = {
   hospital: ['Hospital', telaHospital],
   bombeiros: ['Quartel dos Bombeiros', telaBombeiros],
   veiculos: ['Meus veículos', telaVeiculos],
+  jornal: ['📰 Jornal da Cidade', telaJornal],
   taxi: ['🚁 Táxi aéreo: para onde?', telaTaxi],
 };
 
@@ -240,4 +241,13 @@ async function telaTaxi(c) {
     <div class="botoes" style="margin-top:12px"><button id="tDescer">Descer aqui</button></div>`;
   c.querySelectorAll('[data-dest]').forEach((b) => { b.onclick = () => { ctx.voarPara(Number(b.dataset.dest)); fechar(); }; });
   $('tDescer').onclick = () => { ctx.voarPara(-1); fechar(); };
+}
+
+async function telaJornal(c) {
+  const lista = await rede.jornal.ultimas();
+  const quando = (t) => { const m = Math.max(0, Math.round((Date.now() - Date.parse(t)) / 60000)); return m < 1 ? 'agora' : m < 60 ? `há ${m} min` : `há ${Math.floor(m / 60)} h`; };
+  c.innerHTML = `${telaProfissao(c, 'jornalista', 'Jornalista', 'Jornalistas em serviço vão até os acontecimentos da cidade (incêndio, ocorrência policial ou alguém ferido) e tocam em <b>Reportar</b>. A manchete sai no jornal para todos e a reportagem vale <b>200</b>. Cada acontecimento só rende uma reportagem: chegue primeiro!')}
+    <div class="sub">Últimas notícias</div>
+    <div class="lista">${lista.length ? lista.map((n) => `<div class="linha item"><span class="nm"><b>${esc(n.titulo)}</b><small>por ${esc(n.autor_nome)} · ${quando(n.criada_em)}</small></span></div>`).join('') : '<span class="vazio">Nenhuma notícia ainda.</span>'}</div>`;
+  ligarProfissao('jornalista');
 }
