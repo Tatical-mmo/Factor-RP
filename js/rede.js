@@ -71,6 +71,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'pos' }, ({ payload }) => eventos.pos?.(payload));
   canal.on('broadcast', { event: 'tiro' }, ({ payload }) => eventos.tiro?.(payload));
   canal.on('broadcast', { event: 'dano' }, ({ payload }) => eventos.dano?.(payload));
+  canal.on('broadcast', { event: 'atropelo' }, ({ payload }) => eventos.atropelo?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
@@ -338,6 +339,12 @@ export const veiculos = {
   chamar: (id, x, z) => rpc('chamar_veiculo', { p_caminhao: id, p_x: x, p_z: z }),
   recolher: (id) => rpc('recolher_veiculo', { p_caminhao: id }),
   bloquear: (id) => rpc('bloquear_veiculo', { p_caminhao: id }),
+};
+export const recompensas = {
+  procurados: () => rpc('mais_procurados'),
+  presoPorRobo: () => rpc('preso_por_robo'),
+  cercar: (x, z) => rpc('cercar_casa', { p_x: x, p_z: z }),
+  fimCerco: () => rpc('fim_cerco'),
 };
 export const banco = {
   estado: () => rpc('banco_estado'),
