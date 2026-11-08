@@ -353,6 +353,18 @@ export function empurrar(p, raio) {
     p.x = c.x + nx * co + nz * si; p.z = c.z - nx * si + nz * co;
   }
 }
+// trem andando passa por cima de quem está no trilho
+export function atropela(p, raio) {
+  for (const l of linhas) for (const tr of l.trens) {
+    if (!tr.est || tr.est.parado !== null) continue;
+    for (const c of tr.carros) {
+      const dx = p.x - c.x, dz = p.z - c.z; if (dx * dx + dz * dz > 120) continue;
+      const co = Math.cos(c.yaw), si = Math.sin(c.yaw), lx = dx * co - dz * si, lz = dx * si + dz * co;
+      if (Math.abs(lx) < HW + raio && Math.abs(lz) < c.len / 2 + raio) return true;
+    }
+  }
+  return false;
+}
 export function marcadores() { const r = []; for (const l of linhas) for (const tr of l.trens) { const c = tr.carros[1]; r.push([c.x, c.z, c.yaw]); } return r; }
 export function desenharMapa(g) {
   g.strokeStyle = '#5a4632'; g.lineWidth = 3;
