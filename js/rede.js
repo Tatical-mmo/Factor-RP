@@ -225,6 +225,11 @@ export const painel = {
   nivelCla: (cla, nivel) => rpc('admin_nivel_cla', { p_cla: cla, p_nivel: nivel }),
 };
 export const cumprirPena = () => rpc('cumprir_pena');
+export const metas = {
+  minhas: () => rpc('minhas_metas'),
+  resgatar: (tipo) => rpc('resgatar_meta', { p_tipo: tipo }),
+  ranking: () => rpc('ranking'),
+};
 export const encomendas = {
   pegar: (origem) => rpc('pegar_encomenda', { p_origem: origem }),
   entregar: (destino) => rpc('entregar_encomenda', { p_destino: destino }),

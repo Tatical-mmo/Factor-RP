@@ -75,7 +75,7 @@
   #ajuda kbd { color:var(--texto); font-family:inherit; font-weight:700; }
   #aviso { position:absolute; left:50%; top:22%; transform:translateX(-50%); font-size:15px; max-width:86vw; text-align:center; transition:opacity .3s; }
 
-  #btPainel { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(288px + env(safe-area-inset-top)); pointer-events:auto;
+  #btPainel { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(334px + env(safe-area-inset-top)); pointer-events:auto;
     font-size:14px; font-weight:700; padding:8px 14px; border-radius:10px; border:1px solid var(--borda); background:#3a2a10; color:#ffd08a; cursor:pointer; }
   #bloqueio { position:absolute; left:50%; bottom:calc(200px + env(safe-area-inset-bottom)); transform:translateX(-50%); font-size:16px; font-weight:700;
     background:rgba(120,20,20,.85); border:1px solid #ff8a7a; border-radius:12px; padding:8px 16px; white-space:nowrap; }
@@ -112,6 +112,16 @@
   .vazio, .dica { color:var(--suave); font-size:13px; }
   .linha-form { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
   .linha-form input { width:7.5em; }
+  #btRanking { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(288px + env(safe-area-inset-top)); pointer-events:auto;
+    font-size:14px; font-weight:700; padding:8px 14px; border-radius:10px; border:1px solid var(--borda); background:#3a3320; color:#ffe7a8; cursor:pointer; }
+  #btRanking.alerta { box-shadow:0 0 0 3px #ffd23e; animation:pisca 1.2s infinite; }
+  @keyframes pisca { 50% { box-shadow:0 0 0 6px rgba(255,210,62,.35); } }
+  .barra { display:block; height:6px; border-radius:4px; background:#202737; margin-top:4px; overflow:hidden; }
+  .barra i { display:block; height:100%; background:var(--destaque); }
+  .grade-conq { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:8px; }
+  .conq { border:1px solid var(--borda); border-radius:10px; padding:8px; text-align:center; opacity:.45; filter:grayscale(1); }
+  .conq.feita { opacity:1; filter:none; border-color:var(--destaque); background:rgba(242,163,58,.1); }
+  .conq span { font-size:26px; display:block; } .conq b { display:block; font-size:13px; } .conq small { color:var(--suave); font-size:11.5px; }
   .aviso-item { font-size:13px; background:rgba(227,178,60,.14); border:1px solid rgba(227,178,60,.45); border-radius:8px; padding:6px 9px; margin:6px 0; }
   .modal .msg { min-height:22px; padding:6px 14px 12px; font-size:14px; } .modal .msg.ok { color:var(--verde); } .modal .msg.erro { color:#ff8a7a; }
 
@@ -162,16 +172,17 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261108l",
-  "./js/mundo.js": "./js/mundo.js?v=20261108l",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261108l",
-  "./js/cla.js": "./js/cla.js?v=20261108l",
-  "./js/config.js": "./js/config.js?v=20261108l",
-  "./js/empresa.js": "./js/empresa.js?v=20261108l",
-  "./js/loja.js": "./js/loja.js?v=20261108l",
-  "./js/painel.js": "./js/painel.js?v=20261108l",
-  "./js/rede.js": "./js/rede.js?v=20261108l",
-  "./js/sedes.js": "./js/sedes.js?v=20261108l"
+  "./js/main.js": "./js/main.js?v=20261108m",
+  "./js/mundo.js": "./js/mundo.js?v=20261108m",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261108m",
+  "./js/cla.js": "./js/cla.js?v=20261108m",
+  "./js/config.js": "./js/config.js?v=20261108m",
+  "./js/empresa.js": "./js/empresa.js?v=20261108m",
+  "./js/loja.js": "./js/loja.js?v=20261108m",
+  "./js/painel.js": "./js/painel.js?v=20261108m",
+  "./js/rede.js": "./js/rede.js?v=20261108m",
+  "./js/sedes.js": "./js/sedes.js?v=20261108m",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261108m"
 } }
 </script>
 </head>
@@ -223,6 +234,7 @@
   <button id="btFianca" class="oculto">Pagar fiança</button>
   <div id="captura" class="painel oculto"></div>
   <button id="btPainel" class="oculto">🛡 Painel</button>
+  <button id="btRanking">🏆 Metas</button>
   <div id="bloqueio" class="oculto"></div>
 </div>
 
@@ -257,6 +269,13 @@
     <div class="alvos" id="mapaAlvos"></div></div>
 </div>
 
+<div id="rankingJanela" class="modal oculto">
+  <div class="topo"><b>Metas, ranking e conquistas</b><button id="fecharRanking" aria-label="Fechar">✕</button></div>
+  <div class="abas" id="rankingAbas"></div>
+  <div id="rankingConteudo" class="conteudo"></div>
+  <div id="rankingMsg" class="msg"></div>
+</div>
+
 <div id="janela" class="modal oculto">
   <div class="topo"><b id="janelaTitulo">Loja</b><button id="fecharJanela" aria-label="Fechar">✕</button></div>
   <div id="janelaConteudo" class="conteudo"></div>
@@ -274,7 +293,7 @@
   <div id="girar"><button class="bt" id="btGiraE">⟲</button><button class="bt" id="btGiraD">⟳</button></div>
 </div>
 
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 08/11 · correção empresa</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 08/11 · metas e ranking</div>
 <script type="module">import './js/main.js';</script>
 </body>
 </html>

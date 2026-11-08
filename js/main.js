@@ -15,6 +15,7 @@ import * as rede from './rede.js';
 import * as mundo from './mundo.js';
 import * as ferrovia from './ferrovia.js';
 import * as sedes from './sedes.js';
+import { iniciarConquistas } from './conquistas.js';
 import { nivelTexto } from './empresa.js';
 import { iniciarPainel, atualizarBotao } from './painel.js';
 
@@ -1411,6 +1412,17 @@ async function iniciarJogo(perfil) {
     recarregar: () => { tempoLogistica = 0; },
   });
   iniciarLogistica();
+  iniciarConquistas({
+    perfil: () => jogador.perfil, aviso,
+    dados: () => ({
+      perfil: jogador.perfil,
+      empresas: [...empresas.values()].filter((e) => e.dono === jogador.perfil.id),
+      helis: [...empresas.values()].filter((e) => e.dono === jogador.perfil.id).reduce((a, e) => a + (helisPorEmpresa.get(e.id) || 0), 0),
+      moradias: casasLista.filter((d) => moraEm(d)),
+      cla: jogador.cla ? clasCache.get(jogador.cla) : null,
+      territorios: jogador.cla ? [...territorios.values()].filter((v) => v.d.dono_cla === jogador.cla).length : 0,
+    }),
+  });
   $('mapa').addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); abrirMapaGrande(); });
   $('fecharMapa').onclick = () => $('mapaJanela').classList.add('oculto');
   $('rastreio').addEventListener('pointerdown', (ev) => { ev.preventDefault(); rastrear(null); });
