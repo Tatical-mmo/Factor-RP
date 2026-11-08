@@ -28,7 +28,7 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b`, `21c`, `22a`, `22b`, `23a`, `23b`, `23c` e `23d`, nessa ordem.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b`, `21c`, `22a`, `22b`, `23a`, `23b`, `23c`, `23d` e `24`, nessa ordem.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
 
 ## Etapa 3: trabalho e produção
@@ -246,3 +246,13 @@ Rode no SQL Editor, nessa ordem e cada um numa consulta limpa: `23a_guerra_clas.
 - **Banco Central**: poupança que rende 1% por ciclo e não se perde na morte; empréstimo de até 20.000 com 10% de juros e prazo de 3 ciclos, com cobrança automática.
 - **Hospital**: quem morre fica ferido por 20 s. Médico em serviço socorre (+250). Sem socorro, acorda no hospital e paga até 100. Tratamento no balcão por 150.
 - **Bombeiros**: incêndios aparecem em empresas e casas. Bombeiro em serviço apaga com 10 jatos (+400). O dono também pode apagar. Fogo de 8 min causa prejuízo.
+
+## Versão 08/11 (r) · veículos 3D, robô motorista e sequestro
+Rode no SQL Editor: `24_veiculos_roubo.sql`.
+- Modelos 3D novos: van, helicóptero, carros (popular, SUV, esportivo, presidencial) e robô motorista (`assets/modelos/`, com compressão meshopt).
+- Todo veículo de empresa tem um robô motorista. Quem zera a vida do veículo arranca o robô do banco (ele cai e some em 3 s) e assume a direção com a carga.
+- A carga roubada é descarregada num território do clã ou na casa do ladrão (botão Descarregar, parado no lugar).
+- Helicóptero só pode ser atacado no chão, enquanto carrega na fábrica.
+- Veículo parado por 5 minutos volta sozinho para a garagem. Policial que acha um veículo roubado abandonado devolve ao dono (+300).
+- O dono dirige qualquer veículo dele quando quiser: chegue perto do veículo, ou do portão da empresa para tirar um da garagem. Ao descer, o robô leva de volta.
+- Prefeitura e Concessionária aparecem no mapa grande para rastrear.

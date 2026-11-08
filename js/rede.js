@@ -148,6 +148,13 @@ function traduzirRpc(m) {
     'limite de funcionarios': 'Limite de 20 funcionários.',
     'o dono nao pode se demitir': 'O dono não pode se demitir.',
     'cla nao encontrado': 'Clã não encontrado.',
+    'veiculo invalido': 'Veículo inválido.',
+    'alguem esta dirigindo': 'Alguém está dirigindo esse veículo.',
+    'esse veiculo nao e seu': 'Esse veículo não é seu.',
+    'voce nao esta nesse veiculo': 'Você não está nesse veículo.',
+    'o veiculo esta vazio': 'O veículo está vazio.',
+    'descarregue num territorio do seu cla ou na sua casa': 'Descarregue num território do seu clã ou na sua casa.',
+    'helicoptero fora de alcance': 'Helicóptero só pode ser atacado no chão (enquanto carrega na fábrica).',
     'escolha outro cla': 'Escolha outro clã.',
     'horario invalido (10 a 120 min)': 'Horário inválido: de 10 a 120 minutos.',
     'aposta invalida': 'Aposta inválida.',
@@ -318,6 +325,12 @@ export const empregos = {
   ajustar: (empresa, jogador, funcao, salario) => rpc('ajustar_funcionario', { p_empresa: empresa, p_jogador: jogador, p_funcao: funcao, p_salario: salario }),
   ponto: (x, z) => rpc('bater_ponto', { p_x: x, p_z: z }),
 };
+export const veiculos = {
+  entrar: (id, x, z, ang) => rpc('entrar_veiculo', { p_caminhao: id, p_x: x, p_z: z, p_ang: ang }),
+  mover: (id, x, z, ang) => rpc('mover_veiculo', { p_caminhao: id, p_x: x, p_z: z, p_ang: ang }),
+  sair: (id, x, z, ang) => rpc('sair_veiculo', { p_caminhao: id, p_x: x, p_z: z, p_ang: ang }),
+  descarregar: (id, x, z) => rpc('descarregar_roubo', { p_caminhao: id, p_x: x, p_z: z }),
+};
 export const banco = {
   estado: () => rpc('banco_estado'),
   depositar: (v) => rpc('banco_depositar', { p_valor: v }),
@@ -461,7 +474,7 @@ export function escutarLogistica(eventos) {
 export const combate = {
   agressao: (alvo) => rpc('registrar_agressao', { p_alvo: alvo }),
   morrer: (assassino) => rpc('morrer', { p_assassino: assassino }),
-  atacarCaminhao: (id) => rpc('atacar_caminhao', { p_caminhao: id }),
+  atacarCaminhao: (id, x, z, ang) => rpc('atacar_caminhao', { p_caminhao: id, p_x: x, p_z: z, p_ang: ang }),
   usarRemedio: () => rpc('usar_remedio'),
 };
 export const policia = {

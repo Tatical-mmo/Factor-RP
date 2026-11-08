@@ -21,6 +21,7 @@ function bloco(g, m, w, h, d, x, y, z) {
 }
 
 export function iniciar(contexto) { ctx = contexto; }
+const GLB_CARRO = { popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial' };
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
 export function montarPrefeitura() {
@@ -148,6 +149,13 @@ const cacheCarro = new Map();
 export function modeloCarro(modelo, cor) {
   const chave = modelo + cor;
   if (cacheCarro.has(chave)) return cacheCarro.get(chave).clone();
+  const base = ctx?.modelo?.(GLB_CARRO[modelo]);
+  if (base) {   // modelo 3D: pinta de leve com a cor escolhida (o presidencial fica como é)
+    const g = base.clone(true);
+    if (modelo !== 'presidencial') g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), 0.45); } });
+    cacheCarro.set(chave, g);
+    return g.clone();
+  }
   const g = new THREE.Group();
   const pint = mat(cor, { roughness: 0.25, metalness: 0.55 }), vidro = mat('#1b2633', { roughness: 0.1, metalness: 0.6 }), pneu = mat('#161616', { roughness: 0.9 });
   const luz = mat('#fff6d0', { emissive: '#fff1c8', emissiveIntensity: 1.4 }), lanterna = mat('#c81e1e', { emissive: '#c81e1e', emissiveIntensity: 0.8 });

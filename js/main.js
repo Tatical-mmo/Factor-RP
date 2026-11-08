@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { FERRO_VELHOS, FABRICAS, PRODUTOS, FOME_POR_SEGUNDO, LOTES_VENDA, DESTINOS } from './config.js';
@@ -185,6 +186,7 @@ manager.onProgress = (_url, carregados, total) => {
   $('progresso').style.width = p + '%'; $('progressoTxt').textContent = p + '%';
 };
 const loader = new GLTFLoader(manager);
+loader.setMeshoptDecoder(MeshoptDecoder);
 const cacheGLTF = new Map();
 function carregarGLB(url) {
   if (!cacheGLTF.has(url)) cacheGLTF.set(url, loader.loadAsync(url));
@@ -820,7 +822,7 @@ function acaoContexto() {
     if (est?.parado === jogador.trem.origem) desembarcar(jogador.trem.origem); else aviso(contexto()[0]);
     return;
   }
-  if (jogador.carro) { sairCarro(); return; }
+  if (jogador.carro) { if (podeDescarregar()) descarregarRoubo(); else sairCarro(); return; }
   if (jogador.trava > 0 || !livre()) return;
   if (jogador.carregando?.userData.pedido) { acaoCaixaPedido(); return; }
   if (jogador.carregando?.userData.encomenda && !jogador.trem && !ferrovia.plataformaEm(jogador.pos.x, jogador.pos.z)) { acaoEncomenda(); return; }
@@ -847,6 +849,7 @@ function acaoContexto() {
   if (perto(civico.PREFEITURA.prf, 3.2)) { abrirPrefeitura('prf'); return; }
   if (perto(civico.CONCESSIONARIA.balcao, 3.2)) { abrirConcessionaria(); return; }
   const carro = meuCarroProximo(); if (carro && !jogador.carregando) { entrarCarro(carro); return; }
+  const vp = veiculoProximo(); if (vp && !jogador.carregando) { entrarVeiculo(vp); return; }
   const ag = agenciaProxima(); if (ag && !jogador.carregando) { pegarEncomenda(ag); return; }
   if (pertoOficina()) { fazerParafusos(); return; }
   const oc = ocorrenciaProxima(); if (oc) { atenderOcorrencia(oc); return; }
@@ -967,7 +970,11 @@ function atualizarPrefeitura(dt) {
   // enquanto dirige, a vaga do carro acompanha (se fechar o jogo, ele fica perto)
   if (jogador.carro) {
     jogador.carro.salvar -= dt;
-    if (jogador.carro.salvar <= 0) { jogador.carro.salvar = 20; rede.carros.estacionar(jogador.carro.id, jogador.pos.x, jogador.pos.z, jogador.yaw).catch(() => {}); }
+    if (jogador.carro.salvar <= 0 && jogador.carro.caminhao) {
+      jogador.carro.salvar = 1.5;
+      const id = jogador.carro.caminhao;
+      rede.veiculos.mover(id, jogador.pos.x, jogador.pos.z, jogador.yaw).then((r) => { if (r === 'perdeu' && jogador.carro?.caminhao === id && performance.now() - jogador.carro.desde > 4000) { sairCarroLocal(); aviso('O veículo voltou para o dono.', 3); } }).catch(() => {});
+    } else if (jogador.carro.salvar <= 0) { jogador.carro.salvar = 20; rede.carros.estacionar(jogador.carro.id, jogador.pos.x, jogador.pos.z, jogador.yaw).catch(() => {}); }
   }
 }
 const carrosMundo = new Map();     // id -> { d, mesh }
@@ -1005,6 +1012,14 @@ function entrarCarro(v) {
 }
 function sairCarro() {
   const c = jogador.carro; if (!c) return;
+  if (c.caminhao) {
+    rede.veiculos.sair(c.caminhao, jogador.pos.x, jogador.pos.z, jogador.yaw).then(() => { tempoLogistica = Math.min(tempoLogistica, 0.5); }).catch(() => {});
+    const v = caminhoes.get(c.caminhao);
+    if (v) v.d = { ...v.d, motorista: null, pos_x: jogador.pos.x, pos_z: jogador.pos.z, ang: jogador.yaw, ...(v.d.sequestrado ? {} : { status: 'parado' }) };
+    sairCarroLocal();
+    aviso(c.sequestrado ? 'Você largou o veículo roubado. Parado por 5 min, ele volta para o dono.' : 'O robô motorista levou o veículo de volta para a garagem.', 3.5);
+    return;
+  }
   jogador.carro = null;
   c.mesh.position.copy(jogador.pos); c.mesh.rotation.y = jogador.yaw;
   const v = carrosMundo.get(c.id); if (v) { v.d = { ...v.d, x: jogador.pos.x, z: jogador.pos.z, ang: jogador.yaw }; }
@@ -1015,9 +1030,19 @@ function sairCarro() {
   jogador.avatar.raiz.visible = true;
   colisoresCarros.push({ tipo: 'circ', x: c.mesh.position.x, z: c.mesh.position.z, r: 1.4 });
 }
+// desce de um veículo de empresa (sem avisar o banco)
+function sairCarroLocal() {
+  const c = jogador.carro; if (!c) return;
+  jogador.carro = null;
+  if (c.mesh) c.mesh.position.y = alturaChao(jogador.pos.x, jogador.pos.z);
+  const lx = Math.cos(jogador.yaw) * 2.2, lz = -Math.sin(jogador.yaw) * 2.2;
+  jogador.pos.x += lx; jogador.pos.z += lz; jogador.pos.y = alturaChao(jogador.pos.x, jogador.pos.z); resolverColisao(jogador.pos, jogador.raio);
+  jogador.avatar.raiz.visible = true;
+  tempoLogistica = Math.min(tempoLogistica, 1);
+}
 // direção arcade: o controle aponta para onde o carro deve ir (como andar a pé)
 function dirigir(dt, dir, forca) {
-  const c = jogador.carro, max = civico.CARROS[c.modelo]?.vel || 15;
+  const c = jogador.carro, max = c.max || civico.CARROS[c.modelo]?.vel || 15;
   if (forca > 0.15) {
     const alvo = Math.atan2(dir.x, dir.z);
     let dif = alvo - jogador.yaw; dif = Math.atan2(Math.sin(dif), Math.cos(dif));
@@ -1028,10 +1053,18 @@ function dirigir(dt, dir, forca) {
   } else c.vel = Math.max(0, c.vel - 7 * dt);
   const antes = { x: jogador.pos.x, z: jogador.pos.z };
   jogador.pos.x += Math.sin(jogador.yaw) * c.vel * dt; jogador.pos.z += Math.cos(jogador.yaw) * c.vel * dt;
-  resolverColisao(jogador.pos, 1.3);
+  if (!c.voa) resolverColisao(jogador.pos, c.raio || 1.3);
   const andou = Math.hypot(jogador.pos.x - antes.x, jogador.pos.z - antes.z), esperado = c.vel * dt;
   if (esperado > 0.01 && andou < esperado * 0.6) c.vel *= 0.5;          // bateu
-  jogador.pos.y += (alturaChao(jogador.pos.x, jogador.pos.z) - jogador.pos.y) * Math.min(1, dt * 10);
+  const chao = alturaChao(jogador.pos.x, jogador.pos.z);
+  if (c.voa) {   // helicóptero: sobe quando anda e pousa quando para
+    c.alt += ((c.vel > 1 ? 22 : 0) - c.alt) * Math.min(1, dt * 1.2);
+    jogador.pos.y = chao; c.mesh.position.set(jogador.pos.x, chao + c.alt, jogador.pos.z); c.mesh.rotation.y = jogador.yaw;
+    const ro = c.mesh.userData.rotor; if (ro) { ro.visible = true; ro.rotation.y += dt * (c.alt > 1 || c.vel > 0.5 ? 28 : 6); }
+    jogador.avatar.raiz.position.copy(jogador.pos);
+    return;
+  }
+  jogador.pos.y += (chao - jogador.pos.y) * Math.min(1, dt * 10);
   c.mesh.position.copy(jogador.pos); c.mesh.rotation.y = jogador.yaw;
   jogador.avatar.raiz.position.copy(jogador.pos);
 }
@@ -1402,6 +1435,8 @@ function alvosRastreio() {
   for (const o of ocorrencias) if (jogador.perfil?.policial || jogador.perfil?.prf) r.push({ icone: '🚨', nome: o.local, x: o.x, z: o.z });
   for (const a of AGENCIAS) r.push({ icone: '📦', nome: `Agência ${a.id === 'centro' ? (a.z < 0 ? 'Norte' : 'Sul') : NOMES_AGENCIA[a.id]}`, x: a.x, z: a.z });
   r.push({ icone: '🔩', nome: 'Oficina de Parafusos', x: OFICINA.x, z: OFICINA.z });
+  r.push({ icone: '🏛️', nome: 'Prefeitura', x: civico.PREFEITURA.porta.x, z: civico.PREFEITURA.porta.z + 2 });
+  r.push({ icone: '🚗', nome: 'Concessionária (carros)', x: civico.CONCESSIONARIA.balcao.x, z: civico.CONCESSIONARIA.balcao.z + 3 });
   r.push({ icone: '🏦', nome: 'Banco e Agência de Empregos', x: civico.BANCO.balcao.x, z: civico.BANCO.balcao.z + 2 });
   r.push({ icone: '🏥', nome: 'Hospital', x: civico.HOSPITAL.balcao.x, z: civico.HOSPITAL.balcao.z - 2 });
   r.push({ icone: '🚒', nome: 'Bombeiros', x: civico.BOMBEIROS.balcao.x, z: civico.BOMBEIROS.balcao.z - 2 });
@@ -1567,7 +1602,7 @@ async function iniciarJogo(perfil) {
   mundo.finalizar();
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
-  civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao });
+  civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n] });
   civico.montarPrefeitura(); civico.montarConcessionaria();
   civico.montarBanco(); civico.montarHospital(); civico.montarBombeiros();
   criarCaminhaoMovel();
@@ -1760,6 +1795,10 @@ function atualizarRemotos(dt) {
         r.arma.visible = false; r.av.mixer.update(dt); continue;
       }
     }
+    if (a.vc) {   // dirigindo um veículo de empresa: o veículo segue a posição dele
+      pilotos.set(Number(a.vc), { x: a.x, y: a.y, z: a.z, r: a.r, t: performance.now() });
+      raiz.position.set(a.x, a.y, a.z); raiz.visible = false; r.av.mixer.update(dt); continue;
+    }
     if (a.cv) {   // dirigindo: mostra o carro no lugar do personagem
       const [cid, mod, cor] = String(a.cv).split('|');
       if (!r.carro || r.carroId !== cid) { if (r.carro) scene.remove(r.carro); r.carro = civico.modeloCarro(mod, cor); r.carroId = cid; r.carro.position.set(a.x, a.y, a.z); scene.add(r.carro); }
@@ -1796,9 +1835,9 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || 0 };
   const u = ultimoEnvio;
-  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv;
+  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc;
   if (!mudou && tempoKeepAlive > 0) return;
   conexao.enviar('pos', est); ultimoEnvio = est; tempoKeepAlive = 3;
 }
@@ -2191,6 +2230,16 @@ function modeloVeiculo(tipo) {
   return modeloVeiculo(tipo);
 }
 function criarVeiculo(tipo, danificado) {
+  if ((tipo === 'van' || tipo === 'helicoptero') && modelos[tipo]) {
+    const o = clonar(tipo);
+    if (tipo === 'helicoptero') {   // hélice girando: disco translúcido sobre as pás
+      const disco = new THREE.Mesh(new THREE.CircleGeometry(5.1, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#222', transparent: true, opacity: 0.18, depthWrite: false }));
+      const rotor = new THREE.Group(); rotor.position.y = 3.9; rotor.add(disco);
+      for (const a of [0, Math.PI / 2]) { const pa = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.04, 10), new THREE.MeshBasicMaterial({ color: '#333', transparent: true, opacity: 0.5 })); pa.rotation.y = a; rotor.add(pa); }
+      o.add(rotor); o.userData.rotor = rotor; rotor.visible = false;
+    }
+    return o;
+  }
   if (tipo === 'van' || tipo === 'helicoptero') {
     const o = modeloVeiculo(tipo);
     o.userData.rotor = o.children.find((k) => k.isGroup && k.position.y > 3); o.userData.rotorCauda = o.children.find((k) => k.isGroup && k.position.z < -5);
@@ -2201,7 +2250,12 @@ function criarVeiculo(tipo, danificado) {
 function sincronizarCaminhao(d) {
   let c = caminhoes.get(d.id);
   if (!c) { const obj = criarVeiculo(d.tipo); scene.add(obj); c = { obj, d, roubadoVisual: false }; caminhoes.set(d.id, c); }
+  if (d.sequestrado && !c.d.sequestrado && c.obj.visible) ejetarRobo(c.obj);
   c.d = d;
+  const meu = jogador.carro?.caminhao === d.id;
+  if (meu && performance.now() - jogador.carro.desde > 4000 && (d.status !== 'dirigido' || d.motorista !== jogador.perfil.id)) {
+    sairCarroLocal(); aviso('O veículo voltou para o dono.', 3);
+  }
   // caminhão roubado volta amassado; a escolta (viatura) acompanha a viagem
   if (!!d.roubado !== c.roubadoVisual && (d.tipo || 'caminhao') === 'caminhao') {
     const novo = clonar(d.roubado ? 'caminhao_danificado' : 'caminhao');
@@ -2218,6 +2272,7 @@ function atualizarCaminhoes(dt) {
   let atrasado = false;
   for (const c of caminhoes.values()) {
     let alvo = null;
+    if (c.d.status === 'dirigido') { atualizarDirigido(c, dt); continue; }
     if (c.d.status !== 'parado' && c.d.partida) {
       const p = pernas(c);
       let t = (agora - Date.parse(c.d.partida)) / 1000, anterior = null;
@@ -2250,7 +2305,8 @@ function atualizarCaminhoes(dt) {
       const voando = !estacionado && !alvo.parado, ro = c.obj.userData;
       if (estacionado) c.heliporto = alvo;
       c.obj.position.y += ((alvo.y ?? 0.02) - c.obj.position.y) * Math.min(1, dt * (voando ? 20 : 6));
-      if (ro.rotor) ro.rotor.rotation.y += dt * (voando ? 28 : 3);
+      c.noChao = !estacionado && !!alvo.parado && c.d.status === 'em_rota';
+      if (ro.rotor) { ro.rotor.rotation.y += dt * (voando ? 28 : 3); if (modelos.helicoptero) ro.rotor.visible = voando; }
       if (ro.rotorCauda) ro.rotorCauda.rotation.x += dt * (voando ? 40 : 4);
     }
     if (estacionado) c.vaga = alvo;
@@ -2272,6 +2328,7 @@ function atualizarCaminhoes(dt) {
       c.escolta.rotation.y = suavizarAngulo(c.escolta.rotation.y, ry, dt * 4);
     }
   }
+  atualizarEjetados(dt);
   // viagens vencidas: pede ao banco para concluir (qualquer jogador pode; o banco decide)
   if (atrasado && performance.now() - ultimoProcessar > 8000) {
     ultimoProcessar = performance.now();
@@ -2454,7 +2511,7 @@ function acertoDaBola(b) {
 function caminhaoProximo(raio) {
   let melhor = null, dm = raio;
   for (const c of caminhoes.values()) {
-    if (c.d.status !== 'em_rota' || c.d.roubado || c.d.tipo === 'helicoptero') continue;
+    if (c.d.status !== 'em_rota' || c.d.roubado || (c.d.tipo === 'helicoptero' && !c.noChao)) continue;
     const d = Math.hypot(c.obj.position.x - jogador.pos.x, c.obj.position.z - jogador.pos.z);
     if (d < dm) { dm = d; melhor = c; }
   }
@@ -2465,10 +2522,128 @@ async function atacarCaminhao(c) {
   if (performance.now() - ultimoAtaqueCaminhao < 950) return;
   ultimoAtaqueCaminhao = performance.now();
   try {
-    const vida = await rede.combate.atacarCaminhao(c.d.id);
-    if (vida > 0) aviso(`Caminhão: ${vida} de vida`, 1.2);
-    else if (vida === 0) { aviso('Carga roubada!', 3); tempoLogistica = 0; }
+    const vida = await rede.combate.atacarCaminhao(c.d.id, c.obj.position.x, c.obj.position.z, c.obj.rotation.y);
+    if (vida > 0) aviso(`${NOME_VEICULO[c.d.tipo] || 'Veículo'}: ${vida} de vida`, 1.2);
+    else if (vida === 0) {
+      if (!c.d.sequestrado) ejetarRobo(c.obj);
+      c.d = { ...c.d, status: 'dirigido', motorista: jogador.perfil.id, sequestrado: true, roubado: true, pos_x: c.obj.position.x, pos_z: c.obj.position.z, ang: c.obj.rotation.y };
+      assumirVeiculo(c, 'ladrao');
+    }
   } catch (e) { aviso(e.message); }
+}
+
+// ---------------------------------------------------------------- veículos de empresa: robô motorista, sequestro e direção
+const NOME_VEICULO = { caminhao: 'Caminhão', van: 'Van', helicoptero: 'Helicóptero' };
+const VEL_VEICULO = { caminhao: 13, van: 16, helicoptero: 26 };
+const pilotos = new Map();      // caminhão -> última posição transmitida por quem dirige
+const ejetados = [];
+// o robô motorista é arrancado do banco e cai fora do veículo; some depois de 3 s
+function ejetarRobo(obj) {
+  if (!modelos.robo_motorista) return;
+  const m = clonar('robo_motorista');
+  m.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; } });
+  const ry = obj.rotation.y, lado = { x: Math.cos(ry), z: -Math.sin(ry) };
+  m.position.set(obj.position.x + lado.x * 1.1, obj.position.y + 1.0, obj.position.z + lado.z * 1.1); m.rotation.y = ry;
+  scene.add(m);
+  ejetados.push({ m, v: new THREE.Vector3(lado.x * 5.5, 5, lado.z * 5.5), giro: (Math.random() - 0.5) * 6, t: 0, ry });
+}
+function atualizarEjetados(dt) {
+  for (let i = ejetados.length - 1; i >= 0; i--) {
+    const e = ejetados[i]; e.t += dt;
+    const chao = alturaChao(e.m.position.x, e.m.position.z);
+    if (e.m.position.y > chao + 0.01 || e.v.y > 0) {
+      e.v.y -= 14 * dt; e.m.position.addScaledVector(e.v, dt);
+      e.m.rotation.z += e.giro * dt; e.m.rotation.x += e.giro * 0.5 * dt;
+      if (e.m.position.y <= chao) { e.m.position.y = chao; e.v.set(0, 0, 0); e.m.rotation.x *= 0.3; e.m.rotation.z = Math.sign(e.giro) * Math.PI / 2 * 0.9; }
+    }
+    if (e.t > 3) e.m.traverse((o) => { if (o.isMesh) o.material.opacity = Math.max(0, 1 - (e.t - 3) / 0.6); });
+    if (e.t > 3.6) { scene.remove(e.m); ejetados.splice(i, 1); }
+  }
+}
+function atualizarDirigido(c, dt) {
+  c.obj.visible = true; c.posicionado = false; c.manobra = null;
+  if (c.escolta) { scene.remove(c.escolta); c.escolta = null; }
+  if (jogador.carro?.caminhao === c.d.id) return;          // sou eu que estou dirigindo
+  const pl = pilotos.get(c.d.id), vivo = pl && performance.now() - pl.t < 1500 && c.d.motorista;
+  const x = vivo ? pl.x : c.d.pos_x, z = vivo ? pl.z : c.d.pos_z, ang = vivo ? pl.r : c.d.ang;
+  if (x == null || z == null) return;
+  if (Math.hypot(x - c.obj.position.x, z - c.obj.position.z) > 40) c.obj.position.set(x, c.obj.position.y, z);
+  const k = Math.min(1, dt * 8);
+  c.obj.position.x += (x - c.obj.position.x) * k; c.obj.position.z += (z - c.obj.position.z) * k;
+  c.obj.rotation.y = suavizarAngulo(c.obj.rotation.y, ang || 0, dt * 8);
+  const voando = c.d.tipo === 'helicoptero' && vivo && pl && Math.hypot(pl.x - c.obj.position.x, pl.z - c.obj.position.z) > 0.05;
+  const alvoY = alturaChao(c.obj.position.x, c.obj.position.z) + (c.d.tipo === 'helicoptero' && c.d.motorista ? (voando || c.obj.position.y > 2 ? 22 : 0) : 0.02);
+  c.obj.position.y += (alvoY - c.obj.position.y) * Math.min(1, dt * 1.5);
+  const ro = c.obj.userData.rotor; if (ro) { ro.visible = !!c.d.motorista; ro.rotation.y += dt * 28; }
+}
+function donoDoVeiculo(c) { return empresas.get(c.d.empresa)?.dono === jogador.perfil?.id; }
+// veículo perto para entrar: meu (qualquer um), roubado abandonado, ou da minha garagem pelo portão
+function veiculoProximo() {
+  if (jogador.carro || jogador.trem) return null;
+  let melhor = null, dm = 4.8;
+  for (const c of caminhoes.values()) {
+    if (!c.obj.visible) continue;
+    const d = Math.hypot(c.obj.position.x - jogador.pos.x, c.obj.position.z - jogador.pos.z);
+    if (d >= dm || (c.d.tipo === 'helicoptero' && c.obj.position.y > alturaChao(c.obj.position.x, c.obj.position.z) + 1.5)) continue;
+    const nome = NOME_VEICULO[c.d.tipo] || 'veículo';
+    const livre = !(c.d.status === 'dirigido' && c.d.motorista);
+    if (donoDoVeiculo(c) && livre) { dm = d; melhor = { c, texto: [`dirigir o seu ${nome.toLowerCase()}${c.d.sequestrado ? ' (recuperar)' : ''}`, 'Dirigir'] }; continue; }
+    if (c.d.status === 'dirigido' && c.d.sequestrado && livre) {
+      const pol = jogador.perfil?.policial || jogador.perfil?.prf;
+      dm = d; melhor = { c, texto: pol ? ['devolver o veículo roubado ao dono (+300)', 'Recuperar'] : [`dirigir o ${nome.toLowerCase()} roubado`, 'Dirigir'] };
+    }
+  }
+  if (melhor) return melhor;
+  // garagem: perto do portão de uma empresa minha, pega o primeiro veículo guardado
+  for (const [lote, u] of unidades) {
+    const e = empresas.get(u.empresa); if (!e || e.dono !== jogador.perfil?.id) continue;
+    const l = LOTES_VENDA.find((x) => x.id === lote); if (!l || Math.hypot(l.portao.x - jogador.pos.x, l.portao.z - jogador.pos.z) > 6) continue;
+    const guardado = [...caminhoes.values()].filter((c) => c.d.empresa === e.id && c.d.status === 'parado' && !c.obj.visible)
+      .sort((a, b) => ['caminhao', 'van', 'helicoptero'].indexOf(a.d.tipo) - ['caminhao', 'van', 'helicoptero'].indexOf(b.d.tipo))[0];
+    if (guardado) return { c: guardado, garagem: l.portao, texto: [`tirar ${NOME_VEICULO[guardado.d.tipo]?.toLowerCase() || 'veículo'} da garagem e dirigir`, 'Garagem'] };
+  }
+  return null;
+}
+async function entrarVeiculo(vp) {
+  if (ocupado) return; ocupado = true;
+  const c = vp.c;
+  try {
+    const x = vp.garagem ? vp.garagem.x : c.obj.position.x, z = vp.garagem ? vp.garagem.z + 3 : c.obj.position.z, ang = vp.garagem ? Math.PI : c.obj.rotation.y;
+    const papel = await rede.veiculos.entrar(c.d.id, x, z, ang);
+    if (papel === 'policia') { aviso('🚓 Veículo devolvido ao dono: +300 moedas', 4); tempoLogistica = 0; return; }
+    if (vp.garagem) { c.obj.position.set(x, alturaChao(x, z), z); c.obj.rotation.y = ang; c.obj.visible = true; }
+    c.d = { ...c.d, status: 'dirigido', motorista: jogador.perfil.id, pos_x: x, pos_z: z, ang, ...(papel === 'ladrao' ? {} : { sequestrado: false, roubado: false, carga: 0 }) };
+    assumirVeiculo(c, papel);
+  } catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
+}
+function assumirVeiculo(c, papel) {
+  if (jogador.armado) alternarArma();
+  const tipo = c.d.tipo || 'caminhao';
+  jogador.carro = { caminhao: c.d.id, tipo, vel: 0, mesh: c.obj, salvar: 1.5, max: VEL_VEICULO[tipo] || 13, voa: tipo === 'helicoptero', alt: Math.max(0, c.obj.position.y),
+    raio: tipo === 'caminhao' ? 1.8 : 1.5, carga: papel === 'ladrao' ? (c.d.carga || 0) : 0, sequestrado: papel === 'ladrao', desde: performance.now() };
+  jogador.pos.set(c.obj.position.x, alturaChao(c.obj.position.x, c.obj.position.z), c.obj.position.z); jogador.yaw = c.obj.rotation.y; jogador.alvo = null;
+  jogador.avatar.raiz.visible = false;
+  const nome = NOME_VEICULO[tipo] || 'Veículo';
+  aviso(papel === 'ladrao' ? `${nome} sequestrado com ${jogador.carro.carga} caixas! Leve até um território do seu clã ou até sua casa e toque em Descarregar.`
+    : papel === 'recuperado' ? `Você recuperou o seu ${nome.toLowerCase()}. Ao descer, o robô leva de volta à garagem.`
+    : `${nome}: use o controle para dirigir. Ao descer, o robô motorista leva de volta à garagem.`, 5);
+}
+function podeDescarregar() {
+  const c = jogador.carro;
+  if (!c?.caminhao || !c.sequestrado || !(c.carga > 0) || c.vel > 2) return false;
+  const p = jogador.pos;
+  if (jogador.cla) for (const v of territorios.values()) if (v.d.dono_cla === jogador.cla && Math.abs(v.d.x - p.x) < 30 && Math.abs(v.d.z - p.z) < 30) return true;
+  return casasLista.some((d) => moraEm(d) && Math.abs(d.x - p.x) < 23 && Math.abs(d.z - p.z) < 23);
+}
+async function descarregarRoubo() {
+  if (ocupado) return; ocupado = true;
+  try {
+    const n = await rede.veiculos.descarregar(jogador.carro.caminhao, jogador.pos.x, jogador.pos.z);
+    jogador.carro.carga = 0;
+    aviso(`📦 ${n} caixas descarregadas ${jogador.cla ? 'no estoque do clã' : 'na sua mochila'}!`, 4);
+  } catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
 }
 
 function receberDano(d) {
@@ -3147,7 +3322,7 @@ function atualizarHUD(dt) {
 // texto da dica e do botão de ação conforme o que está perto
 function contexto() {
   const pd = jogador.carregando?.userData.pedido;
-  if (jogador.carro) return [`dirigindo · ${Math.round(jogador.carro.vel * 3.6)} km/h`, 'Sair'];
+  if (jogador.carro) return podeDescarregar() ? [`descarregar ${jogador.carro.carga} caixas roubadas`, 'Descarregar'] : [`dirigindo · ${Math.round(jogador.carro.vel * 3.6)} km/h${jogador.carro.carga ? ` · ${jogador.carro.carga} caixas roubadas` : ''}`, 'Sair'];
   if (jogador.trem) {
     const t = jogador.trem, est = ferrovia.estadoDe(t.li, t.k), dest = ferrovia.nomeParada(ferrovia.linhas[t.li], t.destino);
     if (est?.parado === t.origem) return [`descer do trem (parte para ${dest} em ${Math.ceil(est.resta)} s)`, 'Descer'];
@@ -3186,6 +3361,7 @@ function contexto() {
   if (perto(civico.PREFEITURA.prf, 3.2)) return ['posto da PRF', 'PRF'];
   if (perto(civico.CONCESSIONARIA.balcao, 3.2)) return ['comprar carro', 'Carros'];
   if (meuCarroProximo() && !jogador.carregando) return ['dirigir o seu carro', 'Dirigir'];
+  { const vp = veiculoProximo(); if (vp && !jogador.carregando) return vp.texto; }
   if (agenciaProxima() && !jogador.carregando) return ['pegar uma encomenda para outra cidade', 'Encomenda'];
   if (pertoOficina()) return ['fazer parafusos (3 sucatas = 2 parafusos)', 'Fazer'];
   if (pertoDelegacia()) return [jogador.perfil?.policial ? 'sair do serviço policial' : 'entrar em serviço na polícia', 'Polícia'];
