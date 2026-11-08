@@ -1221,7 +1221,10 @@ async function iniciarJogo(perfil) {
   iniciarLoja({ perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, curar: usarRemedio, vida: () => jogador.vida,
     casaId: () => jogador.dentroCasa || null,
     meuTerreno: () => { const d = casasMundo.get(portaAberta)?.d; return d?.tipo === 'terreno' && d.dono === jogador.perfil.id ? d : null; },
-    portaAtual: () => { const d = casasMundo.get(portaAberta)?.d; return d?.dono === jogador.perfil.id ? d : null; },
+    portaAtual: () => { const d = casasMundo.get(portaAberta)?.d; return moraEm(d) ? d : null; },
+    predioAberto: () => casasMundo.get(portaAberta)?.d || null,
+    unidadesDe: (pai) => casasLista.filter((u) => u.pai === pai).sort((a, b) => a.id - b.id),
+    agora: agoraServidor,
     entrarMoradia: (d) => entrarEmCasa(d),
     casaVendida: () => { tempoSocial = 0; if (jogador.dentroCasa) sairDeCasa(); } });
   iniciarEmpresa({
@@ -1484,7 +1487,7 @@ const interiores = new Map();    // casa -> { base, pontos }
 const SALA = { w: 12, d: 10 };
 function criarInterior(casaId) {
   if (interiores.has(casaId)) return interiores.get(casaId);
-  const bx = 2000 + casaId * 40, bz = 0;
+  const bx = 2000 + interiores.size * 40, bz = 0;          // cada interior numa vaga própria, longe da cidade
   const g = new THREE.Group(); g.position.set(bx, 0, bz); scene.add(g);
   const mat = (cor, r = 0.8) => new THREE.MeshStandardMaterial({ color: cor, roughness: r });
   const caixa = (w, h, d, cor, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(cor)); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
@@ -2093,20 +2096,27 @@ async function carregarCidadeSocial() {
     v.placa.position.set(t.x, 13.5, t.z); scene.add(v.placa);
     if (t.dono_cla && nivelCla >= 5) montarFortaleza(v, t, nivelCla, corDoCla(t.dono_cla));
   }
-  const eu = jogador.perfil.id;
+  const eu = jogador.perfil.id, agoraMs = agoraServidor();
+  const ativo = (u) => u.inquilino && Date.parse(u.pago_ate) > agoraMs;
+  const livresDe = (pai) => cs.filter((u) => u.pai === pai && !u.dono && !ativo(u) && (u.aluguel || u.a_venda)).length;
   for (const c of cs) {
     let v = casasMundo.get(c.id);
-    const chave = `${c.dono}|${c.dono_perfil?.nome}|${c.modelo}`;
+    const chave = `${c.dono}|${c.dono_perfil?.nome}|${c.modelo}|${c.nivel}|${c.tipo === 'terreno' ? livresDe(c.id) : ''}`;
     if (v && v.chave === chave) { v.d = c; continue; }
     if (v) { if (v.placa) scene.remove(v.placa); removerCasaTerreno(v); }
     v = { d: c, chave }; casasMundo.set(c.id, v);
     const minha = c.dono === eu, tipo = c.tipo || 'casa';
-    if (tipo === 'apto') continue;                                 // o prédio tem uma placa só (abaixo)
+    if (tipo === 'apto' || tipo === 'unidade') continue;          // o prédio tem uma placa só
     let texto, fundo = c.dono ? (minha ? 'rgba(30,110,60,.92)' : 'rgba(40,40,40,.85)') : 'rgba(30,90,50,.9)';
-    if (tipo === 'terreno') texto = !c.dono ? `${c.rotulo} à venda · ${num(c.preco)}` : minha ? (c.modelo ? 'Sua casa' : 'Seu terreno · construa aqui') : `${c.modelo ? 'Casa' : 'Terreno'} de ${c.dono_perfil?.nome || '?'}`;
+    const ESTAGIO = ['', 'Casa', 'Casa', 'Condomínio', 'Residencial', 'Torre residencial'];
+    if (tipo === 'terreno' && c.dono && (c.nivel || 1) >= 3) {
+      const l = livresDe(c.id);
+      texto = `${ESTAGIO[c.nivel]} de ${minha ? 'você' : c.dono_perfil?.nome || '?'}${l ? ` · ${l} apto${l > 1 ? 's' : ''} livre${l > 1 ? 's' : ''}` : ''}`;
+      fundo = minha ? 'rgba(30,110,60,.92)' : l ? 'rgba(30,60,90,.9)' : 'rgba(40,40,40,.85)';
+    } else if (tipo === 'terreno') texto = !c.dono ? `${c.rotulo} à venda · ${num(c.preco)}` : minha ? (c.modelo ? 'Sua casa' : 'Seu terreno · construa aqui') : `${c.modelo ? 'Casa' : 'Terreno'} de ${c.dono_perfil?.nome || '?'}`;
     else texto = c.dono ? (minha ? 'Sua casa' : `Casa de ${c.dono_perfil?.nome || '?'}`) : 'Casa à venda · 35.000';
     v.placa = textoSprite(texto, { escala: 0.6, fundo });
-    v.placa.position.set(c.x + 0.5, tipo === 'terreno' ? 3 : 2.4, c.z); scene.add(v.placa);
+    v.placa.position.set(c.x + 0.5, tipo === 'terreno' ? 3 + ((c.nivel || 1) >= 3 ? 1.5 : 0) : 2.4, c.z); scene.add(v.placa);
     if (tipo === 'terreno' && c.modelo) desenharCasaTerreno(v);
   }
   // uma placa por prédio de apartamentos
@@ -2125,9 +2135,11 @@ async function carregarCidadeSocial() {
   }
   const minha = cs.find((c) => c.dono === eu);
   jogador.casa = minha ? { x: minha.x, z: minha.z } : null;
-  jogador.moradias = cs.filter((c) => c.dono === eu).length;
+  jogador.moradias = cs.filter((c) => c.dono === eu || (c.inquilino === eu && ativo(c))).length;
+  casasLista = cs;
 }
-let portaAberta = null;
+let portaAberta = null, casasLista = [];
+const moraEm = (d) => d && (d.dono === jogador.perfil.id || (d.inquilino === jogador.perfil.id && Date.parse(d.pago_ate) > agoraServidor()));
 const placasTorre = new Map();
 const num = (n) => Number(n || 0).toLocaleString('pt-BR');
 // casa construída num terreno (simples, sobrado ou mansão), de frente para a rua
@@ -2153,7 +2165,48 @@ function desenharCasaTerreno(v) {
     const m = new THREE.Mesh(geo, telha); m.scale.set(w + 0.8, 2.4, d + 0.8); m.position.set(x, y + 1.2, z); m.castShadow = true; g.add(m);
   };
   const janelas = (w, d, y, x = 0, z = 0) => { for (const dx of [-w / 3, w / 3]) bloco(vidro, 1.6, 1.3, 0.08, x + dx, y, z + d / 2 + 0.03); };
-  if (c.modelo === 'simples') {
+  const nivel = c.nivel || 1;
+  const concreto = new THREE.MeshStandardMaterial({ color: '#cfc9bd', roughness: 0.85 });
+  const guarda = new THREE.MeshStandardMaterial({ color: '#9fc0d8', roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.45 });
+  // fachada de prédio: andares com janelas, varandas na frente e laje no topo
+  const predio = (w, d, andares, x, z, comVaranda) => {
+    const h = andares * 3.2;
+    bloco(parede, w, h, d, x, h / 2, z);
+    for (let a = 0; a < andares; a++) {
+      const y = a * 3.2 + 1.7;
+      for (let k = 0; k < Math.floor(w / 3); k++) {
+        const wx = x - w / 2 + 1.5 + k * 3 + (w % 3) / 2;
+        bloco(vidro, 1.8, 1.5, 0.08, wx, y, z + d / 2 + 0.03);
+        bloco(vidro, 0.08, 1.5, 1.8, x + w / 2 + 0.03, y, z - d / 2 + 1.5 + (k % Math.max(1, Math.floor(d / 3))) * 3);
+        bloco(vidro, 0.08, 1.5, 1.8, x - w / 2 - 0.03, y, z - d / 2 + 1.5 + (k % Math.max(1, Math.floor(d / 3))) * 3);
+      }
+      if (comVaranda && a > 0) { bloco(concreto, w * 0.8, 0.18, 1.3, x, a * 3.2 + 0.1, z + d / 2 + 0.65); bloco(guarda, w * 0.8, 1.0, 0.06, x, a * 3.2 + 0.7, z + d / 2 + 1.28); }
+    }
+    bloco(concreto, w + 0.5, 0.5, d + 0.5, x, h + 0.25, z);
+    return h;
+  };
+  if (nivel >= 3) {
+    if (nivel === 3) {
+      // condomínio: 4 sobradinhos, muro e portaria
+      for (const [dx, dz] of [[-4.6, -4.8], [4.6, -4.8], [-4.6, 2.2], [4.6, 2.2]]) {
+        bloco(parede, 8, 6.2, 5.6, dx, 3.1, dz); telhado(8, 5.6, 6.2, dx, dz); janelas(8, 5.6, 1.8, dx, dz); janelas(8, 5.6, 4.8, dx, dz);
+        bloco(madeira, 1, 2.1, 0.1, dx, 1.05, dz + 2.85);
+      }
+      for (const sx of [-1, 1]) bloco(concreto, 7.5, 1.6, 0.25, sx * 5.6, 0.8, 8.9);
+      bloco(concreto, 0.25, 1.6, 18, -9.2, 0.8, 0); bloco(concreto, 0.25, 1.6, 18, 9.2, 0.8, 0); bloco(concreto, 18.6, 1.6, 0.25, 0, 0.8, -9);
+      bloco(parede, 2.4, 2.6, 2.4, 3, 1.3, 7.4); bloco(vidro, 1.6, 1, 0.08, 3, 1.8, 8.62);
+    } else {
+      const andares = nivel === 4 ? 4 : 12, h = predio(15, 11.5, andares, 0, -1.5, true);
+      // portaria de vidro com marquise
+      bloco(vidro, 4.5, 2.6, 0.1, 0, 1.3, 4.35);
+      bloco(concreto, 7, 0.25, 3, 0, 3, 5.6);
+      if (nivel === 5) {
+        bloco(telha, 15.6, 2.2, 12.1, 0, h + 1.5, -1.5);                                          // coroa colorida
+        const jardim = new THREE.Mesh(new THREE.BoxGeometry(10, 0.3, 7), new THREE.MeshStandardMaterial({ color: '#5b8c3e', roughness: 1 }));
+        jardim.position.set(0, h + 0.65, -1.5); g.add(jardim);
+      } else bloco(new THREE.MeshStandardMaterial({ color: '#6b7075', roughness: 0.6 }), 3, 2, 3, 4, h + 1.5, -4);   // caixa d'água
+    }
+  } else if (c.modelo === 'simples') {
     bloco(parede, 9, 3.2, 8, 0, 1.6, 0); telhado(9, 8, 3.2); janelas(9, 8, 1.8);
     bloco(madeira, 1.1, 2.2, 0.1, 0, 1.1, 4.05); bloco(madeira, 9, 0.15, 2.2, 0, 2.9, 5);
     for (const dx of [-4.2, 4.2]) bloco(madeira, 0.2, 2.8, 0.2, dx, 1.4, 5.9);
@@ -2171,6 +2224,13 @@ function desenharCasaTerreno(v) {
     piscina.position.set(4.5, 0.06, 5.2); g.add(piscina);
     bloco(new THREE.MeshStandardMaterial({ color: '#e8e2d4', roughness: 0.8 }), 7, 0.08, 4.4, 4.5, 0.03, 5.2).position.y = 0.02;
     for (const dx of [-7.5, 7.5]) { const a = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4, 0), new THREE.MeshStandardMaterial({ color: '#4f7f3a', flatShading: true })); a.position.set(dx, 2.6, 7); a.castShadow = true; g.add(a); bloco(madeira, 0.25, 2, 0.25, dx, 1, 7); }
+  }
+  if (nivel === 2) {
+    // casa ampliada: garagem, muro baixo e jardim
+    bloco(concreto, 18.6, 1.1, 0.2, 0, 0.55, 9);
+    bloco(new THREE.MeshStandardMaterial({ color: '#5d636b', roughness: 0.6 }), 4.4, 2.6, 5.2, -6.6, 1.3, 5.5);
+    const gr = new THREE.Mesh(new THREE.BoxGeometry(8, 0.1, 3), new THREE.MeshStandardMaterial({ color: '#5b8c3e', roughness: 1 })); gr.position.set(3.5, 0.05, 7.2); g.add(gr);
+    g.scale.setScalar(1.06);
   }
   g.position.set(cx, 0.18, cz); g.rotation.y = sz > 0 ? 0 : Math.PI; scene.add(g); g.updateMatrixWorld(true);
   const caixa = new THREE.Box3().setFromObject(g);
@@ -2190,14 +2250,21 @@ function casaProxima(raio) {
 let confirmaCasa = 0;
 // apartamentos do mesmo prédio dividem a porta: escolhe o meu ou o primeiro livre
 function unidadeNaPorta(c) {
+  if (c.tipo === 'terreno' || c.tipo === 'unidade') {
+    const pai = c.tipo === 'unidade' ? c.pai : c.id;
+    const minhaU = casasLista.find((u) => u.pai === pai && moraEm(u));
+    if (minhaU) return minhaU;
+    return casasMundo.get(pai)?.d || c;
+  }
   if (c.tipo !== 'apto') return c;
   const lista = [...casasMundo.values()].map((v) => v.d).filter((d) => d.tipo === 'apto' && d.x === c.x && d.z === c.z);
   return lista.find((d) => d.dono === jogador.perfil.id) || lista.find((d) => !d.dono) || c;
 }
-function nomeMoradia(c) { return c.tipo === 'apto' ? 'apartamento' : c.tipo === 'terreno' ? 'terreno' : 'casa'; }
+function nomeMoradia(c) { return c.tipo === 'apto' || c.tipo === 'unidade' ? 'apartamento' : c.tipo === 'terreno' ? (c.modelo ? 'imóvel' : 'terreno') : 'casa'; }
 async function acaoCasa(c0) {
   const c = unidadeNaPorta(c0);
-  if (c.dono === jogador.perfil.id) { portaAberta = c.id; abrirJanela('porta'); return; }
+  if (moraEm(c)) { portaAberta = c.id; abrirJanela('porta'); return; }
+  if (c.tipo === 'terreno' && c.dono && (c.nivel || 1) >= 3) { portaAberta = c.id; abrirJanela('predio'); return; }
   if (c.dono) { aviso(c.tipo === 'apto' ? 'Prédio lotado: todos os apartamentos têm dono.' : `${nomeMoradia(c)} de ${c.dono_perfil?.nome || 'outro jogador'}. A porta está trancada.`); return; }
   if (jogador.moradias >= 3) { aviso('Você já tem 3 moradias. Para vender uma, toque na porta dela e escolha Vender.', 4); return; }
   if (performance.now() - confirmaCasa > 3000) { confirmaCasa = performance.now(); aviso(`${c.rotulo || 'Casa'} à venda por ${num(c.preco)}. Aperte de novo para comprar.`, 3); return; }
@@ -2240,7 +2307,7 @@ let tempoSocial = 0, tempoCaptura = 0;
 function atualizarSocial(dt) {
   tempoSocial -= dt; tempoCaptura -= dt;
   if (tempoFundoMapa > 0) { tempoFundoMapa -= dt; if (tempoFundoMapa <= 0) desenharFundoMapa(); }
-  if (tempoSocial <= 0) { tempoSocial = 15; carregarCidadeSocial().catch(() => {}); rede.cla.processar().catch(() => {}); }
+  if (tempoSocial <= 0) { tempoSocial = 15; carregarCidadeSocial().catch(() => {}); rede.cla.processar().catch(() => {}); rede.casas.processarAlugueis().catch(() => {}); }
   if (tempoCaptura <= 0) { tempoCaptura = 0.5; atualizarCaptura(); }
 }
 
@@ -2526,8 +2593,9 @@ function contexto() {
   if (pontoProximo(pontos.lotes, 4)) return ['comprar este lote', 'Comprar'];
   const casa = casaProxima(3.2);
   if (casa) {
-    const u = unidadeNaPorta(casa), minha = u.dono === jogador.perfil.id, nm = nomeMoradia(u);
-    if (minha) return [`seu ${nm}: entrar, construir ou vender`, 'Porta'];
+    const u = unidadeNaPorta(casa), minha = moraEm(u), nm = nomeMoradia(u);
+    if (minha) return [u.tipo === 'unidade' ? 'seu apartamento: entrar ou sair' : `seu ${nm}: entrar, evoluir ou vender`, 'Porta'];
+    if (u.tipo === 'terreno' && u.dono && (u.nivel || 1) >= 3) return ['ver apartamentos para alugar ou comprar', 'Aptos'];
     if (u.dono) return [u.tipo === 'apto' ? 'prédio lotado' : `${nm} de ${u.dono_perfil?.nome || '?'}`, 'Casa'];
     return [`comprar ${u.rotulo || 'esta casa'} (${num(u.preco)})`, 'Comprar'];
   }

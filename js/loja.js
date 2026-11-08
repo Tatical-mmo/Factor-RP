@@ -68,25 +68,91 @@ async function desenharBau(c) {
   c.querySelectorAll('[data-tirar]').forEach((b) => { b.onclick = () => executar(() => rede.casas.retirar(casa, b.dataset.tirar, bau[b.dataset.tirar]), 'Na sua mochila.'); });
 }
 
-// porta da sua moradia: entrar, construir (terreno) ou vender
+// porta da sua moradia: entrar, construir/evoluir (terreno), gerenciar apartamentos, sair do aluguel ou vender
 const VALOR_VENDA = { simples: 10000, sobrado: 22500, mansao: 45000 };
-const valorVenda = (c) => (c.tipo === 'apto' ? 8000 : c.tipo === 'terreno' ? 6000 + (VALOR_VENDA[c.modelo] || 0) : 20000);
+const EVOLUIR = [60000, 150000, 350000, 800000];
+const ESTAGIOS = ['', 'Casa', 'Casa ampliada', 'Condomínio (4 aptos)', 'Prédio pequeno (8 aptos)', 'Prédio grande (20 aptos)'];
+const real = (n) => Number(n || 0).toLocaleString('pt-BR');
+function valorVenda(c) {
+  if (c.tipo === 'apto') return 8000;
+  if (c.tipo === 'unidade') return Math.floor((c.preco || 0) / 2);
+  if (c.tipo !== 'terreno') return 20000;
+  let v = 6000 + (VALOR_VENDA[c.modelo] || 0);
+  for (let k = 1; k < (c.nivel || 1); k++) v += EVOLUIR[k - 1] / 2;
+  return v;
+}
+const restaAluguel = (u) => { const ms = Date.parse(u.pago_ate) - ctx.agora(); return ms > 0 ? `${Math.floor(ms / 3600000)} h ${Math.floor((ms % 3600000) / 60000)} min` : 'vencido'; };
 function desenharPorta(c) {
   const m = ctx.portaAtual?.();
   if (!m) { fechar(); return; }
-  const nome = m.tipo === 'apto' ? 'Seu apartamento' : m.tipo === 'terreno' ? (m.modelo ? 'Sua casa (terreno)' : 'Seu terreno') : 'Sua casa';
+  const eu = ctx.perfil().id, inquilino = m.inquilino === eu && m.dono !== eu, nv = m.nivel || 1;
+  const nome = m.tipo === 'unidade' ? (inquilino ? 'Apartamento alugado' : 'Seu apartamento') : m.tipo === 'apto' ? 'Seu apartamento' : m.tipo === 'terreno' ? (m.modelo ? ESTAGIOS[nv] : 'Seu terreno') : 'Sua casa';
   $('janelaTitulo').textContent = m.rotulo || nome;
-  c.innerHTML = `<p class="dica">${nome}. Você pode ter até 3 moradias (casa, apartamento ou terreno). Cada uma tem o seu baú com cama.</p>
+  const podeEvoluir = m.tipo === 'terreno' && m.modelo && nv < 5;
+  c.innerHTML = `<p class="dica">${esc(nome)}. Você pode ter até 3 moradias (contando aluguéis), cada uma com cama e baú.</p>
+    ${inquilino ? `<p class="dica">Aluguel: <b>${real(m.aluguel)}</b> por dia, cobrado sozinho da sua carteira. Pago por mais ${restaAluguel(m)}. Se faltar dinheiro na renovação, você sai e o baú volta para a mochila.</p>` : ''}
     <div class="botoes">${m.tipo !== 'terreno' || m.modelo ? '<button id="pEntrar">Entrar</button>' : ''}
-      ${m.tipo === 'terreno' ? `<button id="pConstruir">${m.modelo ? 'Trocar a casa' : 'Construir a casa'}</button>` : ''}</div>
-    <div class="sub">Vender</div>
-    <p class="dica">Recebe <b>${valorVenda(m).toLocaleString('pt-BR')}</b>. O que estiver no baú volta para a sua mochila.</p>
-    <div class="botoes"><button id="pVender" class="perigo">Vender</button></div>`;
+      ${m.tipo === 'terreno' && nv < 3 ? `<button id="pConstruir">${m.modelo ? 'Trocar a casa' : 'Construir a casa'}</button>` : ''}
+      ${m.tipo === 'terreno' && nv >= 3 ? '<button id="pGerenciar">Apartamentos e aluguéis</button>' : ''}</div>
+    ${podeEvoluir ? `<div class="sub">Evoluir o imóvel</div>
+      <p class="dica">Próximo: <b>${ESTAGIOS[nv + 1]}</b> por ${real(EVOLUIR[nv - 1])}.${nv + 1 >= 3 ? ' Você define o aluguel por dia ou o preço de venda de cada apartamento.' : ''}</p>
+      <div class="botoes"><button id="pEvoluir">Evoluir</button></div>` : ''}
+    <div class="sub">${inquilino ? 'Sair' : 'Vender'}</div>
+    ${inquilino ? '<p class="dica">Ao sair, o que estiver no baú volta para a sua mochila.</p><div class="botoes"><button id="pSair" class="perigo">Sair do aluguel</button></div>'
+      : `<p class="dica">Recebe <b>${real(valorVenda(m))}</b>. O que estiver no baú volta para a sua mochila.${m.tipo === 'terreno' && nv >= 3 ? ' Só dá para vender o prédio sem apartamentos vendidos ou alugados.' : ''}</p>
+         <div class="botoes"><button id="pVender" class="perigo">Vender</button></div>`}`;
   const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
+  const confirmar = (id, fn) => on(id, () => { const b = $(id); if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Toque de novo para confirmar'; return; } fn(); });
   on('pEntrar', () => { fechar(); ctx.entrarMoradia(m); });
   on('pConstruir', () => abrir('terreno'));
-  on('pVender', () => { const b = $('pVender'); if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Toque de novo para confirmar'; return; }
-    executar(() => rede.casas.vender(m.id), (v) => { ctx.casaVendida?.(); fechar(); return `Vendido por ${Number(v).toLocaleString('pt-BR')}.`; }); });
+  on('pGerenciar', () => abrir('gerenciar'));
+  confirmar('pEvoluir', () => executar(() => rede.casas.evoluir(m.id), (n) => { ctx.casaVendida?.(); return `Imóvel evoluiu: ${ESTAGIOS[n]}!`; }));
+  confirmar('pSair', () => executar(() => rede.casas.sairAluguel(m.id), () => { ctx.casaVendida?.(); fechar(); return 'Você saiu do aluguel.'; }));
+  confirmar('pVender', () => executar(() => rede.casas.vender(m.id), (v) => { ctx.casaVendida?.(); fechar(); return `Vendido por ${real(v)}.`; }));
+}
+
+// dono do prédio: aluguel por dia e preço de venda de cada apartamento
+function desenharGerenciar(c) {
+  const p = ctx.portaAtual?.();
+  if (!p || p.tipo !== 'terreno') { fechar(); return; }
+  const us = ctx.unidadesDe(p.id), agora = ctx.agora();
+  $('janelaTitulo').textContent = `${ESTAGIOS[p.nivel]} · apartamentos`;
+  c.innerHTML = `<p class="dica">Deixe o aluguel vazio para não alugar e o preço vazio para não vender. O aluguel cai na sua carteira todo dia; a venda, na hora.</p>
+    <div class="lista">${us.map((u, i) => {
+      const alugado = u.inquilino && Date.parse(u.pago_ate) > agora;
+      const estado = u.dono ? `vendido para ${esc(u.dono_perfil?.nome || '?')}` : alugado ? `alugado por ${esc(u.inquilino_perfil?.nome || '?')} · ${real(u.aluguel)}/dia` : u.aluguel || u.a_venda ? 'disponível' : 'vazio';
+      return `<div class="linha"><b>Apto ${i + 1}</b> <small>${estado}</small>
+        ${u.dono ? '' : `<div class="form linha-form"><input type="number" inputmode="numeric" placeholder="Aluguel/dia" data-al="${u.id}" value="${u.aluguel || ''}">
+          <input type="number" inputmode="numeric" placeholder="Preço de venda" data-pv="${u.id}" value="${u.a_venda ? u.preco : ''}" ${alugado ? 'disabled' : ''}>
+          <button data-salvar="${u.id}">Salvar</button></div>`}</div>`;
+    }).join('')}</div>
+    <div class="botoes"><button id="gVoltar">Voltar</button></div>`;
+  c.querySelectorAll('[data-salvar]').forEach((b) => {
+    b.onclick = () => {
+      const id = Number(b.dataset.salvar), al = Number(c.querySelector(`[data-al="${id}"]`).value) || null, pv = Number(c.querySelector(`[data-pv="${id}"]`).value) || null;
+      executar(() => rede.casas.definirUnidade(id, al, pv), () => { ctx.casaVendida?.(); return 'Apartamento atualizado.'; });
+    };
+  });
+  $('gVoltar').onclick = () => abrir('porta');
+}
+
+// visitante na portaria: apartamentos para alugar ou comprar
+function desenharPredio(c) {
+  const p = ctx.predioAberto?.();
+  if (!p) { fechar(); return; }
+  const us = ctx.unidadesDe(p.id), agora = ctx.agora();
+  const livres = us.filter((u) => !u.dono && !(u.inquilino && Date.parse(u.pago_ate) > agora) && (u.aluguel || u.a_venda));
+  $('janelaTitulo').textContent = `${ESTAGIOS[p.nivel]} de ${p.dono_perfil?.nome || '?'}`;
+  c.innerHTML = `<p class="dica">Moedas: <b>${moedas()}</b>. O aluguel é cobrado por dia, sozinho, enquanto você tiver dinheiro. Você pode ter até 3 moradias.</p>
+    <div class="lista">${livres.length ? livres.map((u) => `<div class="linha item"><span class="nm"><b>Apto ${us.indexOf(u) + 1}</b>
+      <small>${u.aluguel ? `aluguel ${real(u.aluguel)}/dia` : ''}${u.aluguel && u.a_venda ? ' · ' : ''}${u.a_venda ? `venda ${real(u.preco)}` : ''}</small></span>
+      <span class="bts">${u.aluguel ? `<button data-alugar="${u.id}">Alugar</button>` : ''}${u.a_venda ? `<button data-comprar="${u.id}">Comprar</button>` : ''}</span></div>`).join('')
+      : '<span class="vazio">Nenhum apartamento disponível agora.</span>'}</div>`;
+  c.querySelectorAll('[data-alugar]').forEach((b) => { b.onclick = () => executar(() => rede.casas.alugar(Number(b.dataset.alugar)), () => { ctx.casaVendida?.(); fechar(); return 'Apartamento alugado! Toque na portaria para entrar.'; }); });
+  c.querySelectorAll('[data-comprar]').forEach((b) => {
+    b.onclick = () => { if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Confirmar'; return; }
+      executar(() => rede.casas.comprarUnidade(Number(b.dataset.comprar)), () => { ctx.casaVendida?.(); fechar(); return 'Apartamento comprado! Toque na portaria para entrar.'; }); };
+  });
 }
 
 function desenhar() {
@@ -94,6 +160,8 @@ function desenhar() {
   if (modo === 'bau') { desenharBau(c); return; }
   if (modo === 'terreno') { desenharTerreno(c); return; }
   if (modo === 'porta') { desenharPorta(c); return; }
+  if (modo === 'gerenciar') { desenharGerenciar(c); return; }
+  if (modo === 'predio') { desenharPredio(c); return; }
   if (modo === 'loja') {
     $('janelaTitulo').textContent = 'Loja';
     const venda = precos.filter((p) => p.compra != null);

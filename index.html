@@ -100,6 +100,8 @@
   .skin { background:#1b2130; border:2px solid transparent; border-radius:10px; padding:4px; color:var(--texto); cursor:pointer; font-size:11px; }
   .skin.sel { border-color:var(--destaque); } .skin img { width:100%; aspect-ratio:1; object-fit:contain; display:block; }
   .vazio, .dica { color:var(--suave); font-size:13px; }
+  .linha-form { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .linha-form input { width:7.5em; }
   .aviso-item { font-size:13px; background:rgba(227,178,60,.14); border:1px solid rgba(227,178,60,.45); border-radius:8px; padding:6px 9px; margin:6px 0; }
   .modal .msg { min-height:22px; padding:6px 14px 12px; font-size:14px; } .modal .msg.ok { color:var(--verde); } .modal .msg.erro { color:#ff8a7a; }
 
@@ -150,16 +152,16 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261108f",
-  "./js/mundo.js": "./js/mundo.js?v=20261108f",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261108f",
-  "./js/cla.js": "./js/cla.js?v=20261108f",
-  "./js/config.js": "./js/config.js?v=20261108f",
-  "./js/empresa.js": "./js/empresa.js?v=20261108f",
-  "./js/loja.js": "./js/loja.js?v=20261108f",
-  "./js/painel.js": "./js/painel.js?v=20261108f",
-  "./js/rede.js": "./js/rede.js?v=20261108f",
-  "./js/sedes.js": "./js/sedes.js?v=20261108f"
+  "./js/main.js": "./js/main.js?v=20261108g",
+  "./js/mundo.js": "./js/mundo.js?v=20261108g",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261108g",
+  "./js/cla.js": "./js/cla.js?v=20261108g",
+  "./js/config.js": "./js/config.js?v=20261108g",
+  "./js/empresa.js": "./js/empresa.js?v=20261108g",
+  "./js/loja.js": "./js/loja.js?v=20261108g",
+  "./js/painel.js": "./js/painel.js?v=20261108g",
+  "./js/rede.js": "./js/rede.js?v=20261108g",
+  "./js/sedes.js": "./js/sedes.js?v=20261108g"
 } }
 </script>
 </head>
@@ -253,7 +255,7 @@
   <div id="girar"><button class="bt" id="btGiraE">⟲</button><button class="bt" id="btGiraD">⟳</button></div>
 </div>
 
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 08/11 · 3 moradias</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 08/11 · imóveis</div>
 <script type="module">import './js/main.js';</script>
 </body>
 </html>

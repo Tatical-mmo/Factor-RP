@@ -362,6 +362,12 @@ export const casas = {
   retirar: (casa, item, qtd) => rpc('retirar_do_bau', { p_casa: casa, p_item: item, p_qtd: qtd }),
   vender: (casa) => rpc('vender_casa', { p_casa: casa }),
   construir: (casa, modelo) => rpc('construir_casa', { p_casa: casa, p_modelo: modelo }),
+  evoluir: (casa) => rpc('evoluir_imovel', { p_casa: casa }),
+  definirUnidade: (u, aluguel, preco) => rpc('definir_unidade', { p_unidade: u, p_aluguel: aluguel, p_preco: preco }),
+  alugar: (u) => rpc('alugar_unidade', { p_unidade: u }),
+  comprarUnidade: (u) => rpc('comprar_unidade', { p_unidade: u }),
+  sairAluguel: (u) => rpc('sair_aluguel', { p_unidade: u }),
+  processarAlugueis: () => rpc('processar_alugueis'),
 };
 export async function listarBau(casa) {
   const d = await sel(sb.from('bau').select('item, qtd').eq('casa', casa));
@@ -372,4 +378,4 @@ export const listarClas = () => sel(sb.from('clas').select('*, lider_perfil:perf
 export const membrosDoCla = (id) => sel(sb.from('membros_cla').select('jogador, desde, perfil:perfis!membros_cla_jogador_fkey(nome)').eq('cla', id).order('desde'));
 export async function meuClaId(id) { const d = await sel(sb.from('membros_cla').select('cla').eq('jogador', id).maybeSingle()); return d?.cla ?? null; }
 export const listarTerritorios = () => sel(sb.from('territorios').select('*').order('id'));
-export const listarCasas = () => sel(sb.from('casas').select('id, x, z, preco, dono, tipo, rotulo, modelo, dono_perfil:perfis!casas_dono_fkey(nome)').order('id'));
+export const listarCasas = () => sel(sb.from('casas').select('id, x, z, preco, dono, tipo, rotulo, modelo, pai, nivel, inquilino, aluguel, pago_ate, a_venda, dono_perfil:perfis!casas_dono_fkey(nome), inquilino_perfil:perfis!casas_inquilino_fkey(nome)').order('id'));
