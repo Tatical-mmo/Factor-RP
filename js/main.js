@@ -1782,7 +1782,7 @@ function conectarMultiplayer(perfil) {
           const alvo = r.alvo; removerRemoto(id); adicionarRemoto(id, meta).then(() => { const n = remotos.get(id); if (n && alvo && !n.alvo) n.alvo = alvo; });
         } else if (!r) adicionarRemoto(id, meta);
         else {
-          const chave = (m) => [m.crimes, m.policial, m.cla, m.prf, m.eleitoral, m.prefeito, m.profissao, m.ferido, m.recompensa].join('|');
+          const chave = (m) => [m.crimes, m.policial, m.cla, m.prf, m.eleitoral, m.prefeito, m.profissao, m.ferido].join('|');
           if (chave(r.meta) !== chave(meta)) {
             r.meta = meta; etiquetaStatus(r);
             if (meta.ferido && r.av) servicos.chamarAmbulancia(id, { x: r.av.raiz.position.x, z: r.av.raiz.position.z });
@@ -1795,7 +1795,7 @@ function conectarMultiplayer(perfil) {
     },
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
     tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c),
-    dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d),
+    dano: (d) => receberDano(d),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -2073,7 +2073,6 @@ function criarInterior(casaId) {
   return i;
 }
 function entrarEmCasa(c) {
-  if (npcs.some((n) => n.perseguindo) && (jogador.perfil?.crimes || 0) > 0) iniciarCerco(c.x + 2, c.z);
   const i = criarInterior(c.id);
   jogador.dentroCasa = c.id;
   if (jogador.carregando) { scene.remove(jogador.carregando); jogador.carregando = null; }
@@ -2508,7 +2507,7 @@ const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfi
 function metaPresenca() {
   const p = jogador.perfil;
   return { nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
-    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0 };
+    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
 function etiquetaStatus(r) {
@@ -2516,10 +2515,10 @@ function etiquetaStatus(r) {
   if (r.status) { r.av.raiz.remove(r.status); r.status = null; }
   const m = r.meta;
   const inimigo = m.cla && inimigos.has(m.cla);
-  const txt = m.ferido ? '✚ FERIDO' : m.recompensa > 0 ? `🎯 PROCURADO · ${Number(m.recompensa).toLocaleString('pt-BR')}` : inimigo ? `⚔️ INIMIGO [${m.cla}]` : m.crimes > 0 ? `PROCURADO${m.eleitoral ? ' (PRF)' : ''} ${'★'.repeat(Math.min(5, m.crimes))}` : m.prefeito ? '★ PREFEITO ★'
+  const txt = m.ferido ? '✚ FERIDO' : inimigo ? `⚔️ INIMIGO [${m.cla}]` : m.crimes > 0 ? `PROCURADO${m.eleitoral ? ' (PRF)' : ''} ${'★'.repeat(Math.min(5, m.crimes))}` : m.prefeito ? '★ PREFEITO ★'
     : m.policial ? 'POLÍCIA' : m.prf ? 'PRF' : m.profissao === 'medico' ? '✚ MÉDICO' : m.profissao === 'bombeiro' ? '🚒 BOMBEIRO' : m.cla ? `[${m.cla}]` : null;
   if (!txt) return;
-  const fundo = m.ferido ? 'rgba(200,40,40,.95)' : m.recompensa > 0 ? 'rgba(110,0,0,.97)' : inimigo ? 'rgba(140,10,10,.95)' : m.crimes > 0 ? 'rgba(170,30,30,.92)' : m.prefeito ? 'rgba(242,194,48,.95)' : m.policial ? 'rgba(30,70,160,.92)'
+  const fundo = m.ferido ? 'rgba(200,40,40,.95)' : inimigo ? 'rgba(140,10,10,.95)' : m.crimes > 0 ? 'rgba(170,30,30,.92)' : m.prefeito ? 'rgba(242,194,48,.95)' : m.policial ? 'rgba(30,70,160,.92)'
     : m.prf ? 'rgba(20,40,90,.95)' : m.profissao === 'medico' ? 'rgba(240,240,240,.95)' : m.profissao === 'bombeiro' ? 'rgba(200,60,20,.95)' : 'rgba(40,40,40,.85)';
   r.status = textoSprite(txt, { escala: 0.6, cor: m.prefeito || m.profissao === 'medico' && !m.ferido && !inimigo && !(m.crimes > 0) ? '#20160a' : '#ffffff', fundo });
   r.status.position.y = 2.6; r.av.raiz.add(r.status);
@@ -2774,9 +2773,8 @@ function colidirVeiculo(c) {
       const chave = o.pessoa || o.npc;
       if (performance.now() - (atropelados.get(chave) || 0) > 1500) {
         atropelados.set(chave, performance.now());
-        const dano = Math.abs(c.vel) >= 12 ? 100 : Math.round(Math.abs(c.vel) * 6);    // rápido mata na hora
-        if (o.pessoa) { conexao?.enviar('atropelo', { alvo: o.pessoa, v: dano, de: jogador.perfil.id }); rede.combate.agressao(o.pessoa).catch(() => {}); }
-        else acertarPoliciaNPC(o.npc, dano);
+        const dano = Math.min(25, Math.round(Math.abs(c.vel) * 1.8));
+        if (o.pessoa) aplicarDanoRemoto(o.pessoa, dano); else acertarPoliciaNPC(o.npc, dano);
         aviso('💥 Atropelamento!', 1.2); tremor = 0.3;
       }
     }
@@ -2806,7 +2804,6 @@ function policiaNPCReage(n, dt) {
     if (n.caido <= 0) { n.vida = 100; n.hostil = 0; p.set(n.rota[0][0], 0.18, n.rota[0][1]); n.i = 1; n.av.tocar('walk', { velocidade: 0.85 }); }
     n.av.mixer.update(dt); return true;
   }
-  if (policiaPersegue(n, dt)) { n.av.mixer.update(dt); return true; }
   if (n.hostil <= 0) return false;
   n.hostil -= dt;
   const dx = jogador.pos.x - p.x, dz = jogador.pos.z - p.z, d = Math.hypot(dx, dz);
@@ -3027,73 +3024,6 @@ function descerPassageiro() {
   aviso('Você desceu do helicóptero.', 2);
 }
 
-// ---------------------------------------------------------------- muito procurados e perseguição da polícia robô
-let tempoProcurados = 3;
-function atualizarProcurados(dt) {
-  tempoProcurados -= dt;
-  if (tempoProcurados > 0) return;
-  tempoProcurados = 20;
-  rede.recompensas.procurados().then((l) => civico.procuradosNosOutdoors(l)).catch(() => {});
-  // cerco salvo no banco (voltou ao jogo dentro de casa ou perto dela): o robô continua na porta
-  const p = jogador.perfil;
-  if (p?.cerco_ate && Date.parse(p.cerco_ate) > agoraServidor() && npcs[0] && !npcs.some((n) => n.cerco)) {
-    npcs[0].cerco = { x: p.cerco_x, z: p.cerco_z, ate: Date.parse(p.cerco_ate) };
-    npcs[0].av.raiz.position.set(p.cerco_x + 1.5, alturaChao(p.cerco_x, p.cerco_z), p.cerco_z + 1.5);
-  }
-}
-function iniciarCerco(x, z) {
-  const n = npcs.find((k) => k.perseguindo) || npcs[0]; if (!n) return;
-  n.cerco = { x, z, ate: agoraServidor() + 1920000 };
-  rede.recompensas.cercar(x, z).then((ate) => { if (ate) n.cerco.ate = Date.parse(ate); }).catch(() => {});
-  aviso('🚓 Você se escondeu, mas a polícia robô vai ficar esperando na porta (até 1 ciclo).', 4);
-}
-function fimCerco(n) { n.cerco = null; n.perseguindo = false; rede.recompensas.fimCerco().catch(() => {}); n.av.tocar('walk', { velocidade: 0.85 }); }
-// procurado à vista (25 m) é perseguido; alcançado a pé, é preso. Em casa, o robô espera na porta.
-function policiaPersegue(n, dt) {
-  const p = n.av.raiz.position, j = jogador, procurado = (j.perfil?.crimes || 0) > 0 && !j.morto && !(j.pena > 0);
-  if (n.cerco) {
-    if (!procurado || agoraServidor() > n.cerco.ate) { fimCerco(n); return false; }
-    if (j.dentroCasa) {   // espera na porta
-      const dx = n.cerco.x + 1.5 - p.x, dz = n.cerco.z + 1.5 - p.z, d = Math.hypot(dx, dz);
-      if (d > 0.5) { p.x += dx / d * 4 * dt; p.z += dz / d * 4 * dt; n.av.tocar('run'); n.av.raiz.rotation.y = Math.atan2(dx, dz); }
-      else { n.av.tocar('idle'); n.av.raiz.rotation.y = suavizarAngulo(n.av.raiz.rotation.y, Math.atan2(n.cerco.x - p.x, n.cerco.z - p.z), dt * 4); }
-      return true;
-    }
-    n.perseguindo = true; n.cerco = null;     // saiu de casa: a perseguição continua
-  }
-  if (!procurado) { if (n.perseguindo) { n.perseguindo = false; n.av.tocar('walk', { velocidade: 0.85 }); } return false; }
-  if (j.dentroCasa) return n.perseguindo;
-  const dx = j.pos.x - p.x, dz = j.pos.z - p.z, d = Math.hypot(dx, dz);
-  if (!n.perseguindo && d < 25) { n.perseguindo = true; aviso('🚓 A polícia robô viu você! Fuja ou se esconda.', 3); }
-  if (!n.perseguindo) return false;
-  if (d > 70) { n.perseguindo = false; n.av.tocar('walk', { velocidade: 0.85 }); return false; }
-  n.av.raiz.rotation.y = suavizarAngulo(n.av.raiz.rotation.y, Math.atan2(dx, dz), dt * 8);
-  if (d > 1.3) { p.x += dx / d * 4.2 * dt; p.z += dz / d * 4.2 * dt; n.av.tocar('run'); }
-  else if (!j.carro && !j.passageiro && !ocupado) {
-    ocupado = true; n.perseguindo = false;
-    rede.recompensas.presoPorRobo().then((min) => { if (min) aviso(`🚓 A polícia robô te prendeu: ${min} min de pena.`, 4); }).catch((e) => aviso(e.message)).finally(() => { ocupado = false; });
-  }
-  return true;
-}
-
-// atropelado por outro jogador: confere se o veículo dele está mesmo perto
-function receberAtropelo(d) {
-  if (d.alvo !== jogador.perfil?.id || jogador.morto || !jogador.avatar || jogador.dentroCasa) return;
-  if (jogador.perfil.imortal || jogador.pena > 0) return;
-  const r = remotos.get(d.de), pl = r && (r.carro?.position || r.av?.raiz.position);
-  if (!pl || Math.hypot(pl.x - jogador.pos.x, pl.z - jogador.pos.z) > 12) return;
-  if (jogador.carro) sairCarro();
-  jogador.vida -= Math.max(0, Math.min(100, Number(d.v) || 0)); jogador.ultimoAgressor = d.de;
-  desenharFome();
-  if (jogador.vida <= 0) { aviso('Você foi atropelado!', 3); morrerLocal(); }
-  else { aviso('💥 Você foi atropelado!', 2); jogador.trava = 0.6; jogador.avatar.tocar('hit', { umaVez: true, velocidade: 1.2, fade: 0.08 }); }
-}
-// trem em movimento mata quem está no trilho (a pé ou de carro)
-function checarTrem() {
-  const j = jogador;
-  if (j.morto || j.trem || j.dentroCasa || j.passageiro || j.carro?.voa || !j.avatar || j.pena > 0 || j.perfil?.imortal) return;
-  if (ferrovia.atropela(j.pos, j.carro ? 1.2 : 0.35)) { j.vida = 0; j.ultimoAgressor = null; desenharFome(); aviso('🚆 Você foi atropelado pelo trem!', 4); morrerLocal(); }
-}
 function receberDano(d) {
   if (d.alvo !== jogador.perfil?.id || jogador.morto || !jogador.avatar) return;
   if (jogador.perfil.imortal || jogador.pena > 0) return;
@@ -3603,7 +3533,7 @@ function aplicarPerfil(novo) {
   if (novo.prf !== antigo.prf) aviso(novo.prf ? 'Você está em serviço na PRF. Investigue a prefeitura!' : 'Você saiu do serviço da PRF.', 4);
   if (novo.eleitoral && !antigo.eleitoral) aviso('CRIME ELEITORAL comprovado: você perdeu o mandato e está procurado!', 5);
   if (novo.profissao !== antigo.profissao) aviso(novo.profissao === 'medico' ? 'Plantão médico: socorra os feridos (✚) pela cidade. +250 por socorro.' : novo.profissao === 'bombeiro' ? 'Você está em serviço nos bombeiros. Apague os incêndios (🔥). +400 por fogo.' : 'Você saiu do serviço público.', 4);
-  if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome || novo.crimes !== antigo.crimes || novo.policial !== antigo.policial || novo.prf !== antigo.prf || novo.eleitoral !== antigo.eleitoral || novo.profissao !== antigo.profissao || novo.recompensa !== antigo.recompensa) {
+  if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome || novo.crimes !== antigo.crimes || novo.policial !== antigo.policial || novo.prf !== antigo.prf || novo.eleitoral !== antigo.eleitoral || novo.profissao !== antigo.profissao) {
     conexao?.rastrear(metaPresenca());
   }
   if (novo.algemado !== antigo.algemado) {
@@ -3886,7 +3816,7 @@ function quadro() {
   atualizarCeu(agoraServidor() / 1000);
   mundo.atualizar(dt);
   sedes.atualizar(dt);
-  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); checarTrem(); atualizarProcurados(dt); }
+  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); }
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);

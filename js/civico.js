@@ -244,40 +244,10 @@ export function atualizarOutdoors(lista) {
       ctx.colisores.push({ tipo: 'circ', x: o.x - 2.2, z: o.z, r: 0.3 }, { tipo: 'circ', x: o.x + 2.2, z: o.z, r: 0.3 });
       v = { g, placa, chave: null }; outdoors.set(o.id, v);
     }
-    v.o = o; v.chaveNormal = chave;
-    pintarOutdoor(o.id, v);
+    if (v.chave === chave) continue;
+    v.chave = chave;
+    v.placa.material.map?.dispose();
+    const tex = texturaOutdoor(o); v.placa.material.map = tex; v.placa.material.emissiveMap = tex; v.placa.material.needsUpdate = true;
   }
-}
-// muito procurados: os 2 outdoors mais perto de onde cada um foi visto mostram o cartaz
-const cartazes = new Map();     // outdoor -> procurado
-function pintarOutdoor(id, v) {
-  const w = cartazes.get(id), chave = w ? `proc|${w.id}|${w.recompensa}|${w.matancas}` : v.chaveNormal;
-  if (v.chave === chave) return;
-  v.chave = chave;
-  v.placa.material.map?.dispose();
-  const tex = w ? texturaProcurado(w) : texturaOutdoor(v.o); v.placa.material.map = tex; v.placa.material.emissiveMap = tex; v.placa.material.needsUpdate = true;
-}
-function texturaProcurado(w) {
-  const c = document.createElement('canvas'); c.width = 512; c.height = 256;
-  const g = c.getContext('2d');
-  g.fillStyle = '#e9dcb8'; g.fillRect(0, 0, 512, 256);
-  g.strokeStyle = '#5a3a1a'; g.lineWidth = 10; g.strokeRect(6, 6, 500, 244);
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillStyle = '#9a1b12'; g.font = 'bold 54px serif'; g.fillText('PROCURADO', 256, 46);
-  g.fillStyle = '#2a1a0a'; let t = 46; do { g.font = `bold ${t}px sans-serif`; t -= 2; } while (g.measureText(w.nome).width > 470 && t > 18);
-  g.fillText(w.nome, 256, 110);
-  g.font = 'bold 34px sans-serif'; g.fillStyle = '#1f5d1f'; g.fillText(`RECOMPENSA: ${Number(w.recompensa).toLocaleString('pt-BR')}`, 256, 165);
-  g.font = '22px sans-serif'; g.fillStyle = '#3a2a1a'; g.fillText(`${w.matancas} mortes · visto nesta região · vivo ou preso`, 256, 214);
-  const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 4;
-  return tx;
-}
-export function procuradosNosOutdoors(lista) {
-  cartazes.clear();
-  for (const w of lista) {
-    if (w.x == null) continue;
-    [...outdoors.entries()].map(([id, v]) => [id, Math.hypot(v.o.x - w.x, v.o.z - w.z)]).sort((a, b) => a[1] - b[1]).slice(0, 2)
-      .forEach(([id]) => { if (!cartazes.has(id)) cartazes.set(id, w); });
-  }
-  for (const [id, v] of outdoors) if (v.o) pintarOutdoor(id, v);
 }
 export function brilhoOutdoors(noite) { for (const v of outdoors.values()) v.placa.material.emissiveIntensity = 0.15 + noite * 0.6; }
