@@ -4,6 +4,8 @@ import * as rede from './rede.js';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (n) => Number(n || 0).toLocaleString('pt-BR');
+const limCla = (n) => ({ membros: 15 + (n - 1) * 3, robos: 20 + (n - 1) * 5, evoluir: n >= 15 ? null : 15000 * n * (n + 1) / 2 });
+const FASES_CLA = { 5: 'a base ganha muralha', 10: 'a base ganha torres de vigia', 15: 'a base vira uma fortaleza' };
 const CORES = ['#c43b3b', '#3b6fd2', '#2f9e5b', '#c98a1c', '#8a3bc4', '#2a2f3a'];
 
 let ctx = null;
@@ -50,8 +52,10 @@ async function desenhar() {
     }
     const lider = meu.lider === eu;
     const membros = await rede.membrosDoCla(meu.id);
-    $('claTitulo').textContent = meu.nome;
-    c.innerHTML = `<div class="cartoes"><div><small>Caixa</small><b>${num(meu.caixa)}</b></div><div><small>Robôs livres</small><b>${meu.robos}</b></div>
+    $('claTitulo').textContent = `${meu.nome} · Nv ${meu.nivel || 1}`;
+    const nv = meu.nivel || 1, L = limCla(nv), prox = nv + 1;
+    const naDefesa = territorios.filter((t) => t.dono_cla === meu.id).reduce((a, t) => a + (t.defesa || 0), 0);
+    c.innerHTML = `<div class="cartoes"><div><small>Nível</small><b>${nv}</b></div><div><small>Caixa</small><b>${num(meu.caixa)}</b></div><div><small>Robôs</small><b>${meu.robos + naDefesa}/${L.robos}</b></div>
         <div><small>Chocolate roubado</small><b>${meu.chocolate}</b></div><div><small>Remédio roubado</small><b>${meu.remedio}</b></div></div>
       <div class="sub">Caixa do clã</div>
       <div class="botoes"><input id="clValor" type="number" min="1" placeholder="Valor" inputmode="numeric"><button id="clDep">Depositar</button>${lider ? '<button id="clSaq">Sacar</button>' : ''}</div>
@@ -64,8 +68,12 @@ async function desenhar() {
           ? `<button data-def="${t.id}" data-n="1">+1 robô na defesa</button><button data-def="${t.id}" data-n="-1">Recolher 1</button>`
           : `<button data-atk="${t.id}">Atacar com robôs</button>`}</span>` : ''}</div>`).join('')}</div>
       <p class="dica">Para tomar um território, fique com o clã dentro do círculo dele: 60 s, mais 20 s por robô defensor. ${lider ? 'Ou ataque com robôs: vence quem tiver mais força (defensores valem 30% a mais).' : ''}</p>
-      ${lider ? `<div class="botoes"><input id="clAtkN" type="number" min="1" value="${Math.max(1, meu.robos)}" inputmode="numeric"><button id="clRobo">Comprar robô (8.000 do caixa)</button></div>` : ''}
-      <div class="sub">Membros (${membros.length}/15)</div>
+      ${lider ? `<div class="botoes"><input id="clAtkN" type="number" min="1" value="${Math.max(1, meu.robos)}" inputmode="numeric"><button id="clRobo">Comprar robô</button></div><p class="dica" id="clPreco"></p>` : ''}
+      <div class="sub">Nível do clã</div>
+      ${L.evoluir ? `<p class="dica">Nível ${prox}: até ${limCla(prox).membros} membros e ${limCla(prox).robos} robôs${FASES_CLA[prox] ? `; ${FASES_CLA[prox]}` : ''}. Custa ${num(L.evoluir)} do caixa do clã.</p>
+        ${prox % 5 === 0 ? '<p class="aviso-item">🔓 Precisa de 1 <b>Desbloqueio Corporativo</b> na mochila do líder (vende na loja).</p>' : ''}
+        ${lider ? `<div class="botoes"><button id="clEvoluir">Evoluir para o nível ${prox}</button></div>` : ''}` : '<p class="dica">Nível máximo.</p>'}
+      <div class="sub">Membros (${membros.length}/${L.membros})</div>
       ${lider ? '<div class="botoes"><input id="clNome" placeholder="Nome do jogador"><button id="clAdd">Adicionar</button></div>' : ''}
       <div class="lista">${membros.map((m) => `<div class="linha item"><span class="nm"><b>${esc(m.perfil?.nome)}</b><small>${m.jogador === meu.lider ? 'líder' : 'membro'}</small></span>
         <span class="bts">${lider && m.jogador !== meu.lider ? `<button data-exp="${m.jogador}">Expulsar</button>` : ''}</span></div>`).join('')}</div>
@@ -74,6 +82,8 @@ async function desenhar() {
     on('clDep', () => { const v = inteiro('clValor'); if (v > 0) executar(() => rede.cla.depositar(v), `Depositado: ${num(v)}.`); });
     on('clSaq', () => { const v = inteiro('clValor'); if (v > 0) executar(() => rede.cla.sacar(v), `Sacado: ${num(v)}.`); });
     on('clRobo', () => executar(() => rede.cla.comprarRobo(), 'Robô de combate comprado.'));
+    on('clEvoluir', () => executar(() => rede.cla.evoluir(), (n) => `O clã chegou ao nível ${n}!`));
+    if (lider) rede.precoRobo().then((p) => { const el = $('clPreco'); if (el) el.innerHTML = p <= 8000 ? 'Robô de uma fábrica de robôs da cidade: <b>8.000</b>.' : 'Sem estoque nas fábricas de robôs: vem de fora por <b>12.000</b>.'; const b = $('clRobo'); if (b) b.textContent = `Comprar robô (${num(p)})`; }).catch(() => {});
     on('clAdd', () => { const n = $('clNome').value.trim(); if (n) executar(() => rede.cla.adicionar(n), `${n} entrou no clã.`); });
     on('clSair', () => { const b = $('clSair'); if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Toque de novo para sair'; return; } executar(() => rede.cla.sair(), 'Você saiu do clã.'); });
     c.querySelectorAll('[data-ret]').forEach((b) => { b.onclick = () => executar(() => rede.cla.retirar(b.dataset.ret, 1), 'Item na sua mochila.'); });

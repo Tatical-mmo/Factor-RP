@@ -14,8 +14,27 @@ let aba = 'resumo';
 let selecionada = null; // empresa aberta na janela
 let loteCompra = null;
 let mercado = {};
-const LIMITES = { robos: [2, 4, 8], funcionarios: [5, 10, 20], caminhoes: [2, 3, 5], evoluir: [30000, 60000, null] };
-const lim = (e, item) => LIMITES[item][e.nivel - 1];
+let minhasCache = [];
+const filiaisPossiveis = () => minhasCache.filter((e) => e.nivel >= 10 && ctx.lotesDe(e.id).length < unidadesMax(e.nivel));
+// mesmos números da função public.limite no banco
+const LIMITES = {
+  robos: [2, 4, 8, 10, 12, 14, 16, 18, 20, 24, 27, 30, 34, 38, 50],
+  funcionarios: [5, 10, 20, 22, 25, 27, 30, 32, 35, 40, 42, 45, 48, 52, 60],
+  caminhoes: [2, 3, 5, 5, 6, 6, 7, 8, 8, 10, 11, 12, 13, 14, 18],
+};
+const custoEvoluir = (n) => (n >= 15 ? null : 25000 * n * (n + 1) / 2);
+const unidadesMax = (n) => (n >= 15 ? 5 : n >= 10 ? 2 : 1);
+const lim = (e, item) => {
+  if (item === 'evoluir') return custoEvoluir(e.nivel);
+  const v = LIMITES[item][e.nivel - 1];
+  return item === 'caminhoes' && !e.transporte ? Math.ceil(v / 2) : v;
+};
+export const nivelTexto = (n) => `Nv ${n}${n >= 15 ? ' ◆' : n >= 10 ? ' ▲' : n >= 5 ? ' ●' : ''}`;
+const FASES = {
+  5: 'o prédio vira um galpão com docas: os caminhões entram de ré e saem carregados',
+  10: 'vira um complexo industrial com linha de produção e mais docas',
+  15: 'vira uma sede gigante (matriz) com várias docas e pode abrir até 4 filiais',
+};
 const ativos = (e) => e.robos + (e.aluguel_ate && Date.parse(e.aluguel_ate) > Date.now() ? e.robos_alugados : 0);
 const temFrota = (e) => e.transporte || e.nivel >= 3;
 const tipoNome = (e) => e.fabrica && e.transporte ? `Grupo (fábrica de ${PRODUTOS[e.produto].nome.toLowerCase()} + transportadora)`
@@ -47,7 +66,10 @@ async function desenhar() {
   const c = $('empresaConteudo'), abas = $('empresaAbas');
   abas.innerHTML = '';
   try {
-    if (modo === 'comprar') return telaCompra(c);
+    if (modo === 'comprar') {
+      try { const eu = ctx.perfil().id; minhasCache = (await rede.listarEmpresas()).filter((e) => e.dono === eu); } catch { minhasCache = []; }
+      return telaCompra(c);
+    }
     const meuId = ctx.perfil().id;
     const [empresas, emprego] = await Promise.all([rede.listarEmpresas(), rede.minhaEmpresaId(meuId)]);
     ctx.definirEmprego(emprego);
@@ -58,7 +80,7 @@ async function desenhar() {
     const e = opcoes.find((x) => x.id === selecionada);
     let topo = opcoes.length > 1 ? `<div class="chips seletor">${opcoes.map((x) => `<button class="chip ${x.id === selecionada ? 'sel' : ''}" data-emp="${x.id}">${esc(x.nome)}${x.dono === meuId ? '' : ' (emprego)'}</button>`).join('')}</div>` : '';
     if (!e) { $('empresaTitulo').textContent = 'Empresas'; return telaSemEmpresa(c, empresas); }
-    $('empresaTitulo').textContent = `${e.nome} ${'★'.repeat(e.nivel)}`;
+    $('empresaTitulo').textContent = `${e.nome} ${nivelTexto(e.nivel)}`;
     if (e.dono !== meuId) { telaFuncionario(c, e); c.insertAdjacentHTML('afterbegin', topo); ligarSeletor(c); return; }
     const lista = [['resumo', 'Resumo'], ['equipe', 'Funcionários']];
     if (e.fabrica) lista.push(['vendas', 'Vendas'], ['missoes', 'Missões']);
@@ -87,7 +109,7 @@ function telaSemEmpresa(c, empresas) {
   const livres = LOTES_VENDA.length - ctx.lotesOcupados();
   c.innerHTML = `<p class="dica">Você não tem empresa nem emprego. Peça emprego a um dono ou funde a sua: há <b>${livres}</b> lote(s) à venda (placas "Lote à venda" pela cidade). Enquanto isso, as empresas do sistema pagam por entrega na doca.</p>
     <div class="sub">Empresas da cidade</div>
-    <div class="lista">${empresas.length ? empresas.map((e) => `<div class="linha"><b>${esc(e.nome)}</b> <i class="tag">${esc(tipoNome(e))}</i> ${'★'.repeat(e.nivel)}<br>
+    <div class="lista">${empresas.length ? empresas.map((e) => `<div class="linha"><b>${esc(e.nome)}</b> <i class="tag">${esc(tipoNome(e))}</i> ${nivelTexto(e.nivel)}<br>
       <small>Dono: ${esc(e.dono_perfil?.nome || '?')} · paga ${e.pagamento} por tarefa</small></div>`).join('') : '<span class="vazio">Nenhuma ainda. Seja o primeiro!</span>'}</div>`;
 }
 function telaFuncionario(c, e) {
@@ -213,17 +235,29 @@ function telaRobos(c, e) {
   const alugadosAtivos = e.aluguel_ate && Date.parse(e.aluguel_ate) > Date.now() ? e.robos_alugados : 0;
   const custo = lim(e, 'evoluir');
   const funcao = [e.fabrica ? 'Na fábrica, cada robô embala <b>1 caixa a cada 90 s</b> sozinho (acumula até 4 h fora do jogo).' : '',
+    e.produto === 'robo' ? 'Na fábrica de robôs, cada robô monta <b>1 robô a cada 20 min</b>, vendido a empresas e clãs por 8.000 (o dinheiro entra no caixa).' : '',
     temFrota(e) ? 'Na transportadora, cada robô carregador põe <b>+5 caixas</b> em cada caminhão (máximo 60).' : ''].filter(Boolean).join(' ');
-  c.innerHTML = `<div class="cartoes"><div><small>Nível</small><b>${'★'.repeat(e.nivel)}</b></div><div><small>Robôs ativos</small><b>${ativos(e)}/${lim(e, 'robos')}</b></div>
+  const prox = e.nivel + 1, precisaItem = prox % 5 === 0;
+  const velocidade = 100 + (e.nivel - 1) * 15;
+  c.innerHTML = `<div class="cartoes"><div><small>Nível</small><b>${nivelTexto(e.nivel)}</b></div><div><small>Robôs ativos</small><b>${ativos(e)}/${lim(e, 'robos')}</b></div>
       <div><small>Funcionários</small><b>até ${lim(e, 'funcionarios')}</b></div><div><small>Caminhões</small><b>${temFrota(e) ? 'até ' + lim(e, 'caminhoes') : '—'}</b></div></div>
     <p class="dica">${funcao}</p>
     <div class="sub">Robôs</div>
     <p class="dica">Próprios: <b>${e.robos}</b> · alugados: <b>${alugadosAtivos}</b>${alugadosAtivos ? ` (até ${new Date(e.aluguel_ate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})` : ''}</p>
-    <div class="botoes"><button id="rComprar">Comprar robô (8.000)</button><button id="rAlugar">Alugar por 24 h (1.200)</button></div>
+    <p class="dica" id="rPreco">Consultando o preço do robô…</p>
+    <div class="botoes"><button id="rComprar">Comprar robô</button><button id="rAlugar">Alugar por 24 h (1.200)</button></div>
+    ${e.fabrica ? `<p class="dica">Linha de produção a <b>${velocidade}%</b> da velocidade (sobe 15% por nível).</p>` : ''}
     <div class="sub">Evoluir a empresa</div>
-    ${custo ? `<p class="dica">Nível ${e.nivel + 1}: prédio maior, até ${LIMITES.robos[e.nivel]} robôs, ${LIMITES.funcionarios[e.nivel]} funcionários e ${LIMITES.caminhoes[e.nivel]} caminhões${!e.transporte && e.nivel + 1 >= 3 ? ', e a fábrica passa a poder ter caminhões' : ''}.</p>
-      <div class="botoes"><button id="rEvoluir">Evoluir por ${num(custo)}</button></div>` : '<p class="dica">Nível máximo.</p>'}
+    ${custo ? `<p class="dica">Nível ${prox}: até ${LIMITES.robos[e.nivel]} robôs, ${LIMITES.funcionarios[e.nivel]} funcionários e ${!e.transporte ? Math.ceil(LIMITES.caminhoes[e.nivel] / 2) : LIMITES.caminhoes[e.nivel]} caminhões${!e.transporte && prox === 3 ? ' (a fábrica passa a poder ter caminhões)' : ''}${FASES[prox] ? `. Visual novo: ${FASES[prox]}` : ''}.</p>
+      ${precisaItem ? '<p class="aviso-item">🔓 Precisa de 1 <b>Desbloqueio Corporativo</b> na sua mochila (vende na loja por 50.000).</p>' : ''}
+      <div class="botoes"><button id="rEvoluir">Evoluir para o nível ${prox} por ${num(custo)}</button></div>` : '<p class="dica">Nível máximo. Abra filiais pelas placas "Lote à venda".</p>'}
+    ${e.nivel >= 10 ? `<p class="dica">Filiais: ${ctx.lotesDe(e.id).length}/${unidadesMax(e.nivel)} lotes. Para abrir uma, vá até uma placa "Lote à venda".</p>` : ''}
     <p class="dica">Tudo sai do caixa da empresa (${num(e.caixa)}).</p>`;
+  rede.precoRobo(e.id).then((p) => {
+    const el = $('rPreco'); if (!el) return;
+    el.innerHTML = p <= 8000 ? 'Robô de uma <b>fábrica de robôs</b> da cidade: <b>8.000</b>.' : 'Nenhuma fábrica de robôs tem estoque: o robô vem de fora por <b>12.000</b>.';
+    const b = $('rComprar'); if (b) b.textContent = `Comprar robô (${num(p)})`;
+  }).catch(() => {});
   $('rComprar').onclick = () => executar(() => rede.logistica.comprarRobo(e.id), 'Robô comprado! Ele já está trabalhando.');
   $('rAlugar').onclick = () => executar(() => rede.logistica.alugarRobo(e.id), 'Robô alugado por 24 horas.');
   const ev = $('rEvoluir'); if (ev) ev.onclick = () => executar(() => rede.logistica.evoluir(e.id), (n) => `Empresa evoluiu para o nível ${n}!`);
@@ -251,10 +285,18 @@ function telaCompra(c) {
     <div class="form">
       <label>Nome da empresa <input id="cNome" maxlength="24" placeholder="Ex.: Doces do Vale"></label>
       <label>Tipo <select id="cTipo"><option value="fabrica">Fábrica</option><option value="transportadora">Transportadora</option></select></label>
-      <label id="cProdL">Produto <select id="cProd"><option value="chocolate">Chocolate</option><option value="remedio">Remédio</option></select></label>
+      <label id="cProdL">Produto <select id="cProd"><option value="chocolate">Chocolate</option><option value="remedio">Remédio</option><option value="robo">Robôs (vende a empresas e clãs)</option></select></label>
       <button id="cComprar">Comprar lote e fundar empresa</button></div>
+    ${filiaisPossiveis().length ? `<div class="sub">Ou abrir uma filial (nível 10+)</div><div class="form">
+      <label>Empresa <select id="fEmp">${filiaisPossiveis().map((e) => `<option value="${e.id}">${esc(e.nome)} · ${nivelTexto(e.nivel)}</option>`).join('')}</select></label>
+      <button id="fAbrir">Abrir filial aqui (20.000 do caixa da empresa)</button></div>` : ''}
     <p class="dica">A fábrica embala e vende ao mercado ou ao Contratante. A transportadora leva as cargas e ganha o frete. Você pode ter até 5 empresas e fundir as suas depois.</p>`;
   $('cTipo').onchange = () => { $('cProdL').classList.toggle('oculto', $('cTipo').value !== 'fabrica'); };
+  const fa = $('fAbrir');
+  if (fa) fa.onclick = () => {
+    const e = minhasCache.find((x) => x.id === Number($('fEmp').value)); if (!e || !l) return;
+    executar(() => rede.logistica.abrirFilial(e.id, l.id, e.fabrica ? 'fabrica' : 'transportadora'), () => { modo = 'empresa'; aba = 'resumo'; selecionada = e.id; return `Filial da ${e.nome} aberta!`; });
+  };
   $('cComprar').onclick = () => {
     if (!l) return;
     const nome = $('cNome').value.trim(), tipo = $('cTipo').value;

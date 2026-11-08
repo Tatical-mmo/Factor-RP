@@ -84,10 +84,14 @@ export function limitar(p) {
 }
 
 // ---------------------------------------------------------------- materiais
+export const UNI = { uNoite: { value: 0 }, uTerreo: { value: null } };
 function materialMundo(params, modo, esc = [4, 3.5]) {
   const m = new THREE.MeshStandardMaterial(params);
   m.onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vTopo;')
+    sh.uniforms.uNoite = UNI.uNoite; sh.uniforms.uTerreo = UNI.uTerreo;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
+varying float vTopo; varying float vAlt; varying float vLoja;
+${modo === 'fachada' ? 'attribute float aLoja;' : ''}`)
       .replace('#include <project_vertex>', `#include <project_vertex>
   {
     mat4 mM = modelMatrix;
@@ -97,16 +101,42 @@ function materialMundo(params, modo, esc = [4, 3.5]) {
     vec4 wp = mM * vec4(transformed, 1.0);
     vec3 wn = normalize(mat3(mM) * objectNormal);
     vTopo = step(0.5, wn.y);
+    vAlt = wp.y;
+    vLoja = ${modo === 'fachada' ? 'aLoja' : '0.0'};
     #ifdef USE_MAP
     vMapUv = ${modo === 'fachada' ? '(abs(wn.x) > 0.5 ? vec2(wp.z, wp.y) : vec2(wp.x, wp.y))' : 'wp.xz'} / vec2(${esc[0].toFixed(2)}, ${esc[1].toFixed(2)});
     #endif
   }`);
     if (modo === 'fachada') {
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vTopo;')
-        .replace('#include <color_fragment>', '#include <color_fragment>\n  if (vTopo > 0.5) diffuseColor.rgb = vec3(0.33, 0.32, 0.31);');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+varying float vTopo; varying float vAlt; varying float vLoja;
+uniform float uNoite; uniform sampler2D uTerreo;`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+  if (vTopo > 0.5) diffuseColor.rgb = vec3(0.33, 0.32, 0.31);
+  // térreo com vitrines nos prédios
+  float terreoF = (1.0 - vTopo) * vLoja * step(vAlt, 3.55);
+  vec4 terreoTex = vec4(0.0);
+  if (terreoF > 0.5) {
+    terreoTex = texture2D(uTerreo, vMapUv);
+    vec3 tinta = vec3(1.0);
+    #ifdef USE_INSTANCING_COLOR
+    tinta = mix(vec3(1.0), vColor, 0.45);
+    #endif
+    diffuseColor.rgb = terreoTex.rgb * tinta;
+  }`)
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  {
+    // à noite parte das janelas acende (cada janela sorteia a sua)
+    vec4 base = terreoF > 0.5 ? terreoTex : sampledDiffuseColor;
+    float jan = smoothstep(0.04, 0.12, base.b - base.r) * (1.0 - vTopo);
+    float h = fract(sin(dot(floor(vMapUv), vec2(12.9898, 78.233))) * 43758.5453);
+    float acesa = terreoF > 0.5 ? 1.0 : step(0.45, h);
+    vec3 cor = mix(vec3(1.0, 0.76, 0.42), vec3(0.72, 0.84, 1.0), step(0.86, h));
+    totalEmissiveRadiance += jan * acesa * uNoite * cor * (terreoF > 0.5 ? 1.3 : 1.05);
+  }`);
     }
   };
-  m.customProgramCacheKey = () => `mundo-${modo}-${esc.join('x')}`;
+  m.customProgramCacheKey = () => `mundo2-${modo}-${esc.join('x')}`;
   return m;
 }
 
@@ -131,6 +161,26 @@ function criarMateriais() {
     g.strokeStyle = 'rgba(120,112,98,.55)'; g.lineWidth = 2;
     for (let i = 0; i <= n; i++) { g.beginPath(); g.moveTo(i * l, 0); g.lineTo(i * l, t); g.moveTo(0, i * l); g.lineTo(t, i * l); g.stroke(); }
   });
+  UNI.uTerreo.value = T(128, (g, t) => {
+    g.fillStyle = '#e6e1d8'; g.fillRect(0, 0, t, t);
+    g.fillStyle = '#3a3f46'; g.fillRect(0, 0, t, t * 0.16);                 // faixa do letreiro
+    g.fillStyle = '#d8d1c4'; g.fillRect(0, t * 0.16, t, 4);
+    const gr = g.createLinearGradient(0, t * 0.22, 0, t * 0.94); gr.addColorStop(0, '#5b7d99'); gr.addColorStop(1, '#22323f');
+    g.fillStyle = gr; g.fillRect(t * 0.06, t * 0.22, t * 0.88, t * 0.72);
+    g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.moveTo(t * 0.06, t * 0.7); g.lineTo(t * 0.4, t * 0.22); g.lineTo(t * 0.55, t * 0.22); g.lineTo(t * 0.06, t * 0.9); g.fill();
+    g.fillStyle = '#c9c2b4'; g.fillRect(t * 0.48, t * 0.22, 5, t * 0.72);   // montante
+    g.fillStyle = '#9c968c'; g.fillRect(0, t * 0.94, t, t * 0.06);           // rodapé
+  });
+  const ondas = T(256, (g, t) => {
+    const img = g.createImageData(t, t);
+    const alt = (x, y) => Math.sin(x * 0.11 + Math.sin(y * 0.07) * 2) * 0.5 + Math.sin(y * 0.19 + x * 0.05) * 0.35 + Math.sin((x + y) * 0.31) * 0.15;
+    for (let y = 0; y < t; y++) for (let x = 0; x < t; x++) {
+      const dx = alt(x + 1, y) - alt(x - 1, y), dy = alt(x, y + 1) - alt(x, y - 1), i = (y * t + x) * 4;
+      img.data[i] = 128 + dx * 90; img.data[i + 1] = 128 + dy * 90; img.data[i + 2] = 255; img.data[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+  });
+  ondas.colorSpace = THREE.NoColorSpace; ondas.repeat.set(60, 25);
   const grama = T(256, (g, t) => { g.fillStyle = '#7aa357'; g.fillRect(0, 0, t, t); R(g, t, 12000, 0.1, 2, [40, 70, 20]); });
   const campo = T(256, (g, t) => { g.fillStyle = '#86a95c'; g.fillRect(0, 0, t, t); R(g, t, 14000, 0.12, 2.4, [60, 80, 25]); });
   const asfalto = T(256, (g, t) => {
@@ -147,7 +197,7 @@ function criarMateriais() {
     tronco: new THREE.MeshStandardMaterial({ color: '#6b4a2e', roughness: 0.9 }),
     copa: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, flatShading: true }),
     chaoHorizonte: new THREE.MeshStandardMaterial({ color: '#5b5e64', roughness: 0.95 }),
-    agua: new THREE.MeshStandardMaterial({ color: '#3e7ea6', roughness: 0.15, metalness: 0.2 }),
+    agua: new THREE.MeshStandardMaterial({ color: '#3e7ea6', roughness: 0.12, metalness: 0.25, normalMap: ondas, normalScale: new THREE.Vector2(0.6, 0.6) }),
     concreto: new THREE.MeshStandardMaterial({ color: '#b9b3a7', roughness: 0.9 }),
     morro: new THREE.MeshStandardMaterial({ color: '#7d8f63', roughness: 1, flatShading: true }),
   };
@@ -160,9 +210,9 @@ const CORES_PREDIO = ['#efe6d2', '#e4cfb0', '#d9b48f', '#c98f6a', '#bfc5c9', '#a
 const CORES_CASA = ['#f2e3c6', '#e9c9a8', '#cfe0e8', '#e7d2e0', '#f4efe4', '#d8e4c4', '#f0d39b'];
 const CORES_TELHA = ['#a5502f', '#8c3f2a', '#9c5a3c', '#6b5145', '#4f5a63'];
 
-export function predio(x, z, w, d, h, { y = 0.18, cor = escolher(CORES_PREDIO), colide = true, det = true } = {}) {
+export function predio(x, z, w, d, h, { y = 0.18, cor = escolher(CORES_PREDIO), colide = true, det = true, loja = true } = {}) {
   const i = edificios.length;
-  edificios.push({ x, z, w, d, h, y, cor, tipo: 'predio', det: [] });
+  edificios.push({ x, z, w, d, h, y, cor, tipo: 'predio', det: [], loja });
   if (colide) addCol({ tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 });
   for (const k of chaves(x - w / 2, z - d / 2, x + w / 2, z + d / 2)) { if (!gradeEd.has(k)) gradeEd.set(k, []); gradeEd.get(k).push(i); }
   if (det && w > 8) {
@@ -172,7 +222,7 @@ export function predio(x, z, w, d, h, { y = 0.18, cor = escolher(CORES_PREDIO), 
   return i;
 }
 function casa(x, z, w, d, andares, rot, y = 0.18) {
-  const i = predio(x, z, w, d, andares * 3.2, { y, cor: escolher(CORES_CASA), det: false });
+  const i = predio(x, z, w, d, andares * 3.2, { y, cor: escolher(CORES_CASA), det: false, loja: false });
   Object.assign(edificios[i], { tipo: 'casa', rot, telha: escolher(CORES_TELHA) });
   return i;
 }
@@ -206,7 +256,7 @@ function quadra(bx, bz, estilo, faixa = [2, 6], y = 0.18) {
     return;
   }
   if (estilo === 'galpoes') {
-    for (const s of [-1, 1]) predio(bx, bz + s * L / 1.05, meio - 2, L * 0.85, entre(6.5, 9), { y, cor: escolher(['#b9c2c9', '#9fb0bf', '#c9b79c', '#a7a39b']) });
+    for (const s of [-1, 1]) predio(bx, bz + s * L / 1.05, meio - 2, L * 0.85, entre(6.5, 9), { y, cor: escolher(['#b9c2c9', '#9fb0bf', '#c9b79c', '#a7a39b']), loja: false });
     return;
   }
   // 'predios': quatro lotes encostados na calçada
@@ -321,7 +371,9 @@ function matrizDet(dt, visivel = true) {
 function montarMalhas() {
   const { scene } = ctx;
   const caixaBase = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-  malhaPredios = new THREE.InstancedMesh(caixaBase, MAT.fachada, edificios.length);
+  const geoPredio = caixaBase.clone();
+  geoPredio.setAttribute('aLoja', new THREE.InstancedBufferAttribute(new Float32Array(edificios.map((e) => (e.tipo === 'predio' && e.loja !== false ? 1 : 0))), 1));
+  malhaPredios = new THREE.InstancedMesh(geoPredio, MAT.fachada, edificios.length);
   edificios.forEach((e, i) => { malhaPredios.setMatrixAt(i, matrizPredio(e)); malhaPredios.setColorAt(i, _c.set(e.cor)); });
   malhaPredios.castShadow = true; malhaPredios.receiveShadow = true; scene.add(malhaPredios);
 
@@ -475,4 +527,116 @@ export function montar(contexto) {
   montarChaos();
 }
 // chamado depois que a ferrovia acrescentou os prédios dela
-export function finalizar() { montarMalhas(); }
+// ---------------------------------------------------------------- mobiliário urbano: meio-fio, faixas, postes e carros
+const pocas = [];                 // luz dos postes no chão (aparece à noite)
+export function poca(x, z, r = 5) { pocas.push([x, z, r]); }
+let matCabeca = null, matPoca = null;
+
+function cruzamentos(r) {
+  // centros das ruas que cruzam esta
+  const [x, z, , , vert] = r, lista = [];
+  for (const o of ruas) {
+    if (o[4] === vert) continue;
+    const [ox, oz, ow, od] = o;
+    if (vert) { if (x >= ox - ow / 2 - 1 && x <= ox + ow / 2 + 1) lista.push(oz); }
+    else if (z >= oz - od / 2 - 1 && z <= oz + od / 2 + 1) lista.push(ox);
+  }
+  return lista;
+}
+function montarMobiliario() {
+  const { scene } = ctx;
+  // meio-fio em volta das calçadas
+  const fios = [];
+  for (const [x, z, w, d, y] of calcadas) {
+    if (y < 0.15) continue;
+    fios.push([x, z - d / 2 + 0.15, w, 0.3, y], [x, z + d / 2 - 0.15, w, 0.3, y], [x - w / 2 + 0.15, z, 0.3, d, y], [x + w / 2 - 0.15, z, 0.3, d, y]);
+  }
+  const mf = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: '#a19b90', roughness: 0.85 }), fios.length);
+  fios.forEach(([x, z, w, d, y], k) => { _m.compose(_v.set(x, (y + 0.03) / 2, z), _q.identity(), _e.set(w, y + 0.03, d)); mf.setMatrixAt(k, _m); });
+  mf.receiveShadow = true; scene.add(mf);
+
+  const faixas = [], postes = [], carros = [];
+  for (const r of ruas) {
+    const [x, z, w, d, vert] = r, cr = cruzamentos(r);
+    const a = vert ? z - d / 2 : x - w / 2, b = vert ? z + d / 2 : x + w / 2, c = vert ? x : z;
+    const longe = (t, m) => cr.every((q) => Math.abs(q - t) > m);
+    const ponto = (t, lat) => (vert ? [c + lat, t] : [t, c + lat]);
+    for (let t = a + 4; t < b - 2; t += 6) if (longe(t, RW / 2 + 2)) faixas.push([...ponto(t, 0), vert]);
+    let lado = 1;
+    for (let t = a + 8; t < b - 6; t += 27) {
+      if (!longe(t, RW / 2 + 3)) continue;
+      const [px, pz] = ponto(t, lado * (RW / 2 + 0.9));
+      postes.push([px, pz, vert ? (lado > 0 ? -Math.PI / 2 : Math.PI / 2) : (lado > 0 ? Math.PI : 0)]);
+      const [qx, qz] = ponto(t, lado * (RW / 2 - 1.6)); poca(qx, qz, 5.5);
+      lado = -lado;
+    }
+    for (let t = a + 6; t < b - 6; t += 6.5) {
+      if (rnd() > 0.3 || !longe(t, RW / 2 + 5)) continue;
+      const lat = (rnd() < 0.5 ? -1 : 1) * (RW / 2 - 1.15);
+      const [px, pz] = ponto(t, lat);
+      carros.push([px, pz, vert ? (lat > 0 ? 0 : Math.PI) : (lat > 0 ? Math.PI / 2 : -Math.PI / 2)]);
+    }
+  }
+  // faixas tracejadas
+  const fx = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#ece4c8', roughness: 0.8 }), faixas.length);
+  faixas.forEach(([x, z, vert], k) => { _m.compose(_v.set(x, 0.022, z), _q.identity(), _e.set(vert ? 0.22 : 3, 1, vert ? 3 : 0.22)); fx.setMatrixAt(k, _m); });
+  fx.receiveShadow = true; scene.add(fx);
+  // postes
+  const matPoste = new THREE.MeshStandardMaterial({ color: '#33383f', roughness: 0.5, metalness: 0.5 });
+  matCabeca = new THREE.MeshStandardMaterial({ color: '#f4efe0', emissive: '#ffd89a', emissiveIntensity: 0, roughness: 0.4 });
+  const haste = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.08, 0.11, 5.2, 7).translate(0, 2.6, 0), matPoste, postes.length);
+  const braco = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 0.08, 1.7).translate(0, 5.1, 0.8), matPoste, postes.length);
+  const cabeca = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.16, 0.7).translate(0, 5.0, 1.55), matCabeca, postes.length);
+  postes.forEach(([x, z, rot], k) => {
+    _q.setFromAxisAngle(_e.set(0, 1, 0), rot); _m.compose(_v.set(x, 0.18, z), _q, _e.set(1, 1, 1));
+    haste.setMatrixAt(k, _m); braco.setMatrixAt(k, _m); cabeca.setMatrixAt(k, _m);
+    addCol({ tipo: 'circ', x, z, r: 0.2 });
+  });
+  haste.castShadow = true; scene.add(haste, braco, cabeca);
+  // luz dos postes no chão
+  const tl = ctx.texturaCanvas(128, (g, t) => {
+    g.clearRect(0, 0, t, t);
+    const gr = g.createRadialGradient(t / 2, t / 2, 0, t / 2, t / 2, t / 2);
+    gr.addColorStop(0, 'rgba(255,214,150,1)'); gr.addColorStop(0.45, 'rgba(255,190,120,.45)'); gr.addColorStop(1, 'rgba(255,170,90,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, t, t);
+  });
+  tl.wrapS = tl.wrapT = THREE.ClampToEdgeWrapping;
+  matPoca = new THREE.MeshBasicMaterial({ map: tl, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
+  const pc = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), matPoca, pocas.length);
+  pocas.forEach(([x, z, r], k) => { _m.compose(_v.set(x, 0.21, z), _q.identity(), _e.set(r * 2, 1, r * 2)); pc.setMatrixAt(k, _m); });
+  pc.renderOrder = 2; pc.visible = false; scene.add(pc); matPoca.userData.malha = pc;
+  // carros estacionados
+  const corpo = new THREE.BoxGeometry(1.8, 0.62, 4.2).translate(0, 0.62, 0);
+  const cabine = new THREE.BoxGeometry(1.58, 0.58, 2.1).translate(0, 1.2, -0.25);
+  const rodaG = []; for (const sx of [-0.86, 0.86]) for (const sz of [-1.35, 1.35]) rodaG.push(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 12).rotateZ(Math.PI / 2).translate(sx, 0.34, sz).toNonIndexed());
+  const rodas = mergeSimples(rodaG);
+  const ic = new THREE.InstancedMesh(corpo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.3, metalness: 0.45 }), carros.length);
+  const iv = new THREE.InstancedMesh(cabine, new THREE.MeshStandardMaterial({ color: '#1d2730', roughness: 0.1, metalness: 0.6 }), carros.length);
+  const ir = new THREE.InstancedMesh(rodas, new THREE.MeshStandardMaterial({ color: '#1b1c1f', roughness: 0.8 }), carros.length);
+  const coresCarro = ['#c0392b', '#2c3e50', '#ecf0f1', '#7f8c8d', '#2980b9', '#16a085', '#f1c40f', '#8e44ad', '#d35400', '#1f1f1f', '#bdc3c7'];
+  carros.forEach(([x, z, rot], k) => {
+    _q.setFromAxisAngle(_e.set(0, 1, 0), rot); _m.compose(_v.set(x, 0.02, z), _q, _e.set(1, 1, 1));
+    ic.setMatrixAt(k, _m); iv.setMatrixAt(k, _m); ir.setMatrixAt(k, _m); ic.setColorAt(k, _c.set(escolher(coresCarro)));
+    const vert = Math.abs(Math.sin(rot)) < 0.5;
+    addCol({ tipo: 'caixa', x0: x - (vert ? 0.95 : 2.15), x1: x + (vert ? 0.95 : 2.15), z0: z - (vert ? 2.15 : 0.95), z1: z + (vert ? 2.15 : 0.95) });
+  });
+  for (const m of [ic, iv, ir]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
+}
+function mergeSimples(lista) {
+  let n = 0; for (const g of lista) n += g.attributes.position.count;
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3); let o = 0;
+  for (const g of lista) { pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3); o += g.attributes.position.count; }
+  const r = new THREE.BufferGeometry(); r.setAttribute('position', new THREE.BufferAttribute(pos, 3)); r.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); return r;
+}
+
+// noite: 0 = dia claro, 1 = noite fechada
+export function definirNoite(n) {
+  UNI.uNoite.value = n;
+  if (matCabeca) matCabeca.emissiveIntensity = n * 2.2;
+  if (matPoca) { matPoca.opacity = n * 0.6; matPoca.userData.malha.visible = n > 0.02; }
+}
+export function atualizar(dt) {
+  if (MAT?.agua.normalMap) { MAT.agua.normalMap.offset.x += dt * 0.004; MAT.agua.normalMap.offset.y += dt * 0.0025; }
+}
+
+export function finalizar() { montarMobiliario(); montarMalhas(); }

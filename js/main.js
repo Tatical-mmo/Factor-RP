@@ -14,6 +14,8 @@ const TOQUE = window.matchMedia('(pointer: coarse)').matches;
 import * as rede from './rede.js';
 import * as mundo from './mundo.js';
 import * as ferrovia from './ferrovia.js';
+import * as sedes from './sedes.js';
+import { nivelTexto } from './empresa.js';
 import { iniciarPainel, atualizarBotao } from './painel.js';
 
 // ================================================================= CONTA E PERFIL
@@ -116,6 +118,38 @@ sol.shadow.bias = -0.0004;
 sol.shadow.normalBias = 0.03;
 scene.add(sol, sol.target);
 const SOL_DIR = new THREE.Vector3(-0.55, 1, 0.35).normalize();
+
+// ---------------------------------------------------------------- dia e noite (igual para todos, pelo relógio do servidor)
+const CICLO_DIA = 32 * 60;                   // um dia do jogo = 32 minutos (22 de dia, 10 de noite)
+const HORA_FIXA = (location.search.match(/[?&]hora=(\d+(?:\.\d+)?)/) || [])[1];   // ?hora=22 para testar
+const CEU = {
+  dia: new THREE.Color('#a9c8de'), noite: new THREE.Color('#0d1730'), tarde: new THREE.Color('#e8a27a'),
+  sol: new THREE.Color('#fff2dc'), solTarde: new THREE.Color('#ffae6a'), lua: new THREE.Color('#9fb4ff'),
+  hemiDia: new THREE.Color('#dfeeff'), hemiNoite: new THREE.Color('#4a5f92'), chaoDia: new THREE.Color('#8a7457'), chaoNoite: new THREE.Color('#2a2833'),
+};
+let horaAtual = 12;
+function horaDoJogo(t) {
+  if (HORA_FIXA !== undefined) return Number(HORA_FIXA) % 24;
+  const f = ((t / CICLO_DIA) % 1 + 1) % 1;
+  return f < 0.7 ? 6 + f / 0.7 * 12 : (18 + (f - 0.7) / 0.3 * 12) % 24;
+}
+function atualizarCeu(t) {
+  const h = horaDoJogo(t); horaAtual = h;
+  const ang = (h - 6) / 12 * Math.PI, elev = Math.sin(ang);
+  const S = THREE.MathUtils.smoothstep;
+  const dia = S(elev, -0.12, 0.22), tarde = dia * (1 - S(elev, 0.05, 0.45));
+  if (dia > 0.02) SOL_DIR.set(Math.cos(ang) * 0.9, Math.max(0.2, elev), 0.35).normalize();
+  else SOL_DIR.set(0.45, 1, -0.4).normalize();              // luz da lua
+  sol.color.copy(CEU.lua).lerp(CEU.sol, dia).lerp(CEU.solTarde, tarde * 0.75);
+  sol.intensity = 0.3 + 1.8 * dia;
+  hemi.intensity = 0.4 + 0.9 * dia;
+  hemi.color.copy(CEU.hemiNoite).lerp(CEU.hemiDia, dia);
+  hemi.groundColor.copy(CEU.chaoNoite).lerp(CEU.chaoDia, dia);
+  scene.environmentIntensity = 0.12 + 0.43 * dia;
+  scene.background.copy(CEU.noite).lerp(CEU.dia, dia).lerp(CEU.tarde, tarde * 0.5);
+  mundo.definirNoite(1 - S(elev, -0.02, 0.3));
+}
+const textoHora = () => `${String(Math.floor(horaAtual)).padStart(2, '0')}:${String(Math.floor((horaAtual % 1) * 60)).padStart(2, '0')}`;
 
 // Câmera isométrica
 const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 600);
@@ -351,6 +385,7 @@ function colocarArvore(x, z, s = 1) {
 }
 function colocarPoste(x, z, rot) {
   const p = clonar('poste'); p.position.set(x, 0.18, z); p.rotation.y = rot; scene.add(p);
+  mundo.poca(x, z, 5);
   colisores.push({ tipo: 'circ', x, z, r: 0.3 });
 }
 function colocarCaixa(x, z, rot = 0) {
@@ -1135,6 +1170,7 @@ async function iniciarJogo(perfil) {
   await Promise.all(carregamentos);
   montarQuarteiroes();
   montarPlacasRuas();
+  sedes.iniciar({ scene, texturaCanvas });
   mundo.montar({ scene, texturaCanvas, ruido, textoSprite });
   ferrovia.montar({ scene, textoSprite });
   mundo.finalizar();
@@ -1351,6 +1387,7 @@ function centroLote(l) {
 function limparLote(id) {
   const v = visuaisLote.get(id); if (!v) return;
   for (const o of v.objs) scene.remove(o);
+  v.sede?.remover();
   if (v.predio) { const i = predios.indexOf(v.predio); if (i >= 0) predios.splice(i, 1); }
   for (const c of v.colisores || []) { const i = colisores.indexOf(c); if (i >= 0) colisores.splice(i, 1); }
   for (const it of v.mapa || []) { const i = itensMapa.indexOf(it); if (i >= 0) itensMapa.splice(i, 1); }
@@ -1376,6 +1413,7 @@ function desenharLote(l) {
   }
   const fabrica = u.funcao === 'fabrica';
   const modelo = fabrica ? 'empresa' : 'transportadora';
+  if (sedes.fase(e.nivel) >= 1) { desenharSede(l, e, u, v, fabrica, modelo); return; }
   const obj = colocarPredio(modelo, x, z, 0);
   // prédio um pouco menor para sobrar pátio atrás (estacionamento) e corredor na lateral
   obj.scale.setScalar(0.85 * (1 + (e.nivel - 1) * 0.04)); obj.updateMatrixWorld(true);
@@ -1388,9 +1426,27 @@ function desenharLote(l) {
   const it = { tipo: modelo, x0: pr.caixa.min.x, x1: pr.caixa.max.x, z0: pr.caixa.min.z, z1: pr.caixa.max.z };
   itensMapa.push(it);
   v.objs.push(obj); v.predio = pr; v.colisores.push(colisores[colisores.length - 1]); v.mapa.push(it);
-  const nome = textoSprite(`${e.nome} ${'★'.repeat(e.nivel)}`, { escala: 1, cor: '#ffd9a0', fundo: 'rgba(20,24,34,.85)' });
+  const nome = textoSprite(`${e.nome} · ${nivelTexto(e.nivel)}`, { escala: 1, cor: '#ffd9a0', fundo: 'rgba(20,24,34,.85)' });
   nome.position.set(x, pr.caixa.max.y + 1.2, z); scene.add(nome); v.objs.push(nome);
-  const bx = x - LOTE_L / 2 + 1.1, bz = z + 4;
+  extrasDoLote(l, e, v, fabrica, x - LOTE_L / 2 + 1.1, z + 4);
+}
+// prédio por fase (níveis 5, 10 e 15): galpão com docas, complexo industrial ou sede gigante
+function desenharSede(l, e, u, v, fabrica, modelo) {
+  const { x, z } = centroLote(l);
+  const sd = sedes.construir({ x, z, nivel: e.nivel, fabrica, id: e.id, nome: e.nome, corProduto: PRODUTOS[e.produto]?.cor || '#c9a06a' });
+  v.sede = sd; v.docas = sd.docas;
+  const pr = { obj: sd.grupo, caixa: sd.caixa, mats: sd.mats, opac: 1 };
+  predios.push(pr); v.predio = pr;
+  const col = { tipo: 'caixa', x0: sd.caixa.min.x + 0.2, x1: sd.caixa.max.x - 0.2, z0: sd.caixa.min.z + 0.2, z1: sd.caixa.max.z - 0.2 };
+  colisores.push(col); v.colisores.push(col);
+  const it = { tipo: modelo, x0: sd.caixa.min.x, x1: sd.caixa.max.x, z0: sd.caixa.min.z, z1: sd.caixa.max.z };
+  itensMapa.push(it); v.mapa.push(it);
+  const nome = textoSprite(`${e.nome} · ${nivelTexto(e.nivel)}`, { escala: 1.1, cor: '#ffd9a0', fundo: 'rgba(20,24,34,.88)' });
+  nome.position.set(x, Math.min(sd.topo, sd.altura + 6) + 1.4, z + 3); scene.add(nome); v.objs.push(nome);
+  extrasDoLote(l, e, v, fabrica, x - 6, z + LOTE_L / 2 + 1.4);
+}
+// bancada, estoque, depósito e robôs andando (igual em todas as fases)
+function extrasDoLote(l, e, v, fabrica, bx, bz) {
   if (fabrica) {
     const banc = clonar('bancada'); banc.position.set(bx, 0.18, bz); scene.add(banc); banc.updateMatrixWorld(true);
     addColisorCaixa(banc, 0.1); v.objs.push(banc); v.colisores.push(colisores[colisores.length - 1]);
@@ -1561,6 +1617,19 @@ function vagasDaEmpresa(id) {
     const l = LOTES_VENDA.find((x) => x.id === loteId); if (!l) continue;
     const { x, z } = centroLote(l), zb = z - LOTE_L / 2;
     const corredor = x + LOTE_L / 2 - 1.6, rua = l.portao.z + 2.6;
+    const docas = visuaisLote.get(loteId)?.docas;
+    if (docas?.length) {
+      // docas: o caminhão entra de ré e sai de frente (carregado)
+      const patio = zb + 2.2;
+      for (const d of docas) {
+        const desvio = Math.min(d.x + 4.5, corredor);
+        const entrada = [{ x: corredor, z: rua }, { x: corredor, z: patio }];
+        if (desvio < corredor - 0.5) entrada.push({ x: desvio, z: patio });
+        entrada.push({ x: d.x, z: d.z - 1.6, re: true }, { x: d.x, z: d.z, re: true });
+        fundo.push({ x: d.x, z: d.z, ang: Math.PI, fundo: true, entrada, saida: [{ x: d.x, z: patio }, { x: corredor, z: patio }, { x: corredor, z: rua }], corredor, rua });
+      }
+      continue;
+    }
     for (const [dx, dz] of [[-4, 1.8], [3.2, 1.8], [-4, 4.6], [3.2, 4.6]]) fundo.push({ x: x + dx, z: zb + dz, ang: Math.PI / 2, fundo: true, corredor, rua });
     for (const dx of [-4.5, 3.5]) frente.push({ x: x + dx, z: rua, ang: Math.PI / 2, fundo: false, corredor, rua });
   }
@@ -1569,15 +1638,18 @@ function vagasDaEmpresa(id) {
 function posicaoEstacionado(c) {
   const vagas = vagasDaEmpresa(c.d.empresa); if (!vagas.length) return null;
   const meus = [...caminhoes.values()].filter((k) => k.d.empresa === c.d.empresa && k.d.status === 'parado').map((k) => k.d.id).sort((a, b) => a - b);
-  return vagas[Math.min(vagas.length - 1, Math.max(0, meus.indexOf(c.d.id)))];
+  const i = Math.max(0, meus.indexOf(c.d.id));
+  if (i >= vagas.length) return { garagem: true };          // sem vaga livre: fica guardado (não aparece)
+  return vagas[i];
 }
 // manobra: segue uma lista de pontos a 6 m/s (entrar e sair do pátio pelo corredor)
 function andarManobra(c, dt) {
   const m = c.manobra, alvo = m.pts[m.i], p = c.obj.position;
-  const dx = alvo.x - p.x, dz = alvo.z - p.z, d = Math.hypot(dx, dz), passo = 6 * dt;
+  const dx = alvo.x - p.x, dz = alvo.z - p.z, d = Math.hypot(dx, dz), passo = (alvo.re ? 3 : 6) * dt;
   if (d <= passo) { p.x = alvo.x; p.z = alvo.z; m.i++; if (m.i >= m.pts.length) { c.naFundo = m.fimFundo; c.manobra = null; } return; }
   p.x += dx / d * passo; p.z += dz / d * passo;
-  c.obj.rotation.y = suavizarAngulo(c.obj.rotation.y, Math.atan2(dx, dz), dt * 8);
+  // de ré: a frente aponta para o lado contrário do movimento
+  c.obj.rotation.y = suavizarAngulo(c.obj.rotation.y, alvo.re ? Math.atan2(-dx, -dz) : Math.atan2(dx, dz), dt * 6);
 }
 
 function atualizarRobos(dt) {
@@ -1629,15 +1701,17 @@ function atualizarCaminhoes(dt) {
     const estacionado = !alvo;
     if (!alvo) alvo = posicaoEstacionado(c);
     if (!alvo) continue;
+    if (alvo.garagem) { c.obj.visible = false; if (c.escolta) c.escolta.visible = false; c.posicionado = false; c.manobra = null; continue; }
+    c.obj.visible = true; if (c.escolta) c.escolta.visible = true;
     if (!c.posicionado) { c.obj.position.set(alvo.x, 0.02, alvo.z); c.obj.rotation.y = alvo.ang || 0; c.posicionado = true; c.naFundo = !!alvo.fundo; c.vaga = alvo; }
     if (estacionado) c.vaga = alvo;
     // saindo do pátio para viajar: corredor lateral até a rua
     if (!estacionado && c.naFundo && !c.manobra && c.vaga) {
-      c.manobra = { i: 0, fimFundo: false, pts: [{ x: c.vaga.corredor, z: c.vaga.z }, { x: c.vaga.corredor, z: c.vaga.rua }] };
+      c.manobra = { i: 0, fimFundo: false, pts: c.vaga.saida || [{ x: c.vaga.corredor, z: c.vaga.z }, { x: c.vaga.corredor, z: c.vaga.rua }] };
     }
     // voltando para a vaga do pátio: entra pelo corredor
     if (estacionado && alvo.fundo && !c.naFundo && !c.manobra && Math.hypot(alvo.x - c.obj.position.x, alvo.z - c.obj.position.z) > 1) {
-      c.manobra = { i: 0, fimFundo: true, pts: [{ x: alvo.corredor, z: alvo.rua }, { x: alvo.corredor, z: alvo.z }, { x: alvo.x, z: alvo.z }] };
+      c.manobra = { i: 0, fimFundo: true, pts: alvo.entrada || [{ x: alvo.corredor, z: alvo.rua }, { x: alvo.corredor, z: alvo.z }, { x: alvo.x, z: alvo.z }] };
     }
     if (c.manobra) { andarManobra(c, dt); continue; }
     c.obj.position.x += (alvo.x - c.obj.position.x) * Math.min(1, dt * 8);
@@ -1942,6 +2016,53 @@ const casasMundo = new Map();    // id -> { d, placa }
 let captura = null;              // { id, fim }
 function corDoCla(id) { return clasCache.get(id)?.cor || '#888888'; }
 const clasCache = new Map();
+// ---------------------------------------------------------------- base do clã cresce com o nível: muralha (5), torres (10), fortaleza (15)
+function removerFortaleza(v) {
+  if (!v.forte) return;
+  scene.remove(v.forte.g);
+  for (const c of v.forte.cols) { const i = colisores.indexOf(c); if (i >= 0) colisores.splice(i, 1); }
+  v.forte = null;
+}
+function montarFortaleza(v, t, nivel, cor) {
+  const g = new THREE.Group(), cols = [], R = 18.5, f = nivel >= 15 ? 3 : nivel >= 10 ? 2 : 1;
+  const pedra = new THREE.MeshStandardMaterial({ color: '#8d8a83', roughness: 0.9 });
+  const corM = new THREE.MeshStandardMaterial({ color: cor, roughness: 0.6 });
+  const H = f === 3 ? 4.2 : 2.6;
+  const portao = Math.atan2(0, -Math.sign(t.x));               // o portão fica virado para a cidade
+  const N = 12;
+  for (let k = 0; k < N; k++) {
+    const a0 = (k / N) * Math.PI * 2, a1 = ((k + 1) / N) * Math.PI * 2, am = (a0 + a1) / 2;
+    if (Math.abs(Math.atan2(Math.sin(am - portao), Math.cos(am - portao))) < 0.3) continue;
+    const x0 = Math.cos(a0) * R, z0 = Math.sin(a0) * R, x1 = Math.cos(a1) * R, z1 = Math.sin(a1) * R, len = Math.hypot(x1 - x0, z1 - z0);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(len + 0.3, H, 0.9), pedra);
+    m.position.set((x0 + x1) / 2, H / 2, (z0 + z1) / 2); m.rotation.y = -Math.atan2(z1 - z0, x1 - x0); m.castShadow = true; m.receiveShadow = true; g.add(m);
+    const faixa = new THREE.Mesh(new THREE.BoxGeometry(len + 0.32, 0.35, 0.95), corM); faixa.position.set(m.position.x, H - 0.2, m.position.z); faixa.rotation.y = m.rotation.y; g.add(faixa);
+    if (f === 3) for (let q = -len / 2 + 0.6; q < len / 2; q += 1.4) {
+      const ameia = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 1), pedra);
+      ameia.position.set(m.position.x + Math.cos(-m.rotation.y) * q, H + 0.35, m.position.z + Math.sin(-m.rotation.y) * q); ameia.rotation.y = m.rotation.y; ameia.castShadow = true; g.add(ameia);
+    }
+    for (let q = 0; q <= 1; q += 0.1) cols.push({ tipo: 'circ', x: t.x + x0 + (x1 - x0) * q, z: t.z + z0 + (z1 - z0) * q, r: 0.65 });
+  }
+  if (f >= 2) {
+    const nt = f === 3 ? 8 : 4;
+    for (let k = 0; k < nt; k++) {
+      const a = portao + Math.PI / nt + (k / nt) * Math.PI * 2, x = Math.cos(a) * R, z = Math.sin(a) * R, th = f === 3 ? 9 : 6.5;
+      const torre = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.5, th, 10), pedra); torre.position.set(x, th / 2, z); torre.castShadow = true; g.add(torre);
+      const teto = new THREE.Mesh(new THREE.ConeGeometry(1.8, 2.4, 10), corM); teto.position.set(x, th + 1.2, z); teto.castShadow = true; g.add(teto);
+      cols.push({ tipo: 'circ', x: t.x + x, z: t.z + z, r: 1.5 });
+    }
+  }
+  if (f === 3) {
+    // mastro com a bandeira do clã no centro
+    const mastro = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 16, 8), new THREE.MeshStandardMaterial({ color: '#d8d8d8', metalness: 0.6, roughness: 0.3 }));
+    mastro.position.set(-Math.sign(t.x) * 8, 8, 8); g.add(mastro);
+    const band = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.4), new THREE.MeshStandardMaterial({ color: cor, side: THREE.DoubleSide, roughness: 0.7 }));
+    band.position.set(mastro.position.x + 2, 14.6, 8); g.add(band);
+  }
+  g.position.set(t.x, 0, t.z); scene.add(g);
+  colisores.push(...cols);
+  v.forte = { g, cols };
+}
 async function carregarCidadeSocial() {
   const [ts, cs, clas, meuCla] = await Promise.all([rede.listarTerritorios(), rede.listarCasas(), rede.listarClas(), rede.meuClaId(jogador.perfil.id)]);
   clasCache.clear(); for (const c of clas) clasCache.set(c.id, c);
@@ -1951,9 +2072,10 @@ async function carregarCidadeSocial() {
   for (const t of ts) {
     let v = territorios.get(t.id);
     const nome = t.dono_cla ? clasCache.get(t.dono_cla)?.nome || 'clã' : null;
-    const chave = `${t.dono_cla}|${t.defesa}|${nome}`;
+    const nivelCla = t.dono_cla ? clasCache.get(t.dono_cla)?.nivel || 1 : 0;
+    const chave = `${t.dono_cla}|${t.defesa}|${nome}|${nivelCla}`;
     if (v && v.chave === chave) { v.d = t; continue; }
-    if (v) { scene.remove(v.placa); }
+    if (v) { scene.remove(v.placa); removerFortaleza(v); }
     else {
       const anel = new THREE.Mesh(new THREE.RingGeometry(23, 24, 64), new THREE.MeshBasicMaterial({ color: '#888888', transparent: true, opacity: 0.6 }));
       anel.rotation.x = -Math.PI / 2; anel.position.set(t.x, 0.05, t.z); scene.add(anel);
@@ -1963,6 +2085,7 @@ async function carregarCidadeSocial() {
     v.anel.material.color.set(t.dono_cla ? corDoCla(t.dono_cla) : '#888888');
     v.placa = textoSprite(nome ? `${t.nome}: ${nome}${t.defesa ? ` · ${t.defesa} robôs` : ''}` : `${t.nome}: livre`, { escala: 1.05, cor: '#ffd9a0' });
     v.placa.position.set(t.x, 13.5, t.z); scene.add(v.placa);
+    if (t.dono_cla && nivelCla >= 5) montarFortaleza(v, t, nivelCla, corDoCla(t.dono_cla));
   }
   for (const c of cs) {
     let v = casasMundo.get(c.id);
@@ -2251,7 +2374,7 @@ function atualizarCamera(dt) {
 
 function atualizarHUD(dt) {
   tempoMapa -= dt;
-  if (tempoMapa <= 0) { tempoMapa = 0.1; desenharMapa(); $('rua').textContent = nomeDaRua(jogador.pos.x, jogador.pos.z) || '—'; }
+  if (tempoMapa <= 0) { tempoMapa = 0.1; desenharMapa(); $('rua').textContent = `${nomeDaRua(jogador.pos.x, jogador.pos.z) || '—'} · ${textoHora()}`; }
   const [dica, botao] = contexto();
   const el = $('dica'); el.textContent = dica ? `E: ${dica}` : ''; el.classList.toggle('oculto', !dica || TOQUE);
   if (TOQUE) { $('btAcao').textContent = botao || 'Pegar'; $('btAcao').classList.toggle('ativo', !!dica); }
@@ -2333,6 +2456,9 @@ function desenharFome() {
 function quadro() {
   const dt = Math.min(relogio.getDelta(), 0.05);
   ferrovia.atualizar(agoraServidor() / 1000);
+  atualizarCeu(agoraServidor() / 1000);
+  mundo.atualizar(dt);
+  sedes.atualizar(dt);
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);

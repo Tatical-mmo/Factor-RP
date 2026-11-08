@@ -3,7 +3,7 @@ import * as rede from './rede.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const ICONES = { sucata: '🔩', chocolate: '🍫', cereal: '🥣', remedio: '💊' };
+const ICONES = { sucata: '🔩', chocolate: '🍫', cereal: '🥣', remedio: '💊', desbloqueio: '🔓' };
 
 let ctx = null;
 let precos = [];
@@ -63,7 +63,7 @@ function desenhar() {
     c.innerHTML = `<p class="dica">Você tem <b>${moedas()}</b> moedas.</p>
       <div class="sub">Comprar</div><div class="lista">${venda.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
-          <span class="nm"><b>${esc(p.nome)}</b><small>${p.compra} moedas${p.fome ? ` · enche ${p.fome}% da fome` : ''}${p.item === 'remedio' ? ' · cura 50 de vida' : ''}</small></span>
+          <span class="nm"><b>${esc(p.nome)}</b><small>${p.compra} moedas${p.fome ? ` · enche ${p.fome}% da fome` : ''}${p.item === 'remedio' ? ' · cura 50 de vida' : ''}${p.item === 'desbloqueio' ? ' · libera os níveis 5, 10 e 15 de empresas e clãs' : ''}</small></span>
           <span class="bts"><button data-comprar="${p.item}" data-q="1">+1</button><button data-comprar="${p.item}" data-q="5">+5</button></span></div>`).join('')}</div>
       <div class="sub">Vender</div><div class="lista">${compra.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>

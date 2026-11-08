@@ -290,7 +290,10 @@ export const logistica = {
   missoes: () => rpc('listar_missoes'),
   aceitarMissao: (missao, fabrica, transportadora, frete) => rpc('aceitar_missao', { p_missao: missao, p_fabrica: fabrica, p_transportadora: transportadora, p_frete: frete }),
   agora: () => rpc('agora'),
+  abrirFilial: (empresa, lote, funcao) => rpc('abrir_filial', { p_empresa: empresa, p_lote: lote, p_funcao: funcao }),
 };
+export const precoRobo = (empresa = null) => rpc('preco_robo', { p_excluir: empresa });
+export const mercadoRobos = () => rpc('mercado_robos');
 async function sel(q) { const { data, error } = await q; if (error) throw new Error(error.message); return data; }
 export const listarEmpresas = () => sel(sb.from('empresas').select('*, dono_perfil:perfis!empresas_dono_fkey(nome)').order('id'));
 export const listarCaminhoes = () => sel(sb.from('caminhoes').select('*').order('id'));
@@ -337,6 +340,7 @@ export const policia = {
   fianca: () => rpc('pagar_fianca'),
 };
 export const cla = {
+  evoluir: () => rpc('cla_evoluir'),
   criar: (nome, cor) => rpc('criar_cla', { p_nome: nome, p_cor: cor }),
   adicionar: (nome) => rpc('cla_adicionar', { p_nome: nome }),
   expulsar: (jogador) => rpc('cla_expulsar', { p_jogador: jogador }),

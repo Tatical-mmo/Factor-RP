@@ -70,6 +70,7 @@ export const FABRICAS = { '2,1': 'chocolate', '2,2': 'remedio' };   // bancada d
 export const PRODUTOS = {
   chocolate: { nome: 'Chocolate', cor: '#c98b5e', codigo: 2 },
   remedio: { nome: 'Remédio', cor: '#eef3ff', codigo: 3 },
+  robo: { nome: 'Robô', cor: '#9aa4ae', codigo: 1 },
 };
 export const FOME_POR_SEGUNDO = 100 / 3600;   // esvazia em 1 hora
 
