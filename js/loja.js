@@ -165,6 +165,7 @@ function desenhar() {
   if (modo === 'bau') { desenharBau(c); return; }
   if (modo === 'terreno') { desenharTerreno(c); return; }
   if (modo === 'visual') { desenharVisual(c); return; }
+  if (modo === 'mercado') { desenharMercado(c); return; }
   if (modo === 'porta') { desenharPorta(c); return; }
   if (modo === 'gerenciar') { desenharGerenciar(c); return; }
   if (modo === 'predio') { desenharPredio(c); return; }
@@ -173,6 +174,7 @@ function desenhar() {
     const venda = precos.filter((p) => p.compra != null);
     const compra = precos.filter((p) => p.venda != null);
     c.innerHTML = `<p class="dica">Você tem <b>${moedas()}</b> moedas.</p>
+      <div class="botoes" style="margin-bottom:10px"><button id="lMercado">🤝 Mercado dos jogadores</button></div>
       <div class="sub">Comprar</div><div class="lista">${venda.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${p.compra} moedas${p.fome ? ` · enche ${p.fome}% da fome` : ''}${p.item === 'remedio' ? ' · cura 50 de vida' : ''}${p.item === 'desbloqueio' ? ' · libera os níveis 5, 10 e 15 de empresas e clãs' : ''}</small></span>
@@ -181,18 +183,20 @@ function desenhar() {
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${p.venda} moedas cada · você tem ${inv[p.item] || 0}</small></span>
           <span class="bts"><button data-vender="${p.item}" data-q="1" ${inv[p.item] ? '' : 'disabled'}>1</button><button data-vender="${p.item}" data-q="${inv[p.item] || 0}" ${inv[p.item] ? '' : 'disabled'}>Todos</button></span></div>`).join('')}</div>`;
+    $('lMercado').onclick = () => abrir('mercado');
     c.querySelectorAll('[data-comprar]').forEach((b) => { b.onclick = () => executar(() => rede.economia.comprar(b.dataset.comprar, Number(b.dataset.q)), `Comprado: ${b.dataset.q}x ${nomeDe(b.dataset.comprar)}.`); });
     c.querySelectorAll('[data-vender]').forEach((b) => { b.onclick = () => { const q = Number(b.dataset.q); if (q > 0) executar(() => rede.economia.vender(b.dataset.vender, q), (r) => `Vendido por ${r} moedas.`); }; });
   } else {
     $('janelaTitulo').textContent = 'Mochila';
     const itens = precos.filter((p) => inv[p.item] > 0);
     c.innerHTML = `<p class="dica">Vida: <b>${Math.round(ctx.vida?.() ?? 100)}</b> · Fome: <b>${Math.round(ctx.fome())}%</b> · Moedas: <b>${moedas()}</b></p>
-      <div class="botoes" style="margin-bottom:10px"><button id="mVisual">👕 Personagem e nome</button></div>
+      <div class="botoes" style="margin-bottom:10px"><button id="mVisual">👕 Personagem e nome</button><button id="mMercado">🤝 Mercado</button></div>
       <div class="lista">${itens.length ? itens.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${inv[p.item]} na mochila</small></span>
           <span class="bts">${p.fome ? `<button data-comer="${p.item}">Comer</button>` : ''}${p.item === 'remedio' ? '<button data-curar="1">Usar (+50 vida)</button>' : ''}</span></div>`).join('') : '<span class="vazio">Mochila vazia. Colete sucata no ferro-velho ou compre na loja.</span>'}</div>`;
     $('mVisual').onclick = () => abrir('visual');
+    $('mMercado').onclick = () => abrir('mercado');
     c.querySelectorAll('[data-curar]').forEach((b) => {
       b.onclick = () => executar(async () => { if (!(await ctx.curar())) throw new Error('Sua vida já está cheia.'); }, 'Remédio usado: +50 de vida.');
     });
@@ -228,5 +232,48 @@ async function desenharVisual(c) {
     b.onclick = () => { if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Confirmar'; return; }
       executar(() => rede.personagens.comprar(b.dataset.comprarP), 'Personagem comprado e em uso!'); };
   });
+}
+// mercado entre jogadores: comprar ofertas, anunciar itens da mochila, cancelar ofertas
+let abaMercado = 'comprar', itemMercado = null;
+async function desenharMercado(c) {
+  $('janelaTitulo').textContent = 'Mercado dos jogadores';
+  const eu = ctx.perfil();
+  const abas = [['comprar', 'Comprar'], ['vender', 'Vender'], ['minhas', 'Minhas ofertas']]
+    .map(([k, t]) => `<button data-am="${k}" class="${abaMercado === k ? 'sel' : ''}">${t}</button>`).join('');
+  let corpo = '';
+  try {
+    if (abaMercado === 'comprar' && !itemMercado) {
+      const r = await rede.mercado.resumo();
+      corpo = `<p class="dica">Preço médio das últimas vendas e a tendência. 5% de cada venda vai para a prefeitura.</p><div class="lista">${r.map((x) => {
+        const seta = x.medio && x.anterior ? (x.medio > x.anterior ? ' <span style="color:#7bd88f">▲</span>' : x.medio < x.anterior ? ' <span style="color:#ff8a80">▼</span>' : '') : '';
+        return `<div class="linha item"><span class="ic">${ICONES[x.item] || '📦'}</span><span class="nm"><b>${esc(nomeDe(x.item))}</b>
+          <small>${x.em_oferta > 0 ? `a partir de ${x.menor} · ${x.em_oferta} à venda` : 'nada à venda'}${x.medio ? ` · média ${x.medio}${seta}` : ''}</small></span>
+          <span class="bts">${x.em_oferta > 0 ? `<button data-ver="${x.item}">Ver ofertas</button>` : ''}</span></div>`; }).join('')}</div>`;
+    } else if (abaMercado === 'comprar') {
+      const os = await rede.mercado.ofertas(itemMercado);
+      corpo = `<div class="botoes" style="margin-bottom:8px"><button id="mVoltar">← Todos os itens</button></div><p class="dica">${ICONES[itemMercado] || '📦'} <b>${esc(nomeDe(itemMercado))}</b> · você tem ${moedas()} moedas.</p>
+        <div class="lista">${os.length ? os.map((o) => `<div class="linha"><b>${o.preco} cada</b> <small>${o.qtd} disponível · ${esc(o.vendedor_perfil?.nome)}</small>
+          ${o.vendedor === eu.id ? '<small> (sua)</small>' : `<div class="form linha-form"><input type="number" min="1" max="${o.qtd}" value="${Math.min(o.qtd, 1)}" data-q="${o.id}" inputmode="numeric"><button data-comprar-o="${o.id}">Comprar</button></div>`}</div>`).join('') : '<span class="vazio">Acabaram as ofertas.</span>'}</div>`;
+    } else if (abaMercado === 'vender') {
+      const itens = precos.filter((p) => inv[p.item] > 0);
+      corpo = `<p class="dica">Os itens anunciados saem da mochila e voltam se você cancelar. Até 10 ofertas.</p><div class="lista">${itens.length ? itens.map((p) => `<div class="linha"><b>${ICONES[p.item] || '📦'} ${esc(p.nome)}</b> <small>você tem ${inv[p.item]}${p.venda ? ` · a loja paga ${p.venda}` : ''}</small>
+        <div class="form linha-form"><input type="number" min="1" max="${inv[p.item]}" value="${inv[p.item]}" data-vq="${p.item}" inputmode="numeric" placeholder="Qtd">
+          <input type="number" min="1" value="${Math.max(1, (p.venda || 10) + Math.ceil((p.venda || 10) * 0.3))}" data-vp="${p.item}" inputmode="numeric" placeholder="Preço"><button data-anunciar="${p.item}">Anunciar</button></div></div>`).join('') : '<span class="vazio">Mochila vazia.</span>'}</div>`;
+    } else {
+      const ms = await rede.mercado.minhas(eu.id);
+      corpo = `<div class="lista">${ms.length ? ms.map((o) => `<div class="linha item"><span class="ic">${ICONES[o.item] || '📦'}</span><span class="nm"><b>${esc(nomeDe(o.item))}</b><small>${o.qtd} a ${o.preco} cada</small></span>
+        <span class="bts"><button data-cancelar="${o.id}">Cancelar</button></span></div>`).join('') : '<span class="vazio">Você não tem ofertas.</span>'}</div>`;
+    }
+  } catch (e) { corpo = `<p class="erro">${esc(e.message)}</p>`; }
+  if (modo !== 'mercado') return;
+  c.innerHTML = `<div class="abas" style="padding:0 0 10px">${abas}</div>${corpo}`;
+  c.querySelectorAll('[data-am]').forEach((b) => { b.onclick = () => { abaMercado = b.dataset.am; itemMercado = null; desenhar(); }; });
+  c.querySelectorAll('[data-ver]').forEach((b) => { b.onclick = () => { itemMercado = b.dataset.ver; desenhar(); }; });
+  const v = $('mVoltar'); if (v) v.onclick = () => { itemMercado = null; desenhar(); };
+  c.querySelectorAll('[data-comprar-o]').forEach((b) => { b.onclick = () => { const id = Number(b.dataset.comprarO), q = Math.floor(Number(c.querySelector(`[data-q="${id}"]`).value));
+    executar(() => rede.mercado.comprar(id, q), (t) => `Comprado por ${Number(t).toLocaleString('pt-BR')}.`); }; });
+  c.querySelectorAll('[data-anunciar]').forEach((b) => { b.onclick = () => { const it = b.dataset.anunciar, q = Math.floor(Number(c.querySelector(`[data-vq="${it}"]`).value)), pr = Math.floor(Number(c.querySelector(`[data-vp="${it}"]`).value));
+    executar(() => rede.mercado.criar(it, q, pr), `Anunciado: ${q}x ${nomeDe(it)} a ${pr}.`); }; });
+  c.querySelectorAll('[data-cancelar]').forEach((b) => { b.onclick = () => executar(() => rede.mercado.cancelar(Number(b.dataset.cancelar)), 'Oferta cancelada; itens de volta na mochila.'); });
 }
 function nomeDe(item) { return precos.find((p) => p.item === item)?.nome || item; }

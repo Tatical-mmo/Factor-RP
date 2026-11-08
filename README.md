@@ -28,7 +28,7 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b` e `21c`, nessa ordem.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b`, `21c`, `22a` e `22b`, nessa ordem.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
 
 ## Etapa 3: trabalho e produção
@@ -81,6 +81,13 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 - O preso pode pagar **fiança de 2.000 por crime**. A pena só corre online.
 - Policial que mata inocente perde o distintivo e vira procurado. A equipe pode **perdoar** pelo painel.
 - Dois robôs policiais NPC patrulham o quarteirão da delegacia.
+
+## Mercado dos jogadores e crime 2.0
+
+- **Mercado dos jogadores** (na loja ou na mochila, botão 🤝): anuncie itens da mochila com quantidade e preço (até 10 ofertas). Quem compra paga você, e 5% vai para o cofre da prefeitura. Cada item mostra o menor preço à venda, quanto há em oferta, o preço médio das últimas vendas e se ele está subindo ▲ ou caindo ▼. Cancelar uma oferta devolve os itens.
+- **Assalto a lojas:** armado no balcão de qualquer loja, toque em **Assaltar** e fique 20 s sem se afastar. Rende de 800 a 1.500 e dá 2 crimes (procurado). Cada loja só pode ser assaltada a cada 10 min.
+- **Alarme:** a luz vermelha pisca no local por 2 min e todos veem.
+- **Ocorrências:** assaltos e roubos de carga chamam a polícia. Policiais e agentes da PRF em serviço recebem o aviso com rastreio até o local, e quem chega e atende ganha 300. No minimapa da polícia, os procurados piscam em vermelho e as ocorrências aparecem em laranja.
 
 ## Prefeitura, eleição, PRF e carros
 
@@ -225,3 +232,9 @@ assets/miniaturas/      imagens da tela de escolha
 ```
 
 Animações de cada personagem: `idle`, `idle_long`, `walk`, `run`, `carry_walk`, `pickup`, `punch_left`, `punch_right`, `punch_combo`, `shoot`, `walk_shoot`, `hit`, `death`.
+
+
+## Versão 08/11 (p) · tela do clã
+- A tela do clã agora tem abas: Resumo, Territórios, Estoque e Membros.
+- Ela só se redesenha quando algo muda de verdade, então não pula mais enquanto você rola ou digita.
+- Não precisa rodar SQL novo.

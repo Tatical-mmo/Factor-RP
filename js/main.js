@@ -842,7 +842,10 @@ function acaoContexto() {
   const carro = meuCarroProximo(); if (carro && !jogador.carregando) { entrarCarro(carro); return; }
   const ag = agenciaProxima(); if (ag && !jogador.carregando) { pegarEncomenda(ag); return; }
   if (pertoOficina()) { fazerParafusos(); return; }
-  if (pontoProximo(pontos.lojas, 3.2)) { abrirJanela('loja'); return; }
+  const oc = ocorrenciaProxima(); if (oc) { atenderOcorrencia(oc); return; }
+  const lj = pontoProximo(pontos.lojas, 3.2);
+  if (lj && jogador.armado && !jogador.perfil.policial && !jogador.perfil.prf) { iniciarAssalto(pontos.lojas.indexOf(lj)); return; }
+  if (lj) { abrirJanela('loja'); return; }
   if (jogador.carregando) {
     if (pontoProximo(pontos.docas, 3.4)) { entregar(); return; }
     pegarOuSoltar(null); return;
@@ -860,6 +863,80 @@ function acaoContexto() {
   const casa = casaProxima(3.2);
   if (casa) { acaoCasa(casa); return; }
   if (pontoProximo(pontos.sucata, 4)) { if (jogador.armado) { aviso('Guarde a arma para trabalhar.'); return; } coletar(); }
+}
+
+// ---------------------------------------------------------------- crime 2.0: assaltos, alarmes e ocorrências
+let ocorrencias = [], tempoOcorrencias = 4;
+const vistas = new Set(), alarmes = new Map();
+async function iniciarAssalto(lojaIdx) {
+  if (ocupado || jogador.assalto) return; ocupado = true;
+  try {
+    const l = pontos.lojas[lojaIdx];
+    const seg = await rede.crime.iniciar(lojaIdx, l.x, l.z);
+    jogador.assalto = { x: l.x, z: l.z, t: seg, aviso: 0 };
+    aviso('ASSALTO! Fique no balcão. O alarme tocou: a polícia foi chamada!', 4);
+    tempoOcorrencias = 0.5;
+  } catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
+}
+function atualizarAssalto(dt) {
+  const a = jogador.assalto; if (!a) return;
+  if (jogador.morto || jogador.algemado || Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z) > 5) {
+    jogador.assalto = null; rede.crime.cancelar().catch(() => {}); aviso('Assalto abandonado.'); return;
+  }
+  a.t -= dt; a.aviso -= dt;
+  if (a.aviso <= 0 && a.t > 0) { a.aviso = 2; aviso(`Esvaziando o caixa… ${Math.ceil(a.t)} s`, 2); }
+  if (a.t <= 0) {
+    jogador.assalto = null;
+    rede.crime.concluir().then((v) => aviso(`Assalto concluído: +${v} moedas. Você está PROCURADO!`, 4)).catch((e) => aviso(e.message));
+  }
+}
+// alarme piscando no local (todos veem) e chamadas para a polícia
+function atualizarOcorrencias(dt) {
+  tempoOcorrencias -= dt;
+  if (tempoOcorrencias <= 0) {
+    tempoOcorrencias = 8;
+    rede.crime.abertas().then((lista) => {
+      ocorrencias = lista;
+      const policia = jogador.perfil?.policial || jogador.perfil?.prf;
+      for (const o of lista) {
+        if (vistas.has(o.id)) continue;
+        vistas.add(o.id);
+        if (policia && o.suspeito !== jogador.perfil.id) {
+          aviso(`🚨 Ocorrência: ${o.local}! Vá até o local para atender (+300).`, 5);
+          if (!rastreio) rastrear({ nome: `🚨 ${o.local}`, x: o.x, z: o.z });
+        }
+      }
+    }).catch(() => {});
+  }
+  const agora = Date.now(), ativos = new Set();
+  for (const o of ocorrencias) {
+    if (agora - Date.parse(o.criada_em) > 120000) continue;
+    ativos.add(o.id);
+    let a = alarmes.get(o.id);
+    if (!a) {
+      a = new THREE.Group();
+      const luz = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 8), new THREE.MeshBasicMaterial({ color: '#ff2020' }));
+      luz.position.y = 4.2; a.add(luz);
+      const anel = new THREE.Mesh(new THREE.RingGeometry(4, 4.6, 32), new THREE.MeshBasicMaterial({ color: '#ff3030', transparent: true, opacity: 0.7, side: THREE.DoubleSide }));
+      anel.rotation.x = -Math.PI / 2; anel.position.y = 0.3; a.add(anel);
+      const placa = textoSprite(`🚨 ${o.local}`, { escala: 0.75, fundo: 'rgba(170,20,20,.92)' }); placa.position.y = 5.2; a.add(placa);
+      a.position.set(o.x, alturaChao(o.x, o.z), o.z); scene.add(a); alarmes.set(o.id, a);
+    }
+    const pisca = Math.sin(performance.now() / 120) > 0;
+    a.children[0].visible = pisca; a.children[1].material.opacity = pisca ? 0.8 : 0.25;
+  }
+  for (const [id, a] of alarmes) if (!ativos.has(id)) { scene.remove(a); alarmes.delete(id); }
+}
+function ocorrenciaProxima() {
+  if (!(jogador.perfil?.policial || jogador.perfil?.prf)) return null;
+  return ocorrencias.find((o) => Math.hypot(o.x - jogador.pos.x, o.z - jogador.pos.z) < 10 && o.suspeito !== jogador.perfil.id) || null;
+}
+async function atenderOcorrencia(o) {
+  if (ocupado) return; ocupado = true;
+  try { const v = await rede.crime.atender(o.id); ocorrencias = ocorrencias.filter((x) => x.id !== o.id); aviso(`Ocorrência atendida: +${v}. Procure o suspeito!`, 4); if (rastreio?.nome?.startsWith('🚨')) rastrear(null); }
+  catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
 }
 
 // ---------------------------------------------------------------- prefeitura, outdoors e carros
@@ -1315,6 +1392,7 @@ function alvosRastreio() {
   if (jogador.cla) for (const v of territorios.values()) if (v.d.dono_cla === jogador.cla) r.push({ icone: '🚩', nome: v.d.nome, x: v.d.x, z: v.d.z });
   for (const l of ferrovia.linhas) for (const lado of ['centro', 'destino']) { const p = l.plataformas[lado]; r.push({ icone: '🚆', nome: p.nome, x: 0, z: p.zSaida }); }
   if (contratante) r.push({ icone: '📋', nome: 'Contratante', x: contratante.x, z: contratante.z });
+  for (const o of ocorrencias) if (jogador.perfil?.policial || jogador.perfil?.prf) r.push({ icone: '🚨', nome: o.local, x: o.x, z: o.z });
   for (const a of AGENCIAS) r.push({ icone: '📦', nome: `Agência ${a.id === 'centro' ? (a.z < 0 ? 'Norte' : 'Sul') : NOMES_AGENCIA[a.id]}`, x: a.x, z: a.z });
   r.push({ icone: '🔩', nome: 'Oficina de Parafusos', x: OFICINA.x, z: OFICINA.z });
   return r;
@@ -1412,6 +1490,11 @@ function desenharMapa() {
   for (const r of remotos.values()) if (r.av?.raiz.visible) desenhar(r.av.raiz.position.x, r.av.raiz.position.z, '#4fa3ff', 5);
   if (caminhaoMovel) desenhar(caminhaoMovel.obj.position.x, caminhaoMovel.obj.position.z, '#e39b3a', 5);
   for (const [x, z] of ferrovia.marcadores()) desenhar(x, z, '#c8282e', 7);
+  if (jogador.perfil?.policial || jogador.perfil?.prf) {
+    const pisca = Math.sin(performance.now() / 150) > 0;
+    for (const r of remotos.values()) if (r.meta?.crimes > 0 && r.av) desenhar(r.av.raiz.position.x, r.av.raiz.position.z, pisca ? '#ff2020' : '#ffffff', 6);
+    for (const o of ocorrencias) desenhar(o.x, o.z, '#ff5a1f', 8);
+  }
   const passo = proximoPasso();
   if (passo) {
     // destino: ponto dourado ou seta na borda quando estiver longe
@@ -3035,7 +3118,9 @@ function contexto() {
   if (pertoOficina()) return ['fazer parafusos (3 sucatas = 2 parafusos)', 'Fazer'];
   if (pertoDelegacia()) return [jogador.perfil?.policial ? 'sair do serviço policial' : 'entrar em serviço na polícia', 'Polícia'];
   if (pertoContratante()) return ['ver missões do Contratante', 'Falar'];
-  if (pontoProximo(pontos.lojas, 3.2)) return ['abrir a loja', 'Loja'];
+  if (ocorrenciaProxima()) return ['atender a ocorrência (+300)', 'Atender'];
+  if (jogador.assalto) return [`assaltando… ${Math.ceil(jogador.assalto.t)} s (não se afaste)`, 'Assalto'];
+  if (pontoProximo(pontos.lojas, 3.2)) return jogador.armado && !jogador.perfil?.policial && !jogador.perfil?.prf ? ['ASSALTAR a loja (crime!)', 'Assaltar'] : ['abrir a loja', 'Loja'];
   if (jogador.carregando) {
     if (pontoProximo(pontos.docas, 3.4)) return jogador.carregando.userData.tipo ? ['entregar a caixa', 'Entregar'] : ['caixa vazia: embale na bancada', 'Soltar'];
     return ['soltar a caixa', 'Soltar'];
@@ -3086,7 +3171,7 @@ function quadro() {
   atualizarCeu(agoraServidor() / 1000);
   mundo.atualizar(dt);
   sedes.atualizar(dt);
-  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); }
+  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); }
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);

@@ -254,6 +254,21 @@ export const carros = {
   estacionar: (id, x, z, ang) => rpc('estacionar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),
   vender: (id) => rpc('vender_carro', { p_carro: id }),
 };
+export const mercado = {
+  resumo: () => rpc('resumo_mercado'),
+  ofertas: (item) => sel(sb.from('ofertas').select('*, vendedor_perfil:perfis!ofertas_vendedor_fkey(nome)').eq('item', item).order('preco').limit(30)),
+  minhas: (id) => sel(sb.from('ofertas').select('*').eq('vendedor', id).order('id')),
+  criar: (item, qtd, preco) => rpc('criar_oferta', { p_item: item, p_qtd: qtd, p_preco: preco }),
+  cancelar: (id) => rpc('cancelar_oferta', { p_oferta: id }),
+  comprar: (id, qtd) => rpc('comprar_oferta', { p_oferta: id, p_qtd: qtd }),
+};
+export const crime = {
+  iniciar: (loja, x, z) => rpc('iniciar_assalto', { p_loja: loja, p_x: x, p_z: z }),
+  concluir: () => rpc('concluir_assalto'),
+  cancelar: () => rpc('cancelar_assalto'),
+  abertas: () => sel(sb.from('ocorrencias').select('*').eq('status', 'aberta').gt('criada_em', new Date(Date.now() - 15 * 60000).toISOString()).order('id', { ascending: false }).limit(20)),
+  atender: (id) => rpc('atender_ocorrencia', { p_ocorrencia: id }),
+};
 export const metas = {
   minhas: () => rpc('minhas_metas'),
   resgatar: (tipo) => rpc('resgatar_meta', { p_tipo: tipo }),
