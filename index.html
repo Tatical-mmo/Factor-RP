@@ -122,6 +122,12 @@
   .conq { border:1px solid var(--borda); border-radius:10px; padding:8px; text-align:center; opacity:.45; filter:grayscale(1); }
   .conq.feita { opacity:1; filter:none; border-color:var(--destaque); background:rgba(242,163,58,.1); }
   .conq span { font-size:26px; display:block; } .conq b { display:block; font-size:13px; } .conq small { color:var(--suave); font-size:11.5px; }
+  .cores { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  .cores button { width:34px; height:34px; border-radius:50%; border:2px solid var(--borda); cursor:pointer; }
+  .cores button.sel { border-color:#fff; box-shadow:0 0 0 2px var(--destaque); }
+  #appBotoes { position:absolute; right:calc(170px + env(safe-area-inset-right)); top:calc(10px + env(safe-area-inset-top)); display:flex; gap:6px; pointer-events:auto; }
+  #appBotoes button, #instalarLogin { font-size:15px; font-weight:700; padding:7px 11px; border-radius:10px; border:1px solid var(--borda); background:rgba(20,25,37,.85); color:var(--texto); cursor:pointer; }
+  #instalarLogin { margin-top:12px; }
   .aviso-item { font-size:13px; background:rgba(227,178,60,.14); border:1px solid rgba(227,178,60,.45); border-radius:8px; padding:6px 9px; margin:6px 0; }
   .modal .msg { min-height:22px; padding:6px 14px 12px; font-size:14px; } .modal .msg.ok { color:var(--verde); } .modal .msg.erro { color:#ff8a7a; }
 
@@ -167,22 +173,32 @@
   #girar { position:absolute; right:calc(10px + env(safe-area-inset-right)); top:calc(170px + env(safe-area-inset-top)); display:flex; gap:8px; pointer-events:auto; }
   #girar .bt { width:46px; height:46px; font-size:18px; }
 </style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#141925">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fator RP">
+<link rel="apple-touch-icon" href="assets/icones/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="assets/icones/icone-192.png">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261108m",
-  "./js/mundo.js": "./js/mundo.js?v=20261108m",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261108m",
-  "./js/cla.js": "./js/cla.js?v=20261108m",
-  "./js/config.js": "./js/config.js?v=20261108m",
-  "./js/empresa.js": "./js/empresa.js?v=20261108m",
-  "./js/loja.js": "./js/loja.js?v=20261108m",
-  "./js/painel.js": "./js/painel.js?v=20261108m",
-  "./js/rede.js": "./js/rede.js?v=20261108m",
-  "./js/sedes.js": "./js/sedes.js?v=20261108m",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261108m"
+  "./js/main.js": "./js/main.js?v=20261108n",
+  "./js/mundo.js": "./js/mundo.js?v=20261108n",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261108n",
+  "./js/cla.js": "./js/cla.js?v=20261108n",
+  "./js/config.js": "./js/config.js?v=20261108n",
+  "./js/empresa.js": "./js/empresa.js?v=20261108n",
+  "./js/loja.js": "./js/loja.js?v=20261108n",
+  "./js/painel.js": "./js/painel.js?v=20261108n",
+  "./js/rede.js": "./js/rede.js?v=20261108n",
+  "./js/sedes.js": "./js/sedes.js?v=20261108n",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261108n",
+  "./js/civico.js": "./js/civico.js?v=20261108n",
+  "./js/governo.js": "./js/governo.js?v=20261108n"
 } }
 </script>
 </head>
@@ -200,6 +216,7 @@
       <button class="btn sec" id="btCriar">Criar conta</button>
     </div>
     <div id="msgLogin"></div>
+    <button id="instalarLogin" class="oculto">📲 Instalar o jogo</button>
   </div>
 </section>
 
@@ -235,6 +252,7 @@
   <div id="captura" class="painel oculto"></div>
   <button id="btPainel" class="oculto">🛡 Painel</button>
   <button id="btRanking">🏆 Metas</button>
+  <div id="appBotoes"><button id="btTela" title="Tela cheia">⛶</button><button id="btInstalar" class="oculto">📲 Instalar</button></div>
   <div id="bloqueio" class="oculto"></div>
 </div>
 
@@ -269,6 +287,13 @@
     <div class="alvos" id="mapaAlvos"></div></div>
 </div>
 
+<div id="governoJanela" class="modal oculto">
+  <div class="topo"><b id="governoTitulo">Prefeitura</b><button id="fecharGoverno" aria-label="Fechar">✕</button></div>
+  <div class="abas" id="governoAbas"></div>
+  <div id="governoConteudo" class="conteudo"></div>
+  <div id="governoMsg" class="msg"></div>
+</div>
+
 <div id="rankingJanela" class="modal oculto">
   <div class="topo"><b>Metas, ranking e conquistas</b><button id="fecharRanking" aria-label="Fechar">✕</button></div>
   <div class="abas" id="rankingAbas"></div>
@@ -293,7 +318,36 @@
   <div id="girar"><button class="bt" id="btGiraE">⟲</button><button class="bt" id="btGiraD">⟳</button></div>
 </div>
 
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 08/11 · metas e ranking</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 08/11 · prefeitura</div>
+<script>
+// tela cheia e instalação como aplicativo (celular e computador)
+(() => {
+  if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  const instalado = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  let pedido = null;
+  const botoes = () => [document.getElementById('btInstalar'), document.getElementById('instalarLogin')].filter(Boolean);
+  const mostrar = (sim) => botoes().forEach((b) => b.classList.toggle('oculto', !sim));
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); pedido = e; mostrar(true); });
+  window.addEventListener('appinstalled', () => { pedido = null; mostrar(false); });
+  const instalar = async () => {
+    if (pedido) { pedido.prompt(); await pedido.userChoice; pedido = null; mostrar(false); return; }
+    if (ios) alert('No iPhone: toque em Compartilhar (quadrado com seta) e depois em "Adicionar à Tela de Início".');
+    else alert('Abra o menu do navegador (⋮) e escolha "Instalar aplicativo" ou "Adicionar à tela inicial".');
+  };
+  const telaCheia = () => {
+    const d = document;
+    if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+    else { const el = d.documentElement; (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el, { navigationUI: 'hide' })?.catch?.(() => {}); }
+  };
+  window.addEventListener('DOMContentLoaded', () => {
+    botoes().forEach((b) => { b.onclick = instalar; });
+    document.getElementById('btTela').onclick = telaCheia;
+    if (instalado || !document.documentElement.requestFullscreen && !document.documentElement.webkitRequestFullscreen) document.getElementById('btTela').classList.add('oculto');
+    if (!instalado && ios) mostrar(true);
+  });
+})();
+</script>
 <script type="module">import './js/main.js';</script>
 </body>
 </html>

@@ -16,6 +16,8 @@ import * as mundo from './mundo.js';
 import * as ferrovia from './ferrovia.js';
 import * as sedes from './sedes.js';
 import { iniciarConquistas } from './conquistas.js';
+import * as civico from './civico.js';
+import { iniciarGoverno, abrirPrefeitura, abrirConcessionaria, atualizarGoverno } from './governo.js';
 import { nivelTexto } from './empresa.js';
 import { iniciarPainel, atualizarBotao } from './painel.js';
 
@@ -153,6 +155,7 @@ function atualizarCeu(t) {
   const noite = 1 - S(elev, -0.02, 0.3);
   mundo.definirNoite(noite);
   for (const m of luzesCasas) m.emissiveIntensity = noite * 1.1;
+  civico.brilhoOutdoors(noite);
 }
 const textoHora = () => `${String(Math.floor(horaAtual)).padStart(2, '0')}:${String(Math.floor((horaAtual % 1) * 60)).padStart(2, '0')}`;
 
@@ -663,6 +666,7 @@ const jogador = {
 function resolverColisao(p, raio) {
   colidirLista(colisores, p, raio);
   mundo.colidir(p, raio, colidirLista);
+  colidirLista(colisoresCarros, p, raio);
   if (!jogador.trem) ferrovia.empurrar(p, raio);
   resolverMoveis(p, raio);
   mundo.limitar(p);
@@ -803,6 +807,7 @@ function pertoContratante() { return contratante && Math.hypot(contratante.x - j
 function livre() {
   if (jogador.morto) return false;
   if (jogador.trem) { aviso('Você está no trem.'); return false; }
+  if (jogador.carro) { aviso('Saia do carro primeiro.'); return false; }
   if (jogador.algemado) { aviso('Você está algemado.'); return false; }
   if (jogador.pena > 0) { aviso('Você está preso.'); return false; }
   return true;
@@ -814,6 +819,7 @@ function acaoContexto() {
     if (est?.parado === jogador.trem.origem) desembarcar(jogador.trem.origem); else aviso(contexto()[0]);
     return;
   }
+  if (jogador.carro) { sairCarro(); return; }
   if (jogador.trava > 0 || !livre()) return;
   if (jogador.carregando?.userData.pedido) { acaoCaixaPedido(); return; }
   if (jogador.carregando?.userData.encomenda && !jogador.trem && !ferrovia.plataformaEm(jogador.pos.x, jogador.pos.z)) { acaoEncomenda(); return; }
@@ -829,6 +835,11 @@ function acaoContexto() {
   if (jogador.perfil.policial) { const alvo = procuradoProximo(2.4); if (alvo) { prenderProcurado(alvo); return; } }
   if (pertoDelegacia()) { alternarServico(); return; }
   if (pertoContratante()) { abrirMissoes(); return; }
+  if (jogador.perfil.prf) { const alvo = eleitoralProximo(2.4); if (alvo) { prenderEleitoral(alvo); return; } }
+  if (perto(civico.PREFEITURA.porta, 3.2)) { abrirPrefeitura(); return; }
+  if (perto(civico.PREFEITURA.prf, 3.2)) { abrirPrefeitura('prf'); return; }
+  if (perto(civico.CONCESSIONARIA.balcao, 3.2)) { abrirConcessionaria(); return; }
+  const carro = meuCarroProximo(); if (carro && !jogador.carregando) { entrarCarro(carro); return; }
   const ag = agenciaProxima(); if (ag && !jogador.carregando) { pegarEncomenda(ag); return; }
   if (pertoOficina()) { fazerParafusos(); return; }
   if (pontoProximo(pontos.lojas, 3.2)) { abrirJanela('loja'); return; }
@@ -851,6 +862,96 @@ function acaoContexto() {
   if (pontoProximo(pontos.sucata, 4)) { if (jogador.armado) { aviso('Guarde a arma para trabalhar.'); return; } coletar(); }
 }
 
+// ---------------------------------------------------------------- prefeitura, outdoors e carros
+let prefeitoAtual = null, tempoPrefeitura = 3, tempoCarros = 2;
+async function carregarPrefeitura() {
+  const [pf, outs] = await Promise.all([rede.prefeitura.estado(), rede.prefeitura.outdoors()]);
+  const antes = prefeitoAtual;
+  prefeitoAtual = pf?.prefeito || null;
+  if (antes !== prefeitoAtual) conexao?.rastrear(metaPresenca());
+  civico.atualizarOutdoors(outs);
+  atualizarGoverno();
+}
+function atualizarPrefeitura(dt) {
+  tempoPrefeitura -= dt; tempoCarros -= dt;
+  if (tempoPrefeitura <= 0) {
+    tempoPrefeitura = 60;
+    rede.prefeitura.processar().catch(() => {}).finally(() => carregarPrefeitura().catch(() => {}));
+    if (prefeitoAtual === jogador.perfil.id) rede.prefeitura.salario().then((v) => { if (v > 0) aviso(`Salário de prefeito: +${v.toLocaleString('pt-BR')} moedas`, 4); }).catch(() => {});
+  }
+  if (tempoCarros <= 0) { tempoCarros = 10; rede.carros.listar().then(sincronizarCarros).catch(() => {}); }
+  // enquanto dirige, a vaga do carro acompanha (se fechar o jogo, ele fica perto)
+  if (jogador.carro) {
+    jogador.carro.salvar -= dt;
+    if (jogador.carro.salvar <= 0) { jogador.carro.salvar = 20; rede.carros.estacionar(jogador.carro.id, jogador.pos.x, jogador.pos.z, jogador.yaw).catch(() => {}); }
+  }
+}
+const carrosMundo = new Map();     // id -> { d, mesh }
+function dirigidosPorOutros() { const r = new Set(); for (const x of remotos.values()) if (x.alvo?.cv) r.add(Number(String(x.alvo.cv).split('|')[0])); return r; }
+function sincronizarCarros(lista) {
+  const ids = new Set(lista.map((c) => c.id)), outros = dirigidosPorOutros();
+  for (const [id, v] of carrosMundo) if (!ids.has(id)) { scene.remove(v.mesh); carrosMundo.delete(id); }
+  for (const d of lista) {
+    let v = carrosMundo.get(d.id);
+    if (!v || v.d.cor !== d.cor || v.d.modelo !== d.modelo) { if (v) scene.remove(v.mesh); v = { d, mesh: civico.modeloCarro(d.modelo, d.cor) }; scene.add(v.mesh); carrosMundo.set(d.id, v); }
+    v.d = d;
+    if (jogador.carro?.id === d.id) continue;
+    v.mesh.visible = !outros.has(d.id);
+    v.mesh.position.set(d.x, alturaChao(d.x, d.z), d.z); v.mesh.rotation.y = d.ang;
+  }
+  colisoresCarros = lista.filter((d) => jogador.carro?.id !== d.id && !outros.has(d.id)).map((d) => ({ tipo: 'circ', x: d.x, z: d.z, r: 1.4 }));
+}
+let colisoresCarros = [];
+function meuCarroProximo() {
+  let melhor = null, dm = 3.4;
+  for (const v of carrosMundo.values()) {
+    if (v.d.dono !== jogador.perfil.id || !v.mesh.visible) continue;
+    const d = Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z);
+    if (d < dm) { dm = d; melhor = v; }
+  }
+  return melhor;
+}
+function entrarCarro(v) {
+  if (jogador.carregando) { aviso('Largue a caixa antes de dirigir.'); return; }
+  if (jogador.armado) alternarArma();
+  jogador.carro = { id: v.d.id, modelo: v.d.modelo, cor: v.d.cor, vel: 0, mesh: v.mesh, salvar: 20 };
+  jogador.pos.set(v.mesh.position.x, v.mesh.position.y, v.mesh.position.z); jogador.yaw = v.mesh.rotation.y; jogador.alvo = null;
+  jogador.avatar.raiz.visible = false;
+  aviso(`${civico.CARROS[v.d.modelo]?.nome || 'Carro'}: use o controle para dirigir. Toque em Sair para estacionar.`, 3.5);
+}
+function sairCarro() {
+  const c = jogador.carro; if (!c) return;
+  jogador.carro = null;
+  c.mesh.position.copy(jogador.pos); c.mesh.rotation.y = jogador.yaw;
+  const v = carrosMundo.get(c.id); if (v) { v.d = { ...v.d, x: jogador.pos.x, z: jogador.pos.z, ang: jogador.yaw }; }
+  rede.carros.estacionar(c.id, jogador.pos.x, jogador.pos.z, jogador.yaw).catch(() => {});
+  // desce pela porta esquerda
+  const lx = Math.cos(jogador.yaw) * 1.8, lz = -Math.sin(jogador.yaw) * 1.8;
+  jogador.pos.x += lx; jogador.pos.z += lz; resolverColisao(jogador.pos, jogador.raio);
+  jogador.avatar.raiz.visible = true;
+  colisoresCarros.push({ tipo: 'circ', x: c.mesh.position.x, z: c.mesh.position.z, r: 1.4 });
+}
+// direção arcade: o controle aponta para onde o carro deve ir (como andar a pé)
+function dirigir(dt, dir, forca) {
+  const c = jogador.carro, max = civico.CARROS[c.modelo]?.vel || 15;
+  if (forca > 0.15) {
+    const alvo = Math.atan2(dir.x, dir.z);
+    let dif = alvo - jogador.yaw; dif = Math.atan2(Math.sin(dif), Math.cos(dif));
+    const giro = 2.4 * Math.min(1, Math.abs(c.vel) / 5 + 0.25);
+    jogador.yaw += THREE.MathUtils.clamp(dif, -giro * dt, giro * dt);
+    if (Math.abs(dif) < 1.7) c.vel = Math.min(max * forca, c.vel + 9 * dt);
+    else c.vel = Math.max(0, c.vel - 16 * dt);
+  } else c.vel = Math.max(0, c.vel - 7 * dt);
+  const antes = { x: jogador.pos.x, z: jogador.pos.z };
+  jogador.pos.x += Math.sin(jogador.yaw) * c.vel * dt; jogador.pos.z += Math.cos(jogador.yaw) * c.vel * dt;
+  resolverColisao(jogador.pos, 1.3);
+  const andou = Math.hypot(jogador.pos.x - antes.x, jogador.pos.z - antes.z), esperado = c.vel * dt;
+  if (esperado > 0.01 && andou < esperado * 0.6) c.vel *= 0.5;          // bateu
+  jogador.pos.y += (alturaChao(jogador.pos.x, jogador.pos.z) - jogador.pos.y) * Math.min(1, dt * 10);
+  c.mesh.position.copy(jogador.pos); c.mesh.rotation.y = jogador.yaw;
+  jogador.avatar.raiz.position.copy(jogador.pos);
+}
+
 // ---------------------------------------------------------------- encomendas entre cidades e oficina de parafusos
 const NOMES_AGENCIA = { centro: 'a Metrópole', serra: 'Vila Serra', porto: 'Porto Sul' };
 const AGENCIAS = [
@@ -858,6 +959,26 @@ const AGENCIAS = [
   { id: 'serra', x: -60, z: -934 }, { id: 'porto', x: -60, z: 934 },
 ];
 const OFICINA = { x: 62, z: 934 };
+function perto(p, raio) { return Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z) < raio; }
+function eleitoralProximo(raio) {
+  let melhor = null, dm = raio;
+  for (const [id, r] of remotos) {
+    if (!r.av?.raiz.visible || !(r.meta.eleitoral && r.meta.crimes > 0)) continue;
+    const d = r.av.raiz.position.distanceTo(jogador.pos);
+    if (d < dm) { dm = d; melhor = { id, r }; }
+  }
+  return melhor;
+}
+async function prenderEleitoral(alvo) {
+  if (ocupado) return; ocupado = true;
+  try {
+    virarPara(alvo.r.av.raiz.position.x, alvo.r.av.raiz.position.z);
+    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 2, fade: 0.1 }); jogador.trava = 0.9;
+    const min = await rede.prf.prender(alvo.id);
+    aviso(`${alvo.r.meta.nome} foi preso pela PRF por ${min} min. +2.000 moedas`, 4);
+  } catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
+}
 function agenciaProxima() { return AGENCIAS.find((a) => Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z) < 3.4) || null; }
 function pertoOficina() { return Math.hypot(OFICINA.x - jogador.pos.x, OFICINA.z - jogador.pos.z) < 3.2; }
 function balcao(x, z, cor, texto, sub) {
@@ -1352,6 +1473,8 @@ async function iniciarJogo(perfil) {
   mundo.finalizar();
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
+  civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao });
+  civico.montarPrefeitura(); civico.montarConcessionaria();
   criarCaminhaoMovel();
 
   // jogador
@@ -1412,6 +1535,12 @@ async function iniciarJogo(perfil) {
     recarregar: () => { tempoLogistica = 0; },
   });
   iniciarLogistica();
+  iniciarGoverno({
+    perfil: () => jogador.perfil, agora: agoraServidor, recarregar: () => { tempoPrefeitura = 0.3; tempoCarros = 0.5; tempoSocial = 0.5; },
+    clas: () => [...clasCache.values()], territorios: () => [...territorios.values()].map((v) => v.d),
+    minhasEmpresas: () => [...empresas.values()].filter((e) => e.dono === jogador.perfil.id),
+    meusCarros: () => [...carrosMundo.values()].map((v) => v.d).filter((d) => d.dono === jogador.perfil.id),
+  });
   iniciarConquistas({
     perfil: () => jogador.perfil, aviso,
     dados: () => ({
@@ -1522,6 +1651,15 @@ function atualizarRemotos(dt) {
         r.arma.visible = false; r.av.mixer.update(dt); continue;
       }
     }
+    if (a.cv) {   // dirigindo: mostra o carro no lugar do personagem
+      const [cid, mod, cor] = String(a.cv).split('|');
+      if (!r.carro || r.carroId !== cid) { if (r.carro) scene.remove(r.carro); r.carro = civico.modeloCarro(mod, cor); r.carroId = cid; r.carro.position.set(a.x, a.y, a.z); scene.add(r.carro); }
+      const kc = Math.min(1, dt * 10);
+      r.carro.position.x += (a.x - r.carro.position.x) * kc; r.carro.position.y += (a.y - r.carro.position.y) * kc; r.carro.position.z += (a.z - r.carro.position.z) * kc;
+      r.carro.rotation.y = suavizarAngulo(r.carro.rotation.y, a.r, dt * 10);
+      raiz.position.copy(r.carro.position); raiz.visible = false; r.av.mixer.update(dt); continue;
+    }
+    if (r.carro) { scene.remove(r.carro); r.carro = null; r.carroId = null; raiz.visible = true; tempoCarros = 0; }
     if (!raiz.visible || Math.hypot(a.x - raiz.position.x, a.z - raiz.position.z) > 8) { raiz.position.set(a.x, a.y, a.z); raiz.visible = true; }
     const k = Math.min(1, dt * 10);
     raiz.position.x += (a.x - raiz.position.x) * k; raiz.position.y += (a.y - raiz.position.y) * k; raiz.position.z += (a.z - raiz.position.z) * k;
@@ -1549,9 +1687,9 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0 };
   const u = ultimoEnvio;
-  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr;
+  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv;
   if (!mudou && tempoKeepAlive > 0) return;
   conexao.enviar('pos', est); ultimoEnvio = est; tempoKeepAlive = 3;
 }
@@ -2153,16 +2291,17 @@ const SKIN_POLICIA = 'Rustbolt_Sentinel';
 const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfil?.personagem);
 function metaPresenca() {
   const p = jogador.perfil;
-  return { nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null };
+  return { nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
+    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
 function etiquetaStatus(r) {
   if (!r.av) return;
   if (r.status) { r.av.raiz.remove(r.status); r.status = null; }
   const m = r.meta;
-  const txt = m.crimes > 0 ? `PROCURADO ${'★'.repeat(Math.min(5, m.crimes))}` : m.policial ? 'POLÍCIA' : m.cla ? `[${m.cla}]` : null;
+  const txt = m.crimes > 0 ? `PROCURADO${m.eleitoral ? ' (PRF)' : ''} ${'★'.repeat(Math.min(5, m.crimes))}` : m.prefeito ? '★ PREFEITO ★' : m.policial ? 'POLÍCIA' : m.prf ? 'PRF' : m.cla ? `[${m.cla}]` : null;
   if (!txt) return;
-  r.status = textoSprite(txt, { escala: 0.6, cor: '#ffffff', fundo: m.crimes > 0 ? 'rgba(170,30,30,.92)' : m.policial ? 'rgba(30,70,160,.92)' : 'rgba(40,40,40,.85)' });
+  r.status = textoSprite(txt, { escala: 0.6, cor: m.prefeito ? '#20160a' : '#ffffff', fundo: m.crimes > 0 ? 'rgba(170,30,30,.92)' : m.prefeito ? 'rgba(242,194,48,.95)' : m.policial ? 'rgba(30,70,160,.92)' : m.prf ? 'rgba(20,40,90,.95)' : 'rgba(40,40,40,.85)' });
   r.status.position.y = 2.6; r.av.raiz.add(r.status);
 }
 
@@ -2302,11 +2441,15 @@ async function prenderProcurado(alvo) {
   } catch (e) { aviso(e.message); }
   finally { ocupado = false; }
 }
-let tempoSalarioPolicia = 180;
+let tempoSalarioPolicia = 180, tempoSalarioPrf = 180;
 function atualizarPolicia(dt) {
   if (jogador.perfil?.policial) {
     tempoSalarioPolicia -= dt;
     if (tempoSalarioPolicia <= 0) { tempoSalarioPolicia = 180; rede.policia.salario().then((v) => { if (v > 0) aviso(`Salário da polícia: +${v} moedas`); }).catch(() => {}); }
+  }
+  if (jogador.perfil?.prf) {
+    tempoSalarioPrf -= dt;
+    if (tempoSalarioPrf <= 0) { tempoSalarioPrf = 180; rede.prf.salario().then((v) => { if (v > 0) aviso(`Salário da PRF: +${v} moedas`); }).catch(() => {}); }
   }
   const f = $('btFianca');
   const preso = jogador.pena > 0 && jogador.perfil?.fianca > 0;
@@ -2410,6 +2553,7 @@ async function carregarCidadeSocial() {
       texto = `${ESTAGIO[c.nivel]} de ${minha ? 'você' : c.dono_perfil?.nome || '?'}${l ? ` · ${l} apto${l > 1 ? 's' : ''} livre${l > 1 ? 's' : ''}` : ''}`;
       fundo = minha ? 'rgba(30,110,60,.92)' : l ? 'rgba(30,60,90,.9)' : 'rgba(40,40,40,.85)';
     } else if (tipo === 'terreno') texto = !c.dono ? `${c.rotulo} à venda · ${num(c.preco)}` : minha ? (c.modelo ? 'Sua casa' : 'Seu terreno · construa aqui') : `${c.modelo ? 'Casa' : 'Terreno'} de ${c.dono_perfil?.nome || '?'}`;
+    else if (tipo === 'oficial') { texto = 'Residência Oficial'; fundo = 'rgba(30,50,80,.92)'; }
     else texto = c.dono ? (minha ? 'Sua casa' : `Casa de ${c.dono_perfil?.nome || '?'}`) : 'Casa à venda · 35.000';
     v.placa = textoSprite(texto, { escala: 0.6, fundo });
     v.placa.position.set(c.x + 0.5, tipo === 'terreno' ? 3 + ((c.nivel || 1) >= 3 ? 1.5 : 0) : 2.4, c.z); scene.add(v.placa);
@@ -2556,9 +2700,10 @@ function unidadeNaPorta(c) {
   const lista = [...casasMundo.values()].map((v) => v.d).filter((d) => d.tipo === 'apto' && d.x === c.x && d.z === c.z);
   return lista.find((d) => d.dono === jogador.perfil.id) || lista.find((d) => !d.dono) || c;
 }
-function nomeMoradia(c) { return c.tipo === 'apto' || c.tipo === 'unidade' ? 'apartamento' : c.tipo === 'terreno' ? (c.modelo ? 'imóvel' : 'terreno') : 'casa'; }
+function nomeMoradia(c) { return c.tipo === 'oficial' ? 'residência oficial' : c.tipo === 'apto' || c.tipo === 'unidade' ? 'apartamento' : c.tipo === 'terreno' ? (c.modelo ? 'imóvel' : 'terreno') : 'casa'; }
 async function acaoCasa(c0) {
   const c = unidadeNaPorta(c0);
+  if (c.tipo === 'oficial') { if (moraEm(c)) entrarEmCasa(c); else aviso('Residência oficial: só o prefeito entra.'); return; }
   if (moraEm(c)) { portaAberta = c.id; abrirJanela('porta'); return; }
   if (c.tipo === 'terreno' && c.dono && (c.nivel || 1) >= 3) { portaAberta = c.id; abrirJanela('predio'); return; }
   if (c.dono) { aviso(c.tipo === 'apto' ? 'Prédio lotado: todos os apartamentos têm dono.' : `${nomeMoradia(c)} de ${c.dono_perfil?.nome || 'outro jogador'}. A porta está trancada.`); return; }
@@ -2624,6 +2769,7 @@ function montarLocais() {
 }
 
 function teleportar(x, z) {
+  if (jogador.carro) sairCarro();
   if (jogador.trem) { ferrovia.ocultarTeto(jogador.trem.li, jogador.trem.k, false); jogador.trem = null; }
   if (jogador.pena > 0 && cadeia) { x = cadeia.x; z = cadeia.z; }
   if (x < 1500) jogador.dentroCasa = null;     // interiores ficam em x >= 2000
@@ -2673,7 +2819,9 @@ function aplicarPerfil(novo) {
   if (novo.personagem !== antigo.personagem || novo.policial !== antigo.policial) trocarAvatar(skinAtual());
   if (novo.policial !== antigo.policial) aviso(novo.policial ? 'Você está em serviço na polícia. Prenda os procurados (em vermelho)!' : 'Você saiu do serviço da polícia.', 4);
   if ((novo.crimes || 0) > (antigo.crimes || 0)) aviso('Você está PROCURADO pela polícia.', 4);
-  if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome || novo.crimes !== antigo.crimes || novo.policial !== antigo.policial) {
+  if (novo.prf !== antigo.prf) aviso(novo.prf ? 'Você está em serviço na PRF. Investigue a prefeitura!' : 'Você saiu do serviço da PRF.', 4);
+  if (novo.eleitoral && !antigo.eleitoral) aviso('CRIME ELEITORAL comprovado: você perdeu o mandato e está procurado!', 5);
+  if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome || novo.crimes !== antigo.crimes || novo.policial !== antigo.policial || novo.prf !== antigo.prf || novo.eleitoral !== antigo.eleitoral) {
     conexao?.rastrear(metaPresenca());
   }
   if (novo.algemado !== antigo.algemado) {
@@ -2739,6 +2887,7 @@ function atualizarJogador(dt) {
     const d = dir.length();
     if (d < 0.25) { j.alvo = null; forca = 0; } else { dir.normalize(); forca = 1; }
   }
+  if (j.carro) { dirigir(dt, dir, forca); av.mixer.update(dt); av.raiz.updateMatrixWorld(true); return; }
   const correr = !j.carregando && !j.armado && (teclas.has('shift') || (joy.ativo && forca > 0.92) || (j.alvo && j.pos.distanceTo(j.alvo) > 12));
 
   if (j.trava > 0) {
@@ -2850,6 +2999,7 @@ function atualizarHUD(dt) {
 // texto da dica e do botão de ação conforme o que está perto
 function contexto() {
   const pd = jogador.carregando?.userData.pedido;
+  if (jogador.carro) return [`dirigindo · ${Math.round(jogador.carro.vel * 3.6)} km/h`, 'Sair'];
   if (jogador.trem) {
     const t = jogador.trem, est = ferrovia.estadoDe(t.li, t.k), dest = ferrovia.nomeParada(ferrovia.linhas[t.li], t.destino);
     if (est?.parado === t.origem) return [`descer do trem (parte para ${dest} em ${Math.ceil(est.resta)} s)`, 'Descer'];
@@ -2876,6 +3026,11 @@ function contexto() {
     return [`o trem para ${dest} chega em ${n} s`, `Trem ${n}s`];
   }
   if (jogador.perfil?.policial && procuradoProximo(2.4)) return ['algemar e prender o procurado', 'Prender'];
+  if (jogador.perfil?.prf && eleitoralProximo(2.4)) return ['prender por crime eleitoral (PRF)', 'Prender'];
+  if (perto(civico.PREFEITURA.porta, 3.2)) return ['prefeitura: prefeito, eleição, outdoors e PRF', 'Prefeitura'];
+  if (perto(civico.PREFEITURA.prf, 3.2)) return ['posto da PRF', 'PRF'];
+  if (perto(civico.CONCESSIONARIA.balcao, 3.2)) return ['comprar carro', 'Carros'];
+  if (meuCarroProximo() && !jogador.carregando) return ['dirigir o seu carro', 'Dirigir'];
   if (agenciaProxima() && !jogador.carregando) return ['pegar uma encomenda para outra cidade', 'Encomenda'];
   if (pertoOficina()) return ['fazer parafusos (3 sucatas = 2 parafusos)', 'Fazer'];
   if (pertoDelegacia()) return [jogador.perfil?.policial ? 'sair do serviço policial' : 'entrar em serviço na polícia', 'Polícia'];
@@ -2898,6 +3053,7 @@ function contexto() {
   const casa = casaProxima(3.2);
   if (casa) {
     const u = unidadeNaPorta(casa), minha = moraEm(u), nm = nomeMoradia(u);
+    if (u.tipo === 'oficial') return [minha ? 'entrar na residência oficial' : 'residência oficial do prefeito', minha ? 'Entrar' : 'Casa'];
     if (minha) return [u.tipo === 'unidade' ? 'seu apartamento: entrar ou sair' : `seu ${nm}: entrar, evoluir ou vender`, 'Porta'];
     if (u.tipo === 'terreno' && u.dono && (u.nivel || 1) >= 3) return ['ver apartamentos para alugar ou comprar', 'Aptos'];
     if (u.dono) return [u.tipo === 'apto' ? 'prédio lotado' : `${nm} de ${u.dono_perfil?.nome || '?'}`, 'Casa'];
@@ -2930,7 +3086,7 @@ function quadro() {
   atualizarCeu(agoraServidor() / 1000);
   mundo.atualizar(dt);
   sedes.atualizar(dt);
-  if (jogador.avatar) atualizarRastreio(dt);
+  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); }
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);

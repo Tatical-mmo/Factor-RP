@@ -28,7 +28,7 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a` e `20b`, nessa ordem.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b` e `21c`, nessa ordem.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
 
 ## Etapa 3: trabalho e produção
@@ -81,6 +81,17 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 - O preso pode pagar **fiança de 2.000 por crime**. A pena só corre online.
 - Policial que mata inocente perde o distintivo e vira procurado. A equipe pode **perdoar** pelo painel.
 - Dois robôs policiais NPC patrulham o quarteirão da delegacia.
+
+## Prefeitura, eleição, PRF e carros
+
+- **Prefeitura** (ao noroeste do centro): na porta ficam o prefeito, a eleição, os outdoors e a PRF.
+- **Mandato:** 20 ciclos de dia e noite (cerca de 10 h 40 min). O prefeito recebe **9.500 por ciclo em que joga**, mora na residência oficial (porta lateral), usa o carro presidencial, define o salário da polícia (de 50 a 250 a cada 3 min) e pode renunciar. Ficar offline não interrompe o mandato.
+- **Eleição:** a campanha abre nos últimos 4 ciclos do mandato. A candidatura custa 5.000 e quem tem crimes não pode se candidatar. Cada jogador tem 1 voto e pode mudar até a apuração. Com a prefeitura vaga, a cada virada de dia o mais votado assume até o fim do mandato.
+- **Outdoors:** 8 pela cidade e nas cidades vizinhas, a 40 moedas por minuto (de 10 min a 4 h), para campanha ou propaganda de empresa. O dinheiro vai para o cofre da prefeitura.
+- **Crime eleitoral:** o prefeito pode repassar verba do cofre a um clã ou entregar um território a ele, mas é ilegal.
+- **PRF:** é a polícia eleitoral. Não obedece ao prefeito e paga 120 a cada 3 min. Os agentes investigam documentos na prefeitura (35% de chance por tentativa, a cada 90 s). Com prova, o prefeito é cassado e fica procurado: achar a prova rende 3.000 e prender rende 2.000.
+- **Carros** (concessionária, a nordeste do centro): Popular 12.000, SUV 30.000 e Esportivo 55.000, até 3 por jogador. Chegue perto e toque em **Dirigir**; o controle aponta para onde o carro vai. Ele fica estacionado onde você descer. O carro presidencial é do prefeito.
+- **Tela cheia e instalar:** o botão ⛶ (ao lado do minimapa) põe o jogo em tela cheia, e **📲 Instalar** coloca o jogo no celular ou no computador como aplicativo (no iPhone: Compartilhar → Adicionar à Tela de Início).
 
 ## Metas, ranking e conquistas (botão 🏆)
 

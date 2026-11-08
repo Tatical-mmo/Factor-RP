@@ -225,6 +225,35 @@ export const painel = {
   nivelCla: (cla, nivel) => rpc('admin_nivel_cla', { p_cla: cla, p_nivel: nivel }),
 };
 export const cumprirPena = () => rpc('cumprir_pena');
+export const prefeitura = {
+  estado: async () => (await sel(sb.from('prefeitura').select('*, prefeito_perfil:perfis!prefeitura_prefeito_fkey(nome)').eq('id', 1).maybeSingle())),
+  campanha: () => rpc('mandato_em_campanha'),
+  candidatos: (m) => sel(sb.from('candidatos').select('*, perfil:perfis!candidatos_jogador_fkey(nome)').eq('mandato', m).order('votos', { ascending: false })),
+  meuVoto: async (m) => (await sel(sb.from('votos').select('candidato').eq('mandato', m).maybeSingle()))?.candidato || null,
+  candidatar: (slogan) => rpc('candidatar', { p_slogan: slogan }),
+  votar: (id) => rpc('votar', { p_candidato: id }),
+  salario: () => rpc('salario_prefeito'),
+  renunciar: () => rpc('renunciar'),
+  salarioPolicia: (v) => rpc('definir_salario_policia', { p_valor: v }),
+  processar: () => rpc('processar_prefeitura'),
+  verba: (cla, valor) => rpc('favor_verba', { p_cla: cla, p_valor: valor }),
+  territorio: (t, cla) => rpc('favor_territorio', { p_territorio: t, p_cla: cla }),
+  outdoors: () => sel(sb.from('outdoors').select('*').order('id')),
+  alugarOutdoor: (id, min, tipo, empresa, texto) => rpc('alugar_outdoor', { p_outdoor: id, p_minutos: min, p_tipo: tipo, p_empresa: empresa, p_texto: texto }),
+};
+export const prf = {
+  entrar: () => rpc('entrar_prf'),
+  sair: () => rpc('sair_prf'),
+  salario: () => rpc('salario_prf'),
+  investigar: () => rpc('prf_investigar'),
+  prender: (alvo) => rpc('prf_prender', { p_alvo: alvo }),
+};
+export const carros = {
+  listar: () => sel(sb.from('carros').select('*').order('id')),
+  comprar: (modelo, cor) => rpc('comprar_carro', { p_modelo: modelo, p_cor: cor }),
+  estacionar: (id, x, z, ang) => rpc('estacionar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),
+  vender: (id) => rpc('vender_carro', { p_carro: id }),
+};
 export const metas = {
   minhas: () => rpc('minhas_metas'),
   resgatar: (tipo) => rpc('resgatar_meta', { p_tipo: tipo }),

@@ -272,6 +272,7 @@ const RESERVA = {
   '0,-1': { tipo: 'residencial', frente: 1, cor: '#d9c7b0' }, '3,4': { tipo: 'residencial', frente: -1, cor: '#c7d3dd' },
   '-1,0': { tipo: 'loteamento' }, '4,0': { tipo: 'loteamento' }, '-1,3': { tipo: 'loteamento' }, '4,3': { tipo: 'loteamento' },
   '-4,-4': { tipo: 'praca' }, '7,7': { tipo: 'praca' },
+  '-1,-1': { tipo: 'vazio' }, '4,-1': { tipo: 'vazio' },          // prefeitura e concessionária
 };
 const extrasMesh = [];
 function quadraEspecial(bx, bz, r) {
@@ -285,6 +286,7 @@ function quadraEspecial(bx, bz, r) {
     for (const sx of [-1, 1]) arvore(bx + sx * 9, zc + r.frente * 15.5, 0.8);
     return;
   }
+  if (r.tipo === 'vazio') return;
   if (r.tipo === 'loteamento') {
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) gramados.push([bx + sx * 9.5, bz + sz * 9.5, 17.6, 17.6]);
     return;
