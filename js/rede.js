@@ -225,6 +225,19 @@ export const painel = {
   nivelCla: (cla, nivel) => rpc('admin_nivel_cla', { p_cla: cla, p_nivel: nivel }),
 };
 export const cumprirPena = () => rpc('cumprir_pena');
+export const encomendas = {
+  pegar: (origem) => rpc('pegar_encomenda', { p_origem: origem }),
+  entregar: (destino) => rpc('entregar_encomenda', { p_destino: destino }),
+  desistir: () => rpc('desistir_encomenda'),
+  parafusos: () => rpc('fazer_parafusos'),
+  minha: async () => (await sel(sb.from('encomendas').select('*').maybeSingle())),
+};
+export const personagens = {
+  comprar: (p) => rpc('comprar_personagem', { p_personagem: p }),
+  usar: (p) => rpc('usar_personagem', { p_personagem: p }),
+  trocarNome: (nome) => rpc('trocar_nome', { p_nome: nome }),
+  comprados: async (id) => (await sel(sb.from('personagens_comprados').select('personagem').eq('jogador', id))).map((r) => r.personagem),
+};
 export const receberSalario = () => rpc('receber_salario');
 
 export async function buscarJogadores(texto) {

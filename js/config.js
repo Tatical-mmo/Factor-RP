@@ -20,6 +20,11 @@ export const PERSONAGENS = [
   { id: 'Urban_Wanderer', nome: 'Andarilho Urbano' },
 ];
 
+// grátis ao criar a conta; os outros custam 8.000 na loja de personagens (mesma lista do banco)
+export const PERSONAGENS_GRATIS = ['Autumn_Traveler', 'Bandaged_Trailblazer', 'Curly_Wanderer', 'Desert_Scout_Ava',
+  'Mustached_Explorer', 'Patchwork_Scout', 'Urban_Explorer', 'Urban_Wanderer'];
+export const PRECO_PERSONAGEM = 8000, PRECO_NOME = 1000;
+
 // Robôs: só administrador, moderadores e polícia (não aparecem na escolha)
 export const ROBOS = ['Rusty_Scout_Bot', 'Rustbolt_Sentinel'];
 

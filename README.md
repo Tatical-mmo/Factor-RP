@@ -28,7 +28,7 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a` e `16b`, nessa ordem.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17` e `18`, nessa ordem.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
 
 ## Etapa 3: trabalho e produção
@@ -81,6 +81,12 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 - O preso pode pagar **fiança de 2.000 por crime**. A pena só corre online.
 - Policial que mata inocente perde o distintivo e vira procurado. A equipe pode **perdoar** pelo painel.
 - Dois robôs policiais NPC patrulham o quarteirão da delegacia.
+
+## Personagens e cidades vizinhas
+
+- **Loja de personagens** (Mochila → Personagem e nome): 8 personagens são grátis desde a criação da conta, e os outros 9 custam 8.000 cada. Personagem comprado fica seu para sempre e pode ser trocado de graça. **Trocar o nome** custa 1.000. Quem já tinha escolhido um personagem pago continua com ele.
+- **Agências de Encomendas** nas estações Norte e Sul da metrópole, em Vila Serra e em Porto Sul. Pegue uma caixa e leve **de trem** até a agência da outra cidade, em até 20 min. Paga 400 entre a metrópole e uma cidade, e 700 entre Vila Serra e Porto Sul. O rastreio aponta o caminho sozinho.
+- **Oficina de Parafusos** em Porto Sul: 3 sucatas viram 2 parafusos, que a loja compra por 30 cada.
 
 ## Vans e helicópteros
 

@@ -6,7 +6,7 @@ import { FERRO_VELHOS, FABRICAS, PRODUTOS, FOME_POR_SEGUNDO, LOTES_VENDA, DESTIN
 import { iniciarCla, atualizarCla } from './cla.js';
 import { iniciarEmpresa, abrirCompra, abrirMissoes, atualizar as atualizarJanelaEmpresa } from './empresa.js';
 import { iniciarLoja, abrir as abrirJanela, recarregarInventario } from './loja.js';
-import { PERSONAGENS, ROBOS, MODELOS, CIDADE, RUAS_HORIZONTAIS, RUAS_VERTICAIS, QUARTEIROES_ESPECIAIS, VELOCIDADE, CONTROLES_PC } from './config.js';
+import { PERSONAGENS, PERSONAGENS_GRATIS, ROBOS, MODELOS, CIDADE, RUAS_HORIZONTAIS, RUAS_VERTICAIS, QUARTEIROES_ESPECIAIS, VELOCIDADE, CONTROLES_PC } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const TOQUE = window.matchMedia('(pointer: coarse)').matches;
@@ -59,7 +59,9 @@ function montarEscolha() {
   for (const p of PERSONAGENS) {
     const c = document.createElement('div');
     c.className = 'carta';
-    c.innerHTML = `<img src="assets/miniaturas/${p.id}.webp" alt="" loading="lazy"><div>${p.nome}</div>`;
+    const gratis = PERSONAGENS_GRATIS.includes(p.id);
+    c.innerHTML = `<img src="assets/miniaturas/${p.id}.webp" alt="" loading="lazy"><div>${p.nome}</div>${gratis ? '' : '<small class="trava">🔒 8.000 na loja</small>'}`;
+    if (!gratis) { c.classList.add('bloqueada'); grade.appendChild(c); continue; }
     c.onclick = () => { escolhido = p.id; document.querySelectorAll('.carta').forEach(e => e.classList.remove('sel')); c.classList.add('sel'); validar(); };
     grade.appendChild(c);
   }
@@ -813,6 +815,7 @@ function acaoContexto() {
   }
   if (jogador.trava > 0 || !livre()) return;
   if (jogador.carregando?.userData.pedido) { acaoCaixaPedido(); return; }
+  if (jogador.carregando?.userData.encomenda && !jogador.trem && !ferrovia.plataformaEm(jogador.pos.x, jogador.pos.z)) { acaoEncomenda(); return; }
   if (jogador.dentroCasa) {
     if (pontoInterior('porta', 1.8)) sairDeCasa();
     else if (pontoInterior('cama', 2)) descansar();
@@ -825,6 +828,8 @@ function acaoContexto() {
   if (jogador.perfil.policial) { const alvo = procuradoProximo(2.4); if (alvo) { prenderProcurado(alvo); return; } }
   if (pertoDelegacia()) { alternarServico(); return; }
   if (pertoContratante()) { abrirMissoes(); return; }
+  const ag = agenciaProxima(); if (ag && !jogador.carregando) { pegarEncomenda(ag); return; }
+  if (pertoOficina()) { fazerParafusos(); return; }
   if (pontoProximo(pontos.lojas, 3.2)) { abrirJanela('loja'); return; }
   if (jogador.carregando) {
     if (pontoProximo(pontos.docas, 3.4)) { entregar(); return; }
@@ -845,9 +850,75 @@ function acaoContexto() {
   if (pontoProximo(pontos.sucata, 4)) { if (jogador.armado) { aviso('Guarde a arma para trabalhar.'); return; } coletar(); }
 }
 
+// ---------------------------------------------------------------- encomendas entre cidades e oficina de parafusos
+const NOMES_AGENCIA = { centro: 'a Metrópole', serra: 'Vila Serra', porto: 'Porto Sul' };
+const AGENCIAS = [
+  { id: 'centro', x: -20, z: -118 }, { id: 'centro', x: -20, z: 118 },
+  { id: 'serra', x: -60, z: -934 }, { id: 'porto', x: -60, z: 934 },
+];
+const OFICINA = { x: 62, z: 934 };
+function agenciaProxima() { return AGENCIAS.find((a) => Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z) < 3.4) || null; }
+function pertoOficina() { return Math.hypot(OFICINA.x - jogador.pos.x, OFICINA.z - jogador.pos.z) < 3.2; }
+function balcao(x, z, cor, texto, sub) {
+  const g = new THREE.Group(); g.position.set(x, alturaChao(x, z), z);
+  const m = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 });
+  const b = (mat, w, h, d, px, py, pz) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); o.position.set(px, py, pz); o.castShadow = true; o.receiveShadow = true; g.add(o); };
+  b(m('#e9e2d4'), 2.6, 1.1, 1.0, 0, 0.55, 0); b(m(cor), 2.8, 0.12, 1.2, 0, 1.16, 0);
+  for (const sx of [-1.25, 1.25]) b(m('#5a5f66'), 0.1, 2.6, 0.1, sx, 1.3, -0.45);
+  b(m(cor), 3.0, 0.15, 1.6, 0, 2.65, -0.1);
+  scene.add(g);
+  const p1 = textoSprite(texto, { escala: 0.75, fundo: 'rgba(20,24,34,.88)', cor: '#ffd9a0' }); p1.position.set(x, 3.6, z); scene.add(p1);
+  if (sub) { const p2 = textoSprite(sub, { escala: 0.5, fundo: cor }); p2.position.set(x, 3.05, z); scene.add(p2); }
+  colisores.push({ tipo: 'caixa', x0: x - 1.3, x1: x + 1.3, z0: z - 0.5, z1: z + 0.5 });
+}
+function montarAgencias() {
+  for (const a of AGENCIAS) balcao(a.x, a.z, '#2f6f5e', 'Agência de Encomendas', a.id === 'centro' ? 'Leve para Vila Serra ou Porto Sul' : 'Leve para outra cidade');
+  balcao(OFICINA.x, OFICINA.z, '#8a5a2a', 'Oficina de Parafusos', '3 sucatas = 2 parafusos');
+}
+function carregarEncomenda(e) {
+  if (jogador.carregando) { scene.remove(jogador.carregando); jogador.carregando = null; }
+  const cx = criarCaixa(null); cx.userData.encomenda = e;
+  jogador.carregando = cx; scene.add(cx);
+}
+async function pegarEncomenda(ag) {
+  if (ocupado) return; ocupado = true;
+  try {
+    const e = await rede.encomendas.pegar(ag.id);
+    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 1.5, fade: 0.15 }); jogador.trava = 1.1; jogador.alvo = null;
+    jogador.eventos.push({ t: 0.7, fn: () => carregarEncomenda(e) });
+    aviso(`Encomenda para ${NOMES_AGENCIA[e.destino]}: ${e.valor} moedas na entrega. Prazo: 20 min. Pegue o trem!`, 5);
+    rastrear({ nome: `Agência ${({ centro: 'da Metrópole', serra: 'de Vila Serra', porto: 'de Porto Sul' })[e.destino]}`, ...AGENCIAS.find((a) => a.id === e.destino) });
+  } catch (err) { aviso(err.message); }
+  finally { ocupado = false; }
+}
+let confirmaEncomenda = 0;
+async function acaoEncomenda() {
+  const cx = jogador.carregando, e = cx.userData.encomenda, ag = agenciaProxima();
+  if (ag?.id === e.destino) {
+    if (ocupado) return; ocupado = true;
+    try { const v = await rede.encomendas.entregar(ag.id); scene.remove(cx); jogador.carregando = null; aviso(`Encomenda entregue! +${v} moedas`); rastrear(null); }
+    catch (err) { aviso(err.message); if (/venceu/.test(err.message)) { scene.remove(cx); jogador.carregando = null; } }
+    finally { ocupado = false; }
+    return;
+  }
+  if (performance.now() - confirmaEncomenda < 3000) {
+    confirmaEncomenda = 0;
+    try { await rede.encomendas.desistir(); } catch { /* some sozinha */ }
+    scene.remove(cx); jogador.carregando = null; aviso('Você desistiu da encomenda.'); return;
+  }
+  confirmaEncomenda = performance.now();
+  aviso(`Leve até a agência de ${NOMES_AGENCIA[e.destino]}. Aperte de novo para desistir.`, 3);
+}
+async function fazerParafusos() {
+  if (ocupado) return; ocupado = true;
+  try { const n = await rede.encomendas.parafusos(); jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 1.2, fade: 0.15 }); jogador.trava = 1; aviso(`+2 parafusos (você tem ${n}). Venda na loja.`); recarregarInventario(); }
+  catch (err) { aviso(err.message === 'itens insuficientes' ? 'Precisa de 3 sucatas (colete no ferro-velho).' : err.message); }
+  finally { ocupado = false; }
+}
+
 // ---------------------------------------------------------------- trem
 function embarcar(pl) {
-  if (jogador.carregando) { aviso('Largue a caixa antes de embarcar.'); return; }
+  if (jogador.carregando && !jogador.carregando.userData.encomenda) { aviso('Largue a caixa antes de embarcar.'); return; }
   if (jogador.armado) alternarArma();
   const l = pl.linha;
   jogador.trem = { li: l.id, k: pl.trem, v: Math.floor(Math.random() * ferrovia.VAGAS_POR_TREM), origem: pl.lado, destino: pl.lado === 'centro' ? 'destino' : 'centro' };
@@ -1122,6 +1193,8 @@ function alvosRastreio() {
   if (jogador.cla) for (const v of territorios.values()) if (v.d.dono_cla === jogador.cla) r.push({ icone: '🚩', nome: v.d.nome, x: v.d.x, z: v.d.z });
   for (const l of ferrovia.linhas) for (const lado of ['centro', 'destino']) { const p = l.plataformas[lado]; r.push({ icone: '🚆', nome: p.nome, x: 0, z: p.zSaida }); }
   if (contratante) r.push({ icone: '📋', nome: 'Contratante', x: contratante.x, z: contratante.z });
+  for (const a of AGENCIAS) r.push({ icone: '📦', nome: `Agência ${a.id === 'centro' ? (a.z < 0 ? 'Norte' : 'Sul') : NOMES_AGENCIA[a.id]}`, x: a.x, z: a.z });
+  r.push({ icone: '🔩', nome: 'Oficina de Parafusos', x: OFICINA.x, z: OFICINA.z });
   return r;
 }
 function rastrear(alvo) {
@@ -1277,6 +1350,7 @@ async function iniciarJogo(perfil) {
   ferrovia.montar({ scene, textoSprite });
   mundo.finalizar();
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
+  montarAgencias();
   criarCaminhaoMovel();
 
   // jogador
@@ -1305,6 +1379,8 @@ async function iniciarJogo(perfil) {
   const rotulo = textoSprite('Contratante', { escala: 0.9, cor: '#ffd23e' }); rotulo.position.y = 2.25; robo.raiz.add(rotulo);
   const excl = textoSprite('!', { escala: 1.6, cor: '#20160a', fundo: '#ffd23e' }); excl.position.y = 3.0; robo.raiz.add(excl);
   contratante.avatar = robo; contratante.excl = excl;
+  // encomenda em andamento continua na mão depois de entrar de novo
+  rede.encomendas.minha().then((e) => { if (e && Date.parse(e.criada_em) > Date.now() - 20 * 60000) carregarEncomenda(e); }).catch(() => {});
   colisores.push({ tipo: 'circ', x: contratante.x, z: contratante.z + 2, r: 0.5 });
 
   desenharFundoMapa();
@@ -2626,8 +2702,9 @@ function atualizarJogador(dt) {
   for (let i = j.eventos.length - 1; i >= 0; i--) { j.eventos[i].t -= dt; if (j.eventos[i].t <= 0) { j.eventos[i].fn(); j.eventos.splice(i, 1); } }
   j.recarga = Math.max(0, j.recarga - dt);
   if (j.trem && seguirTrem()) {
-    av.tocar('idle'); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw;
+    av.tocar(j.carregando ? 'carregar_parado' : 'idle'); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw;
     av.mixer.update(dt); av.raiz.updateMatrixWorld(true);
+    if (j.carregando) posicionarCaixa(av, j.carregando, j.yaw);
     return;
   }
 
@@ -2767,6 +2844,11 @@ function contexto() {
     return [`a caminho da ${dest}: chega em ${Math.ceil(est?.chega ?? 0)} s`, `Chega ${Math.ceil(est?.chega ?? 0)}s`];
   }
   if (pd) return pertoDestino(pd.destino) ? ['entregar a carga', 'Entregar'] : [`levar a carga até: ${DESTINOS[pd.destino]?.nome}`, 'Largar'];
+  const enc = jogador.carregando?.userData.encomenda;
+  if (enc && !ferrovia.plataformaEm(jogador.pos.x, jogador.pos.z)) {
+    const ag = agenciaProxima();
+    return ag?.id === enc.destino ? [`entregar a encomenda (+${enc.valor})`, 'Entregar'] : [`encomenda para ${NOMES_AGENCIA[enc.destino]} (vá de trem)`, 'Largar'];
+  }
   if (jogador.morto) return ['', ''];
   if (jogador.dentroCasa) {
     if (pontoInterior('porta', 1.8)) return ['sair de casa', 'Sair'];
@@ -2782,6 +2864,8 @@ function contexto() {
     return [`o trem para ${dest} chega em ${n} s`, `Trem ${n}s`];
   }
   if (jogador.perfil?.policial && procuradoProximo(2.4)) return ['algemar e prender o procurado', 'Prender'];
+  if (agenciaProxima() && !jogador.carregando) return ['pegar uma encomenda para outra cidade', 'Encomenda'];
+  if (pertoOficina()) return ['fazer parafusos (3 sucatas = 2 parafusos)', 'Fazer'];
   if (pertoDelegacia()) return [jogador.perfil?.policial ? 'sair do serviço policial' : 'entrar em serviço na polícia', 'Polícia'];
   if (pertoContratante()) return ['ver missões do Contratante', 'Falar'];
   if (pontoProximo(pontos.lojas, 3.2)) return ['abrir a loja', 'Loja'];

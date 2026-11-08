@@ -1,9 +1,10 @@
 // Loja e mochila (etapa 3). Toda compra, venda e refeição é feita no banco.
 import * as rede from './rede.js';
+import { PERSONAGENS, PERSONAGENS_GRATIS, PRECO_PERSONAGEM, PRECO_NOME } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const ICONES = { sucata: '🔩', chocolate: '🍫', cereal: '🥣', remedio: '💊', desbloqueio: '🔓' };
+const ICONES = { sucata: '⚙️', chocolate: '🍫', cereal: '🥣', remedio: '💊', desbloqueio: '🔓', parafuso: '🔩' };
 
 let ctx = null;
 let precos = [];
@@ -163,6 +164,7 @@ function desenhar() {
   const c = $('janelaConteudo');
   if (modo === 'bau') { desenharBau(c); return; }
   if (modo === 'terreno') { desenharTerreno(c); return; }
+  if (modo === 'visual') { desenharVisual(c); return; }
   if (modo === 'porta') { desenharPorta(c); return; }
   if (modo === 'gerenciar') { desenharGerenciar(c); return; }
   if (modo === 'predio') { desenharPredio(c); return; }
@@ -185,10 +187,12 @@ function desenhar() {
     $('janelaTitulo').textContent = 'Mochila';
     const itens = precos.filter((p) => inv[p.item] > 0);
     c.innerHTML = `<p class="dica">Vida: <b>${Math.round(ctx.vida?.() ?? 100)}</b> · Fome: <b>${Math.round(ctx.fome())}%</b> · Moedas: <b>${moedas()}</b></p>
+      <div class="botoes" style="margin-bottom:10px"><button id="mVisual">👕 Personagem e nome</button></div>
       <div class="lista">${itens.length ? itens.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${inv[p.item]} na mochila</small></span>
           <span class="bts">${p.fome ? `<button data-comer="${p.item}">Comer</button>` : ''}${p.item === 'remedio' ? '<button data-curar="1">Usar (+50 vida)</button>' : ''}</span></div>`).join('') : '<span class="vazio">Mochila vazia. Colete sucata no ferro-velho ou compre na loja.</span>'}</div>`;
+    $('mVisual').onclick = () => abrir('visual');
     c.querySelectorAll('[data-curar]').forEach((b) => {
       b.onclick = () => executar(async () => { if (!(await ctx.curar())) throw new Error('Sua vida já está cheia.'); }, 'Remédio usado: +50 de vida.');
     });
@@ -196,5 +200,33 @@ function desenhar() {
       b.onclick = () => executar(async () => { const f = await rede.economia.consumir(b.dataset.comer); ctx.definirFome(Number(f)); return f; }, (f) => `Fome agora: ${Math.round(f)}%.`);
     });
   }
+}
+// personagens: 8 grátis, os outros comprados uma vez e usados quando quiser; trocar o nome custa 1.000
+async function desenharVisual(c) {
+  $('janelaTitulo').textContent = 'Personagem e nome';
+  const p = ctx.perfil();
+  let meus = [];
+  try { meus = await rede.personagens.comprados(p.id); } catch (e) { c.textContent = e.message; return; }
+  if (modo !== 'visual') return;
+  const tem = (id) => PERSONAGENS_GRATIS.includes(id) || meus.includes(id);
+  c.innerHTML = `<p class="dica">Moedas: <b>${moedas()}</b>. Personagem comprado fica seu para sempre: troque quando quiser, de graça.</p>
+    <div class="sub">Nome</div>
+    <div class="botoes"><input id="vNome" maxlength="16" value="${esc(p.nome)}"><button id="vNomeOk">Trocar nome (${PRECO_NOME.toLocaleString('pt-BR')})</button></div>
+    <div class="sub">Personagens</div>
+    <div class="grade pequena">${PERSONAGENS.map((x) => `<div class="carta"><img src="assets/miniaturas/${x.id}.webp" alt="" loading="lazy"><div>${esc(x.nome)}</div>
+      ${p.personagem === x.id ? '<button class="acao em-uso" disabled>Em uso</button>'
+        : tem(x.id) ? `<button class="acao" data-usar="${x.id}">Usar</button>`
+        : `<button class="acao" data-comprar-p="${x.id}">🔒 ${PRECO_PERSONAGEM.toLocaleString('pt-BR')}</button>`}</div>`).join('')}</div>`;
+  $('vNomeOk').onclick = () => {
+    const n = $('vNome').value.trim(), b = $('vNomeOk');
+    if (!/^[\p{L}\p{N} _.-]{3,16}$/u.test(n)) { msg('Use de 3 a 16 letras, números, espaço, ponto, hífen ou _.', false); return; }
+    if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Confirmar (1.000)'; return; }
+    executar(() => rede.personagens.trocarNome(n), `Agora você se chama ${n}.`);
+  };
+  c.querySelectorAll('[data-usar]').forEach((b) => { b.onclick = () => executar(() => rede.personagens.usar(b.dataset.usar), 'Personagem trocado!'); });
+  c.querySelectorAll('[data-comprar-p]').forEach((b) => {
+    b.onclick = () => { if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Confirmar'; return; }
+      executar(() => rede.personagens.comprar(b.dataset.comprarP), 'Personagem comprado e em uso!'); };
+  });
 }
 function nomeDe(item) { return precos.find((p) => p.item === item)?.nome || item; }

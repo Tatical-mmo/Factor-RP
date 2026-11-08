@@ -26,6 +26,11 @@
   .carta.sel { border-color:var(--destaque); background:rgba(242,163,58,.14); }
   .carta img { width:100%; aspect-ratio:1; object-fit:contain; display:block; }
   .carta div { font-size:13px; margin-top:2px; }
+  .carta.bloqueada { opacity:.45; cursor:default; }
+  .carta .trava { display:block; font-size:11px; color:var(--suave); margin-top:2px; }
+  .grade.pequena { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap:8px; }
+  .carta .acao { margin-top:5px; width:100%; padding:6px 4px; border-radius:8px; border:1px solid var(--borda); background:#202737; color:var(--texto); font-weight:700; font-size:12px; cursor:pointer; }
+  .carta .acao.em-uso { background:var(--destaque); color:#20160a; }
   #barraEscolha { position:fixed; left:0; right:0; bottom:0; z-index:21; display:flex; gap:10px; justify-content:center; align-items:center;
     padding:14px 16px calc(14px + env(safe-area-inset-bottom)); background:var(--painel); border-top:1px solid var(--borda); flex-wrap:wrap; }
   #nome { font-size:17px; padding:12px 14px; border-radius:10px; border:1px solid var(--borda); background:#0f131b; color:var(--texto); width:min(260px, 60vw); }
@@ -157,16 +162,16 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261108j",
-  "./js/mundo.js": "./js/mundo.js?v=20261108j",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261108j",
-  "./js/cla.js": "./js/cla.js?v=20261108j",
-  "./js/config.js": "./js/config.js?v=20261108j",
-  "./js/empresa.js": "./js/empresa.js?v=20261108j",
-  "./js/loja.js": "./js/loja.js?v=20261108j",
-  "./js/painel.js": "./js/painel.js?v=20261108j",
-  "./js/rede.js": "./js/rede.js?v=20261108j",
-  "./js/sedes.js": "./js/sedes.js?v=20261108j"
+  "./js/main.js": "./js/main.js?v=20261108k",
+  "./js/mundo.js": "./js/mundo.js?v=20261108k",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261108k",
+  "./js/cla.js": "./js/cla.js?v=20261108k",
+  "./js/config.js": "./js/config.js?v=20261108k",
+  "./js/empresa.js": "./js/empresa.js?v=20261108k",
+  "./js/loja.js": "./js/loja.js?v=20261108k",
+  "./js/painel.js": "./js/painel.js?v=20261108k",
+  "./js/rede.js": "./js/rede.js?v=20261108k",
+  "./js/sedes.js": "./js/sedes.js?v=20261108k"
 } }
 </script>
 </head>
@@ -269,7 +274,7 @@
   <div id="girar"><button class="bt" id="btGiraE">⟲</button><button class="bt" id="btGiraD">⟳</button></div>
 </div>
 
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 08/11 · veículos</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 08/11 · cidades vivas</div>
 <script type="module">import './js/main.js';</script>
 </body>
 </html>
