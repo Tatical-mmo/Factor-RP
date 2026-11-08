@@ -267,6 +267,32 @@ function quadra(bx, bz, estilo, faixa = [2, 6], y = 0.18) {
   }
 }
 
+// quarteirões com uso especial: prédios de apartamentos, loteamentos de terrenos e praças de território
+const RESERVA = {
+  '0,-1': { tipo: 'residencial', frente: 1, cor: '#d9c7b0' }, '3,4': { tipo: 'residencial', frente: -1, cor: '#c7d3dd' },
+  '-1,0': { tipo: 'loteamento' }, '4,0': { tipo: 'loteamento' }, '-1,3': { tipo: 'loteamento' }, '4,3': { tipo: 'loteamento' },
+  '-4,-4': { tipo: 'praca' }, '7,7': { tipo: 'praca' },
+};
+const extrasMesh = [];
+function quadraEspecial(bx, bz, r) {
+  calcadas.push([bx, bz, QB, QB, 0.18]);
+  if (r.tipo === 'residencial') {
+    const zc = bz - r.frente * 2;
+    predio(bx, zc, 30, 24, 35, { cor: r.cor, loja: false });
+    // marquise e portaria
+    extrasMesh.push({ geo: [12, 0.3, 3], cor: '#2f3a44', pos: [bx, 3.6, zc + r.frente * 13.4] });
+    extrasMesh.push({ geo: [5, 3.2, 0.2], cor: '#7fa6c2', pos: [bx, 1.8, zc + r.frente * 12.05], vidro: true });
+    for (const sx of [-1, 1]) arvore(bx + sx * 9, zc + r.frente * 15.5, 0.8);
+    return;
+  }
+  if (r.tipo === 'loteamento') {
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) gramados.push([bx + sx * 9.5, bz + sz * 9.5, 17.6, 17.6]);
+    return;
+  }
+  // praça do território: piso livre no meio, árvores só nos cantos
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) arvore(bx + sx * 17.5, bz + sz * 17.5, 1.1);
+}
+
 function celulaMetro(i, j) {
   if (i >= 0 && i < N && j >= 0 && j < N) return false;                              // centro
   if ((i === -2 || i === -1 || i === N || i === N + 1) && (j === 1 || j === 2)) return false;   // territórios dos clãs
@@ -279,6 +305,8 @@ function gerarMetropole() {
   for (let i = MI; i <= MA; i++) for (let j = MI; j <= MA; j++) {
     if (!celulaMetro(i, j)) continue;
     const x = quadC(i), z = quadC(j); blocosMetro.add(i + ',' + j);
+    const res = RESERVA[i + ',' + j];
+    if (res) { quadraEspecial(x, z, res); continue; }
     const d = Math.max(Math.abs(x), Math.abs(z)), r = rnd();
     let estilo = 'predios';
     if (r < 0.11) estilo = 'parque';
@@ -329,6 +357,7 @@ function gerarCidade(cid) {
     const x = bx, z = s * bz;
     pisos.push({ x0: x - QB / 2, x1: x + QB / 2, z0: z - QB / 2, z1: z + QB / 2, h: 0.18 });
     if (bx === 0 && bz === 1026) { quadra(x, z, 'parque'); continue; }
+    if (bx === -54 && bz === 1080) { quadraEspecial(x, z, { tipo: 'praca' }); continue; }   // território da cidade
     if (bx === 54 && bz === 972) { calcadas.push([x, z, QB, QB, 0.18]); cid.loja = { x: x - 6, z: z + (s > 0 ? -3 : 3) }; arvore(x + 12, z - 10); arvore(x + 12, z + 10); continue; }
     if (cid.id === 'norte') quadra(x, z, rnd() < 0.75 ? 'casas' : 'predios', [1, 3]);
     else quadra(x, z, bz === 1080 ? 'galpoes' : (rnd() < 0.5 ? 'predios' : 'casas'), [2, 4]);
@@ -370,6 +399,10 @@ function matrizDet(dt, visivel = true) {
 
 function montarMalhas() {
   const { scene } = ctx;
+  for (const e of extrasMesh) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(...e.geo), e.vidro ? new THREE.MeshStandardMaterial({ color: e.cor, roughness: 0.1, metalness: 0.4 }) : new THREE.MeshStandardMaterial({ color: e.cor, roughness: 0.6 }));
+    m.position.set(...e.pos); m.castShadow = true; scene.add(m);
+  }
   const caixaBase = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
   const geoPredio = caixaBase.clone();
   geoPredio.setAttribute('aLoja', new THREE.InstancedBufferAttribute(new Float32Array(edificios.map((e) => (e.tipo === 'predio' && e.loja !== false ? 1 : 0))), 1));

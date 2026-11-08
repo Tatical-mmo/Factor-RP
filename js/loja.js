@@ -34,6 +34,25 @@ async function executar(fn, sucesso) {
 }
 const moedas = () => Number(ctx.perfil().moedas || 0).toLocaleString('pt-BR');
 
+// terreno: escolher a casa que vai ser construída
+const MODELOS = [
+  { id: 'simples', nome: 'Casa simples', preco: 20000, texto: 'Térrea, com varanda.' },
+  { id: 'sobrado', nome: 'Sobrado', preco: 45000, texto: 'Dois andares e garagem.' },
+  { id: 'mansao', nome: 'Mansão', preco: 90000, texto: 'Dois andares, piscina e jardim.' },
+];
+function desenharTerreno(c) {
+  const t = ctx.meuTerreno?.();
+  $('janelaTitulo').textContent = t?.rotulo || 'Seu terreno';
+  if (!t) { c.textContent = 'Você não tem terreno.'; return; }
+  c.innerHTML = `<p class="dica">Escolha o que construir. Trocar de modelo depois cobra o preço do novo. Moedas: <b>${moedas()}</b>.</p>
+    <div class="lista">${MODELOS.map((m) => `<div class="linha item"><span class="nm"><b>${m.nome}</b><small>${m.texto} · ${m.preco.toLocaleString('pt-BR')} moedas${t.modelo === m.id ? ' · construída' : ''}</small></span>
+      <span class="bts">${t.modelo === m.id ? '' : `<button data-mod="${m.id}">Construir</button>`}</span></div>`).join('')}</div>
+    <div class="botoes" style="margin-top:12px"><button id="tVender" class="perigo">Vender o terreno</button></div>`;
+  c.querySelectorAll('[data-mod]').forEach((b) => { b.onclick = () => executar(() => rede.casas.construir(b.dataset.mod), () => { ctx.casaVendida?.(); return 'Construção pronta!'; }); });
+  $('tVender').onclick = () => { const b = $('tVender'); if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Toque de novo para vender'; return; }
+    executar(() => rede.casas.vender(), (v) => { ctx.casaVendida?.(); fechar(); return `Vendido por ${Number(v).toLocaleString('pt-BR')}.`; }); };
+}
+
 async function desenharBau(c) {
   $('janelaTitulo').textContent = 'Baú da casa';
   const casa = ctx.casaId?.();
@@ -56,6 +75,7 @@ async function desenharBau(c) {
 function desenhar() {
   const c = $('janelaConteudo');
   if (modo === 'bau') { desenharBau(c); return; }
+  if (modo === 'terreno') { desenharTerreno(c); return; }
   if (modo === 'loja') {
     $('janelaTitulo').textContent = 'Loja';
     const venda = precos.filter((p) => p.compra != null);

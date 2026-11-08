@@ -361,6 +361,7 @@ export const casas = {
   guardar: (item, qtd) => rpc('guardar_no_bau', { p_item: item, p_qtd: qtd }),
   retirar: (item, qtd) => rpc('retirar_do_bau', { p_item: item, p_qtd: qtd }),
   vender: () => rpc('vender_casa'),
+  construir: (modelo) => rpc('construir_casa', { p_modelo: modelo }),
 };
 export async function listarBau(casa) {
   const d = await sel(sb.from('bau').select('item, qtd').eq('casa', casa));
@@ -371,4 +372,4 @@ export const listarClas = () => sel(sb.from('clas').select('*, lider_perfil:perf
 export const membrosDoCla = (id) => sel(sb.from('membros_cla').select('jogador, desde, perfil:perfis!membros_cla_jogador_fkey(nome)').eq('cla', id).order('desde'));
 export async function meuClaId(id) { const d = await sel(sb.from('membros_cla').select('cla').eq('jogador', id).maybeSingle()); return d?.cla ?? null; }
 export const listarTerritorios = () => sel(sb.from('territorios').select('*').order('id'));
-export const listarCasas = () => sel(sb.from('casas').select('id, x, z, preco, dono, dono_perfil:perfis!casas_dono_fkey(nome)').order('id'));
+export const listarCasas = () => sel(sb.from('casas').select('id, x, z, preco, dono, tipo, rotulo, modelo, dono_perfil:perfis!casas_dono_fkey(nome)').order('id'));
