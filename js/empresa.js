@@ -147,12 +147,30 @@ function telaResumo(c, e) {
   $('eSalvarPag').onclick = () => executar(() => rede.logistica.pagamento(e.id, inteiro('ePag')), 'Pagamento atualizado.');
 }
 async function telaEquipe(c, e) {
-  const membros = await rede.membrosDe(e.id);
-  c.innerHTML = `<p class="dica">Funcionários: ${membros.length}/${lim(e, 'funcionarios')} (evolua a empresa para contratar mais).</p><div class="botoes"><input id="eNome" placeholder="Nome do jogador"><button id="eContratar">Contratar</button></div>
+  const membros = (await rede.membrosDe(e.id)).filter((m) => m.jogador !== e.dono);
+  const FUN = { operario: 'Operário', motorista: 'Motorista', seguranca: 'Segurança', gerente: 'Gerente' };
+  const opcoes = (sel) => Object.entries(FUN).filter(([k]) => k !== 'operario' || e.fabrica).map(([k, t]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${t}</option>`).join('');
+  const livres = Math.max(0, lim(e, 'funcionarios') - membros.length);
+  c.innerHTML = `<p class="dica">Funcionários: ${membros.length}/${lim(e, 'funcionarios')} (evolua a empresa para contratar mais).</p>
+    <div class="sub">Vagas no mural da Agência de Empregos</div>
+    <p class="dica">${e.vagas > 0 ? `Aberto agora: <b>${e.vagas}</b> vaga${e.vagas === 1 ? '' : 's'} de ${FUN[e.vaga_funcao] || e.vaga_funcao} a ${num(e.vaga_salario)}/min.` : 'Nenhuma vaga aberta.'}
+      Funcionário perto da empresa bate ponto a cada minuto e recebe o salário do caixa.${e.fabrica ? ' Operário também produz 1 caixa por minuto.' : ''}</p>
+    <div class="linha-form"><label>Vagas<input id="eVagas" type="number" min="0" max="${livres}" value="${Math.min(e.vagas || 0, livres)}" inputmode="numeric"></label>
+      <label>Função<select id="eVagaFun">${opcoes(e.vaga_funcao)}</select></label>
+      <label>Salário/min<input id="eVagaSal" type="number" min="5" max="200" value="${e.vaga_salario || 20}" inputmode="numeric"></label></div>
+    <div class="botoes"><button id="eVagasOk">Publicar vagas</button>${e.vagas > 0 ? '<button id="eVagasFechar">Fechar vagas</button>' : ''}</div>
+    <div class="sub">Contratar pelo nome</div>
+    <div class="botoes"><input id="eNome" placeholder="Nome do jogador"><button id="eContratar">Contratar</button></div>
     <div class="sub">Equipe (${membros.length})</div>
-    <div class="lista">${membros.map((m) => `<div class="linha item"><span class="nm"><b>${esc(m.perfil?.nome)}</b><small>funcionário desde ${new Date(m.desde).toLocaleDateString('pt-BR')}</small></span>
-      <span class="bts"><button data-demitir="${m.jogador}">Demitir</button></span></div>`).join('')}</div>`;
+    <div class="lista">${membros.length ? membros.map((m) => `<div class="linha item"><span class="nm"><b>${esc(m.perfil?.nome)}</b><small>${FUN[m.funcao] || m.funcao} · ${num(m.salario)}/min · ${num(m.minutos || 0)} min trabalhados${m.ponto_em && Date.now() - Date.parse(m.ponto_em) < 150000 ? ' · 🟢 trabalhando' : ''}</small>
+        <span class="linha-form"><select data-fun="${m.jogador}">${opcoes(m.funcao)}</select><input data-sal="${m.jogador}" type="number" min="0" max="200" value="${m.salario}" inputmode="numeric" style="max-width:5em"><button data-ajustar="${m.jogador}">Salvar</button></span></span>
+      <span class="bts"><button data-demitir="${m.jogador}">Demitir</button></span></div>`).join('') : '<span class="vazio">Ninguém ainda.</span>'}</div>`;
   $('eContratar').onclick = () => { const n = $('eNome').value.trim(); if (n) executar(() => rede.logistica.contratar(e.id, n), `${n} foi contratado.`); };
+  $('eVagasOk').onclick = () => executar(() => rede.empregos.abrirVagas(e.id, inteiro('eVagas'), $('eVagaFun').value, inteiro('eVagaSal')), 'Vagas publicadas no mural.');
+  const f = $('eVagasFechar'); if (f) f.onclick = () => executar(() => rede.empregos.abrirVagas(e.id, 0, e.vaga_funcao, e.vaga_salario || 20), 'Vagas fechadas.');
+  c.querySelectorAll('[data-ajustar]').forEach((b) => {
+    b.onclick = () => { const id = b.dataset.ajustar; executar(() => rede.empregos.ajustar(e.id, id, c.querySelector(`[data-fun="${id}"]`).value, Math.floor(Number(c.querySelector(`[data-sal="${id}"]`).value) || 0)), 'Cargo atualizado.'); };
+  });
   c.querySelectorAll('[data-demitir]').forEach((b) => { b.onclick = () => executar(() => rede.logistica.demitir(e.id, b.dataset.demitir), 'Funcionário demitido.'); });
 }
 

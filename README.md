@@ -28,7 +28,7 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b`, `21c`, `22a` e `22b`, nessa ordem.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b`, `21c`, `22a`, `22b`, `23a`, `23b`, `23c` e `23d`, nessa ordem.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
 
 ## Etapa 3: trabalho e produção
@@ -238,3 +238,11 @@ Animações de cada personagem: `idle`, `idle_long`, `walk`, `run`, `carry_walk`
 - A tela do clã agora tem abas: Resumo, Territórios, Estoque e Membros.
 - Ela só se redesenha quando algo muda de verdade, então não pula mais enquanto você rola ou digita.
 - Não precisa rodar SQL novo.
+
+## Versão 08/11 (q) · guerra de clãs, empregos, banco, hospital e bombeiros
+Rode no SQL Editor, nessa ordem e cada um numa consulta limpa: `23a_guerra_clas.sql`, `23b_empregos.sql`, `23c_banco.sql`, `23d_hospital_bombeiros.sql`.
+- **Guerra de clãs** (aba Guerra do clã): o líder desafia outro clã, marca o horário (10 a 120 min) e aposta do caixa. O outro líder aceita ou recusa. A guerra dura 15 min; cada abate de inimigo vale 1 ponto e não é crime. O vencedor leva as duas apostas. Placar no topo da tela e etiqueta ⚔️ INIMIGO.
+- **Empregos**: o dono publica vagas (função e salário por minuto) na aba Equipe. Jogadores se candidatam na Agência de Empregos (ao lado do banco). Perto da empresa o ponto é batido a cada minuto; operário de fábrica também produz 1 caixa por minuto.
+- **Banco Central**: poupança que rende 1% por ciclo e não se perde na morte; empréstimo de até 20.000 com 10% de juros e prazo de 3 ciclos, com cobrança automática.
+- **Hospital**: quem morre fica ferido por 20 s. Médico em serviço socorre (+250). Sem socorro, acorda no hospital e paga até 100. Tratamento no balcão por 150.
+- **Bombeiros**: incêndios aparecem em empresas e casas. Bombeiro em serviço apaga com 10 jatos (+400). O dono também pode apagar. Fogo de 8 min causa prejuízo.

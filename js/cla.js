@@ -59,17 +59,18 @@ async function desenhar(auto = false) {
       return;
     }
     const lider = meu.lider === eu;
-    const membros = await rede.membrosDoCla(meu.id);
+    const [membros, todasGuerras, historico] = await Promise.all([rede.membrosDoCla(meu.id), rede.guerra.listar(), rede.guerra.historico(meu.id)]);
     if (travado()) return;
+    const guerras = todasGuerras.filter((g) => g.desafiante === meu.id || g.desafiado === meu.id);
     // só redesenha quando algo mudou (evita a tela pulando enquanto rola)
-    const assinatura = JSON.stringify([aba, meu, membros.map((m) => m.jogador), territorios.map((t) => [t.id, t.dono_cla, t.defesa])]);
+    const assinatura = JSON.stringify([aba, meu, membros.map((m) => m.jogador), territorios.map((t) => [t.id, t.dono_cla, t.defesa]), guerras, historico.map((g) => g.id), aba === 'guerra' ? Math.floor(Date.now() / 30000) : 0]);
     if (auto && assinatura === ultimaAssinatura) return;
     ultimaAssinatura = assinatura;
     $('claTitulo').textContent = `${meu.nome} · Nv ${meu.nivel || 1}`;
     const nv = meu.nivel || 1, L = limCla(nv), prox = nv + 1;
     const meus = territorios.filter((t) => t.dono_cla === meu.id), outros = territorios.filter((t) => t.dono_cla !== meu.id);
     const naDefesa = meus.reduce((a, t) => a + (t.defesa || 0), 0);
-    const abas = [['resumo', 'Resumo'], ['territorios', `Territórios (${meus.length})`], ['estoque', 'Estoque'], ['membros', `Membros (${membros.length})`]];
+    const abas = [['resumo', 'Resumo'], ['territorios', `Territórios (${meus.length})`], ['estoque', 'Estoque'], ['membros', `Membros (${membros.length})`], ['guerra', guerras.length ? '⚔️ Guerra' : 'Guerra']];
     let corpo = '';
     if (aba === 'resumo') {
       corpo = `<div class="cartoes"><div><small>Nível</small><b>${nv}</b></div><div><small>Caixa</small><b>${num(meu.caixa)}</b></div>
@@ -95,6 +96,34 @@ async function desenhar(auto = false) {
       corpo = `<p class="dica">Cargas roubadas por membros vêm para cá. Qualquer membro pega para a mochila; o líder vende tudo para o caixa.</p>
         <div class="lista">${[['chocolate', '🍫', 'Chocolate'], ['remedio', '💊', 'Remédio']].map(([k, ic, n]) => `<div class="linha item"><span class="ic">${ic}</span><span class="nm"><b>${n}</b><small>${meu[k] || 0} no estoque</small></span>
           <span class="bts"><button data-ret="${k}" ${meu[k] ? '' : 'disabled'}>Pegar 1</button>${lider ? `<button data-vend="${k}" ${meu[k] ? '' : 'disabled'}>Vender tudo</button>` : ''}</span></div>`).join('')}</div>`;
+    } else if (aba === 'guerra') {
+      const hora = (t) => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const minutos = (t) => Math.max(0, Math.round((Date.parse(t) - Date.now()) / 60000));
+      const cartao = (g) => {
+        const nos = g.desafiante === meu.id, outro = esc(nomeCla(nos ? g.desafiado : g.desafiante) || '?');
+        const agora = Date.now(), ini = Date.parse(g.inicio), fim = Date.parse(g.fim);
+        const nossos = nos ? g.pontos_a : g.pontos_b, deles = nos ? g.pontos_b : g.pontos_a;
+        let txt, bts = '';
+        if (g.status === 'proposta') {
+          txt = nos ? `Você desafiou <b>${outro}</b>. Esperando o aceite (até ${hora(g.inicio)}).` : `<b>${outro}</b> desafiou o seu clã para ${hora(g.inicio)} (em ${minutos(g.inicio)} min).`;
+          if (lider) bts = nos ? `<button data-gcanc="${g.id}">Cancelar</button>` : `<button data-gsim="${g.id}">Aceitar (paga ${num(g.aposta)})</button><button data-gnao="${g.id}">Recusar</button>`;
+        } else if (agora < ini) txt = `Guerra contra <b>${outro}</b> às ${hora(g.inicio)} (em ${minutos(g.inicio)} min).`;
+        else if (agora < fim) txt = `<b>EM GUERRA</b> contra ${outro}: <b>${nossos} × ${deles}</b>. Termina em ${minutos(g.fim)} min.`;
+        else txt = `Guerra contra ${outro} terminou: ${nossos} × ${deles}. Apurando o resultado…`;
+        return `<div class="linha item"><span class="ic">⚔️</span><span class="nm"><b>Aposta ${num(g.aposta)} de cada lado</b><small>${txt}</small></span>${bts ? `<span class="bts">${bts}</span>` : ''}</div>`;
+      };
+      const outros = clas.filter((x) => x.id !== meu.id);
+      corpo = `<p class="dica">Marque uma guerra com outro clã: o horário é de 10 a 120 minutos depois, e os dois lados apostam o mesmo valor do caixa. A guerra dura <b>15 minutos</b>: cada abate de inimigo vale 1 ponto e <b>não conta como crime</b>. Quem fizer mais pontos leva as duas apostas; empate devolve.</p>
+        <div class="lista">${guerras.length ? guerras.map(cartao).join('') : '<span class="vazio">Nenhuma guerra marcada.</span>'}</div>
+        ${lider && !guerras.length ? (outros.length ? `<div class="sub">Declarar guerra</div>
+          <div class="linha-form"><label>Clã<select id="gCla">${outros.map((x) => `<option value="${x.id}">${esc(x.nome)}</option>`).join('')}</select></label>
+            <label>Começa em (min)<input id="gMin" type="number" min="10" max="120" value="30" inputmode="numeric"></label>
+            <label>Aposta<input id="gAposta" type="number" min="0" value="${Math.min(5000, meu.caixa)}" inputmode="numeric"></label></div>
+          <div class="botoes"><button id="gDeclarar" class="perigo">Declarar guerra</button></div>` : '<p class="dica">Não há outro clã para desafiar.</p>') : ''}
+        ${historico.length ? `<div class="sub">Últimas guerras</div><div class="lista">${historico.map((g) => {
+          const nos = g.desafiante === meu.id, outro = esc(nomeCla(nos ? g.desafiado : g.desafiante) || '?');
+          const res = g.status === 'encerrada' ? (g.vencedor === meu.id ? '🏆 vitória' : g.vencedor ? 'derrota' : 'empate') + ` ${nos ? g.pontos_a : g.pontos_b} × ${nos ? g.pontos_b : g.pontos_a}` : g.status;
+          return `<div class="linha item"><span class="nm"><b>${outro}</b><small>${res}</small></span></div>`; }).join('')}</div>` : ''}`;
     } else {
       corpo = `<p class="dica">${membros.length} de ${L.membros} membros.</p>
         ${lider ? '<div class="botoes"><input id="clNome" placeholder="Nome do jogador"><button id="clAdd">Adicionar</button></div>' : ''}
@@ -111,6 +140,10 @@ async function desenhar(auto = false) {
     on('clEvoluir', () => executar(() => rede.cla.evoluir(), (n) => `O clã chegou ao nível ${n}!`));
     if (lider && aba === 'resumo') rede.precoRobo().then((p) => { const el = $('clPreco'); if (el) el.innerHTML = p <= 8000 ? 'Robô de uma fábrica de robôs da cidade: <b>8.000</b>.' : 'Sem estoque nas fábricas de robôs: vem de fora por <b>12.000</b>.'; const b = $('clRobo'); if (b) b.textContent = `Comprar robô (${num(p)})`; }).catch(() => {});
     on('clAdd', () => { const n = $('clNome').value.trim(); if (n) executar(() => rede.cla.adicionar(n), `${n} entrou no clã.`); });
+    on('gDeclarar', () => { const alvo = Number($('gCla').value); executar(() => rede.guerra.declarar(alvo, inteiro('gMin'), inteiro('gAposta')), `Guerra declarada a ${nomeCla(alvo)}!`); });
+    c.querySelectorAll('[data-gsim]').forEach((b) => { b.onclick = () => executar(() => rede.guerra.responder(Number(b.dataset.gsim), true), 'Guerra aceita!'); });
+    c.querySelectorAll('[data-gnao]').forEach((b) => { b.onclick = () => executar(() => rede.guerra.responder(Number(b.dataset.gnao), false), 'Guerra recusada.'); });
+    c.querySelectorAll('[data-gcanc]').forEach((b) => { b.onclick = () => executar(() => rede.guerra.cancelar(Number(b.dataset.gcanc)), 'Desafio cancelado.'); });
     on('clSair', () => { const b = $('clSair'); if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Toque de novo para sair'; return; } executar(() => rede.cla.sair(), 'Você saiu do clã.'); });
     c.querySelectorAll('[data-ret]').forEach((b) => { b.onclick = () => executar(() => rede.cla.retirar(b.dataset.ret, 1), 'Item na sua mochila.'); });
     c.querySelectorAll('[data-vend]').forEach((b) => { b.onclick = () => { const q = meu[b.dataset.vend]; if (q > 0) executar(() => rede.cla.vender(b.dataset.vend, q), (r) => `Vendido por ${num(r)} (caixa do clã).`); else msg('Nada para vender.', false); }; });

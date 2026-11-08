@@ -17,7 +17,8 @@ import * as ferrovia from './ferrovia.js';
 import * as sedes from './sedes.js';
 import { iniciarConquistas } from './conquistas.js';
 import * as civico from './civico.js';
-import { iniciarGoverno, abrirPrefeitura, abrirConcessionaria, atualizarGoverno } from './governo.js';
+import { iniciarGoverno, abrirPrefeitura, abrirConcessionaria, abrirServico, atualizarGoverno } from './governo.js';
+import * as servicos from './servicos.js';
 import { nivelTexto } from './empresa.js';
 import { iniciarPainel, atualizarBotao } from './painel.js';
 
@@ -836,6 +837,12 @@ function acaoContexto() {
   if (pertoDelegacia()) { alternarServico(); return; }
   if (pertoContratante()) { abrirMissoes(); return; }
   if (jogador.perfil.prf) { const alvo = eleitoralProximo(2.4); if (alvo) { prenderEleitoral(alvo); return; } }
+  if (jogador.perfil.profissao === 'medico') { const fer = feridoProximo(2.8); if (fer) { socorrerFerido(fer); return; } }
+  const fogo = servicos.fogoProximo(9); if (fogo && !jogador.carregando) { servicos.apagar(fogo); return; }
+  if (perto(civico.BANCO.balcao, 3.2)) { abrirServico('banco'); return; }
+  if (perto(civico.BANCO.empregos, 3.2)) { abrirServico('empregos'); return; }
+  if (perto(civico.HOSPITAL.balcao, 3.2)) { abrirServico('hospital'); return; }
+  if (perto(civico.BOMBEIROS.balcao, 3.2)) { abrirServico('bombeiros'); return; }
   if (perto(civico.PREFEITURA.porta, 3.2)) { abrirPrefeitura(); return; }
   if (perto(civico.PREFEITURA.prf, 3.2)) { abrirPrefeitura('prf'); return; }
   if (perto(civico.CONCESSIONARIA.balcao, 3.2)) { abrirConcessionaria(); return; }
@@ -1395,6 +1402,10 @@ function alvosRastreio() {
   for (const o of ocorrencias) if (jogador.perfil?.policial || jogador.perfil?.prf) r.push({ icone: '🚨', nome: o.local, x: o.x, z: o.z });
   for (const a of AGENCIAS) r.push({ icone: '📦', nome: `Agência ${a.id === 'centro' ? (a.z < 0 ? 'Norte' : 'Sul') : NOMES_AGENCIA[a.id]}`, x: a.x, z: a.z });
   r.push({ icone: '🔩', nome: 'Oficina de Parafusos', x: OFICINA.x, z: OFICINA.z });
+  r.push({ icone: '🏦', nome: 'Banco e Agência de Empregos', x: civico.BANCO.balcao.x, z: civico.BANCO.balcao.z + 2 });
+  r.push({ icone: '🏥', nome: 'Hospital', x: civico.HOSPITAL.balcao.x, z: civico.HOSPITAL.balcao.z - 2 });
+  r.push({ icone: '🚒', nome: 'Bombeiros', x: civico.BOMBEIROS.balcao.x, z: civico.BOMBEIROS.balcao.z - 2 });
+  for (const f of servicos.listaIncendios()) r.push({ icone: '🔥', nome: f.nome, x: f.x, z: f.z });
   return r;
 }
 function rastrear(alvo) {
@@ -1558,6 +1569,7 @@ async function iniciarJogo(perfil) {
   montarAgencias();
   civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao });
   civico.montarPrefeitura(); civico.montarConcessionaria();
+  civico.montarBanco(); civico.montarHospital(); civico.montarBombeiros();
   criarCaminhaoMovel();
 
   // jogador
@@ -1618,11 +1630,22 @@ async function iniciarJogo(perfil) {
     recarregar: () => { tempoLogistica = 0; },
   });
   iniciarLogistica();
+  servicos.iniciar({
+    scene, textoSprite, altura: alturaChao, jogador: () => jogador, perfil: () => jogador.perfil, aviso, agora: agoraServidor,
+    rastrear: (a) => rastrear(a), rastreio: () => rastreio, meuCla: () => jogador.cla, clas: () => [...clasCache.values()],
+    guerrasMudaram: () => {
+      atualizarCla();
+      const novo = servicos.clasInimigos(jogador.cla, [...clasCache.values()]);
+      if ([...novo].join() === [...inimigos].join()) return;
+      inimigos = novo; for (const r of remotos.values()) etiquetaStatus(r);
+    },
+  });
   iniciarGoverno({
     perfil: () => jogador.perfil, agora: agoraServidor, recarregar: () => { tempoPrefeitura = 0.3; tempoCarros = 0.5; tempoSocial = 0.5; },
     clas: () => [...clasCache.values()], territorios: () => [...territorios.values()].map((v) => v.d),
     minhasEmpresas: () => [...empresas.values()].filter((e) => e.dono === jogador.perfil.id),
     meusCarros: () => [...carrosMundo.values()].map((v) => v.d).filter((d) => d.dono === jogador.perfil.id),
+    vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); }, pontoMudou: () => servicos.recomecarPonto(),
   });
   iniciarConquistas({
     perfil: () => jogador.perfil, aviso,
@@ -1638,7 +1661,7 @@ async function iniciarJogo(perfil) {
   $('mapa').addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); abrirMapaGrande(); });
   $('fecharMapa').onclick = () => $('mapaJanela').classList.add('oculto');
   $('rastreio').addEventListener('pointerdown', (ev) => { ev.preventDefault(); rastrear(null); });
-  iniciarCla({ perfil: () => jogador.perfil, recarregar: () => { tempoSocial = 0; }, definirCla: (id, info) => { jogador.cla = id; if ((info?.nome || null) !== (jogador.claInfo?.nome || null)) { jogador.claInfo = info; conexao?.rastrear(metaPresenca()); } } });
+  iniciarCla({ perfil: () => jogador.perfil, recarregar: () => { tempoSocial = 0; servicos.recarregarGuerras(); }, definirCla: (id, info) => { jogador.cla = id; if ((info?.nome || null) !== (jogador.claInfo?.nome || null)) { jogador.claInfo = info; conexao?.rastrear(metaPresenca()); } } });
   carregarCidadeSocial().catch(() => {});
   criarPoliciaNPC();
   $('btFianca').onclick = async () => { try { await rede.policia.fianca(); aviso('Fiança paga. Você está livre.'); } catch (e) { aviso(e.message); } };
@@ -1685,7 +1708,10 @@ function conectarMultiplayer(perfil) {
         if (r && (r.meta.personagem !== meta.personagem || r.meta.cargo !== meta.cargo || r.meta.nome !== meta.nome)) {
           const alvo = r.alvo; removerRemoto(id); adicionarRemoto(id, meta).then(() => { const n = remotos.get(id); if (n && alvo && !n.alvo) n.alvo = alvo; });
         } else if (!r) adicionarRemoto(id, meta);
-        else if (r.meta.crimes !== meta.crimes || r.meta.policial !== meta.policial || r.meta.cla !== meta.cla) { r.meta = meta; etiquetaStatus(r); }
+        else {
+          const chave = (m) => [m.crimes, m.policial, m.cla, m.prf, m.eleitoral, m.prefeito, m.profissao, m.ferido].join('|');
+          if (chave(r.meta) !== chave(meta)) { r.meta = meta; etiquetaStatus(r); }
+        }
       }
       for (const id of [...remotos.keys()]) if (!lista[id]) removerRemoto(id);
       atualizarInfo();
@@ -2375,16 +2401,20 @@ const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfi
 function metaPresenca() {
   const p = jogador.perfil;
   return { nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
-    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id };
+    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
 function etiquetaStatus(r) {
   if (!r.av) return;
   if (r.status) { r.av.raiz.remove(r.status); r.status = null; }
   const m = r.meta;
-  const txt = m.crimes > 0 ? `PROCURADO${m.eleitoral ? ' (PRF)' : ''} ${'★'.repeat(Math.min(5, m.crimes))}` : m.prefeito ? '★ PREFEITO ★' : m.policial ? 'POLÍCIA' : m.prf ? 'PRF' : m.cla ? `[${m.cla}]` : null;
+  const inimigo = m.cla && inimigos.has(m.cla);
+  const txt = m.ferido ? '✚ FERIDO' : inimigo ? `⚔️ INIMIGO [${m.cla}]` : m.crimes > 0 ? `PROCURADO${m.eleitoral ? ' (PRF)' : ''} ${'★'.repeat(Math.min(5, m.crimes))}` : m.prefeito ? '★ PREFEITO ★'
+    : m.policial ? 'POLÍCIA' : m.prf ? 'PRF' : m.profissao === 'medico' ? '✚ MÉDICO' : m.profissao === 'bombeiro' ? '🚒 BOMBEIRO' : m.cla ? `[${m.cla}]` : null;
   if (!txt) return;
-  r.status = textoSprite(txt, { escala: 0.6, cor: m.prefeito ? '#20160a' : '#ffffff', fundo: m.crimes > 0 ? 'rgba(170,30,30,.92)' : m.prefeito ? 'rgba(242,194,48,.95)' : m.policial ? 'rgba(30,70,160,.92)' : m.prf ? 'rgba(20,40,90,.95)' : 'rgba(40,40,40,.85)' });
+  const fundo = m.ferido ? 'rgba(200,40,40,.95)' : inimigo ? 'rgba(140,10,10,.95)' : m.crimes > 0 ? 'rgba(170,30,30,.92)' : m.prefeito ? 'rgba(242,194,48,.95)' : m.policial ? 'rgba(30,70,160,.92)'
+    : m.prf ? 'rgba(20,40,90,.95)' : m.profissao === 'medico' ? 'rgba(240,240,240,.95)' : m.profissao === 'bombeiro' ? 'rgba(200,60,20,.95)' : 'rgba(40,40,40,.85)';
+  r.status = textoSprite(txt, { escala: 0.6, cor: m.prefeito || m.profissao === 'medico' && !m.ferido && !inimigo && !(m.crimes > 0) ? '#20160a' : '#ffffff', fundo });
   r.status.position.y = 2.6; r.av.raiz.add(r.status);
 }
 
@@ -2462,17 +2492,49 @@ async function morrerLocal() {
   const quem = remotos.get(j.ultimoAgressor)?.meta.nome;
   try {
     const perdeu = await rede.combate.morrer(j.ultimoAgressor || null);
-    aviso(`Você morreu${quem ? ' para ' + quem : ''}.${perdeu ? ` Perdeu ${perdeu} moedas.` : ''} Renascendo…`, 4.5);
-  } catch { aviso('Você morreu. Renascendo…', 4.5); }
-  setTimeout(renascer, 5000);
+    aviso(`Você está FERIDO${quem ? ' (' + quem + ')' : ''}.${perdeu ? ` Perdeu ${perdeu} moedas.` : ''} Um médico pode te socorrer em 20 s; senão você acorda no hospital.`, 6);
+  } catch { aviso('Você está ferido. Espere um médico ou acorde no hospital.', 5); }
+  j.ferido = true; conexao?.rastrear(metaPresenca());
+  clearTimeout(j.timerHospital); j.timerHospital = setTimeout(renascer, 20000);
 }
-function renascer() {
+function levantar(vida) {
   const j = jogador;
-  const destino = j.casa ? { x: j.casa.x + 2, z: j.casa.z } : { x: contratante.x + 6, z: contratante.z + 6 };
-  teleportar(destino.x, destino.z);
-  j.vida = 100; j.morto = false; j.trava = 0; j.ultimoAgressor = null;
+  clearTimeout(j.timerHospital); j.ferido = false;
+  j.vida = vida; j.morto = false; j.trava = 0; j.ultimoAgressor = null;
   j.avatar.tocar('idle', { fade: 0.3 }); desenharFome();
-  aviso(j.casa ? 'Você renasceu em casa.' : 'Você renasceu na praça.');
+  conexao?.rastrear(metaPresenca());
+}
+// sem socorro: acorda no hospital e paga a conta (até 100)
+function renascer() {
+  if (!jogador.morto) return;
+  teleportar(civico.HOSPITAL.saida.x, civico.HOSPITAL.saida.z);
+  levantar(100);
+  rede.saude.alta().then((v) => aviso(v > 0 ? `Você acordou no hospital. Conta: ${v} moedas.` : 'Você acordou no hospital.', 4)).catch(() => aviso('Você acordou no hospital.'));
+}
+function socorrido(medico) {
+  if (!jogador.morto) return;
+  levantar(60);
+  aviso(`✚ ${medico || 'Um médico'} te socorreu! Você levantou com 60 de vida.`, 4);
+}
+function feridoProximo(raio) {
+  let melhor = null, dm = raio;
+  for (const [id, r] of remotos) {
+    if (!r.av?.raiz.visible || !r.meta.ferido) continue;
+    const d = r.av.raiz.position.distanceTo(jogador.pos);
+    if (d < dm) { dm = d; melhor = { id, r }; }
+  }
+  return melhor;
+}
+async function socorrerFerido(alvo) {
+  if (ocupado) return; ocupado = true;
+  try {
+    virarPara(alvo.r.av.raiz.position.x, alvo.r.av.raiz.position.z);
+    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 1.5, fade: 0.1 }); jogador.trava = 1.2;
+    const v = await rede.saude.socorrer(alvo.id);
+    alvo.r.meta.ferido = false; etiquetaStatus(alvo.r);
+    aviso(`✚ Você socorreu ${alvo.r.meta.nome}: +${v} moedas`, 4);
+  } catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
 }
 
 async function usarRemedio() {
@@ -2546,6 +2608,7 @@ const casasMundo = new Map();    // id -> { d, placa }
 let captura = null;              // { id, fim }
 function corDoCla(id) { return clasCache.get(id)?.cor || '#888888'; }
 const clasCache = new Map();
+let inimigos = new Set();     // clãs em guerra com o meu agora
 // ---------------------------------------------------------------- base do clã cresce com o nível: muralha (5), torres (10), fortaleza (15)
 function removerFortaleza(v) {
   if (!v.forte) return;
@@ -2866,6 +2929,7 @@ function teleportar(x, z) {
 function aoComando(c) {
   if (c.tipo === 'teleporte' && c.dados) { teleportar(Number(c.dados.x), Number(c.dados.z)); aviso('Você foi teleportado pela equipe.'); }
   if (c.tipo === 'aviso' && c.dados?.texto) { aviso(c.dados.texto, 5); atualizarJanelaEmpresa(); }
+  if (c.tipo === 'socorro') socorrido(c.dados?.medico);
 }
 
 function solto() {
@@ -2904,7 +2968,8 @@ function aplicarPerfil(novo) {
   if ((novo.crimes || 0) > (antigo.crimes || 0)) aviso('Você está PROCURADO pela polícia.', 4);
   if (novo.prf !== antigo.prf) aviso(novo.prf ? 'Você está em serviço na PRF. Investigue a prefeitura!' : 'Você saiu do serviço da PRF.', 4);
   if (novo.eleitoral && !antigo.eleitoral) aviso('CRIME ELEITORAL comprovado: você perdeu o mandato e está procurado!', 5);
-  if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome || novo.crimes !== antigo.crimes || novo.policial !== antigo.policial || novo.prf !== antigo.prf || novo.eleitoral !== antigo.eleitoral) {
+  if (novo.profissao !== antigo.profissao) aviso(novo.profissao === 'medico' ? 'Plantão médico: socorra os feridos (✚) pela cidade. +250 por socorro.' : novo.profissao === 'bombeiro' ? 'Você está em serviço nos bombeiros. Apague os incêndios (🔥). +400 por fogo.' : 'Você saiu do serviço público.', 4);
+  if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome || novo.crimes !== antigo.crimes || novo.policial !== antigo.policial || novo.prf !== antigo.prf || novo.eleitoral !== antigo.eleitoral || novo.profissao !== antigo.profissao) {
     conexao?.rastrear(metaPresenca());
   }
   if (novo.algemado !== antigo.algemado) {
@@ -3110,6 +3175,13 @@ function contexto() {
   }
   if (jogador.perfil?.policial && procuradoProximo(2.4)) return ['algemar e prender o procurado', 'Prender'];
   if (jogador.perfil?.prf && eleitoralProximo(2.4)) return ['prender por crime eleitoral (PRF)', 'Prender'];
+  if (jogador.perfil?.profissao === 'medico' && feridoProximo(2.8)) return ['socorrer o ferido (+250)', 'Socorrer'];
+  if (servicos.estaApagando()) return ['jogando água no fogo (toque para parar)', 'Parar'];
+  if (servicos.fogoProximo(9) && !jogador.carregando) return [jogador.perfil?.profissao === 'bombeiro' ? 'apagar o incêndio (+400)' : 'apagar o fogo (só o dono ou bombeiros)', 'Apagar'];
+  if (perto(civico.BANCO.balcao, 3.2)) return ['banco: poupança e empréstimo', 'Banco'];
+  if (perto(civico.BANCO.empregos, 3.2)) return ['agência de empregos: vagas nas empresas', 'Vagas'];
+  if (perto(civico.HOSPITAL.balcao, 3.2)) return ['hospital: tratamento e plantão médico', 'Hospital'];
+  if (perto(civico.BOMBEIROS.balcao, 3.2)) return ['quartel dos bombeiros', 'Bombeiros'];
   if (perto(civico.PREFEITURA.porta, 3.2)) return ['prefeitura: prefeito, eleição, outdoors e PRF', 'Prefeitura'];
   if (perto(civico.PREFEITURA.prf, 3.2)) return ['posto da PRF', 'PRF'];
   if (perto(civico.CONCESSIONARIA.balcao, 3.2)) return ['comprar carro', 'Carros'];
@@ -3171,7 +3243,7 @@ function quadro() {
   atualizarCeu(agoraServidor() / 1000);
   mundo.atualizar(dt);
   sedes.atualizar(dt);
-  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); }
+  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); }
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);

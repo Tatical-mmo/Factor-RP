@@ -147,6 +147,39 @@ function traduzirRpc(m) {
     'jogador ja trabalha em uma empresa': 'Esse jogador já trabalha em uma empresa.',
     'limite de funcionarios': 'Limite de 20 funcionários.',
     'o dono nao pode se demitir': 'O dono não pode se demitir.',
+    'cla nao encontrado': 'Clã não encontrado.',
+    'escolha outro cla': 'Escolha outro clã.',
+    'horario invalido (10 a 120 min)': 'Horário inválido: de 10 a 120 minutos.',
+    'aposta invalida': 'Aposta inválida.',
+    'um dos clas ja tem guerra marcada': 'Um dos clãs já tem guerra marcada.',
+    'caixa do cla insuficiente': 'O caixa do clã não tem o valor da aposta.',
+    'guerra invalida': 'Essa guerra não está mais disponível.',
+    'o prazo para responder acabou': 'O prazo para responder acabou.',
+    'so da para cancelar antes do aceite': 'Só dá para cancelar antes do aceite.',
+    'funcao invalida': 'Função inválida.',
+    'salario invalido (5 a 200 por minuto)': 'Salário inválido: de 5 a 200 por minuto.',
+    'salario invalido (0 a 200 por minuto)': 'Salário inválido: de 0 a 200 por minuto.',
+    'operario so em fabrica': 'Operário só existe em empresa com fábrica.',
+    'a equipe nao se candidata': 'A equipe não se candidata a vagas.',
+    'vaga preenchida': 'Essa vaga já foi preenchida.',
+    'a empresa e sua': 'Essa empresa é sua.',
+    'voce nao tem emprego': 'Você não tem emprego.',
+    'o dono nao bate ponto': 'O dono não bate ponto.',
+    'va ate um predio da empresa': 'Vá até um prédio da empresa para bater ponto.',
+    'saldo insuficiente': 'Saldo insuficiente na poupança.',
+    'a equipe nao pega emprestimo': 'A equipe não pega empréstimo.',
+    'emprestimo de 500 a 20.000': 'Empréstimo de 500 a 20.000.',
+    'pague o emprestimo atual antes': 'Pague o empréstimo atual antes.',
+    'voce nao tem divida': 'Você não tem dívida.',
+    'profissao invalida': 'Profissão inválida.',
+    'saia da policia antes': 'Saia da polícia ou da PRF antes.',
+    'procurado nao pode trabalhar no servico publico': 'Procurado não trabalha no serviço público.',
+    'so medicos em servico': 'Só médicos em serviço.',
+    'voce nao pode se socorrer': 'Você não pode se socorrer.',
+    'essa pessoa nao esta ferida': 'Essa pessoa não está ferida.',
+    'ja foi socorrida': 'Já foi socorrida.',
+    'o fogo ja foi apagado': 'O fogo já foi apagado.',
+    'so bombeiros ou o dono apagam': 'Só bombeiros em serviço ou o dono apagam esse fogo.',
     'jogador nao e seu funcionario': 'Esse jogador não é seu funcionário.',
     'o dono nao pode sair da propria empresa': 'O dono não pode sair da própria empresa.',
     'voce nao trabalha em uma fabrica': 'Você não trabalha nesta fábrica.',
@@ -269,6 +302,39 @@ export const crime = {
   abertas: () => sel(sb.from('ocorrencias').select('*').eq('status', 'aberta').gt('criada_em', new Date(Date.now() - 15 * 60000).toISOString()).order('id', { ascending: false }).limit(20)),
   atender: (id) => rpc('atender_ocorrencia', { p_ocorrencia: id }),
 };
+export const guerra = {
+  listar: () => sel(sb.from('guerras').select('*').in('status', ['proposta', 'aceita']).order('inicio')),
+  historico: (cla) => sel(sb.from('guerras').select('*').or(`desafiante.eq.${cla},desafiado.eq.${cla}`).in('status', ['encerrada', 'recusada', 'cancelada']).order('id', { ascending: false }).limit(5)),
+  declarar: (cla, min, aposta) => rpc('declarar_guerra', { p_cla: cla, p_minutos: min, p_aposta: aposta }),
+  responder: (id, sim) => rpc('responder_guerra', { p_guerra: id, p_aceitar: sim }),
+  cancelar: (id) => rpc('cancelar_guerra', { p_guerra: id }),
+  processar: () => rpc('processar_guerras'),
+};
+export const empregos = {
+  mural: () => rpc('mural_vagas'),
+  meu: (id) => sel(sb.from('membros').select('*, emp:empresas!membros_empresa_fkey(nome, dono)').eq('jogador', id).maybeSingle()),
+  candidatar: (empresa) => rpc('candidatar_vaga', { p_empresa: empresa }),
+  abrirVagas: (empresa, vagas, funcao, salario) => rpc('abrir_vagas', { p_empresa: empresa, p_vagas: vagas, p_funcao: funcao, p_salario: salario }),
+  ajustar: (empresa, jogador, funcao, salario) => rpc('ajustar_funcionario', { p_empresa: empresa, p_jogador: jogador, p_funcao: funcao, p_salario: salario }),
+  ponto: (x, z) => rpc('bater_ponto', { p_x: x, p_z: z }),
+};
+export const banco = {
+  estado: () => rpc('banco_estado'),
+  depositar: (v) => rpc('banco_depositar', { p_valor: v }),
+  sacar: (v) => rpc('banco_sacar', { p_valor: v }),
+  emprestimo: (v) => rpc('banco_emprestimo', { p_valor: v }),
+  pagar: (v) => rpc('banco_pagar', { p_valor: v }),
+};
+export const saude = {
+  entrar: (prof) => rpc('entrar_profissao', { p_profissao: prof }),
+  sair: () => rpc('sair_profissao'),
+  socorrer: (alvo) => rpc('socorrer', { p_alvo: alvo }),
+  alta: () => rpc('alta_hospital'),
+  tratar: () => rpc('tratar_hospital'),
+  incendios: () => sel(sb.from('incendios').select('*').eq('status', 'ativo').order('id')),
+  processar: () => rpc('processar_incendios'),
+  apagar: (id) => rpc('apagar_incendio', { p_incendio: id }),
+};
 export const metas = {
   minhas: () => rpc('minhas_metas'),
   resgatar: (tipo) => rpc('resgatar_meta', { p_tipo: tipo }),
@@ -369,7 +435,7 @@ export async function minhaEmpresaId(id) {
   const d = await sel(sb.from('membros').select('empresa').eq('jogador', id).maybeSingle());
   return d?.empresa ?? null;
 }
-export const membrosDe = (empresa) => sel(sb.from('membros').select('jogador, desde, perfil:perfis!membros_jogador_fkey(nome)').eq('empresa', empresa).order('desde'));
+export const membrosDe = (empresa) => sel(sb.from('membros').select('jogador, desde, funcao, salario, minutos, ponto_em, perfil:perfis!membros_jogador_fkey(nome)').eq('empresa', empresa).order('desde'));
 export const pedidosDe = (empresa) => sel(sb.from('pedidos')
   .select('*, fab:empresas!pedidos_fabrica_fkey(nome,lote), tra:empresas!pedidos_transportadora_fkey(nome)')
   .or(`fabrica.eq.${empresa},transportadora.eq.${empresa}`).order('id', { ascending: false }).limit(30));

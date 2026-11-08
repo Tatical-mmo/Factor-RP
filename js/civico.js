@@ -4,6 +4,9 @@ import * as THREE from 'three';
 let ctx = null;
 export const PREFEITURA = { x: -135, z: -135, porta: { x: -135, z: -120.5 }, prf: { x: -146, z: -115 } };
 export const CONCESSIONARIA = { x: 135, z: -135, balcao: { x: 135, z: -127.5 } };
+export const BANCO = { x: 81, z: -135, balcao: { x: 75, z: -124 }, empregos: { x: 88, z: -124 } };
+export const HOSPITAL = { x: -135, z: 135, balcao: { x: -131, z: 125 }, saida: { x: -139, z: 124 } };
+export const BOMBEIROS = { x: -81, z: 135, balcao: { x: -88, z: 125 } };
 export const CARROS = {
   popular: { nome: 'Popular', preco: 12000, vel: 15 },
   suv: { nome: 'SUV', preco: 30000, vel: 17 },
@@ -61,6 +64,83 @@ export function montarConcessionaria() {
   const t = ctx.textoSprite('CONCESSIONÁRIA', { escala: 1.2, fundo: 'rgba(160,30,30,.92)' }); t.position.set(CONCESSIONARIA.x, 8.2, CONCESSIONARIA.z + 2); ctx.scene.add(t);
   ctx.colisores.push({ tipo: 'caixa', x0: CONCESSIONARIA.x - 14, x1: CONCESSIONARIA.x + 14, z0: CONCESSIONARIA.z - 14, z1: CONCESSIONARIA.z + 4 });
   ctx.balcao(CONCESSIONARIA.balcao.x, CONCESSIONARIA.balcao.z, '#c0392b', 'Vendas de carros', 'Popular, SUV e Esportivo');
+}
+
+// banco: pedra clara, colunata, letreiro dourado e cofre à vista
+export function montarBanco() {
+  const g = new THREE.Group(); g.position.set(BANCO.x, 0.18, BANCO.z);
+  const pedra = mat('#d8d2c4', { roughness: 0.7 }), escuro = mat('#3b3f46'), ouro = mat('#d6a937', { metalness: 0.8, roughness: 0.3, emissive: '#6b4d10', emissiveIntensity: 0.3 });
+  const vidro = mat('#24384a', { roughness: 0.1, metalness: 0.5, emissive: '#ffd27a', emissiveIntensity: 0 });
+  bloco(g, pedra, 26, 12, 18, 0, 6, -4);
+  bloco(g, escuro, 26.6, 0.8, 18.6, 0, 12.4, -4);
+  bloco(g, pedra, 20, 4, 14, 0, 14.8, -5);
+  for (let k = 0; k < 6; k++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 10, 14), pedra); c.position.set(-10 + k * 4, 5.2, 6.4); c.castShadow = true; g.add(c); }
+  bloco(g, pedra, 24, 1.4, 3, 0, 10.9, 6.4);
+  for (let k = 0; k < 3; k++) bloco(g, pedra, 24, 0.3, 3 - k * 0.8, 0, 0.15 + k * 0.3, 8.6 - k * 0.4);
+  for (let a = 0; a < 2; a++) for (let k = 0; k < 5; k++) if (k !== 2) bloco(g, vidro, 2.4, 3.2, 0.08, -9.6 + k * 4.8, 3 + a * 4.6, 4.98);
+  bloco(g, mat('#2a2f36', { metalness: 0.6 }), 3.6, 5.5, 0.12, 0, 2.75, 5.0);
+  const cofre = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 0.4, 24).rotateX(Math.PI / 2), mat('#9aa3ad', { metalness: 0.9, roughness: 0.25 })); cofre.position.set(0, 2.6, 5.1); g.add(cofre);
+  bloco(g, ouro, 10, 1.3, 0.2, 0, 13.6, 5.35);
+  ctx.scene.add(g); ctx.janelas.push(vidro);
+  const t = ctx.textoSprite('BANCO CENTRAL', { escala: 1.3, fundo: 'rgba(40,36,20,.92)', cor: '#ffd36b' }); t.position.set(BANCO.x, 19, BANCO.z + 4); ctx.scene.add(t);
+  ctx.colisores.push({ tipo: 'caixa', x0: BANCO.x - 13, x1: BANCO.x + 13, z0: BANCO.z - 13, z1: BANCO.z + 7.2 });
+  ctx.balcao(BANCO.balcao.x, BANCO.balcao.z, '#b8902a', 'Banco Central', 'Poupança e empréstimos');
+  ctx.balcao(BANCO.empregos.x, BANCO.empregos.z, '#2f7a4f', 'Agência de Empregos', 'Vagas nas empresas');
+}
+
+// hospital: prédio branco, ala alta, cruz vermelha, heliponto no teto e ambulância (frente para -Z)
+export function montarHospital() {
+  const g = new THREE.Group(); g.position.set(HOSPITAL.x, 0.18, HOSPITAL.z); g.rotation.y = Math.PI;
+  const branco = mat('#f2f4f5', { roughness: 0.5 }), azul = mat('#3a87c8'), verm = mat('#d62828', { emissive: '#d62828', emissiveIntensity: 0.6 });
+  const vidro = mat('#28455c', { roughness: 0.1, metalness: 0.5, emissive: '#d9f0ff', emissiveIntensity: 0 });
+  bloco(g, branco, 30, 9, 16, 0, 4.5, -5);
+  bloco(g, branco, 12, 18, 12, -8, 9, -6);
+  bloco(g, azul, 30.4, 0.6, 16.4, 0, 9.3, -5);
+  for (let a = 0; a < 2; a++) for (let k = 0; k < 6; k++) bloco(g, vidro, 2.6, 2.4, 0.08, -12.5 + k * 5, 2.4 + a * 3.6, 3.04);
+  for (let a = 0; a < 4; a++) for (let k = 0; k < 3; k++) bloco(g, vidro, 2.4, 2.2, 0.08, -12 + k * 4, 10.5 + a * 2, 0.04);
+  bloco(g, verm, 1.2, 4, 0.3, -8, 14, 0.2); bloco(g, verm, 4, 1.2, 0.3, -8, 14, 0.2);
+  bloco(g, mat('#cfd6db'), 8, 0.4, 5, 3, 4.4, 5.4);
+  for (const sx of [-0.6, 6.6]) bloco(g, mat('#9aa3ad'), 0.25, 4.2, 0.25, sx, 2.1, 7.6);
+  const heli = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 0.2, 32), mat('#2c3238')); heli.position.set(-8, 18.1, -6); g.add(heli);
+  const anel = new THREE.Mesh(new THREE.TorusGeometry(3.3, 0.12, 6, 40).rotateX(Math.PI / 2), mat('#f2c230')); anel.position.set(-8, 18.25, -6); g.add(anel);
+  bloco(g, mat('#ffffff'), 0.3, 0.05, 2.6, -9, 18.25, -6); bloco(g, mat('#ffffff'), 0.3, 0.05, 2.6, -7, 18.25, -6); bloco(g, mat('#ffffff'), 2, 0.05, 0.3, -8, 18.25, -6);
+  const amb = new THREE.Group(); amb.position.set(10, 0, 8); amb.rotation.y = Math.PI / 2;
+  bloco(amb, mat('#f7f7f7'), 2.1, 2.2, 3.4, 0, 1.5, -0.6); bloco(amb, mat('#f7f7f7'), 2.0, 1.4, 1.6, 0, 1.1, 1.8);
+  bloco(amb, mat('#1b2633'), 1.8, 0.6, 0.05, 0, 1.6, 2.62); bloco(amb, verm, 2.12, 0.3, 3.42, 0, 1.4, -0.6);
+  bloco(amb, mat('#2266dd', { emissive: '#2266dd', emissiveIntensity: 1 }), 1.2, 0.2, 0.3, 0, 2.7, 0.8);
+  for (const sx of [-1, 1]) for (const sz of [-1.6, 1.6]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.3, 12).rotateZ(Math.PI / 2), mat('#161616')); p.position.set(sx, 0.4, sz); amb.add(p); }
+  g.add(amb);
+  ctx.scene.add(g); ctx.janelas.push(vidro);
+  const t = ctx.textoSprite('✚ HOSPITAL', { escala: 1.3, fundo: 'rgba(200,30,30,.92)' }); t.position.set(HOSPITAL.x, 21, HOSPITAL.z - 2); ctx.scene.add(t);
+  ctx.colisores.push({ tipo: 'caixa', x0: HOSPITAL.x - 15, x1: HOSPITAL.x + 15, z0: HOSPITAL.z - 3.2, z1: HOSPITAL.z + 13 });
+  ctx.colisores.push({ tipo: 'caixa', x0: HOSPITAL.x - 11.8, x1: HOSPITAL.x - 8.2, z0: HOSPITAL.z - 9.6, z1: HOSPITAL.z - 6.4 });
+  ctx.balcao(HOSPITAL.balcao.x, HOSPITAL.balcao.z, '#d62828', 'Hospital', 'Tratamento e plantão médico');
+}
+
+// quartel dos bombeiros: tijolo vermelho, três portões, torre de treino e caminhão (frente para -Z)
+export function montarBombeiros() {
+  const g = new THREE.Group(); g.position.set(BOMBEIROS.x, 0.18, BOMBEIROS.z); g.rotation.y = Math.PI;
+  const tijolo = mat('#9c3b2c', { roughness: 0.85 }), branco = mat('#efe9df'), portao = mat('#c9ced3', { metalness: 0.4 });
+  bloco(g, tijolo, 22, 8, 16, -2, 4, -5);
+  bloco(g, branco, 22.4, 0.6, 16.4, -2, 8.2, -5);
+  for (let k = 0; k < 3; k++) { bloco(g, portao, 5, 5.6, 0.12, -9 + k * 6.6, 2.8, 3.04); for (let f = 0; f < 5; f++) bloco(g, mat('#aab1b8'), 5, 0.08, 0.14, -9 + k * 6.6, 0.7 + f * 1.1, 3.1); }
+  bloco(g, tijolo, 4.5, 16, 4.5, 11, 8, -8);
+  for (let a = 0; a < 4; a++) bloco(g, mat('#2a3540', { emissive: '#ffb36b', emissiveIntensity: 0.2 }), 2, 1.6, 0.08, 11, 4 + a * 3.4, -5.7);
+  const cam = new THREE.Group(); cam.position.set(-4, 0, 9); cam.rotation.y = 0.15;
+  const vm = mat('#c81e1e', { roughness: 0.35, metalness: 0.4 });
+  bloco(cam, vm, 2.4, 2.2, 6.6, 0, 1.6, -0.4); bloco(cam, vm, 2.4, 1.6, 1.8, 0, 1.3, 3.6);
+  bloco(cam, mat('#1b2633'), 2.2, 0.8, 0.05, 0, 1.9, 4.52); bloco(cam, mat('#f2f2f2'), 2.45, 0.25, 6.65, 0, 1.4, -0.4);
+  bloco(cam, mat('#bfc5ca', { metalness: 0.7 }), 0.9, 0.2, 6, 0, 2.9, -0.6);
+  for (let k = 0; k < 8; k++) bloco(cam, mat('#bfc5ca', { metalness: 0.7 }), 0.9, 0.08, 0.08, 0, 3.0, -3.3 + k * 0.75);
+  bloco(cam, mat('#2266dd', { emissive: '#ff2020', emissiveIntensity: 1 }), 1.6, 0.2, 0.3, 0, 2.25, 4.0);
+  for (const sx of [-1.15, 1.15]) for (const sz of [-2.8, 0, 3.4]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.35, 12).rotateZ(Math.PI / 2), mat('#161616')); p.position.set(sx, 0.5, sz); cam.add(p); }
+  g.add(cam);
+  ctx.scene.add(g);
+  const t = ctx.textoSprite('🚒 BOMBEIROS', { escala: 1.2, fundo: 'rgba(170,30,20,.92)' }); t.position.set(BOMBEIROS.x, 11, BOMBEIROS.z - 2); ctx.scene.add(t);
+  ctx.colisores.push({ tipo: 'caixa', x0: BOMBEIROS.x - 9, x1: BOMBEIROS.x + 13, z0: BOMBEIROS.z - 3.2, z1: BOMBEIROS.z + 13 });
+  ctx.colisores.push({ tipo: 'caixa', x0: BOMBEIROS.x - 13.3, x1: BOMBEIROS.x - 8.7, z0: BOMBEIROS.z + 5.7, z1: BOMBEIROS.z + 10.3 });
+  ctx.colisores.push({ tipo: 'caixa', x0: BOMBEIROS.x + 1.5, x1: BOMBEIROS.x + 6.5, z0: BOMBEIROS.z - 12.6, z1: BOMBEIROS.z - 5 });
+  ctx.balcao(BOMBEIROS.balcao.x, BOMBEIROS.balcao.z, '#c81e1e', 'Quartel dos Bombeiros', 'Entre em serviço e apague incêndios');
 }
 
 // carros: frente em +Z, chão em y = 0

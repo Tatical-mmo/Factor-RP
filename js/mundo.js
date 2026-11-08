@@ -273,6 +273,7 @@ const RESERVA = {
   '-1,0': { tipo: 'loteamento' }, '4,0': { tipo: 'loteamento' }, '-1,3': { tipo: 'loteamento' }, '4,3': { tipo: 'loteamento' },
   '-4,-4': { tipo: 'praca' }, '7,7': { tipo: 'praca' },
   '-1,-1': { tipo: 'vazio' }, '4,-1': { tipo: 'vazio' },          // prefeitura e concessionária
+  '3,-1': { tipo: 'vazio' }, '-1,4': { tipo: 'vazio' }, '0,4': { tipo: 'vazio' },   // banco, hospital e bombeiros
 };
 const extrasMesh = [];
 function quadraEspecial(bx, bz, r) {
