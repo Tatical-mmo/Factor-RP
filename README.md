@@ -28,7 +28,7 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b` e `15`, nessa ordem.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a` e `16b`, nessa ordem.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
 
 ## Etapa 3: trabalho e produção
@@ -81,6 +81,15 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 - O preso pode pagar **fiança de 2.000 por crime**. A pena só corre online.
 - Policial que mata inocente perde o distintivo e vira procurado. A equipe pode **perdoar** pelo painel.
 - Dois robôs policiais NPC patrulham o quarteirão da delegacia.
+
+## Vans e helicópteros
+
+- Na aba **Veículos** da empresa:
+  - **Van:** 9.000. Rápida, leva 10 caixas mais 2 por robô (máximo 20), mas aguenta menos ataques.
+  - **Caminhão:** 15.000. Leva 20 caixas mais 5 por robô (máximo 60).
+  - **Helicóptero:** 75.000, a partir do nível 10. Voa em linha reta, é o mais rápido, leva até 30 caixas e **não pode ser roubado**.
+- Quem tem helicóptero ganha **heliporto no telhado** (até 2 plataformas), de onde ele decola e onde pousa.
+- **Fábricas de veículos:** ao fundar uma fábrica, escolha Vans, Caminhões ou Helicópteros. Os robôs montam 1 van a cada 25 min, 1 caminhão a cada 40 min ou 1 helicóptero a cada 2 h (mais rápido com o nível). Outras empresas compram delas por 20% menos que o preço de fora, e o dinheiro vai para o caixa da fábrica.
 
 ## Mapa e rastreio
 

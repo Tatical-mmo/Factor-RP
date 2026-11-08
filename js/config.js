@@ -71,6 +71,9 @@ export const PRODUTOS = {
   chocolate: { nome: 'Chocolate', cor: '#c98b5e', codigo: 2 },
   remedio: { nome: 'Remédio', cor: '#eef3ff', codigo: 3 },
   robo: { nome: 'Robô', cor: '#9aa4ae', codigo: 1 },
+  van: { nome: 'Van', cor: '#f2f2ee', codigo: 1 },
+  caminhao: { nome: 'Caminhão', cor: '#e39b3a', codigo: 1 },
+  helicoptero: { nome: 'Helicóptero', cor: '#23395b', codigo: 1 },
 };
 export const FOME_POR_SEGUNDO = 100 / 3600;   // esvazia em 1 hora
 

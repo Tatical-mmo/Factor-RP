@@ -93,7 +93,7 @@ function chamine(g, x, z, base, h) {
   });
 }
 
-export function construir({ x, z, nivel, fabrica, id, nome, corProduto }) {
+export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0 }) {
   materiais();
   const f = fase(nivel), n = docasDaFase(f), cor = corDaEmpresa(id);
   const g = new THREE.Group(); g.position.set(x, 0.18, z);
@@ -142,7 +142,8 @@ export function construir({ x, z, nivel, fabrica, id, nome, corProduto }) {
     // escritório de vidro no telhado
     const ow = f === 3 ? 0 : 9.5;
     if (ow) { caixa(g, M.vidro, ow, 5, 4.2, XL + 0.3 + ow / 2, H + 0.35 + 2.5, FRENTE - 2.3, 3); caixa(g, faixaMat, ow + 0.2, 0.4, 4.4, XL + 0.3 + ow / 2, H + 5.05, FRENTE - 2.3); }
-    if (fabrica) for (let k = 0; k < (f === 3 ? 3 : 2); k++) anima.push(chamine(g, XR - 1.6 - k * 2.2, zw + 1.8, H + 0.35, 6 + k * 1.5));
+    // com heliporto, as chaminés vão para o lado esquerdo do telhado
+    if (fabrica) for (let k = 0; k < (f === 3 ? 3 : 2); k++) anima.push(chamine(g, helis ? XL + 1.6 + k * 2.2 : XR - 1.6 - k * 2.2, zw + 1.8, H + 0.35, 6 + k * 1.5));
   }
   let topo = H + 0.35;
   if (f === 3) {
@@ -156,11 +157,20 @@ export function construir({ x, z, nivel, fabrica, id, nome, corProduto }) {
     caixa(g, M.vermelho, 0.25, 0.25, 0.25, tx + tw / 2 - 0.6, b + th + 7.1, tz - tw / 2 + 0.6);
     topo = b + th;
   }
+  // heliporto no telhado (lado direito) para quem tem helicóptero: até 2 plataformas
+  const heliportos = [];
+  for (let k = 0; k < Math.min(2, helis); k++) {
+    const hx = XR - 2.9, hz = zw + 2.7 + k * 4.7, hy = H + 0.35;
+    caixa(g, M.escuro, 4.6, 0.12, 4.6, hx, hy + 0.06, hz);
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2).rotateX(-Math.PI / 2), M.heli); pad.position.set(hx, hy + 0.13, hz); g.add(pad);
+    for (const [dx, dz] of [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]]) caixa(g, M.luz, 0.18, 0.12, 0.18, hx + dx, hy + 0.18, hz + dz);
+    heliportos.push({ x: x + hx, z: z + hz, y: 0.18 + hy + 0.15 });
+  }
   ctx.scene.add(g); g.updateMatrixWorld(true);
   const reg = { anima, vivo: true }; vivas.add(reg);
   const mats = []; g.traverse((o) => { if (o.isMesh && o.material !== M.vitrine) { o.material = o.material.clone(); mats.push(o.material); } });
   return {
-    grupo: g, mats, docas, altura: H, topo,
+    grupo: g, mats, docas, heliportos, altura: H, topo,
     caixa: new THREE.Box3(new THREE.Vector3(x + XL, 0, z + zw - 1.2), new THREE.Vector3(x + XR, topo, z + FRENTE)),
     remover: () => { reg.vivo = false; vivas.delete(reg); ctx.scene.remove(g); },
   };

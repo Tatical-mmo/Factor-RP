@@ -1574,8 +1574,9 @@ function enfeitesNivel(x, z, e, v) {
 // prédio por fase (níveis 5, 10 e 15): galpão com docas, complexo industrial ou sede gigante
 function desenharSede(l, e, u, v, fabrica, modelo) {
   const { x, z } = centroLote(l);
-  const sd = sedes.construir({ x, z, nivel: e.nivel, fabrica, id: e.id, nome: e.nome, corProduto: PRODUTOS[e.produto]?.cor || '#c9a06a' });
-  v.sede = sd; v.docas = sd.docas;
+  const principal = Math.min(...[...unidades.entries()].filter(([, k]) => k.empresa === e.id).map(([lote]) => lote)) === l.id;
+  const sd = sedes.construir({ x, z, nivel: e.nivel, fabrica, id: e.id, corProduto: PRODUTOS[e.produto]?.cor || '#c9a06a', helis: principal ? helisPorEmpresa.get(e.id) || 0 : 0 });
+  v.sede = sd; v.docas = sd.docas; v.heliportos = sd.heliportos;
   const pr = { obj: sd.grupo, caixa: sd.caixa, mats: sd.mats, opac: 1 };
   predios.push(pr); v.predio = pr;
   const col = { tipo: 'caixa', x0: sd.caixa.min.x + 0.2, x1: sd.caixa.max.x - 0.2, z0: sd.caixa.min.z + 0.2, z1: sd.caixa.max.z - 0.2 };
@@ -1741,6 +1742,17 @@ function pernas(c) {
   const r = c.d.rota; if (!r) return null;
   if (c.rotaCache?.id === c.d.partida) return c.rotaCache.pernas;
   const T = { x: r.t[0], z: r.t[1] }, F = { x: r.f[0], z: r.f[1] }, D = { x: r.d[0], z: r.d[1] };
+  if (r.voa) {
+    // helicóptero: linha reta, decola e pousa no heliporto
+    const H = c.heliporto || { ...T, y: 0.02 };
+    const p = [
+      { pts: [H, F], dur: r.d1, y0: H.y, y1: 0.02 }, { parado: true, dur: r.carga },
+      { pts: [F, D], dur: r.d2, y0: 0.02, y1: 0.02 }, { parado: true, dur: r.descarga },
+      { pts: [D, H], dur: r.d3, y0: 0.02, y1: H.y },
+    ];
+    c.rotaCache = { id: c.d.partida, pernas: p };
+    return p;
+  }
   const p = [
     { pts: rotaGrade(T, F), dur: r.d1 }, { parado: true, dur: r.carga },
     { pts: rotaGrade(F, D), dur: r.d2 }, { parado: true, dur: r.descarga },
@@ -1776,9 +1788,15 @@ function vagasDaEmpresa(id) {
   }
   return [...fundo, ...frente];
 }
+function heliportosDaEmpresa(id) {
+  const r = [];
+  for (const [lote, u] of unidades) if (u.empresa === id) for (const h of visuaisLote.get(lote)?.heliportos || []) r.push({ x: h.x, z: h.z, y: h.y, ang: 0 });
+  return r;
+}
 function posicaoEstacionado(c) {
-  const vagas = vagasDaEmpresa(c.d.empresa); if (!vagas.length) return null;
-  const meus = [...caminhoes.values()].filter((k) => k.d.empresa === c.d.empresa && k.d.status === 'parado').map((k) => k.d.id).sort((a, b) => a - b);
+  const heli = c.d.tipo === 'helicoptero';
+  const vagas = heli ? heliportosDaEmpresa(c.d.empresa) : vagasDaEmpresa(c.d.empresa); if (!vagas.length) return heli ? { garagem: true } : null;
+  const meus = [...caminhoes.values()].filter((k) => k.d.empresa === c.d.empresa && k.d.status === 'parado' && (k.d.tipo === 'helicoptero') === heli).map((k) => k.d.id).sort((a, b) => a - b);
   const i = Math.max(0, meus.indexOf(c.d.id));
   if (i >= vagas.length) return { garagem: true };          // sem vaga livre: fica guardado (não aparece)
   return vagas[i];
@@ -1804,12 +1822,53 @@ function atualizarRobos(dt) {
     r.av.mixer.update(dt);
   }
 }
+// van e helicóptero feitos por código (frente em +Z, como o caminhão)
+const modelosVeiculo = {};
+function modeloVeiculo(tipo) {
+  if (modelosVeiculo[tipo]) return modelosVeiculo[tipo].clone(true);
+  const g = new THREE.Group();
+  const m = (cor, ex = {}) => new THREE.MeshStandardMaterial({ color: cor, roughness: 0.45, metalness: 0.3, ...ex });
+  const caixa = (mat, w, h, d, x, y, z, pai = g) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); o.position.set(x, y, z); o.castShadow = true; pai.add(o); return o; };
+  const vidro = m('#1b2633', { roughness: 0.1, metalness: 0.6 }), pneu = m('#1a1a1a', { roughness: 0.9, metalness: 0 });
+  if (tipo === 'van') {
+    const corpo = m('#f2f2ee');
+    caixa(corpo, 2.0, 2.0, 3.6, 0, 1.45, -0.5); caixa(corpo, 2.0, 1.2, 1.3, 0, 1.05, 1.9);
+    caixa(vidro, 1.9, 0.75, 0.6, 0, 2.0, 1.25).rotation.x = -0.5;
+    for (const s of [-1, 1]) { caixa(vidro, 0.05, 0.6, 0.9, s * 1.01, 1.95, 0.9); caixa(m('#e39b3a'), 0.05, 0.35, 4.7, s * 1.02, 1.0, 0.05); }
+    for (const sx of [-0.9, 0.9]) for (const sz of [-1.5, 1.6]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.25, 14).rotateZ(Math.PI / 2), pneu); r.position.set(sx, 0.38, sz); g.add(r); }
+    caixa(m('#fff6d0', { emissive: '#fff1c8', emissiveIntensity: 1.5 }), 1.6, 0.18, 0.05, 0, 1.1, 2.56);
+  } else {
+    const corpo = m('#23395b'), faixa = m('#f2f2ee');
+    const fus = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), corpo); fus.scale.set(1.25, 1.15, 2.3); fus.position.set(0, 1.55, 0.3); fus.castShadow = true; g.add(fus);
+    const cab = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2.4), vidro); cab.scale.set(1.1, 1.0, 1.4); cab.rotation.x = Math.PI / 2.2; cab.position.set(0, 1.75, 1.5); g.add(cab);
+    caixa(faixa, 2.55, 0.25, 3.2, 0, 1.25, 0.2);
+    const cauda = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.4, 4.6, 10).rotateX(Math.PI / 2), corpo); cauda.position.set(0, 1.9, -3.6); cauda.castShadow = true; g.add(cauda);
+    caixa(corpo, 0.12, 1.3, 0.9, 0, 2.5, -5.6); caixa(faixa, 1.6, 0.1, 0.6, 0, 2.1, -5.5);
+    const rotorCauda = new THREE.Group(); rotorCauda.position.set(0.2, 2.5, -5.7); g.add(rotorCauda);
+    caixa(m('#333'), 0.05, 1.3, 0.12, 0, 0, 0, rotorCauda);
+    for (const s of [-1, 1]) { caixa(m('#3a3d42'), 0.1, 0.1, 3.4, s * 0.95, 0.1, 0.3); for (const dz of [-0.7, 1.2]) caixa(m('#3a3d42'), 0.08, 0.6, 0.08, s * 0.85, 0.42, dz); }
+    caixa(m('#3a3d42'), 0.4, 0.5, 0.4, 0, 2.85, 0.3);
+    const rotor = new THREE.Group(); rotor.position.set(0, 3.15, 0.3); g.add(rotor);
+    for (const a of [0, Math.PI / 2]) { const pa = caixa(m('#2b2b2b'), 0.32, 0.06, 7.6, 0, 0, 0, rotor); pa.rotation.y = a; }
+    g.userData.rotor = rotor; g.userData.rotorCauda = rotorCauda;
+  }
+  modelosVeiculo[tipo] = g;
+  return modeloVeiculo(tipo);
+}
+function criarVeiculo(tipo, danificado) {
+  if (tipo === 'van' || tipo === 'helicoptero') {
+    const o = modeloVeiculo(tipo);
+    o.userData.rotor = o.children.find((k) => k.isGroup && k.position.y > 3); o.userData.rotorCauda = o.children.find((k) => k.isGroup && k.position.z < -5);
+    return o;
+  }
+  return clonar(danificado ? 'caminhao_danificado' : 'caminhao');
+}
 function sincronizarCaminhao(d) {
   let c = caminhoes.get(d.id);
-  if (!c) { const obj = clonar('caminhao'); scene.add(obj); c = { obj, d, roubadoVisual: false }; caminhoes.set(d.id, c); }
+  if (!c) { const obj = criarVeiculo(d.tipo); scene.add(obj); c = { obj, d, roubadoVisual: false }; caminhoes.set(d.id, c); }
   c.d = d;
   // caminhão roubado volta amassado; a escolta (viatura) acompanha a viagem
-  if (!!d.roubado !== c.roubadoVisual) {
+  if (!!d.roubado !== c.roubadoVisual && (d.tipo || 'caminhao') === 'caminhao') {
     const novo = clonar(d.roubado ? 'caminhao_danificado' : 'caminhao');
     novo.position.copy(c.obj.position); novo.rotation.copy(c.obj.rotation);
     scene.remove(c.obj); scene.add(novo); c.obj = novo; c.roubadoVisual = !!d.roubado;
@@ -1829,8 +1888,14 @@ function atualizarCaminhoes(dt) {
       let t = (agora - Date.parse(c.d.partida)) / 1000, anterior = null;
       for (const perna of p || []) {
         if (t <= perna.dur) {
-          if (perna.parado) { const u = anterior.pts; alvo = { ...ponto(u, 1), parado: true }; }
-          else alvo = ponto(perna.pts, t / perna.dur);
+          if (perna.parado) { const u = anterior.pts; alvo = { ...ponto(u, 1), parado: true, y: 0.02 }; }
+          else {
+            const f = t / perna.dur; alvo = ponto(perna.pts, f);
+            if (perna.y0 !== undefined) {   // voo: sobe, cruza a 24 m e desce
+              const sobe = THREE.MathUtils.smoothstep(f, 0, 0.18), desce = 1 - THREE.MathUtils.smoothstep(f, 0.82, 1);
+              alvo.y = THREE.MathUtils.lerp(perna.y0, perna.y1, f) + 24 * Math.min(sobe, desce);
+            }
+          }
           break;
         }
         if (!perna.parado) anterior = perna;
@@ -1844,7 +1909,15 @@ function atualizarCaminhoes(dt) {
     if (!alvo) continue;
     if (alvo.garagem) { c.obj.visible = false; if (c.escolta) c.escolta.visible = false; c.posicionado = false; c.manobra = null; continue; }
     c.obj.visible = true; if (c.escolta) c.escolta.visible = true;
-    if (!c.posicionado) { c.obj.position.set(alvo.x, 0.02, alvo.z); c.obj.rotation.y = alvo.ang || 0; c.posicionado = true; c.naFundo = !!alvo.fundo; c.vaga = alvo; }
+    if (!c.posicionado) { c.obj.position.set(alvo.x, alvo.y ?? 0.02, alvo.z); c.obj.rotation.y = alvo.ang || 0; c.posicionado = true; c.naFundo = !!alvo.fundo; c.vaga = alvo; }
+    if (c.d.tipo === 'helicoptero') {
+      // hélices giram em voo e devagar no chão; altura segue a rota
+      const voando = !estacionado && !alvo.parado, ro = c.obj.userData;
+      if (estacionado) c.heliporto = alvo;
+      c.obj.position.y += ((alvo.y ?? 0.02) - c.obj.position.y) * Math.min(1, dt * (voando ? 20 : 6));
+      if (ro.rotor) ro.rotor.rotation.y += dt * (voando ? 28 : 3);
+      if (ro.rotorCauda) ro.rotorCauda.rotation.x += dt * (voando ? 40 : 4);
+    }
     if (estacionado) c.vaga = alvo;
     // saindo do pátio para viajar: corredor lateral até a rua
     if (!estacionado && c.naFundo && !c.manobra && c.vaga) {
@@ -1871,13 +1944,15 @@ function atualizarCaminhoes(dt) {
   }
 }
 
+const helisPorEmpresa = new Map();
 async function carregarLogistica() {
   const [lista, frota, unis, emp] = await Promise.all([rede.listarEmpresas(), rede.listarCaminhoes(), rede.listarUnidades(), rede.minhaEmpresaId(jogador.perfil.id)]);
   emprego = emp;
   // lotes que mudaram (dono, nome, nível, robôs, estoque) são redesenhados
   const assinatura = (lote) => { const u = unidades.get(lote); const e = u && empresas.get(u.empresa);
-    return u ? `${u.empresa}|${u.funcao}|${e?.nome}|${e?.nivel}|${e?.estoque}|${e && robosAtivos(e)}` : ''; };
+    return u ? `${u.empresa}|${u.funcao}|${e?.nome}|${e?.nivel}|${e?.estoque}|${e && robosAtivos(e)}|${helisPorEmpresa.get(u.empresa) || 0}` : ''; };
   const antes = new Map(LOTES_VENDA.map((l) => [l.id, visuaisLote.has(l.id) ? assinatura(l.id) : null]));
+  helisPorEmpresa.clear(); for (const k of frota) if (k.tipo === 'helicoptero') helisPorEmpresa.set(k.empresa, (helisPorEmpresa.get(k.empresa) || 0) + 1);
   empresas.clear(); for (const e of lista) empresas.set(e.id, e);
   unidades.clear(); for (const u of unis) unidades.set(u.lote, u);
   let mudou = false;
@@ -2039,7 +2114,7 @@ function acertoDaBola(b) {
 function caminhaoProximo(raio) {
   let melhor = null, dm = raio;
   for (const c of caminhoes.values()) {
-    if (c.d.status !== 'em_rota' || c.d.roubado) continue;
+    if (c.d.status !== 'em_rota' || c.d.roubado || c.d.tipo === 'helicoptero') continue;
     const d = Math.hypot(c.obj.position.x - jogador.pos.x, c.obj.position.z - jogador.pos.z);
     if (d < dm) { dm = d; melhor = c; }
   }

@@ -1,7 +1,7 @@
 // Empresas dos jogadores (etapa 4): fundar, caixa, funcionários, pedidos, caminhões e missões.
 // Todas as ações são conferidas no banco.
 import * as rede from './rede.js';
-import { LOTES_VENDA, DESTINOS, CAPACIDADE_CAMINHAO, PRECO_CAMINHAO, PRODUTOS } from './config.js';
+import { LOTES_VENDA, DESTINOS, PRODUTOS } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -91,7 +91,7 @@ async function desenhar(auto = false) {
     if (e.dono !== meuId) { telaFuncionario(c, e); c.insertAdjacentHTML('afterbegin', topo); ligarSeletor(c); return; }
     const lista = [['resumo', 'Resumo'], ['equipe', 'Funcionários']];
     if (e.fabrica) lista.push(['vendas', 'Vendas'], ['missoes', 'Missões']);
-    if (temFrota(e)) lista.push(['pedidos', 'Pedidos'], ['caminhoes', 'Caminhões']);
+    if (temFrota(e)) lista.push(['pedidos', 'Pedidos'], ['caminhoes', 'Veículos']);
     lista.push(['robos', 'Robôs e nível']);
     if (minhas.length > 1) lista.push(['fundir', 'Fundir']);
     if (!lista.some(([k]) => k === aba)) aba = 'resumo';
@@ -216,24 +216,36 @@ async function telaPedidos(c, e) {
     <div class="lista">${listaPedidos(pedidos, 'auto', e.id)}</div>`;
   ligarPedidos(c);
 }
+// mesma ficha da função public.veiculo no banco
+const VEICULOS = {
+  van: { nome: 'Van', icone: '🚐', cap: 10, robo: 2, max: 20, sistema: 9000, fabrica: 7200, nivel: 1, texto: 'rápida e barata, leva pouco' },
+  caminhao: { nome: 'Caminhão', icone: '🚚', cap: 20, robo: 5, max: 60, sistema: 15000, fabrica: 12000, nivel: 1, texto: 'o equilíbrio entre carga e preço' },
+  helicoptero: { nome: 'Helicóptero', icone: '🚁', cap: 15, robo: 3, max: 30, sistema: 75000, fabrica: 60000, nivel: 10, texto: 'voa em linha reta, muito rápido e não pode ser roubado; ganha heliporto no telhado' },
+};
 async function telaCaminhoes(c, e) {
   const [frota, aceitos] = await Promise.all([rede.listarCaminhoes(), rede.pedidosAceitosDe(e.id)]);
   const meus = frota.filter((x) => x.empresa === e.id);
-  const cap = Math.min(60, 20 + 5 * ativos(e));
   const disponiveis = aceitos.filter((p) => p.qtd - p.entregues - p.em_transito > 0);
-  const estado = (k) => k.status === 'parado' ? 'parado no portão' : k.status === 'em_rota'
+  const capDe = (t) => Math.min(VEICULOS[t].max, VEICULOS[t].cap + VEICULOS[t].robo * ativos(e));
+  const estado = (k) => k.status === 'parado' ? 'parado' : k.status === 'em_rota'
     ? `levando ${k.carga} caixas · chega em ${Math.max(0, Math.round((new Date(k.chegada).getTime() - ctx.agora()) / 1000))} s` : 'voltando';
-  c.innerHTML = `<p class="dica">Caminhão: <b>${num(PRECO_CAMINHAO)}</b> do caixa da empresa (você tem ${num(e.caixa)}). Leva até <b>${cap}</b> caixas (${CAPACIDADE_CAMINHAO} + 5 por robô) e faz a viagem sozinho.</p>
-    <div class="botoes"><button id="eComprarCam">Comprar caminhão</button></div>
+  const cont = {};
+  c.innerHTML = `<p class="dica">Veículos saem do caixa da empresa (você tem ${num(e.caixa)}). Fábricas de veículos de jogadores vendem mais barato; sem estoque nelas, o veículo vem de fora.</p>
+    <div class="lista">${Object.entries(VEICULOS).map(([t, v]) => `<div class="linha item"><span class="nm"><b>${v.icone} ${v.nome}</b>
+      <small>${v.texto} · leva ${capDe(t)} caixas (${v.cap} + ${v.robo} por robô, máx. ${v.max})${e.nivel < v.nivel ? ` · a partir do nível ${v.nivel}` : ''}</small>
+      <small data-preco="${t}">${num(v.sistema)}</small></span>
+      <span class="bts"><button data-comprar="${t}" ${e.nivel < v.nivel ? 'disabled' : ''}>Comprar</button></span></div>`).join('')}</div>
     <div class="sub">Frota (${meus.length}/${lim(e, 'caminhoes')})</div>
-    <div class="lista">${meus.length ? meus.map((k, i) => `<div class="linha"><b>Caminhão ${i + 1}</b> <small>${estado(k)}</small>
-      ${k.status === 'parado' && disponiveis.length ? `<div class="form"><select data-sel="${k.id}">${disponiveis.map((p) => `<option value="${p.id}">#${p.id} · ${p.qtd - p.entregues - p.em_transito} caixas de ${esc(p.fab?.nome)} → ${esc(DESTINOS[p.destino]?.nome || p.destino)}</option>`).join('')}</select><label class="check"><input type="checkbox" data-esc="${k.id}"> Escolta armada (400): caminhão aguenta mais ataques</label><button data-despachar="${k.id}">Despachar</button></div>` : ''}</div>`).join('') : '<span class="vazio">Nenhum caminhão.</span>'}</div>
+    <div class="lista">${meus.length ? meus.map((k) => { const t = k.tipo || 'caminhao', v = VEICULOS[t]; cont[t] = (cont[t] || 0) + 1;
+      return `<div class="linha"><b>${v.icone} ${v.nome} ${cont[t]}</b> <small>${estado(k)}</small>
+      ${k.status === 'parado' && disponiveis.length ? `<div class="form"><select data-sel="${k.id}">${disponiveis.map((p) => `<option value="${p.id}">#${p.id} · ${p.qtd - p.entregues - p.em_transito} caixas de ${esc(p.fab?.nome)} → ${esc(DESTINOS[p.destino]?.nome || p.destino)}</option>`).join('')}</select>${t === 'helicoptero' ? '' : `<label class="check"><input type="checkbox" data-esc="${k.id}"> Escolta armada (400): aguenta mais ataques</label>`}<button data-despachar="${k.id}">Despachar</button></div>` : ''}</div>`; }).join('') : '<span class="vazio">Nenhum veículo.</span>'}</div>
     ${!disponiveis.length ? '<p class="dica">Nenhum pedido aceito com caixas para levar.</p>' : ''}`;
-  $('eComprarCam').onclick = () => executar(() => rede.logistica.comprarCaminhao(e.id), 'Caminhão comprado! Ele fica no portão da transportadora.');
+  for (const t of Object.keys(VEICULOS)) rede.logistica.precoVeiculo(e.id, t).then((p) => { const el = c.querySelector(`[data-preco="${t}"]`); if (el) el.textContent = `${num(p)}${p < VEICULOS[t].sistema ? ' · de uma fábrica de jogador' : ''}`; }).catch(() => {});
+  c.querySelectorAll('[data-comprar]').forEach((b) => { b.onclick = () => executar(() => rede.logistica.comprarVeiculo(e.id, b.dataset.comprar), `${VEICULOS[b.dataset.comprar].nome} comprado!`); });
   c.querySelectorAll('[data-despachar]').forEach((b) => {
     b.onclick = () => { const p = Number(c.querySelector(`[data-sel="${b.dataset.despachar}"]`).value);
       const esc2 = !!c.querySelector(`[data-esc="${b.dataset.despachar}"]`)?.checked;
-      executar(() => rede.logistica.despachar(Number(b.dataset.despachar), p, esc2), esc2 ? 'Caminhão despachado com escolta!' : 'Caminhão despachado! Acompanhe pelo mapa.'); };
+      executar(() => rede.logistica.despachar(Number(b.dataset.despachar), p, esc2), esc2 ? 'Despachado com escolta!' : 'Despachado! Acompanhe pelo mapa.'); };
   });
 }
 
@@ -243,11 +255,12 @@ function telaRobos(c, e) {
   const custo = lim(e, 'evoluir');
   const funcao = [e.fabrica ? 'Na fábrica, cada robô embala <b>1 caixa a cada 90 s</b> sozinho (acumula até 4 h fora do jogo).' : '',
     e.produto === 'robo' ? 'Na fábrica de robôs, cada robô monta <b>1 robô a cada 20 min</b>, vendido a empresas e clãs por 8.000 (o dinheiro entra no caixa).' : '',
+    VEICULOS[e.produto] ? `Na fábrica de ${({ van: 'vans', caminhao: 'caminhões', helicoptero: 'helicópteros' })[e.produto]}, cada robô monta <b>1 a cada ${({ van: 25, caminhao: 40, helicoptero: 120 })[e.produto]} min</b>, vendido a outras empresas por ${num(VEICULOS[e.produto].fabrica)} (o dinheiro entra no caixa).` : '',
     temFrota(e) ? 'Na transportadora, cada robô carregador põe <b>+5 caixas</b> em cada caminhão (máximo 60).' : ''].filter(Boolean).join(' ');
   const prox = e.nivel + 1, precisaItem = prox % 5 === 0;
   const velocidade = 100 + (e.nivel - 1) * 15;
   c.innerHTML = `<div class="cartoes"><div><small>Nível</small><b>${nivelTexto(e.nivel)}</b></div><div><small>Robôs ativos</small><b>${ativos(e)}/${lim(e, 'robos')}</b></div>
-      <div><small>Funcionários</small><b>até ${lim(e, 'funcionarios')}</b></div><div><small>Caminhões</small><b>${temFrota(e) ? 'até ' + lim(e, 'caminhoes') : '—'}</b></div></div>
+      <div><small>Funcionários</small><b>até ${lim(e, 'funcionarios')}</b></div><div><small>Veículos</small><b>${temFrota(e) ? 'até ' + lim(e, 'caminhoes') : '—'}</b></div></div>
     <p class="dica">${funcao}</p>
     <div class="sub">Robôs</div>
     <p class="dica">Próprios: <b>${e.robos}</b> · alugados: <b>${alugadosAtivos}</b>${alugadosAtivos ? ` (até ${new Date(e.aluguel_ate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})` : ''}</p>
@@ -294,7 +307,7 @@ function telaCompra(c) {
     <div class="form">
       <label>Nome da empresa <input id="cNome" maxlength="24" placeholder="Ex.: Doces do Vale"></label>
       <label>Tipo <select id="cTipo"><option value="fabrica">Fábrica</option><option value="transportadora">Transportadora</option></select></label>
-      <label id="cProdL">Produto <select id="cProd"><option value="chocolate">Chocolate</option><option value="remedio">Remédio</option><option value="robo">Robôs (vende a empresas e clãs)</option></select></label>
+      <label id="cProdL">Produto <select id="cProd"><option value="chocolate">Chocolate</option><option value="remedio">Remédio</option><option value="robo">Robôs (vende a empresas e clãs)</option><option value="van">Vans</option><option value="caminhao">Caminhões</option><option value="helicoptero">Helicópteros</option></select></label>
       <button id="cComprar">Comprar lote e fundar empresa</button></div>
     ${filiaisPossiveis().length ? `<div class="sub">Ou abrir uma filial (nível 10+)</div><div class="form">
       <label>Empresa <select id="fEmp">${filiaisPossiveis().map((e) => `<option value="${e.id}">${esc(e.nome)} · ${nivelTexto(e.nivel)}</option>`).join('')}</select></label>

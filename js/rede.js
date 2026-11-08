@@ -287,6 +287,8 @@ export const logistica = {
   entregar: () => rpc('entregar_caixa'),
   desistir: () => rpc('desistir_caixa'),
   comprarCaminhao: (empresa) => rpc('comprar_caminhao', { p_empresa: empresa }),
+  comprarVeiculo: (empresa, tipo) => rpc('comprar_veiculo', { p_empresa: empresa, p_tipo: tipo }),
+  precoVeiculo: (empresa, tipo) => rpc('preco_veiculo', { p_empresa: empresa, p_tipo: tipo }),
   despachar: (caminhao, pedido, escolta = false) => rpc('despachar_caminhao', { p_caminhao: caminhao, p_pedido: pedido, p_escolta: escolta }),
   processar: () => rpc('processar_caminhoes'),
   missoes: () => rpc('listar_missoes'),
