@@ -195,14 +195,29 @@ function ruaMaisPerto(v) { let m = ruaC(0), d = Infinity; for (let i = -7; i <= 
 // caminho pelas ruas (em L): sai para a rua, anda na horizontal, depois na vertical e entra no destino
 export function rotaRuas(a, b, parar = 0) {
   const za = ruaMaisPerto(a.z), xb = ruaMaisPerto(b.x), zb = ruaMaisPerto(b.z);
-  const pts = [{ x: a.x, z: a.z }, { x: a.x, z: za }, { x: xb, z: za }, { x: xb, z: zb }, { x: b.x, z: zb }, { x: b.x, z: b.z }]
-    .filter((p, i, l) => i === 0 || Math.hypot(p.x - l[i - 1].x, p.z - l[i - 1].z) > 0.5);
+  const pts = faixaDireita([{ x: a.x, z: a.z }, { x: a.x, z: za }, { x: xb, z: za }, { x: xb, z: zb }, { x: b.x, z: zb }, { x: b.x, z: b.z }]
+    .filter((p, i, l) => i === 0 || Math.hypot(p.x - l[i - 1].x, p.z - l[i - 1].z) > 0.5));
   if (parar > 0 && pts.length > 1) {   // para um pouco antes do destino
     const u = pts[pts.length - 1], w = pts[pts.length - 2], d = Math.hypot(u.x - w.x, u.z - w.z);
     if (d > parar + 0.5) pts[pts.length - 1] = { x: u.x + (w.x - u.x) / d * parar, z: u.z + (w.z - u.z) / d * parar }; else pts.pop();
   }
   let total = 0; for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
   return { pts, total };
+}
+// veículo guiado por robô anda na faixa da direita (não sobe na calçada nem anda no meio da rua)
+export function faixaDireita(pts, o = 2.4) {
+  if (pts.length < 3) return pts;
+  const dir = (a, b) => { const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1; return { x: dx / l, z: dz / l }; };
+  const dirTo = (d) => ({ x: -d.z, z: d.x });      // direita de quem anda na direção d
+  const r = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = dirTo(dir(pts[i - 1], pts[i])), b = dirTo(dir(pts[i], pts[i + 1]));
+    const dot = a.x * b.x + a.z * b.z;
+    const off = dot > 0.9 ? a : { x: a.x + b.x, z: a.z + b.z };
+    r.push({ x: pts[i].x + off.x * o, z: pts[i].z + off.z * o });
+  }
+  r.push(pts[pts.length - 1]);
+  return r;
 }
 export function pontoNaRota(r, s) {
   let resto = Math.max(0, s);
@@ -217,6 +232,7 @@ export function pontoNaRota(r, s) {
 function novoNpc(chave, modelo, base, destino, atraso, vel, parar) {
   const obj = civico.modeloCarro(modelo, '#ffffff');
   obj.visible = false; ctx.scene.add(obj);
+  obj.userData.sireneDe = modelo === 'ambulancia' ? 'sirene_ambulancia' : modelo === 'bombeiros' ? 'sirene_bombeiros' : null;
   const n = { obj, modelo, base, rota: rotaRuas(base, destino, parar), t0: performance.now() + atraso * 1000, vel, volta: null, chegou: false, atraso: 0 };
   npcs.set(chave, n); return n;
 }

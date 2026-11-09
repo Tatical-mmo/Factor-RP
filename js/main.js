@@ -20,6 +20,7 @@ import { iniciarConquistas } from './conquistas.js';
 import * as civico from './civico.js';
 import { iniciarGoverno, abrirPrefeitura, abrirConcessionaria, abrirServico, atualizarGoverno } from './governo.js';
 import * as servicos from './servicos.js';
+import * as sons from './sons.js';
 import { nivelTexto } from './empresa.js';
 import { iniciarPainel, atualizarBotao } from './painel.js';
 
@@ -1340,6 +1341,7 @@ function atirar(alvo) {
   jogador.recarga = 0.28;
 }
 function criarBola(pos, vel, cor, minha = false) {
+  sons.tocar('tiro', { vol: 0.7, dist: jogador.avatar ? Math.hypot(pos.x - jogador.pos.x, pos.z - jogador.pos.z) : 0, raio: 55, velocidade: 0.9 + Math.random() * 0.2 });
   const m = new THREE.Mesh(geoBola, new THREE.MeshStandardMaterial({ color: cor, roughness: 0.3 }));
   m.position.copy(pos); scene.add(m);
   bolas.push({ m, v: vel.clone(), vida: 1.4, cor, minha });
@@ -1390,6 +1392,8 @@ async function criarNPCs(excluir) {
 }
 function atualizarNPCs(dt) {
   for (const n of npcs) {
+    if (n.conversa) { conversando(n, dt); continue; }
+    if (n.animConversa) { n.animConversa = false; n.av.tocar('walk', { velocidade: 0.85 }); }
     if (n.policia) {
       if (remotoAtivo(n) && !(n.caido > 0) && !n.cerco && !n.perseguindo && !(n.hostil > 0)) { mostrarRoboRemoto(n, dt); continue; }
       if (n.animRemota) { n.animRemota = null; n.av.tocar('walk', { velocidade: 0.85 }); }
@@ -1707,7 +1711,7 @@ async function iniciarJogo(perfil) {
   montarLocais();
   atualizarInfo();
   if (TOQUE) { $('toque').classList.remove('oculto'); configurarJoystick(); $('btTiro').classList.add('oculto'); }
-  else { $('ajuda').innerHTML = CONTROLES_PC.map(([k, t]) => `<kbd>${k}</kbd> ${t}`).join('<br>'); $('ajuda').classList.remove('oculto'); }
+  else { $('ajuda').innerHTML = CONTROLES_PC.map(([k, t]) => `<kbd>${k}</kbd> ${t}`).join('<br>'); $('ajuda').classList.remove('oculto'); setTimeout(() => $('ajuda').classList.add('oculto'), 15000); }
   $('hud').classList.remove('oculto');
   $('carregando').classList.add('oculto');
   aviso(`Bem-vindo à cidade, ${nome}!`);
@@ -1746,9 +1750,16 @@ async function iniciarJogo(perfil) {
     clas: () => [...clasCache.values()], territorios: () => [...territorios.values()].map((v) => v.d),
     minhasEmpresas: () => [...empresas.values()].filter((e) => e.dono === jogador.perfil.id),
     meusCarros: () => [...carrosMundo.values()].map((v) => v.d).filter((d) => d.dono === jogador.perfil.id),
-    veiculos: meusVeiculos, acaoVeiculo, destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); }, pontoMudou: () => servicos.recomecarPonto(),
+    veiculos: meusVeiculos, acaoVeiculo, amigosMudaram: () => carregarAmigos(), destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); }, pontoMudou: () => servicos.recomecarPonto(),
   });
   $('btVeiculos').onclick = () => abrirServico('veiculos');
+  $('btAmigos').onclick = () => abrirServico('amigos');
+  $('btMenu').onclick = () => $('menuBar').classList.toggle('aberto');
+  $('menuItens').addEventListener('click', (e) => { if (e.target.closest('button') && e.target.closest('button').id !== 'btMenu') $('menuBar').classList.remove('aberto'); });
+  $('btSom').onclick = () => { const l = sons.alternar(); $('btSom').firstChild.textContent = l ? '🔊' : '🔇'; };
+  $('btSom').firstChild.textContent = sons.estaLigado() ? '🔊' : '🔇';
+  sons.preparar();
+  iniciarChat();
   iniciarConquistas({
     perfil: () => jogador.perfil, aviso,
     dados: () => ({
@@ -1833,7 +1844,7 @@ function conectarMultiplayer(perfil) {
     },
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
     tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c),
-    dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d),
+    dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -1881,7 +1892,7 @@ function atualizarRemotos(dt) {
     }
     if (a.cv) {   // dirigindo: mostra o carro no lugar do personagem
       const [cid, mod, cor] = String(a.cv).split('|');
-      if (!r.carro || r.carroId !== cid) { if (r.carro) scene.remove(r.carro); r.carro = civico.modeloCarro(mod, cor); r.carroId = cid; r.carro.position.set(a.x, a.y, a.z); scene.add(r.carro); }
+      if (!r.carro || r.carroId !== cid) { if (r.carro) scene.remove(r.carro); r.carro = civico.modeloCarro(mod, cor); r.carroId = cid; r.carroModelo = mod; r.carro.position.set(a.x, a.y, a.z); scene.add(r.carro); }
       const kc = Math.min(1, dt * 10);
       r.carro.position.x += (a.x - r.carro.position.x) * kc; r.carro.position.y += (a.y - r.carro.position.y) * kc; r.carro.position.z += (a.z - r.carro.position.z) * kc;
       r.carro.rotation.y = suavizarAngulo(r.carro.rotation.y, a.r, dt * 10);
@@ -2210,9 +2221,9 @@ function pernas(c) {
     return p;
   }
   const p = [
-    { pts: rotaGrade(T, F), dur: r.d1 }, { parado: true, dur: r.carga },
-    { pts: rotaGrade(F, D), dur: r.d2 }, { parado: true, dur: r.descarga },
-    { pts: rotaGrade(D, T), dur: r.d3 },
+    { pts: servicos.faixaDireita(rotaGrade(T, F)), dur: r.d1 }, { parado: true, dur: r.carga },
+    { pts: servicos.faixaDireita(rotaGrade(F, D)), dur: r.d2 }, { parado: true, dur: r.descarga },
+    { pts: servicos.faixaDireita(rotaGrade(D, T)), dur: r.d3 },
   ];
   c.rotaCache = { id: c.d.partida, pernas: p };
   return p;
@@ -3131,6 +3142,135 @@ function descerPassageiro() {
   aviso('Você desceu do helicóptero.', 2);
 }
 
+// ---------------------------------------------------------------- sons do mundo (volume pela distância)
+let tempoBuzina = 0;
+function atualizarSons() {
+  const p = jogador.pos, dist = (o) => Math.hypot(o.position.x - p.x, o.position.z - p.z), t = performance.now() / 1000;
+  // sirenes: ambulâncias e bombeiros (NPC, o meu e o dos outros jogadores) e viaturas em perseguição
+  for (const o of servicos.veiculosNpc()) {
+    const nome = o.userData.sireneDe; if (nome) sons.continuo(nome, 0.55 * sons.perto(dist(o), 75));
+  }
+  if (jogador.carro?.servico) sons.continuo(jogador.carro.servico === 'ambulancia' ? 'sirene_ambulancia' : 'sirene_bombeiros', 0.45);
+  for (const r of remotos.values()) if (r.carro && (r.carroModelo === 'ambulancia' || r.carroModelo === 'bombeiros')) sons.continuo(r.carroModelo === 'ambulancia' ? 'sirene_ambulancia' : 'sirene_bombeiros', 0.5 * sons.perto(dist(r.carro), 75));
+  for (const v of viaturas) if (v.perseguindo || remotoAtivo(v)) sons.continuo('sirene_policia', 0.6 * sons.perto(dist(v.obj), 85));
+  // helicópteros: som de perto do chão e som do alto, conforme a altura
+  for (const c of caminhoes.values()) {
+    if (c.d.tipo !== 'helicoptero' || !c.obj.visible) continue;
+    const alt = c.obj.position.y - alturaChao(c.obj.position.x, c.obj.position.z), ligado = alt > 0.5 || c.obj.userData.rotor?.visible;
+    if (!ligado) continue;
+    const dentro = jogador.carro?.caminhao === c.d.id || jogador.passageiro?.c === c, vol = dentro ? 0.6 : 0.55 * sons.perto(dist(c.obj), 110);
+    const k = THREE.MathUtils.clamp(alt / 12, 0, 1);
+    sons.continuo('helicoptero_baixo', vol * (1 - k)); sons.continuo('helicoptero_alto', vol * k);
+  }
+  // trem: barulho dentro e perto; buzina quando passa perto
+  if (jogador.trem) sons.continuo('trem_andando', 0.6);
+  else {
+    let dm = Infinity; for (const [x, z] of ferrovia.marcadores()) dm = Math.min(dm, Math.hypot(x - p.x, z - p.z));
+    sons.continuo('trem_andando', 0.4 * sons.perto(dm, 55));
+    if (dm < 70 && t > tempoBuzina) { tempoBuzina = t + 40; sons.tocar('buzina_trem', { vol: 0.5, dist: dm, raio: 120 }); }
+  }
+  sons.atualizar();
+}
+
+// ---------------------------------------------------------------- NPCs se encontram e conversam
+const FALAS_ROBO = ['Bip! Tudo em ordem.', 'Ronda tranquila.', 'Algum procurado por aí?', 'Bateria em 87%.', 'Viu a viatura 3?', 'Bip bop.'];
+const FALAS_GENTE = ['Oi! Tudo bem?', 'Que calor hoje!', 'Viu o preço do chocolate?', 'Vou pegar o trem.', 'Ouvi uma sirene…', 'Bom dia!', 'Até mais!'];
+function atualizarConversas(dt) {
+  const agora = performance.now();
+  for (const n of npcs) {
+    if (n.conversa) {
+      const c = n.conversa;
+      if (agora > c.ate) { if (n.balao) { n.av.raiz.remove(n.balao); n.balao = null; } n.conversa = null; n.pausa = agora + 25000; n.fase -= c.dur * n.vel; continue; }
+      if (agora > c.proxFala) {
+        c.proxFala = agora + 2200; c.vez = !c.vez;
+        if (n.balao) { n.av.raiz.remove(n.balao); n.balao = null; }
+        if (c.vez) {
+          const falas = n.policia ? FALAS_ROBO : FALAS_GENTE;
+          n.balao = textoSprite(falas[Math.floor(Math.random() * falas.length)], { escala: 0.5, fundo: 'rgba(255,255,255,.92)', cor: '#1a1a1a' });
+          n.balao.position.y = 3.0; n.av.raiz.add(n.balao);
+          if (n.policia) sons.tocar('robo_conversando', { vol: 0.35, dist: Math.hypot(n.av.raiz.position.x - jogador.pos.x, n.av.raiz.position.z - jogador.pos.z), raio: 25 });
+        }
+      }
+    }
+  }
+  // dois NPCs livres que se cruzam param para conversar uns segundos
+  for (let i = 0; i < npcs.length; i++) {
+    const a = npcs[i]; if (a.conversa || (a.pausa || 0) > agora || a.perseguindo || a.hostil > 0 || a.caido > 0 || a.cerco || (a.policia && remotoAtivo(a))) continue;
+    for (let k = i + 1; k < npcs.length; k++) {
+      const b = npcs[k]; if (b.conversa || (b.pausa || 0) > agora || b.perseguindo || b.hostil > 0 || b.caido > 0 || b.cerco || (b.policia && remotoAtivo(b))) continue;
+      if (a.av.raiz.position.distanceTo(b.av.raiz.position) > 2.4) continue;
+      const dur = 6 + Math.random() * 4;
+      a.conversa = { ate: agora + dur * 1000, dur, proxFala: agora + 300, vez: false, com: b };
+      b.conversa = { ate: agora + dur * 1000, dur, proxFala: agora + 1400, vez: false, com: a };
+      break;
+    }
+  }
+}
+function conversando(n, dt) {   // parado, de frente para o outro
+  const o = n.conversa.com.av.raiz.position, p = n.av.raiz.position;
+  n.av.raiz.rotation.y = suavizarAngulo(n.av.raiz.rotation.y, Math.atan2(o.x - p.x, o.z - p.z), dt * 5);
+  if (n.animConversa !== true) { n.animConversa = true; n.av.tocar('idle'); }
+  n.av.mixer.update(dt);
+}
+
+// ---------------------------------------------------------------- chat: ao vivo, não é salvo em lugar nenhum
+const amigosIds = new Set();
+let chatPrivado = false, ultimoChat = 0, tempoAmigos = 1;
+function carregarAmigos() {
+  rede.amigos.listar().then((l) => { amigosIds.clear(); for (const a of l || []) if (a.aceita) amigosIds.add(a.id); }).catch(() => {});
+}
+function iniciarChat() {
+  const caixa = $('chatCaixa'), txt = $('chatTexto');
+  const abrir = () => { caixa.classList.remove('oculto'); txt.focus(); };
+  const fechar = () => { caixa.classList.add('oculto'); txt.blur(); };
+  $('btChat').onclick = () => (caixa.classList.contains('oculto') ? abrir() : fechar());
+  $('chatFechar').onclick = fechar;
+  $('chatModo').onclick = () => { chatPrivado = !chatPrivado; $('chatModo').textContent = chatPrivado ? '🔒 Amigos' : '🌐 Todos'; $('chatModo').classList.toggle('privado', chatPrivado); txt.focus(); };
+  const enviar = () => {
+    const t = txt.value.replace(/\s+/g, ' ').trim().slice(0, 120);
+    if (!t) { fechar(); return; }
+    if (performance.now() - ultimoChat < 1200) { aviso('Calma: uma mensagem por segundo.'); return; }
+    if (chatPrivado && !amigosIds.size) { aviso('Você ainda não tem amigos. Adicione em 👥 Amigos.'); return; }
+    ultimoChat = performance.now();
+    const m = { de: jogador.perfil.id, nome: jogador.perfil.nome, texto: t, privado: chatPrivado };
+    conexao?.enviar('chat', m);
+    mostrarChat(m, true); txt.value = '';
+  };
+  $('chatEnviar').onclick = enviar;
+  txt.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); enviar(); } if (e.key === 'Escape') fechar(); e.stopPropagation(); });
+  window.addEventListener('keydown', (e) => {
+    const foco = document.activeElement;
+    if (e.key === 'Enter' && jogador.avatar && !(foco && (foco.tagName === 'INPUT' || foco.tagName === 'TEXTAREA'))) { e.preventDefault(); abrir(); }
+  });
+}
+function receberChat(m) {
+  if (!m || typeof m.texto !== 'string' || !m.de) return;
+  if (m.privado && !amigosIds.has(m.de)) return;      // modo privado: só os amigos veem
+  mostrarChat({ ...m, texto: m.texto.slice(0, 120), nome: String(m.nome || '?').slice(0, 24) }, false);
+}
+function mostrarChat(m, meu) {
+  // linha no canto (some em 20 s)
+  const log = $('chatLog'), linha = document.createElement('div');
+  if (m.privado) linha.className = 'privado';
+  const b = document.createElement('b'); b.textContent = `${m.privado ? '🔒 ' : ''}${m.nome}: `;
+  linha.append(b, document.createTextNode(m.texto));
+  log.append(linha);
+  while (log.children.length > 6) log.firstChild.remove();
+  setTimeout(() => { linha.style.opacity = '0'; setTimeout(() => linha.remove(), 1000); }, 20000);
+  // balão sobre a cabeça (some em 6 s)
+  const raiz = meu ? jogador.avatar?.raiz : remotos.get(m.de)?.av?.raiz;
+  if (!raiz) return;
+  if (raiz.userData.balaoChat) raiz.remove(raiz.userData.balaoChat);
+  const curto = m.texto.length > 46 ? `${m.texto.slice(0, 45)}…` : m.texto;
+  const s = textoSprite(curto, { escala: 0.55, fundo: m.privado ? 'rgba(255,214,40,.95)' : 'rgba(255,255,255,.94)', cor: '#151515' });
+  s.position.y = 3.15; raiz.add(s); raiz.userData.balaoChat = s;
+  setTimeout(() => { if (raiz.userData.balaoChat === s) { raiz.remove(s); raiz.userData.balaoChat = null; } }, 6000);
+}
+function atualizarChat(dt) {
+  tempoAmigos -= dt;
+  if (tempoAmigos <= 0) { tempoAmigos = 45; carregarAmigos(); }
+}
+
 // ---------------------------------------------------------------- roubo de carros de jogador
 function carroAlheioProximo() {
   if (jogador.carro || jogador.trem) return null;
@@ -3484,9 +3624,16 @@ function atualizarViaturas(dt) {
       if (v.perseguindo && d > 220) v.perseguindo = false;
       if (v.perseguindo) {
         const vel = j.carro ? 12 : 8.5;
-        if (d > 5) { o.position.x += dx / d * vel * dt; o.position.z += dz / d * vel * dt; resolverColisao(o.position, 1.6); }
+        // segue pelas ruas (refaz o caminho a cada 2 s); no fim do caminho vai direto até você
+        v.recalc = (v.recalc || 0) - dt;
+        if (v.recalc <= 0 || !v.rota) { v.recalc = 2; v.rota = servicos.rotaRuas({ x: o.position.x, z: o.position.z }, { x: j.pos.x, z: j.pos.z }, 4); v.s = 0; }
+        if (d > 5) {
+          v.s += vel * dt;
+          const p = servicos.pontoNaRota(v.rota, v.s);
+          if (!p.fim) { o.rotation.y = suavizarAngulo(o.rotation.y, p.ang, dt * 6); o.position.x = p.x; o.position.z = p.z; }
+          else { o.position.x += dx / d * vel * dt; o.position.z += dz / d * vel * dt; o.rotation.y = suavizarAngulo(o.rotation.y, Math.atan2(dx, dz), dt * 4); }
+        }
         o.position.y = alturaChao(o.position.x, o.position.z);
-        o.rotation.y = suavizarAngulo(o.rotation.y, Math.atan2(dx, dz), dt * 4);
         if (d < 6 && !j.passageiro && (!j.carro || Math.abs(j.carro.vel) < 1.5) && !ocupado) {
           if (j.carro) sairCarro();
           ocupado = true; v.perseguindo = false;
@@ -4223,7 +4370,7 @@ function quadro() {
   atualizarCeu(agoraServidor() / 1000);
   mundo.atualizar(dt);
   sedes.atualizar(dt);
-  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); checarTrem(); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); }
+  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); checarTrem(); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);

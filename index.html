@@ -190,6 +190,36 @@
   #vAcel { width:80px; height:140px; border-radius:18px; font-size:12px; background:rgba(40,120,60,.75); }
   #vFreio { background:rgba(150,40,40,.75); }
   .pd.ativo { filter:brightness(1.6); transform:scale(.96); }
+
+  /* ---- HUD enxuto: menu único (☰) no celular, coluna de ícones no computador ---- */
+  #menuBar { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(150px + env(safe-area-inset-top)); pointer-events:auto; display:flex; flex-direction:column; gap:6px; z-index:2; }
+  #menuBar .fixos { display:flex; gap:6px; }
+  #menuBar button { position:static !important; transform:none !important; display:flex; align-items:center; gap:8px; height:40px; min-width:40px; padding:0 10px;
+    font-size:18px; font-weight:700; border-radius:10px; border:1px solid var(--borda); background:rgba(20,25,37,.82); color:var(--texto); cursor:pointer; }
+  #menuBar button span { font-size:13px; }
+  #menuItens { display:none; flex-direction:column; gap:5px; background:rgba(15,19,27,.9); border:1px solid var(--borda); border-radius:12px; padding:6px; }
+  #menuBar.aberto #menuItens { display:flex; }
+  #menuBar.aberto #btMenu { background:var(--destaque); color:#20160a; }
+  #menuItens .oculto { display:none !important; }
+  @media (min-width: 900px) and (pointer: fine) {
+    #btMenu { display:none !important; }
+    #menuItens { display:flex; background:transparent; border:0; padding:0; }
+    #menuItens button span { display:none; }
+    #menuItens button { width:40px; justify-content:center; padding:0; }
+  }
+  #info { font-size:12.5px; line-height:1.35; padding:6px 10px; max-width:230px; }
+  #rua { font-size:12px; padding:4px 10px; opacity:.85; }
+  @media (max-width: 600px) { #mapa { width:118px; height:118px; } #rastreio { top:calc(134px + env(safe-area-inset-top)); } #rua { display:none; } }
+  /* chat: mensagens somem sozinhas e não são salvas */
+  #chatLog { position:absolute; left:calc(10px + env(safe-area-inset-left)); bottom:calc(200px + env(safe-area-inset-bottom)); width:min(340px, 62vw); display:flex; flex-direction:column; gap:3px; pointer-events:none; }
+  #chatLog div { background:rgba(10,13,19,.62); border-radius:8px; padding:3px 8px; font-size:12.5px; color:#e8edf5; transition:opacity 1s; word-wrap:break-word; }
+  #chatLog div b { color:#9fd0ff; }
+  #chatLog div.privado { color:#ffe066; } #chatLog div.privado b { color:#ffd23e; }
+  #chatCaixa { position:absolute; left:50%; transform:translateX(-50%); top:calc(54px + env(safe-area-inset-top)); width:min(560px, 94vw); display:flex; gap:6px; pointer-events:auto; padding:6px; z-index:5; }
+  #chatCaixa input { flex:1; min-width:0; font-size:16px; padding:9px 10px; border-radius:9px; border:1px solid var(--borda); background:#0f131b; color:var(--texto); }
+  #chatCaixa button { padding:0 10px; border-radius:9px; border:1px solid var(--borda); background:#202737; color:var(--texto); font-weight:700; cursor:pointer; white-space:nowrap; }
+  #chatCaixa #chatModo.privado { background:#5a4a10; color:#ffe066; }
+  @media (min-width: 900px) { #chatLog { bottom:calc(20px + env(safe-area-inset-bottom)); } }
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#141925">
@@ -204,20 +234,21 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261109b",
-  "./js/mundo.js": "./js/mundo.js?v=20261109b",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261109b",
-  "./js/cla.js": "./js/cla.js?v=20261109b",
-  "./js/config.js": "./js/config.js?v=20261109b",
-  "./js/empresa.js": "./js/empresa.js?v=20261109b",
-  "./js/loja.js": "./js/loja.js?v=20261109b",
-  "./js/painel.js": "./js/painel.js?v=20261109b",
-  "./js/rede.js": "./js/rede.js?v=20261109b",
-  "./js/sedes.js": "./js/sedes.js?v=20261109b",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261109b",
-  "./js/civico.js": "./js/civico.js?v=20261109b",
-  "./js/governo.js": "./js/governo.js?v=20261109b",
-  "./js/servicos.js": "./js/servicos.js?v=20261109b"
+  "./js/main.js": "./js/main.js?v=20261109c",
+  "./js/mundo.js": "./js/mundo.js?v=20261109c",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261109c",
+  "./js/cla.js": "./js/cla.js?v=20261109c",
+  "./js/config.js": "./js/config.js?v=20261109c",
+  "./js/empresa.js": "./js/empresa.js?v=20261109c",
+  "./js/loja.js": "./js/loja.js?v=20261109c",
+  "./js/painel.js": "./js/painel.js?v=20261109c",
+  "./js/rede.js": "./js/rede.js?v=20261109c",
+  "./js/sedes.js": "./js/sedes.js?v=20261109c",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261109c",
+  "./js/civico.js": "./js/civico.js?v=20261109c",
+  "./js/governo.js": "./js/governo.js?v=20261109c",
+  "./js/servicos.js": "./js/servicos.js?v=20261109c",
+  "./js/sons.js": "./js/sons.js?v=20261109c"
 } }
 </script>
 </head>
@@ -265,15 +296,29 @@
   <div id="dica" class="painel oculto"></div>
   <div id="aviso" class="painel" style="opacity:0"></div>
   <div id="ajuda" class="painel oculto"></div>
-  <button id="btMochila">🎒 Mochila</button>
-  <button id="btEmpresa">🏢 Empresa</button>
-  <button id="btCla">⚔ Clã</button>
+  <div id="menuBar">
+    <div class="fixos"><button id="btMenu" title="Menu">☰</button><button id="btChat" title="Chat (Enter)">💬</button></div>
+    <div id="menuItens">
+      <button id="btMochila" title="Mochila (M)">🎒<span>Mochila</span></button>
+      <button id="btEmpresa" title="Empresa">🏢<span>Empresa</span></button>
+      <button id="btCla" title="Clã">⚔️<span>Clã</span></button>
+      <button id="btRanking" title="Metas e ranking">🏆<span>Metas</span></button>
+      <button id="btVeiculos" title="Veículos">🚗<span>Veículos</span></button>
+      <button id="btAmigos" title="Amigos">👥<span>Amigos</span></button>
+      <button id="btPainel" class="oculto" title="Painel da equipe">🛡<span>Painel</span></button>
+      <button id="btSom" title="Som">🔊<span>Som</span></button>
+      <button id="btTela" title="Tela cheia">⛶<span>Tela cheia</span></button>
+      <button id="btInstalar" class="oculto" title="Instalar">📲<span>Instalar</span></button>
+    </div>
+  </div>
+  <div id="chatLog"></div>
+  <div id="chatCaixa" class="painel oculto">
+    <button id="chatModo" title="Quem vê a mensagem">🌐 Todos</button>
+    <input id="chatTexto" maxlength="120" placeholder="Mensagem… (Enter envia)" autocomplete="off">
+    <button id="chatEnviar">➤</button><button id="chatFechar" title="Fechar">✕</button>
+  </div>
   <button id="btFianca" class="oculto">Pagar fiança</button>
   <div id="captura" class="painel oculto"></div>
-  <button id="btPainel" class="oculto">🛡 Painel</button>
-  <button id="btRanking">🏆 Metas</button>
-  <button id="btVeiculos">🚗 Veículos</button>
-  <div id="appBotoes"><button id="btTela" title="Tela cheia">⛶</button><button id="btInstalar" class="oculto">📲 Instalar</button></div>
   <div id="bloqueio" class="oculto"></div>
 </div>
 
@@ -343,7 +388,7 @@
   </div>
 </div>
 
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 09/11 · carreiras e polícia robô</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 09/11 · chat, sons e tela nova</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

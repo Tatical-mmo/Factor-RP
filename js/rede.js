@@ -72,6 +72,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'tiro' }, ({ payload }) => eventos.tiro?.(payload));
   canal.on('broadcast', { event: 'dano' }, ({ payload }) => eventos.dano?.(payload));
   canal.on('broadcast', { event: 'atropelo' }, ({ payload }) => eventos.atropelo?.(payload));
+  canal.on('broadcast', { event: 'chat' }, ({ payload }) => eventos.chat?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
@@ -150,6 +151,8 @@ function traduzirRpc(m) {
     'o dono nao pode se demitir': 'O dono não pode se demitir.',
     'cla nao encontrado': 'Clã não encontrado.',
     'veiculo invalido': 'Veículo inválido.',
+    'voce nao pode adicionar a si mesmo': 'Você não pode adicionar a si mesmo.',
+    'pedido ja existe': 'Vocês já são amigos ou o pedido já foi feito.',
     'policial nao rouba carro': 'Policial não rouba carro.',
     'esse carro nao pode ser roubado': 'Esse carro não pode ser roubado.',
     'o carro e seu': 'O carro é seu.',
@@ -362,6 +365,12 @@ export const veiculos = {
 export const jornal = {
   publicar: (tipo, ref, titulo, x, z) => rpc('publicar_noticia', { p_tipo: tipo, p_ref: ref, p_titulo: titulo, p_x: x, p_z: z }),
   ultimas: () => sel(sb.from('noticias').select('*').order('id', { ascending: false }).limit(12)),
+};
+export const amigos = {
+  listar: () => rpc('meus_amigos'),
+  pedir: (nome) => rpc('pedir_amizade', { p_nome: nome }),
+  responder: (de, sim) => rpc('responder_amizade', { p_de: de, p_aceitar: sim }),
+  desfazer: (id) => rpc('desfazer_amizade', { p_outro: id }),
 };
 export const recompensas = {
   procurados: () => rpc('mais_procurados'),

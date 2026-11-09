@@ -152,6 +152,7 @@ const SERVICOS = {
   bombeiros: ['Quartel dos Bombeiros', telaBombeiros],
   veiculos: ['Meus veículos', telaVeiculos],
   jornal: ['📰 Jornal da Cidade', telaJornal],
+  amigos: ['👥 Amigos', telaAmigos],
   taxi: ['Carona: para onde?', telaTaxi],
 };
 
@@ -267,4 +268,21 @@ async function telaJornal(c) {
     <div class="sub">Últimas notícias</div>
     <div class="lista">${lista.length ? lista.map((n) => `<div class="linha item"><span class="nm"><b>${esc(n.titulo)}</b><small>por ${esc(n.autor_nome)} · ${quando(n.criada_em)}</small></span></div>`).join('') : '<span class="vazio">Nenhuma notícia ainda.</span>'}</div>`;
   ligarProfissao('jornalista');
+}
+
+async function telaAmigos(c) {
+  const lista = (await rede.amigos.listar()) || [];
+  const amigos = lista.filter((a) => a.aceita), recebidos = lista.filter((a) => !a.aceita && !a.pediu_eu), enviados = lista.filter((a) => !a.aceita && a.pediu_eu);
+  c.innerHTML = `<p class="dica">No chat (💬), o modo <b>🔒 Amigos</b> manda mensagens que só seus amigos veem, em amarelo. Nada do chat fica salvo.</p>
+    <div class="botoes"><input id="amNome" placeholder="Nome do jogador"><button id="amPedir">Adicionar</button></div>
+    ${recebidos.length ? `<div class="sub">Pedidos para você (${recebidos.length})</div><div class="lista">${recebidos.map((a) => `<div class="linha item"><span class="nm"><b>${esc(a.nome)}</b></span>
+      <span class="bts"><button data-aceitar="${a.id}">Aceitar</button><button data-recusar="${a.id}">Recusar</button></span></div>`).join('')}</div>` : ''}
+    <div class="sub">Amigos (${amigos.length})</div>
+    <div class="lista">${amigos.length ? amigos.map((a) => `<div class="linha item"><span class="nm"><b>${esc(a.nome)}</b></span><span class="bts"><button data-desfazer="${a.id}">Remover</button></span></div>`).join('') : '<span class="vazio">Nenhum amigo ainda.</span>'}</div>
+    ${enviados.length ? `<div class="sub">Esperando resposta</div><div class="lista">${enviados.map((a) => `<div class="linha item"><span class="nm"><b>${esc(a.nome)}</b><small>pedido enviado</small></span><span class="bts"><button data-desfazer="${a.id}">Cancelar</button></span></div>`).join('')}</div>` : ''}`;
+  const depois = (txt) => (r) => { ctx.amigosMudaram?.(); return typeof txt === 'function' ? txt(r) : txt; };
+  $('amPedir').onclick = () => { const n = $('amNome').value.trim(); if (n) executar(() => rede.amigos.pedir(n), depois((r) => (r === 'aceita' ? `Agora você e ${n} são amigos!` : `Pedido enviado para ${n}.`))); };
+  c.querySelectorAll('[data-aceitar]').forEach((b) => { b.onclick = () => executar(() => rede.amigos.responder(b.dataset.aceitar, true), depois('Amizade aceita!')); });
+  c.querySelectorAll('[data-recusar]').forEach((b) => { b.onclick = () => executar(() => rede.amigos.responder(b.dataset.recusar, false), depois('Pedido recusado.')); });
+  c.querySelectorAll('[data-desfazer]').forEach((b) => { b.onclick = () => executar(() => rede.amigos.desfazer(b.dataset.desfazer), depois('Removido.')); });
 }

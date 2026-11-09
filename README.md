@@ -28,7 +28,7 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b`, `21c`, `22a`, `22b`, `23a`, `23b`, `23c`, `23d`, `24`, `25`, `26`, `27`, `28`, `29`, `30`, `31a`, `31b` e `31c`, nessa ordem.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b`, `21c`, `22a`, `22b`, `23a`, `23b`, `23c`, `23d`, `24`, `25`, `26`, `27`, `28`, `29`, `30`, `31a`, `31b`, `31c` e `32`, nessa ordem.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
 
 ## Etapa 3: trabalho e produção
@@ -324,3 +324,12 @@ Rode no SQL Editor, nessa ordem: `31a_carreiras.sql`, `31b_robos_policia.sql`, `
 - Roubo de carros de jogador: arrombe um carro parado de outro (2,5 s, é crime) e saia dirigindo. O dono vê ROUBADO na janela 🚗 Veículos e pode Bloquear (20 s depois o ladrão é jogado para fora). Policial devolve carro roubado largado (+300). O presidencial não pode ser roubado.
 - Passageiros também em van e caminhão (clã do dono ou funcionários): descem quando o veículo chega.
 - Gráfico: janelas da prefeitura e do banco não piscam mais; árvores nos cantos das quadras dos prédios públicos.
+
+## Versão 09/11 (c) · chat, amigos, sons, conversas de NPCs, faixas da rua e tela nova
+Rode no SQL Editor: `32_amigos.sql`.
+- Chat (💬 ou Enter): mensagens aparecem no canto e num balão sobre a cabeça por alguns segundos. Modo 🔒 Amigos: só os amigos veem, em amarelo. Nada do chat fica salvo.
+- 👥 Amigos: adicionar pelo nome, aceitar/recusar pedidos e remover.
+- Sons (assets/sons, botão 🔊): sirenes da ambulância, bombeiros e polícia, helicóptero perto do chão e no alto (troca conforme a altura), buzina e barulho do trem, tiros e robôs conversando. Volume pela distância.
+- NPCs (pessoas e policiais robôs) que se cruzam param para conversar, com balões de fala.
+- Veículos guiados por robôs (entregas, carona, ambulância, bombeiros e viaturas, inclusive na perseguição) andam pela faixa da direita das ruas.
+- Tela mais limpa: menu único ☰ no celular e coluna de ícones no computador; minimapa menor no celular; ajuda de teclas some sozinha.
