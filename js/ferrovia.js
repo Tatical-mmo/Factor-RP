@@ -365,6 +365,8 @@ export function atropela(p, raio) {
   }
   return false;
 }
+// trens em movimento (para o som): posição de cada um que não está parado na estação
+export function andando() { const r = []; for (const l of linhas) for (const tr of l.trens) if (tr.est && tr.est.parado === null) { const c = tr.carros[1]; r.push({ x: c.x, z: c.z, li: l.id, k: l.trens.indexOf(tr) }); } return r; }
 export function marcadores() { const r = []; for (const l of linhas) for (const tr of l.trens) { const c = tr.carros[1]; r.push([c.x, c.z, c.yaw]); } return r; }
 export function desenharMapa(g) {
   g.strokeStyle = '#5a4632'; g.lineWidth = 3;

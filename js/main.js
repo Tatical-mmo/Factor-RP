@@ -3156,15 +3156,23 @@ function descerPassageiro() {
 
 // ---------------------------------------------------------------- sons do mundo (volume pela distância)
 let tempoBuzina = 0;
+// o objeto andou desde o último quadro? (sirene só com o veículo em movimento)
+function andando(o) {
+  const u = o.userData, agora = performance.now(), x = o.position.x, z = o.position.z;
+  if (u.somT === undefined) { u.somT = agora; u.somX = x; u.somZ = z; u.somV = 0; return false; }
+  const dt = (agora - u.somT) / 1000;
+  if (dt >= 0.25) { u.somV = Math.hypot(x - u.somX, z - u.somZ) / dt; u.somT = agora; u.somX = x; u.somZ = z; }
+  return u.somV > 0.8;
+}
 function atualizarSons() {
   const p = jogador.pos, dist = (o) => Math.hypot(o.position.x - p.x, o.position.z - p.z), t = performance.now() / 1000;
-  // sirenes: ambulâncias e bombeiros (NPC, o meu e o dos outros jogadores) e viaturas em perseguição
+  // sirenes: ambulâncias e bombeiros (NPC, o meu e o dos outros jogadores) e viaturas em perseguição; parados não tocam
   for (const o of servicos.veiculosNpc()) {
-    const nome = o.userData.sireneDe; if (nome) sons.continuo(nome, 0.55 * sons.perto(dist(o), 75));
+    const nome = o.userData.sireneDe; if (nome && andando(o)) sons.continuo(nome, 0.55 * sons.perto(dist(o), 75));
   }
-  if (jogador.carro?.servico) sons.continuo(jogador.carro.servico === 'ambulancia' ? 'sirene_ambulancia' : 'sirene_bombeiros', 0.45);
-  for (const r of remotos.values()) if (r.carro && (r.carroModelo === 'ambulancia' || r.carroModelo === 'bombeiros')) sons.continuo(r.carroModelo === 'ambulancia' ? 'sirene_ambulancia' : 'sirene_bombeiros', 0.5 * sons.perto(dist(r.carro), 75));
-  for (const v of viaturas) if (v.perseguindo || remotoAtivo(v)) sons.continuo('sirene_policia', 0.6 * sons.perto(dist(v.obj), 85));
+  if (jogador.carro?.servico && Math.abs(jogador.carro.vel) > 0.8) sons.continuo(jogador.carro.servico === 'ambulancia' ? 'sirene_ambulancia' : 'sirene_bombeiros', 0.45);
+  for (const r of remotos.values()) if (r.carro && (r.carroModelo === 'ambulancia' || r.carroModelo === 'bombeiros') && andando(r.carro)) sons.continuo(r.carroModelo === 'ambulancia' ? 'sirene_ambulancia' : 'sirene_bombeiros', 0.5 * sons.perto(dist(r.carro), 75));
+  for (const v of viaturas) if ((v.perseguindo || remotoAtivo(v)) && andando(v.obj)) sons.continuo('sirene_policia', 0.6 * sons.perto(dist(v.obj), 85));
   // helicópteros: som de perto do chão e som do alto, conforme a altura
   for (const c of caminhoes.values()) {
     if (c.d.tipo !== 'helicoptero' || !c.obj.visible) continue;
@@ -3175,9 +3183,10 @@ function atualizarSons() {
     sons.continuo('helicoptero_baixo', vol * (1 - k)); sons.continuo('helicoptero_alto', vol * k);
   }
   // trem: barulho dentro e perto; buzina quando passa perto
-  if (jogador.trem) sons.continuo('trem_andando', 0.6);
+  const trens = ferrovia.andando();
+  if (jogador.trem) { if (trens.some((tr) => tr.li === jogador.trem.li && tr.k === jogador.trem.k)) sons.continuo('trem_andando', 0.6); }
   else {
-    let dm = Infinity; for (const [x, z] of ferrovia.marcadores()) dm = Math.min(dm, Math.hypot(x - p.x, z - p.z));
+    let dm = Infinity; for (const tr of trens) dm = Math.min(dm, Math.hypot(tr.x - p.x, tr.z - p.z));
     sons.continuo('trem_andando', 0.4 * sons.perto(dm, 55));
     if (dm < 70 && t > tempoBuzina) { tempoBuzina = t + 40; sons.tocar('buzina_trem', { vol: 0.5, dist: dm, raio: 120 }); }
   }

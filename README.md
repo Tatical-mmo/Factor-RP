@@ -341,3 +341,7 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Atingido pela bala dourada: morre na hora, ninguém socorre, e 7 s depois acorda no cemitério (novo, na quadra do canto sudeste da cidade). Quem morre de outro jeito continua sendo socorrido no lugar.
 - Administrador e moderadores são imunes. Prefeito atingido perde o mandato na hora.
 - Cada acerto vale 5 crimes para o atirador (mais que qualquer outra arma), e todos são avisados de quem foi.
+
+## Versão 09/11 (e) · sons só em movimento
+- Sirenes (ambulância, bombeiros e polícia) só tocam com o veículo andando; parado, fica em silêncio.
+- Barulho do trem e buzina só com o trem andando (parado na estação não faz barulho).
