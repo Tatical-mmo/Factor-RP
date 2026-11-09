@@ -345,3 +345,9 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 ## Versão 09/11 (e) · sons só em movimento
 - Sirenes (ambulância, bombeiros e polícia) só tocam com o veículo andando; parado, fica em silêncio.
 - Barulho do trem e buzina só com o trem andando (parado na estação não faz barulho).
+
+## Versão 09/11 (f) · Agência de Empregos completa e botão 💼 Trabalho
+- A Agência de Empregos (ao lado do Banco) mostra o serviço público, sempre com vaga para quem tem ficha limpa: Polícia, PRF, Hospital, Bombeiros e Jornal. Entrar já leva ao cargo inicial e marca o caminho até o trabalho no mapa (trocar de serviço sai do anterior).
+- Também mostra as vagas que as empresas anunciaram (o dono anuncia na tela da empresa › Equipe › "📢 Anunciar vagas na Agência de Empregos").
+- Novo botão 💼 Trabalho no menu: mostra seu cargo público (patente, tempo, próximo cargo) e seu emprego em empresa (função, salário, se está batendo ponto), com "📍 Ir" para o local de trabalho, sair do serviço ou pedir demissão.
+- Quem trabalha em empresa vê "💼 nome da empresa" na faixa embaixo da tela.

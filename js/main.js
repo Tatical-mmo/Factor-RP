@@ -1759,10 +1759,14 @@ async function iniciarJogo(perfil) {
     clas: () => [...clasCache.values()], territorios: () => [...territorios.values()].map((v) => v.d),
     minhasEmpresas: () => [...empresas.values()].filter((e) => e.dono === jogador.perfil.id),
     meusCarros: () => [...carrosMundo.values()].map((v) => v.d).filter((d) => d.dono === jogador.perfil.id),
-    veiculos: meusVeiculos, acaoVeiculo, amigosMudaram: () => carregarAmigos(), destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); }, pontoMudou: () => servicos.recomecarPonto(),
+    veiculos: meusVeiculos, acaoVeiculo, amigosMudaram: () => carregarAmigos(),
+    rastrear: (a) => rastrear(a), portaoEmpresa: (id) => portaoDaEmpresa(id),
+    locaisTrabalho: () => ({ policia: pontos.delegacia, prf: civico.PREFEITURA.prf, medico: civico.HOSPITAL.balcao, bombeiro: civico.BOMBEIROS.balcao,
+      jornalista: civico.PREFEITURA.jornal, agencia: civico.BANCO.empregos }), destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); }, pontoMudou: () => servicos.recomecarPonto(),
   });
   $('btVeiculos').onclick = () => abrirServico('veiculos');
   $('btAmigos').onclick = () => abrirServico('amigos');
+  $('btTrabalho').onclick = () => abrirServico('trabalho');
   $('btMenu').onclick = () => $('menuBar').classList.toggle('aberto');
   $('menuItens').addEventListener('click', (e) => { if (e.target.closest('button') && e.target.closest('button').id !== 'btMenu') $('menuBar').classList.remove('aberto'); });
   $('btSom').onclick = () => { const l = sons.alternar(); $('btSom').firstChild.textContent = l ? '🔊' : '🔇'; };
@@ -3384,7 +3388,11 @@ function atualizarCarreira(dt) {
   const p = jogador.perfil;
   const emServico = p && (p.policial || p.prf || p.profissao);
   const chip = $('patente');
-  if (!emServico) { jogador.patente = null; if (chip) chip.textContent = ''; return; }
+  if (!emServico) {
+    jogador.patente = null;
+    if (chip) { const e = emprego && empresas.get(emprego); chip.textContent = e && e.dono !== p?.id ? `💼 ${e.nome}` : ''; }
+    return;
+  }
   tempoTurno -= dt;
   if (tempoTurno > 0) return;
   tempoTurno = 60;

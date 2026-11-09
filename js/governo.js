@@ -153,6 +153,7 @@ const SERVICOS = {
   veiculos: ['Meus veículos', telaVeiculos],
   jornal: ['📰 Jornal da Cidade', telaJornal],
   amigos: ['👥 Amigos', telaAmigos],
+  trabalho: ['💼 Seu trabalho', telaTrabalho],
   taxi: ['Carona: para onde?', telaTaxi],
 };
 
@@ -177,20 +178,80 @@ async function telaBanco(c) {
   on('bPegar', () => { const v = inteiro('bEmp'); if (v > 0) executar(() => rede.banco.emprestimo(v), (t) => `Você recebeu ${num(v)}. Vai pagar ${num(t)}.`); });
 }
 
+// serviço público: polícia, PRF, hospital, bombeiros e jornal (ficha limpa; entra na hora)
+const PUBLICOS = [
+  { id: 'policia', nome: '🚓 Polícia', inicio: 'Soldado', req: 'ficha limpa', onde: 'Delegacia', base: 'salário definido pelo prefeito' },
+  { id: 'prf', nome: '🛡 PRF · Polícia Eleitoral', inicio: 'Agente', req: 'ficha limpa, sem clã e sem ser prefeito', onde: 'Prefeitura', base: '40/min' },
+  { id: 'medico', nome: '✚ Hospital', inicio: 'Socorrista', req: 'ficha limpa', onde: 'Hospital', base: '30/min' },
+  { id: 'bombeiro', nome: '🚒 Bombeiros', inicio: 'Recruta', req: 'ficha limpa', onde: 'Quartel dos Bombeiros', base: '30/min' },
+  { id: 'jornalista', nome: '📰 Jornal da Cidade', inicio: 'Estagiário', req: 'ficha limpa', onde: 'Prefeitura (balcão do jornal)', base: '24/min' },
+];
+const servicoAtual = (eu) => (eu.policial ? 'policia' : eu.prf ? 'prf' : eu.profissao || null);
+async function sairDoServico(eu) {
+  if (eu.policial) await rede.policia.sair();
+  else if (eu.prf) await rede.prf.sair();
+  else if (eu.profissao) await rede.saude.sair();
+}
+async function entrarNoServico(id) {
+  const eu = ctx.perfil();
+  if (servicoAtual(eu) && servicoAtual(eu) !== id) await sairDoServico(eu);
+  if (id === 'policia') await rede.policia.entrar();
+  else if (id === 'prf') await rede.prf.entrar();
+  else await rede.saude.entrar(id);
+  const l = ctx.locaisTrabalho?.()[id]; if (l) ctx.rastrear?.({ nome: `Trabalho: ${PUBLICOS.find((x) => x.id === id).onde}`, x: l.x, z: l.z });
+}
+// quadro "seu trabalho" (usado na Agência e no botão 💼 Trabalho)
+async function quadroTrabalho() {
+  const eu = ctx.perfil();
+  const [meu, carreiras] = await Promise.all([rede.empregos.meu(eu.id).catch(() => null), rede.carreiras.minhas().catch(() => [])]);
+  const atual = servicoAtual(eu), pub = PUBLICOS.find((x) => x.id === atual), car = (carreiras || []).find((x) => x.carreira === atual);
+  const souDono = meu && meu.emp?.dono === eu.id;
+  let h = '';
+  if (pub) h += `<div class="linha item"><span class="ic">🎖️</span><span class="nm"><b>${pub.nome} · ${esc(car?.nome || pub.inicio)}</b>
+      <small>${car ? `${Math.floor(car.minutos / 60)}h${String(car.minutos % 60).padStart(2, '0')} em serviço · ${car.proximo ? `${esc(car.proximo)} em ${car.falta} min` : 'topo da carreira'}` : 'recém-contratado'} · trabalha em: ${pub.onde}</small></span>
+      <span class="bts"><button data-rastrear="${atual}">📍 Ir</button><button data-sairpub="1">Sair</button></span></div>`;
+  if (meu && !souDono) h += `<div class="linha item"><span class="ic">💼</span><span class="nm"><b>${esc(meu.emp?.nome)} · ${FUNCOES[meu.funcao] || meu.funcao}</b>
+      <small>${num(meu.salario)}/min · ${num(meu.minutos)} min trabalhados${meu.ponto_em && Date.now() - Date.parse(meu.ponto_em) < 150000 ? ' · 🟢 trabalhando agora' : ' · fique perto da empresa para bater ponto'}</small></span>
+      <span class="bts"><button data-irempresa="${meu.empresa}">📍 Ir</button><button data-demissao="1" class="perigo">Demissão</button></span></div>`;
+  if (souDono) h += `<div class="linha item"><span class="ic">🏢</span><span class="nm"><b>Dono da ${esc(meu.emp?.nome)}</b><small>Anuncie vagas na tela da empresa › Equipe.</small></span></div>`;
+  return h ? `<div class="lista">${h}</div>` : '<p class="dica">Você está sem trabalho. Escolha uma vaga abaixo: a contratação é na hora.</p>';
+}
+function ligarQuadroTrabalho(c) {
+  c.querySelectorAll('[data-rastrear]').forEach((b) => { b.onclick = () => { const l = ctx.locaisTrabalho?.()[b.dataset.rastrear]; if (l) { ctx.rastrear?.({ nome: 'Seu trabalho', x: l.x, z: l.z }); fechar(); } }; });
+  c.querySelectorAll('[data-sairpub]').forEach((b) => { b.onclick = () => executar(() => sairDoServico(ctx.perfil()), 'Você saiu do serviço.'); });
+  c.querySelectorAll('[data-irempresa]').forEach((b) => { b.onclick = () => { const p = ctx.portaoEmpresa?.(Number(b.dataset.irempresa)); if (p) { ctx.rastrear?.({ nome: 'Seu trabalho (empresa)', x: p.x, z: p.z }); fechar(); } else msg('Não achei o prédio da empresa.', false); }; });
+  c.querySelectorAll('[data-demissao]').forEach((b) => { b.onclick = () => confirmar(b, () => executar(() => rede.logistica.sair(), 'Você pediu demissão.')); });
+}
+async function telaTrabalho(c) {
+  c.innerHTML = `<div class="sub">Seu trabalho</div>${await quadroTrabalho()}
+    <p class="dica">Vagas no serviço público e nas empresas ficam na <b>Agência de Empregos</b>, ao lado do Banco.</p>
+    <div class="botoes"><button id="tbAgencia">Ver vagas</button><button id="tbIrAgencia">📍 Ir até a Agência</button></div>`;
+  ligarQuadroTrabalho(c);
+  $('tbAgencia').onclick = () => { modo = 'empregos'; desenhar(); };
+  $('tbIrAgencia').onclick = () => { const l = ctx.locaisTrabalho?.().agencia; if (l) { ctx.rastrear?.({ nome: 'Agência de Empregos', x: l.x, z: l.z }); fechar(); } };
+}
 async function telaEmpregos(c) {
   const eu = ctx.perfil();
-  const [meu, mural] = await Promise.all([rede.empregos.meu(eu.id), rede.empregos.mural()]);
-  const souDono = meu && meu.emp?.dono === eu.id;
-  const emprego = meu && !souDono ? `<div class="cartoes"><div><small>Empresa</small><b>${esc(meu.emp?.nome)}</b></div><div><small>Cargo</small><b>${FUNCOES[meu.funcao] || meu.funcao}</b></div>
-      <div><small>Salário</small><b>${num(meu.salario)}/min</b></div><div><small>Minutos trabalhados</small><b>${num(meu.minutos)}</b></div></div>
-    <p class="dica">Fique perto de um prédio da empresa: o ponto é batido sozinho a cada minuto e o salário sai do caixa dela.${meu.funcao === 'operario' ? ' Como operário, você também produz 1 caixa por minuto.' : ''}</p>
-    <div class="botoes"><button id="vDemissao" class="perigo">Pedir demissão</button></div>` : souDono ? '<p class="dica">Você é dono de empresa. Abra vagas na tela da empresa, aba Equipe.</p>' : '<p class="dica">Você está sem emprego. Escolha uma vaga abaixo: a contratação é na hora.</p>';
-  c.innerHTML = `${emprego}<div class="sub">Vagas abertas (${mural.length})</div>
+  const [mural, meu, quadro] = await Promise.all([rede.empregos.mural(), rede.empregos.meu(eu.id).catch(() => null), quadroTrabalho()]);
+  const atual = servicoAtual(eu), limpa = !(eu.crimes > 0);
+  c.innerHTML = `<div class="sub">Seu trabalho</div>${quadro}
+    <div class="sub">Serviço público (${PUBLICOS.length} vagas sempre abertas)</div>
+    <div class="lista">${PUBLICOS.map((v) => `<div class="linha item"><span class="nm"><b>${v.nome}</b>
+      <small>começa como ${v.inicio} · ${v.base} · requisito: ${v.req} · trabalha em: ${v.onde}</small></span>
+      <span class="bts">${atual === v.id ? '<small class="dica">seu cargo</small>' : `<button data-pub="${v.id}" ${limpa ? '' : 'disabled title="Procurado não entra no serviço público"'}>${atual ? 'Trocar' : 'Entrar'}</button>`}</span></div>`).join('')}</div>
+    ${limpa ? '' : '<p class="aviso-item">Você está procurado: pague a pena ou a fiança para entrar no serviço público.</p>'}
+    <div class="sub">Vagas nas empresas (${mural.length})</div>
     <div class="lista">${mural.length ? mural.map((v) => `<div class="linha item"><span class="nm"><b>${esc(v.nome)} · Nv ${v.nivel}</b>
       <small>${FUNCOES[v.funcao] || v.funcao} · ${num(v.salario)}/min · ${v.vagas} vaga${v.vagas === 1 ? '' : 's'} · dono ${esc(v.dono)}${v.caixa_ok ? '' : ' · ⚠️ caixa baixo'}</small></span>
-      <span class="bts">${meu ? '' : `<button data-vaga="${v.empresa}">Candidatar</button>`}</span></div>`).join('') : '<span class="vazio">Nenhuma vaga agora. Volte mais tarde.</span>'}</div>`;
-  const d = $('vDemissao'); if (d) d.onclick = () => confirmar(d, () => executar(() => rede.logistica.sair(), 'Você pediu demissão.'));
-  c.querySelectorAll('[data-vaga]').forEach((b) => { b.onclick = () => executar(() => rede.empregos.candidatar(Number(b.dataset.vaga)), () => { ctx.pontoMudou?.(); return 'Contratado! Vá até a empresa para começar a trabalhar.'; }); });
+      <span class="bts">${meu ? '' : `<button data-vaga="${v.empresa}">Candidatar</button>`}</span></div>`).join('') : '<span class="vazio">Nenhuma empresa anunciou vaga agora. Donos de empresa anunciam na tela da empresa › Equipe.</span>'}</div>`;
+  ligarQuadroTrabalho(c);
+  c.querySelectorAll('[data-pub]').forEach((b) => { b.onclick = () => executar(() => entrarNoServico(b.dataset.pub), 'Contratado! O caminho até o trabalho está no mapa.'); });
+  c.querySelectorAll('[data-vaga]').forEach((b) => {
+    b.onclick = () => executar(async () => {
+      await rede.empregos.candidatar(Number(b.dataset.vaga)); ctx.pontoMudou?.();
+      const p = ctx.portaoEmpresa?.(Number(b.dataset.vaga)); if (p) ctx.rastrear?.({ nome: 'Seu trabalho (empresa)', x: p.x, z: p.z });
+    }, 'Contratado! O caminho até a empresa está no mapa.');
+  });
 }
 
 const CARGOS = {

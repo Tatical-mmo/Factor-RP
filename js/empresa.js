@@ -152,7 +152,7 @@ async function telaEquipe(c, e) {
   const opcoes = (sel) => Object.entries(FUN).filter(([k]) => k !== 'operario' || e.fabrica).map(([k, t]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${t}</option>`).join('');
   const livres = Math.max(0, lim(e, 'funcionarios') - membros.length);
   c.innerHTML = `<p class="dica">Funcionários: ${membros.length}/${lim(e, 'funcionarios')} (evolua a empresa para contratar mais).</p>
-    <div class="sub">Vagas no mural da Agência de Empregos</div>
+    <div class="sub">📢 Anunciar vagas na Agência de Empregos</div>
     <p class="dica">${e.vagas > 0 ? `Aberto agora: <b>${e.vagas}</b> vaga${e.vagas === 1 ? '' : 's'} de ${FUN[e.vaga_funcao] || e.vaga_funcao} a ${num(e.vaga_salario)}/min.` : 'Nenhuma vaga aberta.'}
       Funcionário perto da empresa bate ponto a cada minuto e recebe o salário do caixa.${e.fabrica ? ' Operário também produz 1 caixa por minuto.' : ''}</p>
     <div class="linha-form"><label>Vagas<input id="eVagas" type="number" min="0" max="${livres}" value="${Math.min(e.vagas || 0, livres)}" inputmode="numeric"></label>
