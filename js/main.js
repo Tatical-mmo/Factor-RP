@@ -1044,14 +1044,13 @@ function entrarCarro(v) {
 }
 function sairCarro() {
   const c = jogador.carro; if (!c) return;
-  if (c.servico) {   // ambulância / caminhão dos bombeiros: o robô leva de volta para a base
-    const base = c.servico === 'ambulancia' ? civico.HOSPITAL : civico.BOMBEIROS;
+  if (c.servico) {   // ambulância / caminhão dos bombeiros: fica estacionado onde você desceu
     jogador.carro = null; modoVolante(false);
-    const lx = Math.cos(jogador.yaw) * 2.6, lz = -Math.sin(jogador.yaw) * 2.6;
+    c.mesh.position.copy(jogador.pos); c.mesh.rotation.y = jogador.yaw;
+    const lx = Math.cos(jogador.yaw) * 2.8, lz = -Math.sin(jogador.yaw) * 2.8;
     jogador.pos.x += lx; jogador.pos.z += lz; resolverColisao(jogador.pos, jogador.raio);
-    c.mesh.position.set(base.vaga.x, 0.18, base.vaga.z); c.mesh.rotation.y = base.vaga.ang;
     civico.atualizarSirenes(0, c.mesh); jogador.avatar.raiz.visible = true;
-    aviso('O robô levou o veículo de volta para a base.', 2.5);
+    aviso(c.servico === 'ambulancia' ? 'Ambulância estacionada. Socorra o ferido (✚) e volte para ela.' : 'Caminhão estacionado aqui. Volte para ele quando terminar.', 3);
     return;
   }
   if (c.caminhao) {
@@ -1584,6 +1583,15 @@ function desenharMapa() {
   for (const r of remotos.values()) if (r.av?.raiz.visible) desenhar(r.av.raiz.position.x, r.av.raiz.position.z, '#4fa3ff', 5);
   if (caminhaoMovel) desenhar(caminhaoMovel.obj.position.x, caminhaoMovel.obj.position.z, '#e39b3a', 5);
   for (const [x, z] of ferrovia.marcadores()) desenhar(x, z, '#c8282e', 7);
+  const prof = jogador.perfil?.profissao, piscaS = Math.sin(performance.now() / 150) > 0;
+  if (prof === 'medico') {
+    for (const r of remotos.values()) if (r.meta?.ferido && r.av) desenhar(r.av.raiz.position.x, r.av.raiz.position.z, piscaS ? '#ff2020' : '#ffffff', 9);
+    if (civico.HOSPITAL.veiculo && !jogador.carro) desenhar(civico.HOSPITAL.veiculo.position.x, civico.HOSPITAL.veiculo.position.z, '#ffffff', 6);
+  }
+  if (prof === 'bombeiro') {
+    for (const f of servicos.listaIncendios()) desenhar(f.x, f.z, piscaS ? '#ff7a1a' : '#ffd23e', 10);
+    if (civico.BOMBEIROS.veiculo && !jogador.carro) desenhar(civico.BOMBEIROS.veiculo.position.x, civico.BOMBEIROS.veiculo.position.z, '#ff4a2a', 6);
+  }
   if (jogador.perfil?.policial || jogador.perfil?.prf) {
     const pisca = Math.sin(performance.now() / 150) > 0;
     for (const r of remotos.values()) if (r.meta?.crimes > 0 && r.av) desenhar(r.av.raiz.position.x, r.av.raiz.position.z, pisca ? '#ff2020' : '#ffffff', 6);
@@ -1797,8 +1805,17 @@ function conectarMultiplayer(perfil) {
           const chave = (m) => [m.crimes, m.policial, m.cla, m.prf, m.eleitoral, m.prefeito, m.profissao, m.ferido, m.recompensa].join('|');
           if (chave(r.meta) !== chave(meta)) {
             r.meta = meta; etiquetaStatus(r);
-            if (meta.ferido && r.av) servicos.chamarAmbulancia(id, { x: r.av.raiz.position.x, z: r.av.raiz.position.z });
-            else servicos.cancelarAmbulancia(id);
+            if (meta.ferido && r.av) {
+              const souMedico = jogador.perfil?.profissao === 'medico';
+              servicos.chamarAmbulancia(id, { x: r.av.raiz.position.x, z: r.av.raiz.position.z }, undefined, souMedico || medicoOnline() ? 40 : 1.5);
+              if (souMedico) {
+                aviso(`✚ ${meta.nome} está ferido! Vá até a marcação no mapa (+250).`, 5);
+                if (!rastreio || rastreio.ferido) rastrear({ nome: `✚ Ferido: ${meta.nome}`, x: r.av.raiz.position.x, z: r.av.raiz.position.z, ferido: id });
+              }
+            } else {
+              servicos.cancelarAmbulancia(id);
+              if (rastreio?.ferido === id) rastrear(null);
+            }
           }
         }
       }
@@ -2651,7 +2668,7 @@ function servicoProximo() {
   if (jogador.carro || jogador.trem) return null;
   const prof = jogador.perfil?.profissao;
   const base = prof === 'medico' ? civico.HOSPITAL : prof === 'bombeiro' ? civico.BOMBEIROS : null;
-  if (!base?.veiculo || Math.hypot(base.vaga.x - jogador.pos.x, base.vaga.z - jogador.pos.z) > 5.5) return null;
+  if (!base?.veiculo || Math.hypot(base.veiculo.position.x - jogador.pos.x, base.veiculo.position.z - jogador.pos.z) > 5.5) return null;
   return { base, modelo: prof === 'medico' ? 'ambulancia' : 'bombeiros' };
 }
 function entrarServico(sv) {
@@ -2662,7 +2679,15 @@ function entrarServico(sv) {
   jogador.carro = { id: 's' + jogador.perfil.id.slice(0, 8), servico: sv.modelo, modelo: sv.modelo, cor: '#ffffff', vel: 0, mesh: m, salvar: 1e9, max: civico.CARROS[sv.modelo].vel, raio: sv.modelo === 'bombeiros' ? 1.9 : 1.6 };
   jogador.pos.set(m.position.x, alturaChao(m.position.x, m.position.z), m.position.z); jogador.yaw = m.rotation.y; jogador.alvo = null;
   jogador.avatar.raiz.visible = false;
-  aviso(sv.modelo === 'ambulancia' ? 'Ambulância: chegue perto de um ferido (✚) e toque em Socorrer.' : 'Caminhão dos bombeiros: pare perto do fogo e toque em Jato (alcance maior).', 4);
+  aviso(sv.modelo === 'ambulancia' ? 'Ambulância: os feridos aparecem no mapa (✚). Pare perto, desça e socorra.' : 'Caminhão dos bombeiros: os incêndios aparecem no mapa (🔥). Pare perto e toque em Jato, sem descer.', 4);
+  if (sv.modelo === 'bombeiros' && !rastreio) {   // já aponta o fogo mais perto
+    const f = [...servicos.listaIncendios()].sort((a, b) => Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z) - Math.hypot(b.x - jogador.pos.x, b.z - jogador.pos.z))[0];
+    if (f) rastrear({ nome: `🔥 ${f.nome}`, x: f.x, z: f.z });
+  }
+  if (sv.modelo === 'ambulancia' && !rastreio) {
+    const fer = [...remotos.entries()].find(([, r]) => r.meta?.ferido && r.av);
+    if (fer) rastrear({ nome: `✚ Ferido: ${fer[1].meta.nome}`, x: fer[1].av.raiz.position.x, z: fer[1].av.raiz.position.z, ferido: fer[0] });
+  }
 }
 function acaoNoVeiculo() {
   const c = jogador.carro;
@@ -3221,10 +3246,12 @@ async function morrerLocal() {
   j.ferido = true; conexao?.rastrear(metaPresenca());
   clearTimeout(j.timerHospital);
   // ambulância NPC vem até você (fora de casa); um médico jogador pode chegar antes
-  const seg = j.pos.x < 1500 && !j.trem ? servicos.chamarAmbulancia('eu', { x: j.pos.x, z: j.pos.z }, atendidoPeloNpc) : null;
+  const medico = medicoOnline();
+  const seg = j.pos.x < 1500 && !j.trem ? servicos.chamarAmbulancia('eu', { x: j.pos.x, z: j.pos.z }, atendidoPeloNpc, medico ? 40 : 1.5) : null;
   j.timerHospital = setTimeout(renascer, ((seg || 20) + 25) * 1000);
-  if (seg) aviso(`🚑 Ambulância chegando em ~${Math.ceil(seg)} s.`, 4);
+  if (seg) aviso(medico ? `🚑 Um socorrista foi chamado. Se ele não chegar, a ambulância da prefeitura vem em ~${Math.ceil(seg)} s.` : `🚑 Ambulância chegando em ~${Math.ceil(seg)} s.`, 5);
 }
+function medicoOnline() { return [...remotos.values()].some((r) => r.meta?.profissao === 'medico'); }
 function atendidoPeloNpc() {
   if (!jogador.morto) return;
   levantar(60);
@@ -3701,6 +3728,13 @@ function aplicarPerfil(novo) {
   if ((novo.crimes || 0) > (antigo.crimes || 0)) aviso('Você está PROCURADO pela polícia.', 4);
   if (novo.prf !== antigo.prf) aviso(novo.prf ? 'Você está em serviço na PRF. Investigue a prefeitura!' : 'Você saiu do serviço da PRF.', 4);
   if (novo.eleitoral && !antigo.eleitoral) aviso('CRIME ELEITORAL comprovado: você perdeu o mandato e está procurado!', 5);
+  if (novo.profissao !== antigo.profissao) {
+    for (const base of [civico.HOSPITAL, civico.BOMBEIROS]) {
+      if (!base.veiculo) continue;
+      if (jogador.carro?.mesh === base.veiculo) sairCarro();
+      base.veiculo.position.set(base.vaga.x, 0.18, base.vaga.z); base.veiculo.rotation.y = base.vaga.ang;
+    }
+  }
   if (novo.profissao !== antigo.profissao) aviso(novo.profissao === 'medico' ? 'Plantão médico: socorra os feridos (✚) pela cidade. +250 por socorro.' : novo.profissao === 'bombeiro' ? 'Você está em serviço nos bombeiros. Apague os incêndios (🔥). +400 por fogo.' : novo.profissao === 'jornalista' ? 'Você é jornalista: vá até incêndios, ocorrências e feridos e toque em Reportar (+200).' : 'Você saiu do serviço público.', 4);
   if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome || novo.crimes !== antigo.crimes || novo.policial !== antigo.policial || novo.prf !== antigo.prf || novo.eleitoral !== antigo.eleitoral || novo.profissao !== antigo.profissao || novo.recompensa !== antigo.recompensa) {
     conexao?.rastrear(metaPresenca());

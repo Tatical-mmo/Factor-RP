@@ -153,6 +153,8 @@ function carregarFogo() {
   rede.saude.incendios().then((lista) => {
     incendios = lista;
     const bombeiro = ctx.perfil()?.profissao === 'bombeiro';
+    const r = ctx.rastreio();   // fogo apagado (por alguém ou pela prefeitura): some do rastreio
+    if (r?.nome?.startsWith('🔥') && !lista.some((f) => Math.hypot(f.x - r.x, f.z - r.z) < 1)) ctx.rastrear(null);
     for (const f of lista) {
       if (vistos.has(f.id)) continue;
       vistos.add(f.id);
@@ -259,13 +261,13 @@ function npcsDeFogo(dt) {
   for (const chave of npcs.keys()) if (chave.startsWith('fogo') && !ativos.has(chave)) voltarNpc(chave);
 }
 // ambulância NPC: vai até o ferido e, ao chegar, chama aoChegar (o atendimento leva 2,5 s)
-export function chamarAmbulancia(chave, alvo, aoChegar) {
+export function chamarAmbulancia(chave, alvo, aoChegar, atraso = 1.5) {
   const ex = npcs.get('amb' + chave);
   if (ex && !ex.volta) return null;
   if (ex) { ctx.scene.remove(ex.obj); npcs.delete('amb' + chave); }
-  const n = novoNpc('amb' + chave, 'ambulancia', civico.HOSPITAL.vaga, alvo, 1.5, 24, 4);
+  const n = novoNpc('amb' + chave, 'ambulancia', civico.HOSPITAL.vaga, alvo, atraso, 24, 4);
   n.aoChegar = () => setTimeout(() => { aoChegar?.(); setTimeout(() => voltarNpc('amb' + chave), 2500); }, 2500);
-  return (n.rota.total / 24) + 1.5 + 2.5;     // segundos até o atendimento
+  return (n.rota.total / 24) + atraso + 2.5;     // segundos até o atendimento
 }
 export function cancelarAmbulancia(chave) { voltarNpc('amb' + chave); }
 export function veiculosNpc() { const r = []; for (const n of npcs.values()) if (n.obj.visible) r.push(n.obj); return r; }
