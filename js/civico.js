@@ -6,6 +6,7 @@ export const PREFEITURA = { x: -135, z: -135, porta: { x: -135, z: -120.5 }, prf
 export const CONCESSIONARIA = { x: 135, z: -135, balcao: { x: 135, z: -127.5 } };
 export const BANCO = { x: 81, z: -135, balcao: { x: 75, z: -124 }, empregos: { x: 88, z: -124 } };
 export const HOSPITAL = { x: -135, z: 135, balcao: { x: -131, z: 125 }, saida: { x: -139, z: 124 }, vaga: { x: -145, z: 126, ang: -Math.PI / 2 }, veiculo: null };
+export const CEMITERIO = { x: 135, z: 135 };
 export const BOMBEIROS = { x: -81, z: 135, balcao: { x: -88, z: 125 }, vaga: { x: -77, z: 125.5, ang: Math.PI + 0.15 }, veiculo: null };
 export const CARROS = {
   popular: { nome: 'Popular', preco: 40000, vel: 10 },
@@ -168,6 +169,56 @@ function veiculoDeServico(modelo, vaga) {
   const m = modeloCarro(modelo, '#ffffff');
   m.position.set(vaga.x, 0.18, vaga.z); m.rotation.y = vaga.ang; ctx.scene.add(m);
   return m;
+}
+
+// cemitério: muro baixo de pedra, portão virado para a rua de cima, fileiras de túmulos, capela e ciprestes
+export function montarCemiterio() {
+  const g = new THREE.Group(); g.position.set(CEMITERIO.x, 0.18, CEMITERIO.z);
+  const pedra = mat('#8d8a82', { roughness: 0.9 }), lapide = mat('#b9b6ae', { roughness: 0.8 }), escura = mat('#5d5a54'), grama = mat('#3e5a32', { roughness: 1 });
+  bloco(g, grama, 40, 0.06, 40, 0, 0.03, 0);
+  const L = 20, h = 1.3;
+  bloco(g, pedra, 2 * L, h, 0.6, 0, h / 2, L);                     // fundo
+  bloco(g, pedra, 0.6, h, 2 * L, -L, h / 2, 0); bloco(g, pedra, 0.6, h, 2 * L, L, h / 2, 0);
+  bloco(g, pedra, L - 3, h, 0.6, -(L + 3) / 2, h / 2, -L); bloco(g, pedra, L - 3, h, 0.6, (L + 3) / 2, h / 2, -L);   // frente com portão
+  for (const sx of [-3.2, 3.2]) bloco(g, escura, 0.9, 3, 0.9, sx, 1.5, -L);
+  bloco(g, mat('#2b2b2b', { metalness: 0.6 }), 5.6, 0.25, 0.15, 0, 2.8, -L);
+  // túmulos em fileiras (lápide + laje), alguns com cruz
+  const geoLap = new THREE.BoxGeometry(1.1, 1.2, 0.25), geoLaje = new THREE.BoxGeometry(1.2, 0.18, 2.2), geoCruzV = new THREE.BoxGeometry(0.16, 1.5, 0.16), geoCruzH = new THREE.BoxGeometry(0.8, 0.16, 0.16);
+  let k = 0;
+  for (let zi = 0; zi < 5; zi++) for (let xi = 0; xi < 9; xi++) {
+    if (xi === 4) continue;                                           // corredor do meio
+    const x = -16 + xi * 4, z = -12 + zi * 5.2 + ((xi * 7) % 3) * 0.15;
+    if (z > 12) continue;
+    const laje = new THREE.Mesh(geoLaje, escura); laje.position.set(x, 0.09, z); g.add(laje);
+    if (k++ % 3 === 0) {
+      const v = new THREE.Mesh(geoCruzV, lapide); v.position.set(x, 0.85, z + 1.05); g.add(v);
+      const hz = new THREE.Mesh(geoCruzH, lapide); hz.position.set(x, 1.15, z + 1.05); g.add(hz);
+    } else { const l = new THREE.Mesh(geoLap, lapide); l.position.set(x, 0.6, z + 1.05); l.rotation.z = ((xi + zi) % 3 - 1) * 0.04; g.add(l); }
+  }
+  // capela ao fundo
+  bloco(g, mat('#e6e0d2'), 7, 5, 6, 0, 2.5, 15.5);
+  const tel = new THREE.Mesh(new THREE.ConeGeometry(5.4, 2.6, 4).rotateY(Math.PI / 4), mat('#6b3b2a')); tel.scale.set(1, 1, 0.85); tel.position.set(0, 6.3, 15.5); g.add(tel);
+  bloco(g, mat('#3a2a1e'), 1.8, 3, 0.1, 0, 1.5, 12.45);
+  bloco(g, lapide, 0.2, 1.6, 0.2, 0, 8.2, 15.5); bloco(g, lapide, 0.9, 0.2, 0.2, 0, 8.5, 15.5);
+  // ciprestes
+  const verde = mat('#2f4a2c');
+  for (const [x, z] of [[-18, -17], [18, -17], [-18, 17], [18, 17], [-8, 17], [8, 17]]) {
+    const c = new THREE.Mesh(new THREE.ConeGeometry(0.9, 6, 8), verde); c.position.set(x, 3.2, z); c.castShadow = true; g.add(c);
+  }
+  ctx.scene.add(g);
+  const t = ctx.textoSprite('✝ CEMITÉRIO', { escala: 1.1, fundo: 'rgba(40,40,44,.92)' }); t.position.set(CEMITERIO.x, 5, CEMITERIO.z - L - 1); ctx.scene.add(t);
+  const X = CEMITERIO.x, Z = CEMITERIO.z;
+  ctx.colisores.push({ tipo: 'caixa', x0: X - L, x1: X + L, z0: Z + L - 0.3, z1: Z + L + 0.3 });
+  ctx.colisores.push({ tipo: 'caixa', x0: X - L - 0.3, x1: X - L + 0.3, z0: Z - L, z1: Z + L });
+  ctx.colisores.push({ tipo: 'caixa', x0: X + L - 0.3, x1: X + L + 0.3, z0: Z - L, z1: Z + L });
+  ctx.colisores.push({ tipo: 'caixa', x0: X - L, x1: X - 3.5, z0: Z - L - 0.3, z1: Z - L + 0.3 });
+  ctx.colisores.push({ tipo: 'caixa', x0: X + 3.5, x1: X + L, z0: Z - L - 0.3, z1: Z - L + 0.3 });
+  ctx.colisores.push({ tipo: 'caixa', x0: X - 3.5, x1: X + 3.5, z0: Z + 12.5, z1: Z + 18.5 });
+}
+// lugar para acordar: entre os túmulos
+export function pontoNoCemiterio() {
+  const xi = [0, 1, 2, 3, 5, 6, 7, 8][Math.floor(Math.random() * 8)], zi = Math.floor(Math.random() * 4);
+  return { x: CEMITERIO.x - 16 + xi * 4 + 1.6, z: CEMITERIO.z - 12 + zi * 5.2 + 0.5 };
 }
 
 // carros: frente em +Z, chão em y = 0

@@ -151,6 +151,11 @@ function traduzirRpc(m) {
     'o dono nao pode se demitir': 'O dono não pode se demitir.',
     'cla nao encontrado': 'Clã não encontrado.',
     'veiculo invalido': 'Veículo inválido.',
+    'so o administrador': 'Só o administrador.',
+    'a arma ja foi pega': 'A arma dourada já foi pega.',
+    'chegue mais perto': 'Chegue mais perto.',
+    'voce nao tem a arma dourada': 'Você não tem a arma dourada.',
+    'tiro invalido': 'Tiro inválido.',
     'voce nao pode adicionar a si mesmo': 'Você não pode adicionar a si mesmo.',
     'pedido ja existe': 'Vocês já são amigos ou o pedido já foi feito.',
     'policial nao rouba carro': 'Policial não rouba carro.',
@@ -366,6 +371,14 @@ export const jornal = {
   publicar: (tipo, ref, titulo, x, z) => rpc('publicar_noticia', { p_tipo: tipo, p_ref: ref, p_titulo: titulo, p_x: x, p_z: z }),
   ultimas: () => sel(sb.from('noticias').select('*').order('id', { ascending: false }).limit(12)),
 };
+export const pd = {
+  estado: () => sel(sb.from('arma_pd').select('*').eq('id', 1).maybeSingle()),
+  esconder: (x, z) => rpc('esconder_arma_pd', { p_x: x, p_z: z }),
+  pegar: (x, z) => rpc('pegar_arma_pd', { p_x: x, p_z: z }),
+  disparar: () => rpc('disparar_pd'),
+  acertar: (alvo) => rpc('acertar_pd', { p_alvo: alvo }),
+  soltar: (x, z) => rpc('soltar_arma_pd', { p_x: x, p_z: z }),
+};
 export const amigos = {
   listar: () => rpc('meus_amigos'),
   pedir: (nome) => rpc('pedir_amizade', { p_nome: nome }),
@@ -513,6 +526,7 @@ export function escutarLogistica(eventos) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'territorios' }, (p) => eventos.territorio?.(p))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'casas' }, (p) => eventos.casa?.(p))
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'robos_policia' }, (p) => eventos.robo?.(p.new))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'arma_pd' }, (p) => eventos.armaPd?.(p.new))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'clas' }, (p) => eventos.cla?.(p))
     .subscribe();
   return () => sb.removeChannel(canal);

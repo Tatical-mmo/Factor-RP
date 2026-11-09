@@ -28,7 +28,7 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b`, `21c`, `22a`, `22b`, `23a`, `23b`, `23c`, `23d`, `24`, `25`, `26`, `27`, `28`, `29`, `30`, `31a`, `31b`, `31c` e `32`, nessa ordem.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b`, `21c`, `22a`, `22b`, `23a`, `23b`, `23c`, `23d`, `24`, `25`, `26`, `27`, `28`, `29`, `30`, `31a`, `31b`, `31c`, `32` e `33`, nessa ordem.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
 
 ## Etapa 3: trabalho e produção
@@ -333,3 +333,11 @@ Rode no SQL Editor: `32_amigos.sql`.
 - NPCs (pessoas e policiais robôs) que se cruzam param para conversar, com balões de fala.
 - Veículos guiados por robôs (entregas, carona, ambulância, bombeiros e viaturas, inclusive na perseguição) andam pela faixa da direita das ruas.
 - Tela mais limpa: menu único ☰ no celular e coluna de ícones no computador; minimapa menor no celular; ajuda de teclas some sozinha.
+
+## Versão 09/11 (d) · arma dourada (evento) e cemitério
+Rode no SQL Editor: `33_arma_dourada.sql`.
+- O administrador abre o Painel › Eu › "✨ Esconder a arma dourada aqui": a arma fica escondida onde ele está (só aparece de perto) e todos recebem o aviso do evento.
+- Quem achar pega (E): a arma na mão fica dourada e tem só 2 balas; depois do 2º tiro ela some. Se quem está com ela morrer, ela cai no chão ali.
+- Atingido pela bala dourada: morre na hora, ninguém socorre, e 7 s depois acorda no cemitério (novo, na quadra do canto sudeste da cidade). Quem morre de outro jeito continua sendo socorrido no lugar.
+- Administrador e moderadores são imunes. Prefeito atingido perde o mandato na hora.
+- Cada acerto vale 5 crimes para o atirador (mais que qualquer outra arma), e todos são avisados de quem foi.
