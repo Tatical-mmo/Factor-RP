@@ -152,7 +152,7 @@ const SERVICOS = {
   bombeiros: ['Quartel dos Bombeiros', telaBombeiros],
   veiculos: ['Meus veículos', telaVeiculos],
   jornal: ['📰 Jornal da Cidade', telaJornal],
-  taxi: ['🚁 Táxi aéreo: para onde?', telaTaxi],
+  taxi: ['Carona: para onde?', telaTaxi],
 };
 
 async function telaBanco(c) {
@@ -223,20 +223,20 @@ async function telaBombeiros(c) {
 }
 
 // ---------------------------------------------------------------- meus veículos e táxi aéreo
-const BOTAO = { chamar: '📍 Chamar', recolher: '🅿️ Recolher', bloquear: '🔒 Bloquear', taxi: '🚁 Chamar táxi aéreo' };
+const BOTAO = { chamar: '📍 Chamar', recolher: '🅿️ Recolher', bloquear: '🔒 Bloquear', taxi: '🚐 Pedir carona' };
 async function telaVeiculos(c) {
   const { carros, frota } = ctx.veiculos();
   const item = (v, tipo) => `<div class="linha item"><span class="nm"><b>${esc(v.nome)}</b><small>${esc(v.info)}</small></span>
     <span class="bts">${v.acoes.map((a) => `<button data-va="${a}" data-vt="${tipo}" data-vid="${v.id}" ${a === 'bloquear' ? 'class="perigo"' : ''}>${BOTAO[a]}</button>`).join('')}</span></div>`;
   c.innerHTML = `<p class="dica"><b>Chamar</b>: o robô motorista traz o veículo pelas ruas até você. <b>Recolher</b>: leva de volta para a garagem (carros vão para a Concessionária).
-      <b>Bloquear</b>: trava um veículo roubado; em 20 s o ladrão é jogado para fora e ele volta para a garagem. <b>Táxi aéreo</b>: o piloto busca você e leva aonde pedir.</p>
+      <b>Bloquear</b>: trava um veículo roubado; em 20 s o ladrão é jogado para fora e ele volta para a garagem. <b>Pedir carona</b>: o robô motorista (ou piloto, no helicóptero) busca você e leva aonde pedir.</p>
     <div class="sub">Carros (${carros.length})</div><div class="lista">${carros.length ? carros.map((v) => item(v, 'carro')).join('') : '<span class="vazio">Nenhum carro. Compre na Concessionária.</span>'}</div>
     <div class="sub">Veículos das empresas (${frota.length})</div><div class="lista">${frota.length ? frota.map((v) => item(v, 'frota')).join('') : '<span class="vazio">Nenhum veículo de empresa.</span>'}</div>`;
   c.querySelectorAll('[data-va]').forEach((b) => { b.onclick = () => { ctx.acaoVeiculo(b.dataset.va, b.dataset.vt, Number(b.dataset.vid)); fechar(); }; });
 }
 async function telaTaxi(c) {
   const lista = ctx.destinosTaxi();
-  c.innerHTML = `<p class="dica">Escolha o destino. O piloto voa em linha reta, pousa e volta sozinho para o heliporto.</p>
+  c.innerHTML = `<p class="dica">Escolha o destino. O robô leva você até lá e volta sozinho para a garagem.</p>
     <div class="lista">${lista.map((d, i) => `<div class="linha item"><span class="ic">${d.icone}</span><span class="nm"><b>${esc(d.nome)}</b></span><span class="bts"><button data-dest="${i}">Voar</button></span></div>`).join('')}</div>
     <div class="botoes" style="margin-top:12px"><button id="tDescer">Descer aqui</button></div>`;
   c.querySelectorAll('[data-dest]').forEach((b) => { b.onclick = () => { ctx.voarPara(Number(b.dataset.dest)); fechar(); }; });
