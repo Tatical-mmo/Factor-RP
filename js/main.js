@@ -149,8 +149,8 @@ function atualizarCeu(t) {
   if (dia > 0.02) SOL_DIR.set(Math.cos(ang) * 0.9, Math.max(0.2, elev), 0.35).normalize();
   else SOL_DIR.set(0.45, 1, -0.4).normalize();              // luz da lua
   sol.color.copy(CEU.lua).lerp(CEU.sol, dia).lerp(CEU.solTarde, tarde * 0.75);
-  sol.intensity = 0.3 + 1.8 * dia;
-  hemi.intensity = 0.4 + 0.9 * dia;
+  sol.intensity = 0.3 + 2.1 * dia;
+  hemi.intensity = 0.4 + 0.75 * dia;
   hemi.color.copy(CEU.hemiNoite).lerp(CEU.hemiDia, dia);
   hemi.groundColor.copy(CEU.chaoNoite).lerp(CEU.chaoDia, dia);
   scene.environmentIntensity = 0.12 + 0.43 * dia;
@@ -237,16 +237,8 @@ function montarChao() {
     g.strokeStyle = 'rgba(25,27,31,.45)'; g.lineWidth = 1.2;
     for (let k = 0; k < 4; k++) { g.beginPath(); let x = Math.random() * t, y = Math.random() * t; g.moveTo(x, y); for (let n = 0; n < 6; n++) { x += (Math.random() - 0.5) * 30; y += (Math.random() - 0.5) * 30; g.lineTo(x, y); } g.stroke(); }
   });
-  const calcTex = texturaCanvas(256, (g, t) => {
-    const n = 4, l = t / n;
-    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
-      const v = 200 + Math.floor(Math.random() * 14); g.fillStyle = `rgb(${v + 6},${v},${v - 12})`; g.fillRect(i * l, j * l, l, l);
-    }
-    ruido(g, t, 3000, 0.05, 1.2);
-    g.strokeStyle = 'rgba(120,112,98,.55)'; g.lineWidth = 2;
-    for (let i = 0; i <= n; i++) { g.beginPath(); g.moveTo(i * l, 0); g.lineTo(i * l, t); g.moveTo(0, i * l); g.lineTo(t, i * l); g.stroke(); }
-  });
-  const gramaTex = texturaCanvas(256, (g, t) => { g.fillStyle = '#7aa357'; g.fillRect(0, 0, t, t); ruido(g, t, 12000, 0.1, 2, [40, 70, 20]); });
+  const calcTex = texturaCanvas(512, mundo.desenharCalcada);
+  const gramaTex = texturaCanvas(512, (g, t) => mundo.desenharGrama(g, t));
   const pateoTex = texturaCanvas(256, (g, t) => { g.fillStyle = '#ab9c82'; g.fillRect(0, 0, t, t); ruido(g, t, 9000, 0.08, 1.8, [70, 55, 35]); });
   const comp = TOTAL;
   const matTex = (tex, rx, ry, rug = 0.92) => { const t = tex.clone(); t.needsUpdate = true; t.repeat.set(rx, ry); return new THREE.MeshStandardMaterial({ map: t, roughness: rug, metalness: 0 }); };
@@ -297,8 +289,8 @@ function montarChao() {
   instancias(new THREE.PlaneGeometry(1, 1), tinta, zebra, 0.036);
 
   // quarteirões: calçada + meio-fio + miolo
-  const calc = matTex(calcTex, QB / 3, QB / 3);
-  const grama = matTex(gramaTex, 6, 6, 1), pateo = matTex(pateoTex, 5, 5, 1);
+  const calc = matTex(calcTex, QB / 3.2, QB / 3.2);
+  const grama = matTex(gramaTex, 5, 5, 1), pateo = matTex(pateoTex, 5, 5, 1);
   const meioFio = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: '#97928a', roughness: 0.85 }), N * N * 4);
   let k = 0;
   for (let cx = 0; cx < N; cx++) for (let cz = 0; cz < N; cz++) {
@@ -1676,7 +1668,7 @@ async function iniciarJogo(perfil) {
   montarQuarteiroes();
   montarPlacasRuas();
   sedes.iniciar({ scene, texturaCanvas });
-  mundo.montar({ scene, texturaCanvas, ruido, textoSprite });
+  mundo.montar({ scene, texturaCanvas, ruido, textoSprite, modelo: (n) => modelos[n] });
   ferrovia.montar({ scene, textoSprite });
   mundo.finalizar();
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
@@ -3911,8 +3903,30 @@ const moraEm = (d) => d && (d.dono === jogador.perfil.id || (d.inquilino === jog
 const placasTorre = new Map();
 const num = (n) => Number(n || 0).toLocaleString('pt-BR');
 // casa construída num terreno (simples, sobrado ou mansão), de frente para a rua
+let _fachadaCasa = null;
+function texturasFachadaCasa() {
+  // uma "célula" de 3 m x 3,2 m: parede branca (a cor vem do material), janela com caixilho e reflexo
+  if (_fachadaCasa) return _fachadaCasa;
+  const cor = texturaCanvas(128, (g, t) => {
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, t, t); ruido(g, t, 700, 0.05, 1.2);
+    g.fillStyle = '#d9d4cc'; g.fillRect(t * 0.16, t * 0.2, t * 0.68, t * 0.62);           // moldura
+    const gr = g.createLinearGradient(0, t * 0.24, 0, t * 0.78); gr.addColorStop(0, '#5f88a8'); gr.addColorStop(1, '#22343f');
+    g.fillStyle = gr; g.fillRect(t * 0.2, t * 0.24, t * 0.6, t * 0.54);
+    g.fillStyle = 'rgba(255,255,255,.2)'; g.beginPath(); g.moveTo(t * 0.2, t * 0.6); g.lineTo(t * 0.45, t * 0.24); g.lineTo(t * 0.56, t * 0.24); g.lineTo(t * 0.2, t * 0.74); g.fill();
+    g.fillStyle = '#cfc9bd'; g.fillRect(t * 0.49, t * 0.24, 3, t * 0.54);                // montante
+    g.fillStyle = '#bdb6a8'; g.fillRect(t * 0.12, t * 0.82, t * 0.76, 5);                 // peitoril
+    g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(0, t - 4, t, 4);
+  });
+  const luz = texturaCanvas(128, (g, t) => {
+    g.fillStyle = '#000'; g.fillRect(0, 0, t, t);
+    g.fillStyle = '#fff'; g.fillRect(t * 0.2, t * 0.24, t * 0.6, t * 0.54);
+  });
+  _fachadaCasa = { cor, luz };
+  return _fachadaCasa;
+}
 function removerCasaTerreno(v) {
   if (!v.casa) return;
+  for (const m of v.casa.luzes || []) { const k = luzesCasas.indexOf(m); if (k >= 0) luzesCasas.splice(k, 1); }
   scene.remove(v.casa.g);
   const i = predios.indexOf(v.casa.pr); if (i >= 0) predios.splice(i, 1);
   for (const c of v.casa.cols) { const k = colisores.indexOf(c); if (k >= 0) colisores.splice(k, 1); }
@@ -3939,17 +3953,19 @@ function desenharCasaTerreno(v) {
   // fachada de prédio: andares com janelas, varandas na frente e laje no topo
   const predio = (w, d, andares, x, z, comVaranda) => {
     const h = andares * 3.2;
-    bloco(parede, w, h, d, x, h / 2, z);
-    for (let a = 0; a < andares; a++) {
-      const y = a * 3.2 + 1.7;
-      for (let k = 0; k < Math.floor(w / 3); k++) {
-        const wx = x - w / 2 + 1.5 + k * 3 + (w % 3) / 2;
-        bloco(vidro, 1.8, 1.5, 0.08, wx, y, z + d / 2 + 0.03);
-        bloco(vidro, 0.08, 1.5, 1.8, x + w / 2 + 0.03, y, z - d / 2 + 1.5 + (k % Math.max(1, Math.floor(d / 3))) * 3);
-        bloco(vidro, 0.08, 1.5, 1.8, x - w / 2 - 0.03, y, z - d / 2 + 1.5 + (k % Math.max(1, Math.floor(d / 3))) * 3);
-      }
-      if (comVaranda && a > 0) { bloco(concreto, w * 0.8, 0.18, 1.3, x, a * 3.2 + 0.1, z + d / 2 + 0.65); bloco(guarda, w * 0.8, 1.0, 0.06, x, a * 3.2 + 0.7, z + d / 2 + 1.28); }
-    }
+    // um bloco só com a fachada pintada (janelas na textura, acendem à noite): leve e sem piscar
+    const { cor, luz } = texturasFachadaCasa();
+    const face = (rx) => {
+      const t = cor.clone(), e = luz.clone(); t.needsUpdate = e.needsUpdate = true;
+      t.repeat.set(Math.max(1, Math.round(rx / 3)), andares); e.repeat.copy(t.repeat);
+      return new THREE.MeshStandardMaterial({ color: cores[0], map: t, emissive: '#ffcf7a', emissiveMap: e, emissiveIntensity: 0, roughness: 0.75 });
+    };
+    const frente = face(w), lado = face(d);
+    luzesCasas.push(frente, lado);
+    const corpo = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [lado, lado, concreto, concreto, frente, frente]);
+    corpo.position.set(x, h / 2, z); corpo.castShadow = corpo.receiveShadow = true; g.add(corpo);
+    bloco(concreto, w + 0.3, 0.35, d + 0.3, x, 3.2, z);                                     // marca do térreo
+    if (comVaranda) for (let a = 1; a < andares; a++) { bloco(concreto, w * 0.8, 0.18, 1.3, x, a * 3.2 + 0.1, z + d / 2 + 0.65); bloco(guarda, w * 0.8, 1.0, 0.06, x, a * 3.2 + 0.7, z + d / 2 + 1.28); }
     bloco(concreto, w + 0.5, 0.5, d + 0.5, x, h + 0.25, z);
     return h;
   };
@@ -4004,10 +4020,12 @@ function desenharCasaTerreno(v) {
   const caixa = new THREE.Box3().setFromObject(g);
   const col = { tipo: 'caixa', x0: caixa.min.x + 0.3, x1: caixa.max.x - 0.3, z0: caixa.min.z + 0.3, z1: caixa.max.z - 0.3 };
   colisores.push(col); cols.push(col);
-  const mats = []; g.traverse((o) => { if (o.isMesh) mats.push(o.material); });
+  const mats = []; g.traverse((o) => { if (o.isMesh) mats.push(...[].concat(o.material)); });
   const pr = { obj: g, caixa, mats, opac: 1 }; predios.push(pr);
   luzesCasas.push(vidro);
-  v.casa = { g, pr, cols };
+  const luzes = []; g.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) if (luzesCasas.includes(m)) luzes.push(m); });
+  if (!luzes.includes(vidro)) luzes.push(vidro);
+  v.casa = { g, pr, cols, luzes };
 }
 const luzesCasas = [];
 function casaProxima(raio) {
@@ -4463,6 +4481,7 @@ function quadro() {
   ferrovia.atualizar(agoraServidor() / 1000);
   atualizarCeu(agoraServidor() / 1000);
   mundo.atualizar(dt);
+  mundo.carrosPerto(jogador.pos.x, jogador.pos.z, dt);
   sedes.atualizar(dt);
   if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); checarTrem(); atualizarArmaPd(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
   atualizarJogador(dt);

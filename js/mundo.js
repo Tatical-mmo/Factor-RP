@@ -154,13 +154,7 @@ function criarMateriais() {
     g.fillStyle = '#bdb4a2'; g.fillRect(gx - 7, gy + gh + 3, gw + 14, 6);
     g.fillStyle = 'rgba(0,0,0,.10)'; g.fillRect(0, t - 4, t, 4);
   });
-  const calcada = T(256, (g, t) => {
-    const n = 4, l = t / n;
-    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const v = 200 + Math.floor(Math.random() * 14); g.fillStyle = `rgb(${v + 6},${v},${v - 12})`; g.fillRect(i * l, j * l, l, l); }
-    R(g, t, 3000, 0.05, 1.2);
-    g.strokeStyle = 'rgba(120,112,98,.55)'; g.lineWidth = 2;
-    for (let i = 0; i <= n; i++) { g.beginPath(); g.moveTo(i * l, 0); g.lineTo(i * l, t); g.moveTo(0, i * l); g.lineTo(t, i * l); g.stroke(); }
-  });
+  const calcada = T(512, desenharCalcada);
   UNI.uTerreo.value = T(128, (g, t) => {
     g.fillStyle = '#e6e1d8'; g.fillRect(0, 0, t, t);
     g.fillStyle = '#3a3f46'; g.fillRect(0, 0, t, t * 0.16);                 // faixa do letreiro
@@ -181,21 +175,21 @@ function criarMateriais() {
     g.putImageData(img, 0, 0);
   });
   ondas.colorSpace = THREE.NoColorSpace; ondas.repeat.set(60, 25);
-  const grama = T(256, (g, t) => { g.fillStyle = '#7aa357'; g.fillRect(0, 0, t, t); R(g, t, 12000, 0.1, 2, [40, 70, 20]); });
-  const campo = T(256, (g, t) => { g.fillStyle = '#86a95c'; g.fillRect(0, 0, t, t); R(g, t, 14000, 0.12, 2.4, [60, 80, 25]); });
+  const grama = T(512, (g, t) => desenharGrama(g, t));
+  const campo = T(512, (g, t) => desenharGrama(g, t, [132, 168, 92]));
   const asfalto = T(256, (g, t) => {
     g.fillStyle = '#41454d'; g.fillRect(0, 0, t, t); R(g, t, 9000, 0.06, 1.6);
   });
   MAT = {
     fachada: materialMundo({ map: fachada, roughness: 0.85, metalness: 0.05 }, 'fachada'),
-    calcada: materialMundo({ map: calcada, roughness: 0.92 }, 'topo', [11, 11]),
-    grama: materialMundo({ map: grama, roughness: 1 }, 'topo', [7, 7]),
-    campo: materialMundo({ map: campo, roughness: 1 }, 'topo', [14, 14]),
+    calcada: materialMundo({ map: calcada, roughness: 0.92 }, 'topo', [3.2, 3.2]),
+    grama: materialMundo({ map: grama, roughness: 1 }, 'topo', [9, 9]),
+    campo: materialMundo({ map: campo, roughness: 1 }, 'topo', [16, 16]),
     asfalto: materialMundo({ map: asfalto, roughness: 0.88 }, 'topo', [7, 7]),
     telha: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8 }),
     detalhe: new THREE.MeshStandardMaterial({ color: '#9da3a8', roughness: 0.7, metalness: 0.2 }),
     tronco: new THREE.MeshStandardMaterial({ color: '#6b4a2e', roughness: 0.9 }),
-    copa: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, flatShading: true }),
+    copa: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85, flatShading: true, vertexColors: true }),
     chaoHorizonte: new THREE.MeshStandardMaterial({ color: '#5b5e64', roughness: 0.95 }),
     agua: new THREE.MeshStandardMaterial({ color: '#3e7ea6', roughness: 0.12, metalness: 0.25, normalMap: ondas, normalScale: new THREE.Vector2(0.6, 0.6) }),
     concreto: new THREE.MeshStandardMaterial({ color: '#b9b3a7', roughness: 0.9 }),
@@ -204,6 +198,79 @@ function criarMateriais() {
   return MAT;
 }
 export const materiais = () => MAT;
+
+
+// ---------------------------------------------------------------- texturas compartilhadas (centro e metrópole)
+const _a = (a, b) => a + Math.random() * (b - a);
+// Calçada de pavers retangulares em junta amarrada, com variação de cor, rejunte e desgaste.
+export function desenharCalcada(g, t) {
+  g.fillStyle = '#8f877a'; g.fillRect(0, 0, t, t);                       // rejunte
+  const linhas = 8, alt = t / linhas, larg = t / 4, j = 2;
+  for (let r = 0; r < linhas; r++) {
+    const off = (r % 2) * larg / 2;
+    for (let c = -1; c < 5; c++) {
+      const x = c * larg + off, y = r * alt;
+      const v = _a(186, 214), q = _a(-6, 6);
+      g.fillStyle = `rgb(${v + 8 + q | 0},${v + q | 0},${v - 14 | 0})`;
+      g.fillRect(x + j / 2, y + j / 2, larg - j, alt - j);
+      g.fillStyle = 'rgba(255,255,255,.10)'; g.fillRect(x + j / 2, y + j / 2, larg - j, 2);          // borda clara
+      g.fillStyle = 'rgba(0,0,0,.10)'; g.fillRect(x + j / 2, y + alt - j / 2 - 2, larg - j, 2);      // borda escura
+    }
+  }
+  for (let i = 0; i < 6000; i++) { g.fillStyle = Math.random() < 0.5 ? `rgba(255,255,255,${_a(0, 0.07)})` : `rgba(40,30,20,${_a(0, 0.08)})`; g.fillRect(_a(0, t), _a(0, t), 1.4, 1.4); }
+  for (let i = 0; i < 7; i++) {                                           // manchas de uso
+    const x = _a(0, t), y = _a(0, t), r = _a(10, 34), gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, `rgba(70,60,50,${_a(0.05, 0.12)})`); gr.addColorStop(1, 'rgba(70,60,50,0)');
+    g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+}
+// Grama com manchas de tom, fiapos e florzinhas.
+export function desenharGrama(g, t, base = [118, 160, 84]) {
+  g.fillStyle = `rgb(${base})`; g.fillRect(0, 0, t, t);
+  for (let i = 0; i < 40; i++) {
+    const x = _a(0, t), y = _a(0, t), r = _a(20, 70), d = _a(-22, 18), gr = g.createRadialGradient(x, y, 0, x, y, r);
+    const c = `${base[0] + d | 0},${base[1] + d * 1.1 | 0},${base[2] + d * 0.6 | 0}`;
+    gr.addColorStop(0, `rgba(${c},.55)`); gr.addColorStop(1, `rgba(${c},0)`);
+    for (const ox of [-t, 0, t]) for (const oy of [-t, 0, t]) { g.save(); g.translate(ox, oy); g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2); g.restore(); }
+  }
+  g.lineWidth = 1;
+  for (let i = 0; i < 9000; i++) {
+    const x = _a(0, t), y = _a(0, t), l = _a(1.5, 4), d = _a(-40, 40);
+    g.strokeStyle = `rgba(${base[0] + d | 0},${base[1] + d + 15 | 0},${base[2] + d * 0.5 | 0},${_a(0.25, 0.6)})`;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + _a(-1, 1), y - l); g.stroke();
+  }
+  const flores = ['#f4f1e8', '#f2d34a', '#e8a6c8', '#c9b6f0'];
+  for (let i = 0; i < 70; i++) { g.fillStyle = flores[i % 4]; g.fillRect(_a(0, t), _a(0, t), 2, 2); }
+}
+
+// Copa de árvore: vários blocos de icosaedro juntos, mais escura embaixo (cor por vértice × cor da instância).
+function geoCopa(blocos) {
+  const pos = [], cor = [];
+  for (const [x, y, z, r] of blocos) {
+    const g = new THREE.IcosahedronGeometry(r, 1); const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      // deforma um pouco para não parecer bola perfeita
+      const px = p.getX(i), py = p.getY(i), pz = p.getZ(i), k = 1 + Math.sin(px * 3.1 + pz * 2.3 + py * 1.7) * 0.08;
+      const X = x + px * k, Y = y + py * k, Z = z + pz * k; pos.push(X, Y, Z);
+      const sombra = THREE.MathUtils.clamp(0.55 + (Y + 1.4) / 3.6 * 0.5, 0.55, 1.05); cor.push(sombra, sombra, sombra * 0.95);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cor, 3));
+  g.computeVertexNormals(); return g;
+}
+function geoPinheiro() {
+  const pos = [], cor = [];
+  for (const [y, r, h] of [[0.4, 1.35, 1.9], [1.3, 1.05, 1.6], [2.1, 0.72, 1.35]]) {
+    const g = new THREE.ConeGeometry(r, h, 7).translate(0, y + h / 2, 0).toNonIndexed(); const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const Y = p.getY(i); pos.push(p.getX(i), Y, p.getZ(i)); const s = THREE.MathUtils.clamp(0.55 + Y / 3.8 * 0.5, 0.55, 1.05); cor.push(s, s, s); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cor, 3));
+  g.computeVertexNormals(); return g;
+}
 
 // ---------------------------------------------------------------- peças
 const CORES_PREDIO = ['#efe6d2', '#e4cfb0', '#d9b48f', '#c98f6a', '#bfc5c9', '#a9b8c8', '#e8d9a8', '#d7a39a', '#b7c4a3', '#f1f1ee', '#c7b9a6'];
@@ -443,17 +510,31 @@ function montarMalhas() {
     im.receiveShadow = true; scene.add(im);
   }
   // árvores
-  const tronco = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.22, 1.8, 6).translate(0, 0.9, 0), MAT.tronco, arvores.length);
-  const copa = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1.5, 0), MAT.copa, arvores.length);
-  const verdes = ['#4f7f3a', '#5b8c3e', '#3f6e34', '#6a9443', '#557a3a'];
+  const pinheiro = (x, z) => ((Math.abs(x * 7.3 + z * 3.1) | 0) % 5) === 0;
+  const folhosas = arvores.filter(([x, z]) => !pinheiro(x, z)), pinheiros = arvores.filter(([x, z]) => pinheiro(x, z));
+  const tronco = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.13, 0.24, 2.0, 7).translate(0, 1.0, 0), MAT.tronco, arvores.length);
+  const copa = new THREE.InstancedMesh(geoCopa([[0, 0, 0, 1.25], [0.75, -0.25, 0.3, 0.9], [-0.7, -0.15, -0.35, 0.95], [0.2, 0.55, -0.45, 0.85], [-0.25, -0.35, 0.7, 0.8]]), MAT.copa, Math.max(1, folhosas.length));
+  const pinho = new THREE.InstancedMesh(geoPinheiro(), MAT.copa, Math.max(1, pinheiros.length));
+  copa.count = folhosas.length; pinho.count = pinheiros.length;
+  const verdes = ['#5a8a3c', '#679a42', '#4b7d36', '#78a34a', '#5f8a3a', '#6e9a3e'];
+  const escuros = ['#3f6b38', '#355f33', '#47753c'];
+  let kf = 0, kp = 0;
   arvores.forEach(([x, z, s], k) => {
-    const y = altura(x, z) ?? 0;
-    _m.compose(_v.set(x, y, z), _q.identity(), _e.set(s, s, s)); tronco.setMatrixAt(k, _m);
-    _q.setFromAxisAngle(_e.set(0, 1, 0), (x * 13 + z * 7) % 6.28);
-    _m.compose(_v.set(x, y + 2.3 * s, z), _q, _e.set(s * 1.1, s * 1.25, s * 1.1)); copa.setMatrixAt(k, _m);
-    copa.setColorAt(k, _c.set(verdes[k % verdes.length]));
+    const y = altura(x, z) ?? 0, var1 = 0.88 + ((x * 31 + z * 17) % 1 + 1) % 1 * 0.3, sc = s * var1;
+    const giro = (x * 13 + z * 7) % 6.28;
+    _q.setFromAxisAngle(_e.set(0, 1, 0), giro);
+    if (pinheiro(x, z)) {
+      _m.compose(_v.set(x, y, z), _q, _e.set(sc * 0.8, sc * 0.7, sc * 0.8)); tronco.setMatrixAt(k, _m);
+      _m.compose(_v.set(x, y + 0.6 * sc, z), _q, _e.set(sc, sc * 1.1, sc)); pinho.setMatrixAt(kp, _m);
+      pinho.setColorAt(kp++, _c.set(escuros[k % escuros.length]));
+    } else {
+      _m.compose(_v.set(x, y, z), _q, _e.set(sc, sc, sc)); tronco.setMatrixAt(k, _m);
+      _m.compose(_v.set(x, y + 2.55 * sc, z), _q, _e.set(sc * 1.05, sc * 1.0, sc * 1.05)); copa.setMatrixAt(kf, _m);
+      copa.setColorAt(kf++, _c.set(verdes[k % verdes.length]));
+    }
   });
-  tronco.castShadow = true; copa.castShadow = true; copa.receiveShadow = true; scene.add(tronco, copa);
+  pinho.castShadow = true; pinho.receiveShadow = true; if (pinheiros.length) scene.add(pinho);
+  tronco.castShadow = true; copa.castShadow = true; copa.receiveShadow = true; scene.add(tronco); if (folhosas.length) scene.add(copa);
 }
 
 function plano(x, z, w, d, y, mat) {
@@ -645,7 +726,8 @@ function montarMobiliario() {
   const pc = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), matPoca, pocas.length);
   pocas.forEach(([x, z, r], k) => { _m.compose(_v.set(x, 0.21, z), _q.identity(), _e.set(r * 2, 1, r * 2)); pc.setMatrixAt(k, _m); });
   pc.renderOrder = 2; pc.visible = false; scene.add(pc); matPoca.userData.malha = pc;
-  // carros estacionados
+  // carros estacionados: caixinhas leves para todos; os mais perto do jogador trocam pelo modelo 3D
+  const coresCarro = ['#c0392b', '#2c3e50', '#ecf0f1', '#7f8c8d', '#2980b9', '#16a085', '#f1c40f', '#8e44ad', '#d35400', '#1f1f1f', '#bdc3c7'];
   const corpo = new THREE.BoxGeometry(1.8, 0.62, 4.2).translate(0, 0.62, 0);
   const cabine = new THREE.BoxGeometry(1.58, 0.58, 2.1).translate(0, 1.2, -0.25);
   const rodaG = []; for (const sx of [-0.86, 0.86]) for (const sz of [-1.35, 1.35]) rodaG.push(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 12).rotateZ(Math.PI / 2).translate(sx, 0.34, sz).toNonIndexed());
@@ -653,14 +735,50 @@ function montarMobiliario() {
   const ic = new THREE.InstancedMesh(corpo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.3, metalness: 0.45 }), carros.length);
   const iv = new THREE.InstancedMesh(cabine, new THREE.MeshStandardMaterial({ color: '#1d2730', roughness: 0.1, metalness: 0.6 }), carros.length);
   const ir = new THREE.InstancedMesh(rodas, new THREE.MeshStandardMaterial({ color: '#1b1c1f', roughness: 0.8 }), carros.length);
-  const coresCarro = ['#c0392b', '#2c3e50', '#ecf0f1', '#7f8c8d', '#2980b9', '#16a085', '#f1c40f', '#8e44ad', '#d35400', '#1f1f1f', '#bdc3c7'];
   carros.forEach(([x, z, rot], k) => {
+    carros[k] = { x, z, rot, cor: escolher(coresCarro), tipo: (k * 7 + 3) % 3, perto: false };
     _q.setFromAxisAngle(_e.set(0, 1, 0), rot); _m.compose(_v.set(x, 0.02, z), _q, _e.set(1, 1, 1));
-    ic.setMatrixAt(k, _m); iv.setMatrixAt(k, _m); ir.setMatrixAt(k, _m); ic.setColorAt(k, _c.set(escolher(coresCarro)));
+    ic.setMatrixAt(k, _m); iv.setMatrixAt(k, _m); ir.setMatrixAt(k, _m); ic.setColorAt(k, _c.set(carros[k].cor));
     const vert = Math.abs(Math.sin(rot)) < 0.5;
     addCol({ tipo: 'caixa', x0: x - (vert ? 0.95 : 2.15), x1: x + (vert ? 0.95 : 2.15), z0: z - (vert ? 2.15 : 0.95), z1: z + (vert ? 2.15 : 0.95) });
   });
   for (const m of [ic, iv, ir]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
+  const MAX = window.matchMedia?.('(pointer: coarse)').matches ? 8 : 16;
+  const glb = ['carro_popular', 'carro_suv', 'carro_esportivo'].map((n) => {
+    const base = ctx.modelo?.(n); if (!base) return null;
+    let malha = null; base.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(base.matrixWorld).invert();
+    base.traverse((o) => { if (o.isMesh && !malha) malha = o; });
+    if (!malha) return null;
+    const geo = malha.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, malha.matrixWorld));
+    const mat = [].concat(malha.material)[0].clone(); mat.color = new THREE.Color('#ffffff');
+    const im = new THREE.InstancedMesh(geo, mat, MAX); im.count = 0; im.receiveShadow = true; im.frustumCulled = false; scene.add(im);
+    return im;
+  });
+  estacionados = { carros, caixas: [ic, iv, ir], glb, max: MAX, t: 0 };
+}
+let estacionados = null;
+// troca as caixinhas perto do jogador pelos modelos 3D (chamado algumas vezes por segundo)
+export function carrosPerto(px, pz, dt) {
+  const E = estacionados; if (!E || !E.glb.some(Boolean)) return;
+  if ((E.t -= dt) > 0) return; E.t = 0.4;
+  const perto = E.carros.map((c, k) => [Math.hypot(c.x - px, c.z - pz), k]).filter(([d]) => d < 70).sort((a, b) => a[0] - b[0]).slice(0, E.max * 2);
+  const conta = E.glb.map(() => 0), novo = new Set();
+  for (const [, k] of perto) {
+    const c = E.carros[k], im = E.glb[c.tipo]; if (!im || conta[c.tipo] >= E.max) continue;
+    _q.setFromAxisAngle(_e.set(0, 1, 0), c.rot); _m.compose(_v.set(c.x, 0.02, c.z), _q, _e.set(1, 1, 1));
+    im.setMatrixAt(conta[c.tipo], _m); im.setColorAt(conta[c.tipo], _c.set('#ffffff').lerp(new THREE.Color(c.cor), 0.45)); conta[c.tipo]++;
+    novo.add(k);
+  }
+  E.glb.forEach((im, i) => { if (!im) return; im.count = conta[i]; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; });
+  // esconde (escala 0) as caixinhas que viraram modelo e mostra de volta as que saíram
+  let mudou = false;
+  E.carros.forEach((c, k) => {
+    const p = novo.has(k); if (p === c.perto) return; c.perto = p; mudou = true;
+    _q.setFromAxisAngle(_e.set(0, 1, 0), c.rot); _m.compose(_v.set(c.x, 0.02, c.z), _q, p ? _e.set(0, 0, 0) : _e.set(1, 1, 1));
+    for (const m of E.caixas) m.setMatrixAt(k, _m);
+  });
+  if (mudou) for (const m of E.caixas) m.instanceMatrix.needsUpdate = true;
 }
 function mergeSimples(lista) {
   let n = 0; for (const g of lista) n += g.attributes.position.count;

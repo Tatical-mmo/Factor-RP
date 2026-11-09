@@ -351,3 +351,11 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Também mostra as vagas que as empresas anunciaram (o dono anuncia na tela da empresa › Equipe › "📢 Anunciar vagas na Agência de Empregos").
 - Novo botão 💼 Trabalho no menu: mostra seu cargo público (patente, tempo, próximo cargo) e seu emprego em empresa (função, salário, se está batendo ponto), com "📍 Ir" para o local de trabalho, sair do serviço ou pedir demissão.
 - Quem trabalha em empresa vê "💼 nome da empresa" na faixa embaixo da tela.
+
+## Versão 09/11 (g) · gráfico melhor
+- Árvores novas: copa cheia (vários blocos, mais escura embaixo), tamanhos variados e pinheiros misturados.
+- Calçadas com pavers em junta amarrada, rejunte e marcas de uso; a da metrópole estava com ladrilhos de quase 3 m e ficou do tamanho certo. Grama com manchas, fiapos e florzinhas (centro e metrópole usam a mesma textura agora).
+- Carros estacionados: perto de você viram os modelos 3D dos carros; longe continuam leves.
+- Casas que viram prédio (níveis 4 e 5): fachada com janelas desenhadas num bloco só, que acendem à noite. Antes eram centenas de peças (pesado e podia piscar).
+- Sol um pouco mais forte e céu um pouco mais fraco, para dar mais contraste e sombra.
+- Não tem SQL nesta versão.
