@@ -293,3 +293,7 @@ Rode no SQL Editor: `27_recompensas.sql`.
 Rode no SQL Editor: `28_jornalista.sql`.
 - Veículos não atravessam mais prédios e casas (as paredes são resolvidas por último) e os pedais soltam mesmo se o dedo escorregar para fora do botão.
 - Jornalista: entre em serviço no balcão "Jornal da Cidade" (ao lado da Prefeitura). Perto de um incêndio, ocorrência policial ou alguém ferido, toque em Reportar: +200 e a manchete aparece para todos na faixa do alto da tela e na lista do jornal. Cada acontecimento rende uma reportagem só.
+
+## Versão 08/11 (y) · caminhão e van dirigíveis como o carro
+- Ao assumir um veículo encostado em outros (doca, garagem, fila), os vizinhos não empurram mais: ele sai normalmente.
+- Empurrão entre veículos limitado ao quanto o veículo andou no quadro (não dispara mais).

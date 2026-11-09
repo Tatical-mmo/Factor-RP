@@ -1095,9 +1095,10 @@ function dirigir(dt) {
   const vAbs = Math.abs(c.vel), giro = 1.5 * Math.min(1, vAbs / 2.5) / (1 + vAbs / 12);
   jogador.yaw -= c.volante * giro * dt * Math.sign(c.vel || 1);
   if (c.servico) civico.atualizarSirenes(performance.now() / 1000, c.mesh);
+  if (!c.assentado) { resolverColisao(jogador.pos, c.raio || 1.3); c.assentado = true; }
   const antes = { x: jogador.pos.x, z: jogador.pos.z };
   jogador.pos.x += Math.sin(jogador.yaw) * c.vel * dt; jogador.pos.z += Math.cos(jogador.yaw) * c.vel * dt;
-  if (!c.voa) { colidirVeiculo(c); resolverColisao(jogador.pos, c.raio || 1.3); }
+  if (!c.voa) { colidirVeiculo(c, dt); resolverColisao(jogador.pos, c.raio || 1.3); }
   const andou = Math.hypot(jogador.pos.x - antes.x, jogador.pos.z - antes.z), esperado = Math.abs(c.vel) * dt;
   if (esperado > 0.01 && andou < esperado * 0.6) {          // bateu
     if (Math.abs(c.vel) > 6 && performance.now() - (c.batida || 0) > 1200) { c.batida = performance.now(); aviso('💥 Batida!', 1.2); tremor = 0.35; }
@@ -2774,11 +2775,17 @@ function obstaculoAFrente(x, z, ang, ignorar, dist = 7.5) {
 // quem dirige bate nos outros veículos; atropelar machuca (jogadores e polícia NPC)
 let tremor = 0;
 const atropelados = new Map();
-function colidirVeiculo(c) {
-  const raio = c.raio || 1.3, p = jogador.pos;
+function colidirVeiculo(c, dt) {
+  const raio = c.raio || 1.3, p = jogador.pos, chaveDe = (o) => o.o || o.pessoa || o.npc;
+  // quem já estava encostado quando entrou (doca, garagem, fila de veículos) não empurra: o veículo sai normalmente
+  if (!c.fantasmas) {
+    c.fantasmas = new Set();
+    for (const o of corposNaRua()) if (o.o !== c.mesh && !o.eu && Math.hypot(p.x - o.x, p.z - o.z) < raio + o.r + 0.3) c.fantasmas.add(chaveDe(o));
+  }
   for (const o of corposNaRua()) {
     if (o.o === c.mesh || o.eu) continue;
     const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), min = raio + o.r;
+    if (c.fantasmas.has(chaveDe(o))) { if (d > min + 0.5) c.fantasmas.delete(chaveDe(o)); continue; }
     if (d >= min || d < 1e-4) continue;
     if ((o.pessoa || o.npc) && Math.abs(c.vel) > 5) {
       const chave = o.pessoa || o.npc;
@@ -2790,7 +2797,9 @@ function colidirVeiculo(c) {
         aviso('💥 Atropelamento!', 1.2); tremor = 0.3;
       }
     }
-    p.x = o.x + dx / d * min; p.z = o.z + dz / d * min;
+    // empurrão limitado: no máximo o quanto o veículo andou neste quadro (nunca dispara)
+    const empurra = Math.min(min - d, Math.abs(c.vel) * dt + 0.03);
+    p.x += dx / d * empurra; p.z += dz / d * empurra;
   }
 }
 // dano que vem de NPC (tiro da polícia)
