@@ -287,7 +287,10 @@ function quadraEspecial(bx, bz, r) {
     for (const sx of [-1, 1]) arvore(bx + sx * 9, zc + r.frente * 15.5, 0.8);
     return;
   }
-  if (r.tipo === 'vazio') return;
+  if (r.tipo === 'vazio') {   // prédio público: calçada com árvores nos cantos
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) arvore(bx + sx * 19.5, bz + sz * 19.5, 0.9);
+    return;
+  }
   if (r.tipo === 'loteamento') {
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) gramados.push([bx + sx * 9.5, bz + sz * 9.5, 17.6, 17.6]);
     return;

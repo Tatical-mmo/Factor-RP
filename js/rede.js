@@ -150,6 +150,11 @@ function traduzirRpc(m) {
     'o dono nao pode se demitir': 'O dono não pode se demitir.',
     'cla nao encontrado': 'Clã não encontrado.',
     'veiculo invalido': 'Veículo inválido.',
+    'policial nao rouba carro': 'Policial não rouba carro.',
+    'esse carro nao pode ser roubado': 'Esse carro não pode ser roubado.',
+    'o carro e seu': 'O carro é seu.',
+    'esse carro ja foi roubado': 'Esse carro já foi roubado.',
+    'o carro nao esta roubado': 'O carro não está roubado.',
     'so jornalistas em servico': 'Só jornalistas em serviço.',
     'esse acontecimento ja passou': 'Esse acontecimento já passou.',
     'outro jornalista ja fez essa reportagem': 'Outro jornalista já fez essa reportagem.',
@@ -301,6 +306,17 @@ export const carros = {
   comprar: (modelo, cor) => rpc('comprar_carro', { p_modelo: modelo, p_cor: cor }),
   estacionar: (id, x, z, ang) => rpc('estacionar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),
   vender: (id) => rpc('vender_carro', { p_carro: id }),
+  roubar: (id) => rpc('roubar_carro', { p_carro: id }),
+  bloquear: (id) => rpc('bloquear_carro', { p_carro: id }),
+  liberar: (id) => rpc('liberar_carro', { p_carro: id }),
+};
+export const carreiras = {
+  turno: (x, z) => rpc('bater_turno', { p_x: x, p_z: z }),
+  minhas: () => rpc('minhas_carreiras'),
+};
+export const robos = {
+  listar: () => sel(sb.from('robos_policia').select('*')),
+  atualizar: (id, estado, alvo, x, z, ang, seg) => rpc('robo_atualizar', { p_id: id, p_estado: estado, p_alvo: alvo, p_x: x, p_z: z, p_ang: ang, p_segundos: Math.round(seg || 0) }),
 };
 export const mercado = {
   resumo: () => rpc('resumo_mercado'),
@@ -487,6 +503,7 @@ export function escutarLogistica(eventos) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'unidades' }, (p) => eventos.unidade?.(p))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'territorios' }, (p) => eventos.territorio?.(p))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'casas' }, (p) => eventos.casa?.(p))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'robos_policia' }, (p) => eventos.robo?.(p.new))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'clas' }, (p) => eventos.cla?.(p))
     .subscribe();
   return () => sb.removeChannel(canal);

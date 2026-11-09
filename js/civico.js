@@ -12,6 +12,7 @@ export const CARROS = {
   suv: { nome: 'SUV', preco: 95000, vel: 11 },
   esportivo: { nome: 'Esportivo', preco: 180000, vel: 14 },
   ambulancia: { nome: 'Ambulância', preco: 0, vel: 12 },
+  viatura: { nome: 'Viatura', preco: 0, vel: 12 },
   bombeiros: { nome: 'Caminhão dos bombeiros', preco: 0, vel: 10 },
   presidencial: { nome: 'Presidencial', preco: 0, vel: 12 },
 };
@@ -23,7 +24,7 @@ function bloco(g, m, w, h, d, x, y, z) {
 }
 
 export function iniciar(contexto) { ctx = contexto; }
-const GLB_CARRO = { popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros' };
+const GLB_CARRO = { viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros' };
 const SEM_TINTA = new Set(['presidencial', 'ambulancia', 'bombeiros']);
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
@@ -38,8 +39,8 @@ export function montarPrefeitura() {
   const fr = new THREE.Shape(); fr.moveTo(-15, 0); fr.lineTo(15, 0); fr.lineTo(0, 3.6); fr.lineTo(-15, 0);
   const fron = new THREE.Mesh(new THREE.ExtrudeGeometry(fr, { depth: 1, bevelEnabled: false }), branco); fron.position.set(0, 10.9, 11.3); fron.castShadow = true; g.add(fron);
   for (let k = 0; k < 3; k++) bloco(g, branco, 30 - k * 0.01, 0.3, 2.2 - k * 0.6, 0, 0.15 + k * 0.3, 12.6 - k * 0.6);
-  for (let a = 0; a < 2; a++) for (let k = 0; k < 7; k++) bloco(g, vidro, 2, 3, 0.08, -13 + k * 4.3, 3 + a * 4.3, 6.96);
-  bloco(g, mat('#5a3d22'), 3.2, 5, 0.1, 0, 2.5, 7.0);
+  for (let a = 0; a < 2; a++) for (let k = 0; k < 7; k++) if (a || k !== 3) bloco(g, vidro, 2, 3, 0.1, -13 + k * 4.3, 3 + a * 4.3, 7.08);
+  bloco(g, mat('#5a3d22'), 3.2, 5, 0.14, 0, 2.5, 7.1);
   const tambor = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 5.5, 3, 24), branco); tambor.position.set(0, 13.1, -4); tambor.castShadow = true; g.add(tambor);
   const dom = new THREE.Mesh(new THREE.SphereGeometry(5.6, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), cupula); dom.position.set(0, 14.6, -4); dom.castShadow = true; g.add(dom);
   const mastro = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 5, 8), mat('#d8d8d8', { metalness: 0.6 })); mastro.position.set(0, 22.6, -4); g.add(mastro);
@@ -82,8 +83,8 @@ export function montarBanco() {
   for (let k = 0; k < 6; k++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 10, 14), pedra); c.position.set(-10 + k * 4, 5.2, 6.4); c.castShadow = true; g.add(c); }
   bloco(g, pedra, 24, 1.4, 3, 0, 10.9, 6.4);
   for (let k = 0; k < 3; k++) bloco(g, pedra, 24, 0.3, 3 - k * 0.8, 0, 0.15 + k * 0.3, 8.6 - k * 0.4);
-  for (let a = 0; a < 2; a++) for (let k = 0; k < 5; k++) if (k !== 2) bloco(g, vidro, 2.4, 3.2, 0.08, -9.6 + k * 4.8, 3 + a * 4.6, 4.98);
-  bloco(g, mat('#2a2f36', { metalness: 0.6 }), 3.6, 5.5, 0.12, 0, 2.75, 5.0);
+  for (let a = 0; a < 2; a++) for (let k = 0; k < 5; k++) if (k !== 2) bloco(g, vidro, 2.4, 3.2, 0.1, -9.6 + k * 4.8, 3 + a * 4.6, 5.08);
+  bloco(g, mat('#2a2f36', { metalness: 0.6 }), 3.6, 5.5, 0.14, 0, 2.75, 5.1);
   const cofre = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 0.4, 24).rotateX(Math.PI / 2), mat('#9aa3ad', { metalness: 0.9, roughness: 0.25 })); cofre.position.set(0, 2.6, 5.1); g.add(cofre);
   bloco(g, ouro, 10, 1.3, 0.2, 0, 13.6, 5.35);
   ctx.scene.add(g); ctx.janelas.push(vidro);
@@ -101,8 +102,8 @@ export function montarHospital() {
   bloco(g, branco, 30, 9, 16, 0, 4.5, -5);
   bloco(g, branco, 12, 18, 12, -8, 9, -6);
   bloco(g, azul, 30.4, 0.6, 16.4, 0, 9.3, -5);
-  for (let a = 0; a < 2; a++) for (let k = 0; k < 6; k++) bloco(g, vidro, 2.6, 2.4, 0.08, -12.5 + k * 5, 2.4 + a * 3.6, 3.04);
-  for (let a = 0; a < 4; a++) for (let k = 0; k < 3; k++) bloco(g, vidro, 2.4, 2.2, 0.08, -12 + k * 4, 10.5 + a * 2, 0.04);
+  for (let a = 0; a < 2; a++) for (let k = 0; k < 6; k++) bloco(g, vidro, 2.6, 2.4, 0.1, -12.5 + k * 5, 2.4 + a * 3.6, 3.08);
+  for (let a = 0; a < 4; a++) for (let k = 0; k < 3; k++) bloco(g, vidro, 2.4, 2.2, 0.1, -12 + k * 4, 10.5 + a * 2, 0.08);
   bloco(g, verm, 1.2, 4, 0.3, -8, 14, 0.2); bloco(g, verm, 4, 1.2, 0.3, -8, 14, 0.2);
   bloco(g, mat('#cfd6db'), 8, 0.4, 5, 3, 4.4, 5.4);
   for (const sx of [-0.6, 6.6]) bloco(g, mat('#9aa3ad'), 0.25, 4.2, 0.25, sx, 2.1, 7.6);
@@ -177,7 +178,8 @@ export function modeloCarro(modelo, cor) {
   const base = ctx?.modelo?.(GLB_CARRO[modelo]);
   if (base) {   // modelo 3D: pinta de leve com a cor escolhida (o presidencial fica como é)
     const g = base.clone(true);
-    if (SEM_TINTA.has(modelo)) sirene(g, { ambulancia: [3.4, 0.9], bombeiros: [3.15, 2.5] }[modelo]);
+    if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
+    else if (SEM_TINTA.has(modelo)) sirene(g, { ambulancia: [3.4, 0.9], bombeiros: [3.15, 2.5] }[modelo]);
     else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), 0.45); } });
     cacheCarro.set(chave, g);
     return g.clone();

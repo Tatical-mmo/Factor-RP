@@ -28,7 +28,7 @@ MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, co
 
 ### Configuração do Supabase (uma vez só)
 
-1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b`, `21c`, `22a`, `22b`, `23a`, `23b`, `23c`, `23d`, `24`, `25`, `26`, `27`, `28`, `29` e `30`, nessa ordem.
+1. Em **SQL Editor → New query**, cole o conteúdo de `supabase/01_perfis.sql` e toque em **Run**. Depois faça o mesmo com `supabase/02_painel_admin.sql` `supabase/03_economia.sql`, `supabase/04_logistica.sql` as partes `supabase/05a…05d`, `06a`, `06b`, `07`, `08a`, `08b`, `09`, `10`, `11a`, `11b`, `11c`, `12`, `13`, `14a`, `14b`, `15`, `16a`, `16b`, `17`, `18`, `19`, `20a`, `20b`, `21a`, `21b`, `21c`, `22a`, `22b`, `23a`, `23b`, `23c`, `23d`, `24`, `25`, `26`, `27`, `28`, `29`, `30`, `31a`, `31b` e `31c`, nessa ordem.
 2. Em **Authentication → Sign In / Providers → Email**, desligue **Confirm email**. Sem isso, cada cadastro depende de um e-mail de confirmação, e o plano gratuito envia poucos por hora.
 
 ## Etapa 3: trabalho e produção
@@ -309,3 +309,18 @@ Rode no SQL Editor: `30_socorro_ambulancia.sql`.
 - Socorrista: cada ferido aparece no minimapa (cruz piscando) com aviso e rastreio. Dirija até lá, pare, desça (a ambulância fica estacionada onde você desceu), socorra a pé e volte para ela. O ferido pode ser socorrido por até 90 s; com socorrista online, a ambulância NPC espera 40 s antes de sair.
 - Bombeiro: os incêndios aparecem no minimapa (piscando) e o mais perto já é rastreado ao entrar no caminhão; o jato sai do caminhão, sem descer. O rastreio some quando o fogo apaga.
 - A ambulância e o caminhão voltam para a base quando o jogador sai do serviço.
+
+## Versão 09/11 (b) · carreiras, polícia robô pela cidade, viaturas e roubo de carros
+Rode no SQL Editor, nessa ordem: `31a_carreiras.sql`, `31b_robos_policia.sql`, `31c_roubo_carros.sql`.
+- Carreiras com patentes e salário por minuto em serviço (o salário sobe a cada promoção):
+  - Polícia: Soldado, Cabo, 3º/2º/1º Sargento, Subtenente, Tenente, Capitão, Major, Tenente-Coronel, Coronel (base = salário definido pelo prefeito).
+  - PRF: Agente, Agente Especial, Inspetor, Superintendente.
+  - Médico: Socorrista, Enfermeiro, Doutor, Supervisor, Diretor (de Doutor em diante o turno só conta dentro do hospital).
+  - Bombeiro: Recruta, Bombeiro, Cabo, Sargento, Tenente, Capitão, Comandante.
+  - Jornalista: Estagiário, Repórter, Repórter Sênior, Editor, Editor-chefe.
+  - O cargo aparece na etiqueta do jogador e numa faixa embaixo da tela; prefeito continua no topo.
+- Polícia robô: 12 policiais a pé fazem ronda em quadras da cidade toda e 4 viaturas rodam pelas ruas. Todos veem os mesmos robôs no mesmo lugar, inclusive perseguições, cercos na porta de casa e robôs derrubados.
+- Viaturas caçam os muito procurados (com recompensa): perseguem a até 90 m e prendem quem para a menos de 6 m.
+- Roubo de carros de jogador: arrombe um carro parado de outro (2,5 s, é crime) e saia dirigindo. O dono vê ROUBADO na janela 🚗 Veículos e pode Bloquear (20 s depois o ladrão é jogado para fora). Policial devolve carro roubado largado (+300). O presidencial não pode ser roubado.
+- Passageiros também em van e caminhão (clã do dono ou funcionários): descem quando o veículo chega.
+- Gráfico: janelas da prefeitura e do banco não piscam mais; árvores nos cantos das quadras dos prédios públicos.

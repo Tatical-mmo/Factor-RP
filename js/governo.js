@@ -192,6 +192,20 @@ async function telaEmpregos(c) {
   c.querySelectorAll('[data-vaga]').forEach((b) => { b.onclick = () => executar(() => rede.empregos.candidatar(Number(b.dataset.vaga)), () => { ctx.pontoMudou?.(); return 'Contratado! Vá até a empresa para começar a trabalhar.'; }); });
 }
 
+const CARGOS = {
+  medico: 'Socorrista → Enfermeiro → Doutor → Supervisor → Diretor (Doutor em diante trabalha dentro do hospital)',
+  bombeiro: 'Recruta → Bombeiro → Cabo → Sargento → Tenente → Capitão → Comandante',
+  jornalista: 'Estagiário → Repórter → Repórter Sênior → Editor → Editor-chefe',
+};
+async function cartaoCarreira(prof) {
+  const lista = await rede.carreiras.minhas().catch(() => []);
+  const r = (lista || []).find((x) => x.carreira === prof);
+  const h = (m) => `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
+  return `<div class="sub">Carreira</div>
+    <div class="cartoes"><div><small>Cargo</small><b>${esc(r?.nome || CARGOS[prof].split(' → ')[0])}</b></div><div><small>Tempo em serviço</small><b>${h(r?.minutos || 0)}</b></div>
+      <div><small>Salário</small><b>× ${Number(r?.mult || 1).toFixed(1)}</b></div><div><small>Próximo cargo</small><b>${r?.proximo ? `${esc(r.proximo)} em ${r.falta} min` : r ? 'topo' : `em ${prof === 'bombeiro' ? 60 : 120} min`}</b></div></div>
+    <p class="dica">Cada minuto em serviço conta para a carreira e paga o salário do cargo; o salário sobe a cada promoção. ${CARGOS[prof]}.</p>`;
+}
 function telaProfissao(c, prof, titulo, texto) {
   const eu = ctx.perfil(), nela = eu.profissao === prof;
   return `<p class="dica">${texto}</p>
@@ -205,7 +219,8 @@ function ligarProfissao(prof) {
 }
 
 async function telaHospital(c) {
-  c.innerHTML = `<div class="sub">Tratamento</div>
+  const carreira = await cartaoCarreira('medico');
+  c.innerHTML = `${carreira}<div class="sub">Tratamento</div>
     <p class="dica">Recupere toda a vida na hora por <b>150</b> (o valor vai para o cofre da prefeitura). Quem morre sem socorro acorda aqui e paga até 100 de conta.</p>
     <div class="botoes"><button id="hTratar">Tratar (150)</button></div>
     <div class="sub">Plantão médico</div>
@@ -216,7 +231,8 @@ async function telaHospital(c) {
 
 async function telaBombeiros(c) {
   const fogos = await rede.saude.incendios();
-  c.innerHTML = `${telaProfissao(c, 'bombeiro', 'Bombeiro', 'Incêndios aparecem em empresas e casas. Bombeiros em serviço recebem o alerta, vão até lá e tocam em <b>Apagar</b>: 10 jatos d\'água (1 por segundo) e o fogo acaba. Cada fogo apagado vale <b>400</b>. O dono também pode apagar o próprio imóvel. Fogo que dura 8 minutos queima: a empresa perde 5% do caixa e a casa custa 500 de reforma.')}
+  const carreira = await cartaoCarreira('bombeiro');
+  c.innerHTML = `${carreira}${telaProfissao(c, 'bombeiro', 'Bombeiro', 'Incêndios aparecem em empresas e casas. Bombeiros em serviço recebem o alerta, vão até lá e tocam em <b>Apagar</b>: 10 jatos d\'água (1 por segundo) e o fogo acaba. Cada fogo apagado vale <b>400</b>. O dono também pode apagar o próprio imóvel. Fogo que dura 8 minutos queima: a empresa perde 5% do caixa e a casa custa 500 de reforma.')}
     <div class="sub">Incêndios agora (${fogos.length})</div>
     <div class="lista">${fogos.length ? fogos.map((f) => `<div class="linha item"><span class="ic">🔥</span><span class="nm"><b>${esc(f.nome)}</b><small>${f.tipo === 'empresa' ? 'empresa' : 'casa'} · começou há ${Math.max(0, Math.round((Date.now() - Date.parse(f.inicio)) / 60000))} min · força ${f.vida}/10</small></span></div>`).join('') : '<span class="vazio">Nenhum fogo na cidade.</span>'}</div>`;
   ligarProfissao('bombeiro');
@@ -245,8 +261,9 @@ async function telaTaxi(c) {
 
 async function telaJornal(c) {
   const lista = await rede.jornal.ultimas();
+  const carreira = await cartaoCarreira('jornalista');
   const quando = (t) => { const m = Math.max(0, Math.round((Date.now() - Date.parse(t)) / 60000)); return m < 1 ? 'agora' : m < 60 ? `há ${m} min` : `há ${Math.floor(m / 60)} h`; };
-  c.innerHTML = `${telaProfissao(c, 'jornalista', 'Jornalista', 'Jornalistas em serviço vão até os acontecimentos da cidade (incêndio, ocorrência policial ou alguém ferido) e tocam em <b>Reportar</b>. A manchete sai no jornal para todos e a reportagem vale <b>200</b>. Cada acontecimento só rende uma reportagem: chegue primeiro!')}
+  c.innerHTML = `${carreira}${telaProfissao(c, 'jornalista', 'Jornalista', 'Jornalistas em serviço vão até os acontecimentos da cidade (incêndio, ocorrência policial ou alguém ferido) e tocam em <b>Reportar</b>. A manchete sai no jornal para todos e a reportagem vale <b>200</b>. Cada acontecimento só rende uma reportagem: chegue primeiro!')}
     <div class="sub">Últimas notícias</div>
     <div class="lista">${lista.length ? lista.map((n) => `<div class="linha item"><span class="nm"><b>${esc(n.titulo)}</b><small>por ${esc(n.autor_nome)} · ${quando(n.criada_em)}</small></span></div>`).join('') : '<span class="vazio">Nenhuma notícia ainda.</span>'}</div>`;
   ligarProfissao('jornalista');

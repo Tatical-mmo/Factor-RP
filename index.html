@@ -49,6 +49,8 @@
   #msgLogin.ok { color:var(--verde); }
   #info { pointer-events:auto; }
   #info .online { color:var(--verde); }
+  #patente { position:absolute; left:50%; transform:translateX(-50%); bottom:calc(150px + env(safe-area-inset-bottom)); font-size:11px; padding:3px 9px; pointer-events:none; white-space:nowrap; color:#ffe7a8; }
+  #patente:empty { display:none; }
   #btSair { margin-top:4px; font-size:12px; padding:4px 10px; border-radius:8px; border:1px solid var(--borda); background:transparent; color:var(--suave); cursor:pointer; }
   #erroNome { width:100%; text-align:center; color:#ff8a7a; font-size:13px; min-height:16px; margin:-4px 0 0; }
 
@@ -202,20 +204,20 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261109a",
-  "./js/mundo.js": "./js/mundo.js?v=20261109a",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261109a",
-  "./js/cla.js": "./js/cla.js?v=20261109a",
-  "./js/config.js": "./js/config.js?v=20261109a",
-  "./js/empresa.js": "./js/empresa.js?v=20261109a",
-  "./js/loja.js": "./js/loja.js?v=20261109a",
-  "./js/painel.js": "./js/painel.js?v=20261109a",
-  "./js/rede.js": "./js/rede.js?v=20261109a",
-  "./js/sedes.js": "./js/sedes.js?v=20261109a",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261109a",
-  "./js/civico.js": "./js/civico.js?v=20261109a",
-  "./js/governo.js": "./js/governo.js?v=20261109a",
-  "./js/servicos.js": "./js/servicos.js?v=20261109a"
+  "./js/main.js": "./js/main.js?v=20261109b",
+  "./js/mundo.js": "./js/mundo.js?v=20261109b",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261109b",
+  "./js/cla.js": "./js/cla.js?v=20261109b",
+  "./js/config.js": "./js/config.js?v=20261109b",
+  "./js/empresa.js": "./js/empresa.js?v=20261109b",
+  "./js/loja.js": "./js/loja.js?v=20261109b",
+  "./js/painel.js": "./js/painel.js?v=20261109b",
+  "./js/rede.js": "./js/rede.js?v=20261109b",
+  "./js/sedes.js": "./js/sedes.js?v=20261109b",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261109b",
+  "./js/civico.js": "./js/civico.js?v=20261109b",
+  "./js/governo.js": "./js/governo.js?v=20261109b",
+  "./js/servicos.js": "./js/servicos.js?v=20261109b"
 } }
 </script>
 </head>
@@ -257,6 +259,7 @@
 <div id="hud" class="oculto">
   <div id="info" class="painel"></div>
   <div id="rua" class="painel">—</div>
+  <div id="patente" class="painel"></div>
   <canvas id="mapa" width="300" height="300"></canvas>
   <div id="rastreio" class="painel oculto"></div>
   <div id="dica" class="painel oculto"></div>
@@ -340,7 +343,7 @@
   </div>
 </div>
 
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 09/11 · socorrista e bombeiro</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 09/11 · carreiras e polícia robô</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {
