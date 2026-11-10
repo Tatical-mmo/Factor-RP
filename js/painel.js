@@ -16,6 +16,7 @@ const ACOES = {
   perdoar: 'perdoou',
   moedas: 'mudou as moedas de', banir: 'baniu', desbanir: 'desbaniu', algemar: 'algemou', soltar_algemas: 'tirou as algemas de',
   prender: 'prendeu', soltar: 'soltou da cadeia', teleporte: 'teleportou', cargo: 'mudou o cargo de',
+  prefeito_nomeado: 'nomeou como prefeito', prefeito_afastado: 'afastou o prefeito', eleicao_convocada: 'convocou eleição extraordinária',
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -132,6 +133,9 @@ async function abrirJogador(id) {
     h += `<div class="sub">Banimento</div><div class="botoes">
       ${j.banido ? '<button id="pDesbanir">Desbanir</button>' : '<input id="pMotivo" placeholder="Motivo"><button id="pBanir" class="perigo">Banir</button>'}</div>`;
   }
+  if (eu.cargo === 'admin' && !j.banido) {
+    h += `<div class="sub">Prefeitura</div><div class="botoes">${ctx.prefeito?.() === j.id ? '<small>🏛️ É o prefeito atual.</small>' : '<button id="pPrefeito">🏛️ Nomear prefeito</button>'}</div>`;
+  }
   if (eu.cargo === 'admin' && !souEu && j.cargo !== 'admin') {
     const pod = j.poderes || {};
     h += `<div class="sub">Cargo</div>
@@ -158,17 +162,18 @@ async function abrirJogador(id) {
   on('pDesbanir', () => executar(() => rede.painel.desbanir(j.id), `${j.nome} foi desbanido.`));
   on('pCargo', () => executar(() => rede.painel.definirCargo(j.id, j.cargo === 'moderador' ? 'jogador' : 'moderador', {}, 0),
     j.cargo === 'moderador' ? `${j.nome} voltou a ser jogador.` : `${j.nome} agora é moderador. Marque os poderes dele abaixo.`));
+  on('pPrefeito', () => { if (confirmarDuplo('pPrefeito', '🏛️ Nomear prefeito')) executar(async () => { await rede.painel.nomearPrefeito(j.id); await ctx.prefeitoMudou?.(); }, `${j.nome} agora é o prefeito.`); });
   on('pSalvarMod', () => {
     const poderes = {}; c.querySelectorAll('[data-poder]').forEach((x) => { if (x.checked) poderes[x.dataset.poder] = true; });
     executar(() => rede.painel.definirCargo(j.id, 'moderador', poderes, Math.max(0, Math.floor(Number($('pSalario').value) || 0))), 'Poderes e salário salvos.');
   });
 }
 // banir pede um segundo toque para confirmar (sem diálogos do navegador)
-function confirmarDuplo(id) {
+function confirmarDuplo(id, texto = 'Banir') {
   const b = $(id);
   if (b.dataset.conf) return true;
   b.dataset.conf = '1'; b.textContent = 'Toque de novo para confirmar';
-  setTimeout(() => { if (b.isConnected) { delete b.dataset.conf; b.textContent = 'Banir'; } }, 3000);
+  setTimeout(() => { if (b.isConnected) { delete b.dataset.conf; b.textContent = texto; } }, 3000);
   return false;
 }
 
@@ -178,6 +183,7 @@ function abaEu() {
   let h = '';
   if (pode('imortal')) h += `<div class="sub">Modo imortal</div><div class="botoes"><button id="pImortal" class="${eu.imortal ? 'ativo' : ''}">${eu.imortal ? 'Imortal: ligado' : 'Imortal: desligado'}</button></div>`;
   if (eu.cargo === 'admin') h += '<div class="sub">Evento: arma dourada</div><p class="dica">Esconde a arma dourada (2 balas) exatamente onde você está. Quem achar pega; depois dos 2 tiros ela some.</p><div class="botoes"><button id="pArmaPd">✨ Esconder a arma dourada aqui</button></div>';
+  if (eu.cargo === 'admin') h += '<div class="sub">Prefeitura</div><div id="pPref" class="dica">Carregando…</div>';
   if (pode('teleportar')) h += `<div class="sub">Teleportar para</div><div class="botoes">${ctx.locais().map((l, i) => `<button data-local="${i}">${esc(l.nome)}</button>`).join('')}</div>`;
   h += `<div class="sub">Skin (grátis para a equipe)</div><div class="skins">${[...ROBOS.map((id) => ({ id, nome: id === 'Rusty_Scout_Bot' ? 'Robô Batedor' : 'Robô Sentinela' })), ...PERSONAGENS]
     .map((p) => `<button class="skin ${p.id === eu.personagem ? 'sel' : ''}" data-skin="${p.id}"><img src="assets/miniaturas/${p.id}.webp" alt=""><span>${esc(p.nome)}</span></button>`).join('')}</div>`;
@@ -186,6 +192,26 @@ function abaEu() {
   const b = $('pImortal'); if (b) b.onclick = () => executar(() => rede.painel.imortal(!eu.imortal), eu.imortal ? 'Modo imortal desligado.' : 'Modo imortal ligado.');
   c.querySelectorAll('[data-local]').forEach((x) => { x.onclick = () => { const l = ctx.locais()[x.dataset.local]; ctx.teleportar(l.x, l.z); msg('Teleportado: ' + l.nome); }; });
   c.querySelectorAll('[data-skin]').forEach((x) => { x.onclick = () => executar(() => rede.painel.skin(x.dataset.skin), 'Skin trocada.'); });
+  if (eu.cargo === 'admin') blocoPrefeitura();
+}
+// estado da prefeitura e ações do administrador (nomear é na ficha do jogador)
+async function blocoPrefeitura() {
+  const el = $('pPref'); if (!el) return;
+  let pf;
+  try { pf = await rede.prefeitura.estado(); } catch (e) { el.textContent = e.message; return; }
+  const eleicao = pf?.eleicao_ate && Date.parse(pf.eleicao_ate) > Date.now();
+  const hora = (t) => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  el.className = '';
+  el.innerHTML = `<p class="dica">${pf?.prefeito ? `Prefeito: <b>${esc(pf.prefeito_perfil?.nome || '?')}</b>${pf.motivo ? ` (${esc(pf.motivo)})` : ''}` : 'Prefeitura <b>vaga</b>: a campanha fica aberta e o mais votado assume na virada do ciclo.'}
+    ${eleicao ? `<br>🗳️ Eleição extraordinária até <b>${hora(pf.eleicao_ate)}</b>.` : ''}<br>Para nomear alguém, abra a ficha do jogador na aba Jogadores.</p>
+    <div class="botoes">
+      ${eleicao ? '<button id="pCancEl">Cancelar eleição extraordinária</button>' : `<select id="pCiclos">${[1, 2, 3, 4, 5, 6].map((n) => `<option value="${n}" ${n === 2 ? 'selected' : ''}>${n} ciclo${n > 1 ? 's' : ''} (${n * 32} min)</option>`).join('')}</select><button id="pConvocar">🗳️ Convocar eleição</button>`}
+      ${pf?.prefeito ? '<button id="pAfastar" class="perigo">Afastar o prefeito</button>' : ''}
+    </div>`;
+  const on = (idb, fn) => { const b = $(idb); if (b) b.onclick = fn; };
+  on('pConvocar', () => { const n = Number($('pCiclos').value); executar(() => rede.painel.convocarEleicao(n), `Eleição extraordinária convocada por ${n * 32} min. Todos foram avisados.`); });
+  on('pCancEl', () => executar(() => rede.painel.cancelarEleicao(), 'Eleição extraordinária cancelada.'));
+  on('pAfastar', () => { if (confirmarDuplo('pAfastar', 'Afastar o prefeito')) executar(async () => { await rede.painel.afastarPrefeito(); await ctx.prefeitoMudou?.(); }, 'Prefeito afastado. A prefeitura está vaga.'); });
 }
 
 // ------------------------------------------------------------ equipe (admin)

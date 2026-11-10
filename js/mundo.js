@@ -432,6 +432,9 @@ function gerarCidade(cid) {
     pisos.push({ x0: x - QB / 2, x1: x + QB / 2, z0: z - QB / 2, z1: z + QB / 2, h: 0.18 });
     if (bx === 0 && bz === 1026) { quadra(x, z, 'parque'); continue; }
     if (bx === -54 && bz === 1080) { quadraEspecial(x, z, { tipo: 'praca' }); continue; }   // território da cidade
+    // moradia: loteamentos (8 terrenos) e um prédio de 10 apartamentos virado para a estação
+    if ((bx === -54 && bz === 972) || (bx === 54 && bz === 1080)) { quadraEspecial(x, z, { tipo: 'loteamento' }); continue; }
+    if (bx === 0 && bz === 972) { quadraEspecial(x, z, { tipo: 'residencial', frente: -s, cor: cid.id === 'norte' ? '#d8cbb6' : '#bfd6dc' }); continue; }
     if (bx === 54 && bz === 972) { calcadas.push([x, z, QB, QB, 0.18]); cid.loja = { x: x - 6, z: z + (s > 0 ? -3 : 3) }; arvore(x + 12, z - 10); arvore(x + 12, z + 10); continue; }
     if (cid.id === 'norte') quadra(x, z, rnd() < 0.75 ? 'casas' : 'predios', [1, 3]);
     else quadra(x, z, bz === 1080 ? 'galpoes' : (rnd() < 0.5 ? 'predios' : 'casas'), [2, 4]);

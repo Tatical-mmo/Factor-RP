@@ -189,6 +189,13 @@ function traduzirRpc(m) {
     'salario invalido (0 a 200 por minuto)': 'Salário inválido: de 0 a 200 por minuto.',
     'operario so em fabrica': 'Operário só existe em empresa com fábrica.',
     'a equipe nao se candidata': 'A equipe não se candidata a vagas.',
+    'ele ja e o prefeito': 'Ele já é o prefeito.',
+    'a prefeitura ja esta vaga': 'A prefeitura já está vaga.',
+    'escolha de 1 a 6 ciclos': 'Escolha de 1 a 6 ciclos.',
+    'a eleicao normal ja esta perto': 'A eleição normal já está aberta ou perto de abrir (últimos 4 ciclos do mandato).',
+    'ja tem eleicao em andamento': 'Já tem uma eleição extraordinária em andamento.',
+    'nao ha eleicao extraordinaria': 'Não há eleição extraordinária em andamento.',
+    'jogador invalido': 'Jogador inválido.',
     'vaga preenchida': 'Essa vaga já foi preenchida.',
     'a empresa e sua': 'Essa empresa é sua.',
     'voce nao tem emprego': 'Você não tem emprego.',
@@ -273,6 +280,10 @@ function traduzirRpc(m) {
   return t[m] || m;
 }
 export const painel = {
+  nomearPrefeito: (id) => rpc('admin_nomear_prefeito', { p_jogador: id }),
+  afastarPrefeito: () => rpc('admin_afastar_prefeito'),
+  convocarEleicao: (ciclos) => rpc('admin_convocar_eleicao', { p_ciclos: ciclos }),
+  cancelarEleicao: () => rpc('admin_cancelar_eleicao'),
   moedas: (alvo, valor) => rpc('admin_moedas', { alvo, valor }),
   banir: (alvo, motivo) => rpc('admin_banir', { alvo, motivo }),
   desbanir: (alvo) => rpc('admin_desbanir', { alvo }),

@@ -359,3 +359,9 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Casas que viram prédio (níveis 4 e 5): fachada com janelas desenhadas num bloco só, que acendem à noite. Antes eram centenas de peças (pesado e podia piscar).
 - Sol um pouco mais forte e céu um pouco mais fraco, para dar mais contraste e sombra.
 - Não tem SQL nesta versão.
+
+## Versão 10/11 (a) · moradia nas cidades vizinhas e prefeito nomeado
+- Vila Serra e Porto Sul ganharam moradia: cada uma tem um prédio com 10 apartamentos (11.000) na quadra da estação e 8 terrenos (9.000) em 2 loteamentos. Os terrenos evoluem igual aos do centro (casa, condomínio, prédio).
+- Painel › Eu › Prefeitura (só administrador): convocar eleição extraordinária (1 a 6 ciclos), cancelar a eleição e afastar o prefeito. Para nomear, abra a ficha do jogador e toque em "🏛️ Nomear prefeito" (toque duas vezes para confirmar).
+- Eleição extraordinária: a campanha abre na hora para o mandato atual. Na apuração o mais votado assume até o fim do mandato. Se ninguém votar, nada muda. Não dá para convocar perto da eleição normal (últimos 4 ciclos do mandato).
+- SQL desta versão: rode **34a_moradia_cidades.sql** e **34b_prefeito_admin.sql**.

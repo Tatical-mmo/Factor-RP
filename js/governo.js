@@ -85,7 +85,8 @@ async function telaEleicao(c, pf) {
   }
   const [cands, voto] = await Promise.all([rede.prefeitura.candidatos(m), rede.prefeitura.meuVoto(m)]);
   const souCand = cands.some((k) => k.jogador === eu.id);
-  c.innerHTML = `<p class="dica">Campanha aberta${pf.prefeito ? ' para o próximo mandato' : ' (prefeitura vaga)'}. Cada jogador tem 1 voto e pode mudar até a apuração. Anuncie nos outdoors da cidade!</p>
+  const extra = pf.eleicao_ate && Date.parse(pf.eleicao_ate) > Date.now();
+  c.innerHTML = `<p class="dica">${extra ? `🗳️ <b>Eleição extraordinária</b> convocada pela administração: a apuração é às <b>${new Date(pf.eleicao_ate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</b> e o mais votado assume até o fim do mandato.` : `Campanha aberta${pf.prefeito ? ' para o próximo mandato' : ' (prefeitura vaga)'}.`} Cada jogador tem 1 voto e pode mudar até a apuração. Anuncie nos outdoors da cidade!</p>
     <div class="lista">${cands.length ? cands.map((k, i) => `<div class="linha item"><span class="ic">${['🥇', '🥈', '🥉'][i] || '🗳'}</span>
       <span class="nm"><b>${esc(k.perfil?.nome)}</b><small>${esc(k.slogan) || 'sem slogan'} · ${k.votos} voto${k.votos === 1 ? '' : 's'}</small></span>
       <span class="bts">${voto === k.jogador ? '<small>✔ seu voto</small>' : `<button data-votar="${k.jogador}">Votar</button>`}</span></div>`).join('') : '<span class="vazio">Nenhum candidato ainda.</span>'}</div>

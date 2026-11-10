@@ -1785,6 +1785,8 @@ async function iniciarJogo(perfil) {
   $('btFianca').onclick = async () => { try { await rede.policia.fianca(); aviso('Fiança paga. Você está livre.'); } catch (e) { aviso(e.message); } };
   iniciarPainel({
     perfil: () => jogador.perfil,
+    prefeito: () => prefeitoAtual,
+    prefeitoMudou: () => carregarPrefeitura().catch(() => {}),
     online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta.nome })),
     posicaoDe: (id) => { const r = remotos.get(id); return r?.av?.raiz.visible ? r.av.raiz.position : (r?.alvo || null); },
     minhaPosicao: () => jogador.pos,
@@ -3933,7 +3935,10 @@ function removerCasaTerreno(v) {
   v.casa = null;
 }
 function desenharCasaTerreno(v) {
-  const c = v.d, sz = Math.sign(c.z - (c.z > 0 ? 81 : -81)) || 1;       // lado da rua
+  const c = v.d;
+  // centro do quarteirão do lote: grade do centro (27 + 54k) ou das cidades vizinhas (972, 1026, 1080)
+  const az = Math.abs(c.z), zq = az > 900 ? Math.sign(c.z) * (972 + 54 * Math.round((az - 972) / 54)) : 27 + 54 * Math.round((c.z - 27) / 54);
+  const sz = Math.sign(c.z - zq) || 1;                                  // lado da rua
   const cx = c.x, cz = c.z - sz * 11;                                   // centro do lote (19 x 19)
   const g = new THREE.Group(), cols = [];
   const cores = { simples: ['#f0dfc0', '#a5502f'], sobrado: ['#d6e4ee', '#4f5a63'], mansao: ['#f7f4ec', '#3d3a36'] }[c.modelo];
