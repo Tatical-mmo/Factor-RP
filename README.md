@@ -385,3 +385,15 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Caçada: em 💼 Trabalho, um militar de Tenente para cima vê os procurados online e pode "Autorizar caçada" por 10 min. O procurado é perseguido por 2 jipes e 4 soldados do Exército, mais rápidos que a polícia, e vai preso quando alcançado.
 - Carros e helicópteros agora podem estacionar nas cidades vizinhas e na mata.
 - SQL desta versão: **34d_helicoptero_cacada.sql** (rode depois do 34a, 34b e 34c).
+
+## Versão 10/11 (d) · quartel completo, morro da Serra, General Supremo e reset do mapa
+- Quartel:
+  - O prédio do Comando agora tem porta e interior: balcão do Comando, bandeiras, mesa de mapas, escrivaninhas, armários e armas. O teto some quando você entra.
+  - Garagem aberta com 2 jipes e 2 caminhões à mostra, e o helicóptero no heliponto, que ganhou o anel amarelo.
+  - Tanque de exposição, sacos de areia no portão, pista de obstáculos, caixotes e tambores.
+- No balcão do Comando, quem é militar abre ordens, caçadas e carreira; quem não é abre a Agência para se alistar.
+- General Supremo: o administrador vê todos os militares em 💼 Trabalho (ou no balcão do Comando) e escolhe a patente de cada um.
+- A caçada do Exército agora aparece para todos os jogadores, não só para o caçado.
+- Morro da Serra: atrás de Vila Serra, depois da mata, o terreno sobe até uns 50 m, com árvores. Dá para subir a pé ou de carro. Os morros de enfeite que entravam no mapa foram removidos; a serra de fundo ficou bem mais longe.
+- Painel › Eu › Resetar o mapa (só administrador): marque o que limpar (moradia, empresas, clãs, jogadores, prefeitura), digite RESETAR e toque duas vezes. As contas continuam e a equipe mantém o cargo.
+- SQL desta versão: **34e_general_reset.sql**.

@@ -7,21 +7,99 @@ export const CONCESSIONARIA = { x: 135, z: -135, balcao: { x: 135, z: -127.5 } }
 export const BANCO = { x: 81, z: -135, balcao: { x: 75, z: -124 }, empregos: { x: 88, z: -124 } };
 export const HOSPITAL = { x: -135, z: 135, balcao: { x: -131, z: 125 }, saida: { x: -139, z: 124 }, vaga: { x: -145, z: 126, ang: -Math.PI / 2 }, veiculo: null };
 export const CEMITERIO = { x: 135, z: 135 };
-// Quartel do Exército (Porto Sul): jipe e caminhão na frente da garagem e o helicóptero no heliponto.
-// São ilimitados: cada militar que pega um leva uma cópia, e o da vitrine continua lá.
+// Quartel do Exército (Porto Sul). Os veículos ficam expostos na garagem aberta e no heliponto; são ilimitados:
+// cada militar que pega um leva uma cópia, e o da exposição continua lá. O prédio do Comando tem interior.
 export const EXERCITO = {
   vagas: [
-    { modelo: 'militar', x: 163, z: 1059, ang: -Math.PI / 2 },
-    { modelo: 'exercito_caminhao', x: 178, z: 1060, ang: -Math.PI / 2 },
+    { modelo: 'militar', x: 159, z: 1074, ang: Math.PI },
+    { modelo: 'militar', x: 165, z: 1074, ang: Math.PI },
+    { modelo: 'exercito_caminhao', x: 173, z: 1072.5, ang: Math.PI },
+    { modelo: 'exercito_caminhao', x: 181, z: 1072.5, ang: Math.PI },
     { modelo: 'helicoptero_exercito', x: 232, z: 1027, ang: -Math.PI / 2 },
   ],
   veiculos: [],
+  comando: { x0: 210, x1: 242, z0: 974, z1: 990, porta: { x: 226, z: 991.5 } },
+  balcao: { x: 226, z: 979.5 },
+  teto: null,
 };
 export function montarQuartelExercito() {
+  const C = EXERCITO.comando, g = new THREE.Group(); ctx.scene.add(g);
+  const oliva = mat('#6b7448'), areia = mat('#cfc39a', { roughness: 0.8 }), escuro = mat('#3a3f2c'), concreto = mat('#a9a69a', { roughness: 0.9 });
+  const metal = mat('#5d6266', { metalness: 0.5, roughness: 0.5 }), madeira = mat('#7a5a38'), branco = mat('#efeee6');
+  const col = (x0, x1, z0, z1) => ctx.colisores.push({ tipo: 'caixa', x0, x1, z0, z1 });
+  const b = (m, w, h, d, x, y, z, pai = g) => bloco(pai, m, w, h, d, x, y, z);
+  // ---- Comando: paredes com porta, interior com balcão, mesa de mapas, armários, bandeiras; o teto some quando você entra
+  const H = 6, e = 0.4, cx = (C.x0 + C.x1) / 2, cz = (C.z0 + C.z1) / 2, W = C.x1 - C.x0, D = C.z1 - C.z0;
+  b(areia, W, H, e, cx, H / 2, C.z0 + e / 2); col(C.x0, C.x1, C.z0, C.z0 + e);                                   // fundo
+  b(areia, e, H, D, C.x0 + e / 2, H / 2, cz); col(C.x0, C.x0 + e, C.z0, C.z1);                                   // lados
+  b(areia, e, H, D, C.x1 - e / 2, H / 2, cz); col(C.x1 - e, C.x1, C.z0, C.z1);
+  const pl = C.porta.x - 1.8, pr = C.porta.x + 1.8;                                                              // frente com porta
+  b(areia, pl - C.x0, H, e, (C.x0 + pl) / 2, H / 2, C.z1 - e / 2); col(C.x0, pl, C.z1 - e, C.z1);
+  b(areia, C.x1 - pr, H, e, (pr + C.x1) / 2, H / 2, C.z1 - e / 2); col(pr, C.x1, C.z1 - e, C.z1);
+  b(areia, pr - pl, H - 3.4, e, C.porta.x, 3.4 + (H - 3.4) / 2, C.z1 - e / 2);
+  b(oliva, W + 0.2, 0.6, e + 0.1, cx, 0.3, C.z1 - e / 2);                                                       // rodapé
+  for (let k = 0; k < 6; k++) if (Math.abs(C.x0 + 3 + k * 5.3 - C.porta.x) > 3) b(mat('#28455c', { metalness: 0.5, roughness: 0.15 }), 2.2, 1.6, 0.08, C.x0 + 3 + k * 5.3, 3.3, C.z1 + 0.02);
+  // marquise e colunas na entrada, escada
+  b(oliva, 9, 0.35, 3.4, C.porta.x, 4.2, C.z1 + 1.7);
+  for (const sx of [-4, 4]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4.1, 12), branco); c.position.set(C.porta.x + sx, 2.05, C.z1 + 3.1); c.castShadow = true; g.add(c); col(C.porta.x + sx - 0.3, C.porta.x + sx + 0.3, C.z1 + 2.8, C.z1 + 3.4); }
+  b(concreto, 9, 0.18, 3.6, C.porta.x, 0.09, C.z1 + 1.8);
+  // teto (escondido quando o jogador está dentro)
+  const teto = new THREE.Group(); g.add(teto);
+  b(escuro, W + 0.6, 0.5, D + 0.6, cx, H + 0.25, cz, teto); b(oliva, W - 6, 1.2, D - 5, cx, H + 1.1, cz, teto);
+  EXERCITO.teto = teto;
+  // interior
+  const piso = new THREE.Mesh(new THREE.PlaneGeometry(W - 2 * e, D - 2 * e).rotateX(-Math.PI / 2), mat('#8d8a7a', { roughness: 0.7 })); piso.position.set(cx, 0.14, cz); piso.receiveShadow = true; g.add(piso);
+  const tapete = new THREE.Mesh(new THREE.PlaneGeometry(3, 10).rotateX(-Math.PI / 2), mat('#7a1f22', { roughness: 1 })); tapete.position.set(C.porta.x, 0.15, C.z1 - 6); g.add(tapete);
+  ctx.balcao(EXERCITO.balcao.x, EXERCITO.balcao.z, '#4b5a2e', 'Comando do Exército', 'Ordens, caçadas e carreira');
+  // bandeiras atrás do balcão
+  for (const [x, cor] of [[221, '#2f7d3a'], [231, '#2f7d3a']]) {
+    b(metal, 0.08, 3.6, 0.08, x, 1.95, C.z0 + 1.2); b(mat(cor), 1.4, 1, 0.04, x + 0.75, 3.2, C.z0 + 1.2); b(mat('#e2c234'), 0.7, 0.5, 0.05, x + 0.75, 3.2, C.z0 + 1.2);
+  }
+  b(mat('#2d3324'), 6, 2.4, 0.1, cx, 3.3, C.z0 + e + 0.06);                                                      // painel com o brasão
+  b(mat('#e2c234', { emissive: '#7a5d10', emissiveIntensity: 0.4 }), 1.6, 1.6, 0.05, cx, 3.3, C.z0 + e + 0.12);
+  // mesa de mapas (lado esquerdo) e escrivaninhas (lado direito)
+  b(madeira, 5, 0.9, 2.6, 215.5, 0.6, 982); b(mat('#c8b98a'), 4.6, 0.04, 2.2, 215.5, 1.07, 982); col(213, 218, 980.7, 983.3);
+  for (const [x, z] of [[236, 978], [236, 984]]) { b(madeira, 2.4, 0.8, 1.2, x, 0.55, z); b(metal, 0.5, 0.35, 0.05, x, 1.15, z - 0.2); col(x - 1.2, x + 1.2, z - 0.6, z + 0.6); }
+  // armários e cabideiro de armas no fundo
+  for (let k = 0; k < 6; k++) b(metal, 0.9, 2.1, 0.6, 212 + k * 1, 1.2, C.z0 + 0.8);
+  col(211.5, 218, C.z0, C.z0 + 1.2);
+  for (let k = 0; k < 5; k++) b(escuro, 0.12, 1.3, 0.12, 236 + k * 0.6, 1.1, C.z0 + 0.7);
+  b(madeira, 3.4, 0.12, 0.4, 237.2, 0.5, C.z0 + 0.7); col(235.5, 239.5, C.z0, C.z0 + 1.1);
+  const luz = new THREE.PointLight('#fff1d6', 5, 22, 1.6); luz.position.set(cx, 5.2, cz); g.add(luz);
+  const placa = ctx.textoSprite('🎖️ QUARTEL DO EXÉRCITO', { escala: 1.1, fundo: 'rgba(52,62,34,.94)', cor: '#ffe9a8' }); placa.position.set(C.porta.x, 8.6, C.z1 + 1); ctx.scene.add(placa);
+  // ---- garagem aberta (pilares, telhado e parede do fundo) com os veículos à mostra
+  const G = { x0: 154, x1: 186, z0: 1066, z1: 1082 };
+  b(oliva, G.x1 - G.x0, 5.2, 0.4, (G.x0 + G.x1) / 2, 2.6, G.z1 - 0.2); col(G.x0, G.x1, G.z1 - 0.4, G.z1);
+  b(oliva, 0.4, 5.2, G.z1 - G.z0, G.x0 + 0.2, 2.6, (G.z0 + G.z1) / 2); col(G.x0, G.x0 + 0.4, G.z0, G.z1);
+  b(escuro, G.x1 - G.x0 + 1, 0.35, G.z1 - G.z0 + 1.5, (G.x0 + G.x1) / 2, 5.4, (G.z0 + G.z1) / 2 - 0.4);
+  for (const x of [G.x0 + 8, G.x0 + 16, G.x0 + 24, G.x1 - 0.3]) { b(metal, 0.35, 5.2, 0.35, x, 2.6, G.z0 + 0.2); col(x - 0.2, x + 0.2, G.z0, G.z0 + 0.4); }
+  const pg = new THREE.Mesh(new THREE.PlaneGeometry(G.x1 - G.x0, G.z1 - G.z0).rotateX(-Math.PI / 2), mat('#5f5f58', { roughness: 0.95 })); pg.position.set((G.x0 + G.x1) / 2, 0.15, (G.z0 + G.z1) / 2); g.add(pg);
+  const pgp = ctx.textoSprite('🚙 Viaturas do Exército · militares pegam à vontade', { escala: 0.55, fundo: 'rgba(52,62,34,.92)' }); pgp.position.set(170, 6.6, G.z0); ctx.scene.add(pgp);
+  // ---- heliponto
+  const h = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 0.08, 32), mat('#4d5346', { roughness: 0.9 })); h.position.set(232, 0.16, 1027); h.receiveShadow = true; g.add(h);
+  const anel = new THREE.Mesh(new THREE.TorusGeometry(7.6, 0.18, 6, 48).rotateX(Math.PI / 2), mat('#e2c234')); anel.position.set(232, 0.22, 1027); g.add(anel);
+  for (const [w, d, x] of [[0.9, 6, -1.6], [0.9, 6, 1.6], [3.2, 0.9, 0]]) b(branco, w, 0.02, d, 232 + x, 0.22, 1027);
+  // ---- pátio: sacos de areia no portão, tanque de exposição, pista de obstáculos, caixotes e tambores
+  const saco = mat('#b7a77a', { roughness: 1 });
+  for (const sz of [-1, 1]) for (let k = 0; k < 3; k++) { b(saco, 4, 0.5, 1, 156, 0.4 + k * 0.5, 1053 + sz * 8); }
+  col(154, 158, 1044.5, 1045.5); col(154, 158, 1060.5, 1061.5);
+  const tanque = new THREE.Group(); tanque.position.set(200, 0.14, 1060); tanque.rotation.y = -0.5; g.add(tanque);
+  b(oliva, 3.6, 1.1, 7, 0, 0.9, 0, tanque); b(escuro, 4, 0.9, 7.4, 0, 0.45, 0, tanque); b(oliva, 2.6, 0.9, 3, 0, 1.9, -0.3, tanque);
+  const canhao = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 5, 10).rotateX(Math.PI / 2), escuro); canhao.position.set(0, 2, 3.4); tanque.add(canhao);
+  col(197, 203, 1056, 1064);
+  for (let k = 0; k < 4; k++) { b(madeira, 3, 1.2, 0.3, 160 + k * 6, 0.74, 1000); col(158.5 + k * 6, 161.5 + k * 6, 999.8, 1000.2); }   // pista de obstáculos
+  for (const x of [166, 172]) { b(metal, 0.12, 2.4, 0.12, x - 1, 1.3, 1006); b(metal, 0.12, 2.4, 0.12, x + 1, 1.3, 1006); b(metal, 2.1, 0.1, 0.1, x, 2.4, 1006); }
+  for (const [x, z] of [[190, 1078], [193, 1078], [191.5, 1080.5]]) { b(madeira, 2.2, 1.4, 2.2, x, 0.85, z); }
+  col(188.8, 194.2, 1076.8, 1081.7);
+  for (let k = 0; k < 6; k++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1.3, 14), mat(k % 2 ? '#3f5a2b' : '#4a4f3a')); t.position.set(244 + (k % 3) * 1.1, 0.8, 1060 + Math.floor(k / 3) * 1.1); t.castShadow = true; g.add(t); }
+  col(243.4, 247, 1059.4, 1061.8);
+  // ---- veículos expostos
   EXERCITO.veiculos = EXERCITO.vagas.map((v) => ({ ...v, mesh: veiculoDeServico(v.modelo, v) })).filter((v) => v.mesh);
-  // heliponto
-  const h = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 0.08, 32), mat('#4d5346', { roughness: 0.9 })); h.position.set(232, 0.16, 1027); h.receiveShadow = true; ctx.scene.add(h);
-  for (const [w, d, x, z] of [[0.9, 6, -1.6, 0], [0.9, 6, 1.6, 0], [3.2, 0.9, 0, 0]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(w, 0.02, d), mat('#e8e4d4')); b.position.set(232 + x, 0.21, 1027 + z); ctx.scene.add(b); }
+}
+// o teto do Comando some quando o jogador está dentro
+export function atualizarQuartel(p) {
+  const C = EXERCITO.comando; if (!EXERCITO.teto) return;
+  EXERCITO.teto.visible = !(p.x > C.x0 && p.x < C.x1 && p.z > C.z0 && p.z < C.z1);
 }
 export const BOMBEIROS = { x: -81, z: 135, balcao: { x: -88, z: 125 }, vaga: { x: -77, z: 125.5, ang: Math.PI + 0.15 }, veiculo: null };
 export const CARROS = {
@@ -188,9 +266,9 @@ export function atualizarSirenes(t, raiz) {
 }
 // ambulância e caminhão dos bombeiros parados na base (somem enquanto alguém dirige)
 function veiculoDeServico(modelo, vaga) {
-  if (!ctx.modelo?.(GLB_CARRO[modelo])) return null;
+  if (!ctx.modelo?.(GLB_CARRO[modelo]) && !DO_EXERCITO.has(modelo)) return null;
   const m = modeloCarro(modelo, '#ffffff');
-  m.position.set(vaga.x, 0.18, vaga.z); m.rotation.y = vaga.ang; ctx.scene.add(m);
+  m.position.set(vaga.x, ctx.altura?.(vaga.x, vaga.z) ?? 0.18, vaga.z); m.rotation.y = vaga.ang; ctx.scene.add(m);
   return m;
 }
 

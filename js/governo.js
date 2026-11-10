@@ -217,12 +217,14 @@ async function quadroTrabalho() {
       <span class="bts"><button data-irempresa="${meu.empresa}">📍 Ir</button><button data-demissao="1" class="perigo">Demissão</button></span></div>`;
   if (souDono) h += `<div class="linha item"><span class="ic">🏢</span><span class="nm"><b>Dono da ${esc(meu.emp?.nome)}</b><small>Anuncie vagas na tela da empresa › Equipe.</small></span></div>`;
   if (atual === 'exercito') h += await blocoExercito(car);
+  else if (eu.cargo === 'admin') h += await blocoGeneral();
   return h ? `<div class="lista">${h}</div>` : '<p class="dica">Você está sem trabalho. Escolha uma vaga abaixo: a contratação é na hora.</p>';
 }
 // Exército: veículos e, para Tenente para cima, as ordens de caçada aos procurados
 async function blocoExercito(car) {
   const cmd = ctx.perfil().cargo === 'admin' || (car?.nivel || 0) >= 8;
   let h = `<div class="linha"><small>🚙 Jipe (3 passageiros), 🚚 caminhão (8) e 🚁 helicóptero (6, só Tenente para cima pilota) ficam no quartel, em Porto Sul. São ilimitados: chegue perto e toque em Dirigir. Militares embarcam como passageiros.</small></div>`;
+  if (ctx.perfil().cargo === 'admin') h += await blocoGeneral();
   if (!cmd) return h + '<div class="linha"><small>A partir de Tenente você pode autorizar os soldados a caçar procurados.</small></div>';
   const [lista, cacadas] = await Promise.all([rede.exercito.procurados().catch(() => []), rede.exercito.cacadas().catch(() => [])]);
   const ativa = new Map((cacadas || []).map((k) => [k.alvo, k]));
@@ -231,7 +233,18 @@ async function blocoExercito(car) {
     <span class="bts">${ativa.has(p.id) ? `<button data-cancelacaca="${p.id}">Suspender</button>` : `<button data-caca="${p.id}">Autorizar caçada</button>`}</span></div>`).join('') : '<div class="linha"><small>Nenhum procurado online agora.</small></div>';
   return h;
 }
+const PATENTES_EX = ['Recruta', 'Soldado', 'Cabo', '3º Sargento', '2º Sargento', '1º Sargento', 'Subtenente', 'Tenente', 'Capitão', 'Major', 'Tenente-Coronel', 'Coronel', 'General'];
+// General Supremo (administrador): promove ou rebaixa quem já está no Exército
+async function blocoGeneral() {
+  const lista = await rede.exercito.membros().catch(() => []);
+  let h = '<div class="linha"><b>⭐ General Supremo · promoções</b><small>Escolha a patente de cada militar. O salário acompanha a patente.</small></div>';
+  h += (lista || []).length ? lista.map((m) => `<div class="linha item"><span class="ic">🎖️</span><span class="nm"><b>${esc(m.jogador)}</b><small>${esc(m.patente)} · ${Math.floor(m.minutos / 60)}h${String(m.minutos % 60).padStart(2, '0')} de serviço</small></span>
+    <span class="bts"><select data-patsel="${m.id}">${PATENTES_EX.map((n, i) => `<option value="${i + 1}" ${i + 1 === m.nivel ? 'selected' : ''}>${n}</option>`).join('')}</select><button data-promover="${m.id}">Salvar</button></span></div>`).join('')
+    : '<div class="linha"><small>Ninguém no Exército ainda.</small></div>';
+  return h;
+}
 function ligarQuadroTrabalho(c) {
+  c.querySelectorAll('[data-promover]').forEach((b) => { b.onclick = () => { const n = Number(c.querySelector(`[data-patsel="${b.dataset.promover}"]`).value); executar(() => rede.exercito.promover(b.dataset.promover, n), (nome) => `Patente salva: ${nome}.`); }; });
   c.querySelectorAll('[data-caca]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.ordenar(b.dataset.caca), 'Caçada autorizada! Os soldados estão a caminho.'); });
   c.querySelectorAll('[data-cancelacaca]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.cancelar(b.dataset.cancelacaca), 'Caçada suspensa.'); });
   c.querySelectorAll('[data-rastrear]').forEach((b) => { b.onclick = () => { const l = ctx.locaisTrabalho?.()[b.dataset.rastrear]; if (l) { ctx.rastrear?.({ nome: 'Seu trabalho', x: l.x, z: l.z }); fechar(); } }; });

@@ -859,6 +859,7 @@ function acaoContexto() {
   if (perto(civico.BANCO.empregos, 3.2)) { abrirServico('empregos'); return; }
   if (perto(civico.HOSPITAL.balcao, 3.2)) { abrirServico('hospital'); return; }
   if (perto(civico.BOMBEIROS.balcao, 3.2)) { abrirServico('bombeiros'); return; }
+  if (perto(civico.EXERCITO.balcao, 3.2)) { abrirServico(jogador.perfil?.profissao === 'exercito' ? 'trabalho' : 'empregos'); return; }
   if (jogador.perfil.profissao === 'jornalista') { const rp = reportagemProxima(); if (rp) { reportar(rp); return; } }
   if (perto(civico.PREFEITURA.jornal, 3.2)) { abrirServico('jornal'); return; }
   if (perto(civico.PREFEITURA.porta, 3.2)) { abrirPrefeitura(); return; }
@@ -1456,7 +1457,7 @@ function suavizarAngulo(a, b, t) {
 const MAPA_ESC = 1.2, MAPA_R = 110;             // pixels por metro no fundo; raio visível em metros
 const REGIOES_MAPA = [
   { x0: -mundo.FIM_HORIZONTE, z0: -mundo.FIM_HORIZONTE, x1: mundo.FIM_HORIZONTE, z1: mundo.FIM_HORIZONTE },
-  { x0: -320, z0: -1190, x1: 320, z1: -810 },
+  { x0: -320, z0: -1400, x1: 320, z1: -810 },
   { x0: -320, z0: 810, x1: 320, z1: 1190 },
 ];
 let fundosMapa = [];
@@ -1890,12 +1891,14 @@ function removerRemoto(id) {
   if (r.av) scene.remove(r.av.raiz);
   if (r.caixa) scene.remove(r.caixa);
   if (r.algemas) scene.remove(r.algemas);
+  if (r.esq) { for (const o of r.esq.jipes) scene.remove(o); for (const av of r.esq.soldados) scene.remove(av.raiz); }
 }
 
 function atualizarRemotos(dt) {
   for (const r of remotos.values()) {
     if (!r.av || !r.alvo) continue;
     const raiz = r.av.raiz, a = r.alvo;
+    if (a.cs || r.esq) atualizarEsquadraRemota(r, a, dt);
     if (a.tr) {   // dentro do trem: a posição vem do horário, igual para todos
       const [li, k, v] = String(a.tr).split('.').map(Number), w = ferrovia.vaga(li, k, v);
       if (w) {
@@ -1946,9 +1949,9 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || 0, cs: codigoEsquadra() };
   const u = ultimoEnvio;
-  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg;
+  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs;
   if (!mudou && tempoKeepAlive > 0) return;
   conexao.enviar('pos', est); ultimoEnvio = est; tempoKeepAlive = 3;
 }
@@ -3768,6 +3771,34 @@ function atualizarCacada(dt) {
       .finally(() => { ocupado = false; if (!cacada) recolherEsquadra(); });
   }
 }
+// a esquadra que me caça vai junto no meu estado, para todo mundo ver a perseguição
+function codigoEsquadra() {
+  if (!cacada || !esquadra.pronto) return 0;
+  return [...esquadra.jipes.map((u) => u.obj), ...esquadra.soldados.map((u) => u.av.raiz)].map((o) => `${Math.round(o.position.x * 10) / 10},${Math.round(o.position.z * 10) / 10},${Math.round(o.rotation.y * 10) / 10}`).join(';');
+}
+// esquadras que caçam outros jogadores (vistas por todos)
+async function esquadraRemota(r) {
+  if (r.esq || r.criandoEsq) return; r.criandoEsq = true;
+  const e = { jipes: [], soldados: [] };
+  for (let k = 0; k < 2; k++) { const m = civico.modeloCarro('militar', '#ffffff'); m.visible = false; scene.add(m); e.jipes.push(m); }
+  for (let k = 0; k < 4; k++) {
+    try { const av = await criarAvatar('robos', 'Rusty_Scout_Bot'); const et = textoSprite('Exército', { escala: 0.55, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et); av.raiz.visible = false; scene.add(av.raiz); av.tocar('run', { velocidade: 1.1 }); e.soldados.push(av); } catch { /* sem soldado */ }
+  }
+  r.esq = e;
+}
+function atualizarEsquadraRemota(r, a, dt) {
+  if (!a.cs) { if (r.esq) { for (const o of r.esq.jipes) o.visible = false; for (const av of r.esq.soldados) av.raiz.visible = false; } return; }
+  if (!r.esq) { esquadraRemota(r); return; }
+  const pts = String(a.cs).split(';').map((t) => t.split(',').map(Number));
+  const objs = [...r.esq.jipes, ...r.esq.soldados.map((av) => av.raiz)];
+  objs.forEach((o, k) => {
+    const p = pts[k]; if (!p) { o.visible = false; return; }
+    if (!o.visible || Math.hypot(p[0] - o.position.x, p[1] - o.position.z) > 25) o.position.set(p[0], 0, p[1]);
+    const kk = Math.min(1, dt * 8); o.position.x += (p[0] - o.position.x) * kk; o.position.z += (p[1] - o.position.z) * kk;
+    o.position.y = alturaChao(o.position.x, o.position.z); o.rotation.y = suavizarAngulo(o.rotation.y, p[2], dt * 8); o.visible = true;
+  });
+  for (const av of r.esq.soldados) av.mixer.update(dt);
+}
 function resolverColisaoNPC(p) { colidirLista(colisores, p, 0.4); mundo.colidir(p, 0.4, colidirLista); }
 async function criarPoliciaNPC() {
   if (!cadeia) return;
@@ -4571,6 +4602,7 @@ function contexto() {
   if (perto(civico.BANCO.empregos, 3.2)) return ['agência de empregos: vagas nas empresas', 'Vagas'];
   if (perto(civico.HOSPITAL.balcao, 3.2)) return ['hospital: tratamento e plantão médico', 'Hospital'];
   if (perto(civico.BOMBEIROS.balcao, 3.2)) return ['quartel dos bombeiros', 'Bombeiros'];
+  if (perto(civico.EXERCITO.balcao, 3.2)) return [jogador.perfil?.profissao === 'exercito' ? 'comando do Exército: ordens e caçadas' : 'comando do Exército: alistar-se', 'Comando'];
   if (jogador.perfil?.profissao === 'jornalista' && reportagemProxima()) return [`reportar: ${reportagemProxima().titulo} (+200)`, 'Reportar'];
   if (perto(civico.PREFEITURA.jornal, 3.2)) return ['Jornal da Cidade: virar jornalista e ler as notícias', 'Jornal'];
   if (perto(civico.PREFEITURA.porta, 3.2)) return ['prefeitura: prefeito, eleição, outdoors e PRF', 'Prefeitura'];
@@ -4655,6 +4687,7 @@ function quadro() {
   atualizarNPCs(dt);
   atualizarSoldados(dt);
   atualizarCacada(dt);
+  civico.atualizarQuartel(jogador.pos);
   atualizarRemotos(dt);
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }

@@ -199,6 +199,10 @@ function traduzirRpc(m) {
     'so tenente para cima autoriza a cacada': 'Só militares de Tenente para cima autorizam a caçada.',
     'ele nao e procurado': 'Ele não é procurado.',
     'a equipe nao e cacada': 'A equipe não pode ser caçada.',
+    'ele nao esta no exercito': 'Ele não está no Exército.',
+    'patente invalida': 'Patente inválida.',
+    'digite RESETAR para confirmar': 'Digite RESETAR (em maiúsculas) para confirmar.',
+    'escolha o que resetar': 'Marque pelo menos uma parte para resetar.',
     'vaga preenchida': 'Essa vaga já foi preenchida.',
     'a empresa e sua': 'Essa empresa é sua.',
     'voce nao tem emprego': 'Você não tem emprego.',
@@ -287,6 +291,7 @@ export const painel = {
   afastarPrefeito: () => rpc('admin_afastar_prefeito'),
   convocarEleicao: (ciclos) => rpc('admin_convocar_eleicao', { p_ciclos: ciclos }),
   cancelarEleicao: () => rpc('admin_cancelar_eleicao'),
+  resetarMundo: (partes, conf) => rpc('admin_resetar_mundo', { p_partes: partes, p_confirma: conf }),
   moedas: (alvo, valor) => rpc('admin_moedas', { alvo, valor }),
   banir: (alvo, motivo) => rpc('admin_banir', { alvo, motivo }),
   desbanir: (alvo) => rpc('admin_desbanir', { alvo }),
@@ -393,6 +398,8 @@ export const exercito = {
   ordenar: (alvo) => rpc('ordenar_cacada', { p_alvo: alvo }),
   cancelar: (alvo) => rpc('cancelar_cacada', { p_alvo: alvo }),
   preso: () => rpc('preso_pelo_exercito'),
+  membros: () => rpc('membros_exercito'),
+  promover: (id, nivel) => rpc('admin_promover_exercito', { p_jogador: id, p_nivel: nivel }),
 };
 export const pd = {
   estado: () => sel(sb.from('arma_pd').select('*').eq('id', 1).maybeSingle()),

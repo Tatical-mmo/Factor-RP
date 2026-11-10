@@ -21,7 +21,15 @@ export const CIDADES = [
   { id: 'sul', nome: 'Porto Sul', s: 1 },
 ];
 const CID = { ruas: [945, 999, 1053, 1107], colunas: [-81, -27, 27, 81], blocos: [972, 1026, 1080], xs: [-54, 0, 54] };
-export const CIDADE_Z = { min: 900, max: 1170, maxSul: 1108, x: 300 };   // cidade + a mata em volta
+export const CIDADE_Z = { min: 900, max: 1390, maxSul: 1108, x: 300 };   // cidade + a mata em volta (+ o morro da Serra)
+// Morro da Serra: começa depois da mata de Vila Serra (z < -1150) e sobe até ~50 m. Dá para subir a pé ou de carro.
+export function morro(x, z) {
+  if (z > -1150) return 0;
+  const t = Math.min(1, (-z - 1150) / 230), base = t * t * (3 - 2 * t);
+  const ondas = 0.78 + 0.14 * Math.sin(x / 47) + 0.08 * Math.sin(x / 19 + z / 31);
+  const picos = 10 * Math.exp(-((x + 120) ** 2 + (z + 1330) ** 2) / 5000) + 8 * Math.exp(-((x - 150) ** 2 + (z + 1300) ** 2) / 4000);
+  return base * 46 * ondas + picos * base;
+}   // cidade + a mata em volta
 // Quartel do Exército (Porto Sul, na mata a leste da cidade): muro, portão a oeste, pátio no meio
 export const QUARTEL = { x0: 150, x1: 250, z0: 966, z1: 1086, portao: { x: 146, z: 1053 }, patio: { x: 190, z: 1026 } };
 
@@ -71,6 +79,7 @@ export function altura(x, z) {
   }
   const i = Math.round((x - quadC(0)) / PASSO), j = Math.round((z - quadC(0)) / PASSO);
   if (blocosMetro.has(i + ',' + j) && Math.abs(x - quadC(i)) < QB / 2 && Math.abs(z - quadC(j)) < QB / 2) return 0.18;
+  if (z < -1150) return morro(x, z);
   return null;
 }
 // mantém o jogador nas áreas andáveis (a ferrovia só se cruza de trem)
@@ -443,14 +452,14 @@ function gerarCidade(cid) {
   }
   // em volta: a mata (dá para andar nela; as árvores perto do caminho têm colisão)
   const Q = QUARTEL;
-  for (let k = 0; k < 420; k++) {
-    const x = entre(-300, 300), z = s * entre(898, 1240);
+  for (let k = 0; k < (cid.id === 'norte' ? 560 : 420); k++) {
+    const x = entre(-300, 300), z = s * entre(898, cid.id === 'norte' ? 1390 : 1240);
     if (Math.abs(x) < 95 && Math.abs(z) < 1118) continue;
     if (cid.id === 'sul' && Math.abs(z) > 1112) continue;
     if (Math.abs(x) < 50 && Math.abs(z) < 935) continue;
     if (cid.id === 'sul' && x > Q.x0 - 18 && x < Q.x1 + 18 && z > Q.z0 - 18 && z < Q.z1 + 18) continue;   // terreno do quartel
     if (cid.id === 'sul' && x > 80 && x < Q.x0 && Math.abs(z - Q.portao.z) < 9) continue;            // estrada do quartel
-    const longe = Math.abs(x) > 300 || Math.abs(z) > 1172;
+    const longe = Math.abs(x) > 300 || Math.abs(z) > 1392;
     arvore(x, z, entre(0.9, 1.7), !longe);
   }
   // arbustos baixos no chão da mata
@@ -487,11 +496,9 @@ function montarQuartel() {
     extrasMesh.push({ geo: [3.4, 2.2, 3.4], cor: '#5e6b45', pos: [x, 9.1, z] });
     extrasMesh.push({ geo: [4, 0.3, 4], cor: '#3b4430', pos: [x, 10.35, z] });
   }
-  // prédios: comando, alojamento e garagem (verde-oliva e areia)
-  predio(cx + 26, Q.z0 + 16, 34, 18, 10.5, { y: 0.12, cor: '#c9bd8f', loja: false });       // comando
+  // prédios fechados: alojamento e paiol (o comando, com interior, e a garagem aberta ficam no civico.js)
   predio(cx + 26, Q.z1 - 15, 34, 16, 7, { y: 0.12, cor: '#9aa070', loja: false });          // alojamento
-  predio(Q.x0 + 16, Q.z1 - 13, 22, 14, 6.5, { y: 0.12, cor: '#7d8462', loja: false, det: false });   // garagem
-  predio(Q.x0 + 16, Q.z0 + 12, 18, 12, 5, { y: 0.12, cor: '#8f9470', loja: false, det: false });     // paiol
+  predio(Q.x0 + 13, Q.z0 + 11, 16, 12, 5, { y: 0.12, cor: '#8f9470', loja: false, det: false });     // paiol
   // pátio de formatura e mastro
   calcadas.push([Q.patio.x, Q.patio.z, 40, 34, 0.14]);
   extrasMesh.push({ geo: [0.25, 12, 0.25], cor: '#d8d8d0', pos: [Q.patio.x + 22, 6, Q.patio.z] });
@@ -607,7 +614,7 @@ function montarMalhas() {
   // arbustos da mata (sem colisão)
   if (arbustos.length) {
     const ab = new THREE.InstancedMesh(geoCopa([[0, 0.45, 0, 0.7], [0.55, 0.3, 0.2, 0.5], [-0.5, 0.3, -0.2, 0.55]]), MAT.copa, arbustos.length);
-    arbustos.forEach(([x, z, e], k) => { _m.compose(_v.set(x, 0, z), _q.setFromAxisAngle(_e.set(0, 1, 0), x * 3.1), _e.set(e, e * 0.8, e)); ab.setMatrixAt(k, _m); ab.setColorAt(k, _c.set(['#4f7d36', '#5b8a3c', '#466f33'][k % 3])); });
+    arbustos.forEach(([x, z, e], k) => { _m.compose(_v.set(x, altura(x, z) ?? 0, z), _q.setFromAxisAngle(_e.set(0, 1, 0), x * 3.1), _e.set(e, e * 0.8, e)); ab.setMatrixAt(k, _m); ab.setColorAt(k, _c.set(['#4f7d36', '#5b8a3c', '#466f33'][k % 3])); });
     ab.receiveShadow = true; scene.add(ab);
   }
 }
@@ -634,11 +641,15 @@ function montarChaos() {
   for (const s of [-1, 1]) for (const [a, b] of [[-CORREDOR, -10], [10, CORREDOR]]) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(b - a, 1.4, 0.3), cerca); m.position.set((a + b) / 2, 0.7, s * (BORDA - 2)); m.castShadow = true; ctx.scene.add(m);
   }
-  // morros atrás de Vila Serra
+  // o morro da Serra (dá para subir) e, bem longe, a serra de fundo
+  const W = 900, D = 380, geo = new THREE.PlaneGeometry(W, D, 90, 38).rotateX(-Math.PI / 2);
+  const pp = geo.attributes.position;
+  for (let k = 0; k < pp.count; k++) { const x = pp.getX(k), z = pp.getZ(k) - 1340; pp.setY(k, morro(x, z) + 0.05); }
+  geo.computeVertexNormals();
+  const terreno = new THREE.Mesh(geo, MAT.campo); terreno.position.z = -1340; terreno.receiveShadow = true; ctx.scene.add(terreno);
   const cone = new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0);
   const morros = [];
-  for (let k = 0; k < 26; k++) morros.push([entre(-700, 700), -entre(1180, 1420), entre(70, 170), entre(45, 120)]);
-  for (let k = 0; k < 14; k++) { const s = rnd() < 0.5 ? -1 : 1; morros.push([s * entre(320, 700), s * 0 + (rnd() < 0.5 ? -1 : 1) * entre(700, 900), entre(60, 130), entre(25, 60)]); }
+  for (let k = 0; k < 22; k++) morros.push([entre(-900, 900), -entre(1620, 1850), entre(90, 180), entre(70, 140)]);
   const im = new THREE.InstancedMesh(cone, MAT.morro, morros.length);
   morros.forEach(([x, z, r, h], k) => { _m.compose(_v.set(x, 0, z), _q.identity(), _e.set(r, h, r)); im.setMatrixAt(k, _m); im.setColorAt(k, _c.set(escolher(['#7d8f63', '#6f8259', '#8a9a6c', '#76866a']))); });
   im.receiveShadow = true; ctx.scene.add(im);

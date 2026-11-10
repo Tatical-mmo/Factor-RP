@@ -16,7 +16,7 @@ const ACOES = {
   perdoar: 'perdoou',
   moedas: 'mudou as moedas de', banir: 'baniu', desbanir: 'desbaniu', algemar: 'algemou', soltar_algemas: 'tirou as algemas de',
   prender: 'prendeu', soltar: 'soltou da cadeia', teleporte: 'teleportou', cargo: 'mudou o cargo de',
-  prefeito_nomeado: 'nomeou como prefeito', prefeito_afastado: 'afastou o prefeito', eleicao_convocada: 'convocou eleição extraordinária',
+  prefeito_nomeado: 'nomeou como prefeito', prefeito_afastado: 'afastou o prefeito', eleicao_convocada: 'convocou eleição extraordinária', patente: 'mudou a patente de', reset_mapa: 'resetou o mapa',
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -184,6 +184,13 @@ function abaEu() {
   if (pode('imortal')) h += `<div class="sub">Modo imortal</div><div class="botoes"><button id="pImortal" class="${eu.imortal ? 'ativo' : ''}">${eu.imortal ? 'Imortal: ligado' : 'Imortal: desligado'}</button></div>`;
   if (eu.cargo === 'admin') h += '<div class="sub">Evento: arma dourada</div><p class="dica">Esconde a arma dourada (2 balas) exatamente onde você está. Quem achar pega; depois dos 2 tiros ela some.</p><div class="botoes"><button id="pArmaPd">✨ Esconder a arma dourada aqui</button></div>';
   if (eu.cargo === 'admin') h += '<div class="sub">Prefeitura</div><div id="pPref" class="dica">Carregando…</div>';
+  if (eu.cargo === 'admin') {
+    h += `<div class="sub">Resetar o mapa</div><p class="dica">Para deixar o mapa limpo antes de abrir para os jogadores. As contas continuam; a equipe mantém o cargo. <b>Não dá para desfazer.</b></p>
+      <div class="poderes">${[['moradia', 'Casas, terrenos, prédios e baús'], ['empresas', 'Empresas, veículos, pedidos e carros dos jogadores'], ['clas', 'Clãs, guerras e territórios'],
+        ['jogadores', 'Moedas, mochila, carreiras, crimes, banco e personagens comprados'], ['prefeitura', 'Prefeito, eleição, cofre, outdoors e notícias']]
+        .map(([k, t]) => `<label><input type="checkbox" data-reset="${k}" checked> ${t}</label>`).join('')}</div>
+      <div class="botoes"><input id="pResetConf" placeholder="Digite RESETAR"><button id="pReset" class="perigo">🧹 Resetar o mapa</button></div>`;
+  }
   if (pode('teleportar')) h += `<div class="sub">Teleportar para</div><div class="botoes">${ctx.locais().map((l, i) => `<button data-local="${i}">${esc(l.nome)}</button>`).join('')}</div>`;
   h += `<div class="sub">Skin (grátis para a equipe)</div><div class="skins">${[...ROBOS.map((id) => ({ id, nome: id === 'Rusty_Scout_Bot' ? 'Robô Batedor' : 'Robô Sentinela' })), ...PERSONAGENS]
     .map((p) => `<button class="skin ${p.id === eu.personagem ? 'sel' : ''}" data-skin="${p.id}"><img src="assets/miniaturas/${p.id}.webp" alt=""><span>${esc(p.nome)}</span></button>`).join('')}</div>`;
@@ -193,6 +200,10 @@ function abaEu() {
   c.querySelectorAll('[data-local]').forEach((x) => { x.onclick = () => { const l = ctx.locais()[x.dataset.local]; ctx.teleportar(l.x, l.z); msg('Teleportado: ' + l.nome); }; });
   c.querySelectorAll('[data-skin]').forEach((x) => { x.onclick = () => executar(() => rede.painel.skin(x.dataset.skin), 'Skin trocada.'); });
   if (eu.cargo === 'admin') blocoPrefeitura();
+  const br = $('pReset'); if (br) br.onclick = () => {
+    const partes = [...c.querySelectorAll('[data-reset]')].filter((x) => x.checked).map((x) => x.dataset.reset);
+    if (confirmarDuplo('pReset', '🧹 Resetar o mapa')) executar(() => rede.painel.resetarMundo(partes, $('pResetConf').value.trim()), 'Mapa resetado. Todos foram avisados.');
+  };
 }
 // estado da prefeitura e ações do administrador (nomear é na ficha do jogador)
 async function blocoPrefeitura() {
