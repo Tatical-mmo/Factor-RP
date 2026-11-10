@@ -3149,7 +3149,10 @@ function danoLocal(v) {
 // polícia NPC: apanha, cai e revida (atira em quem bateu nela)
 function acertarPoliciaNPC(n, dano) {
   if (n.caido > 0) return;
-  n.vida -= dano; n.hostil = 30;
+  n.vida -= dano; n.hostil = 60;
+  // quem atira em um policial vira alvo de todos os policiais por perto e das viaturas
+  jogador.atacouPolicia = performance.now();
+  for (const m of npcs) if (m.policia && m !== n && m.caido <= 0 && m.av.raiz.position.distanceTo(n.av.raiz.position) < 70) { if (!(m.hostil > 0)) m.av.tocar('run', { velocidade: 1 }); m.hostil = Math.max(m.hostil || 0, 60); }
   rede.crime.agredirNpc().catch(() => {});
   if (n.vida <= 0) { n.caido = 20; n.av.tocar('death', { umaVez: true, velocidade: 1, fade: 0.1 }); aviso('Você derrubou um policial! Está PROCURADO.', 3); }
   else { n.av.tocar('hit', { umaVez: true, velocidade: 1.4, fade: 0.08 }); if (n.vida <= dano) aviso('A polícia está atirando em você!', 2); }
@@ -3165,16 +3168,18 @@ function policiaNPCReage(n, dt) {
   if (n.hostil <= 0) return false;
   n.hostil -= dt;
   const dx = jogador.pos.x - p.x, dz = jogador.pos.z - p.z, d = Math.hypot(dx, dz);
-  if (jogador.morto || d > 45 || n.hostil <= 0) { n.hostil = 0; n.av.tocar('walk', { velocidade: 0.85 }); return false; }
+  if (jogador.morto || d > 90 || n.hostil <= 0) { n.hostil = 0; n.av.tocar('walk', { velocidade: 0.85 }); return false; }
   n.av.raiz.rotation.y = suavizarAngulo(n.av.raiz.rotation.y, Math.atan2(dx, dz), dt * 8);
-  if (d > 7) { p.x += dx / d * 3.6 * dt; p.z += dz / d * 3.6 * dt; n.av.tocar('run', { velocidade: 1 }); }
+  // revida: corre atrás atirando (mais rápido e mais certeiro que antes)
+  if (d > 9) { p.x += dx / d * 5 * dt; p.z += dz / d * 5 * dt; n.av.tocar('run', { velocidade: 1.1 }); }
   else n.av.tocar('idle');
   n.tiro -= dt;
-  if (d < 16 && n.tiro <= 0) {
-    n.tiro = 1.3;
-    const de = new THREE.Vector3(p.x, p.y + 1.4, p.z), t = Math.max(0.15, d / 24);
-    criarBola(de, new THREE.Vector3(dx / t, (jogador.pos.y + 1 - de.y) / t + 4.9 * t, dz / t), '#3ea8ff');
-    setTimeout(() => { if (Math.random() < 0.75) danoLocal(8); }, t * 1000);
+  if (d < 26 && n.tiro <= 0) {
+    n.tiro = 0.75 + Math.random() * 0.25;
+    const de = new THREE.Vector3(p.x, p.y + 1.4, p.z), t = Math.max(0.12, d / 30);
+    criarBola(de, new THREE.Vector3(dx / t, (jogador.pos.y + 1 - de.y) / t + 4.9 * t, dz / t), '#ffd23e');
+    const acerto = jogador.carro ? 0.55 : d < 12 ? 0.85 : 0.65;
+    setTimeout(() => { if (Math.random() < acerto && !jogador.morto) { jogador.ultimoAgressor = null; danoLocal(14); } }, t * 1000);
   }
   n.av.mixer.update(dt); return true;
 }
@@ -4191,7 +4196,8 @@ function criarViaturas() {
 }
 function atualizarViaturas(dt) {
   const t = performance.now() / 1000, j = jogador;
-  const cacado = (j.perfil?.recompensa || 0) > 0 && !j.morto && !(j.pena > 0) && !j.dentroCasa && !j.trem;
+  const atacou = performance.now() - (j.atacouPolicia || -1e9) < 120000 && (j.perfil?.crimes || 0) > 0;
+  const cacado = ((j.perfil?.recompensa || 0) > 0 || atacou) && !j.morto && !(j.pena > 0) && !j.dentroCasa && !j.trem;
   for (const v of viaturas) {
     const o = v.obj;
     civico.atualizarSirenes(v.perseguindo || remotoAtivo(v) ? t : 0, o);
@@ -4203,7 +4209,7 @@ function atualizarViaturas(dt) {
     }
     if (cacado) {
       const dx = j.pos.x - o.position.x, dz = j.pos.z - o.position.z, d = Math.hypot(dx, dz);
-      if (!v.perseguindo && d < 90) { v.perseguindo = true; aviso('🚓 Uma viatura da polícia está atrás de você!', 3); }
+      if (!v.perseguindo && d < (atacou ? 160 : 90)) { v.perseguindo = true; aviso(atacou ? '🚓 Você atirou na polícia: as viaturas estão vindo!' : '🚓 Uma viatura da polícia está atrás de você!', 3); }
       if (v.perseguindo && d > 220) v.perseguindo = false;
       if (v.perseguindo) {
         const vel = j.carro ? 12 : 8.5;

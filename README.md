@@ -464,3 +464,16 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Com uma arma nova sacada (Polícia, PRF, Exército, militar ou pesada), ou dirigindo o tanque, aparece uma mira que só você vê: uma linha tracejada com a curva da tinta e um círculo onde o tiro vai cair.
 - A mira tem a cor da sua tinta e fica vermelha quando o tiro vai pegar em alguém.
 - A arma básica continua sem mira.
+
+## Versão 10/11 (q) · salários no painel
+- Nova aba "Salários" no painel (só administrador). Ela mostra e permite mudar:
+  - Polícia: o mesmo valor que o prefeito define (50 a 250).
+  - PRF, Hospital, Bombeiros, Jornal e Exército: valor base por minuto em serviço, multiplicado pela patente.
+  - Prefeito: valor por ciclo jogado.
+  - Moderadores: valor por dia, de cada um.
+- SQL desta versão: **38_salarios.sql**.
+
+## Versão 10/11 (r) · polícia mais perigosa
+- Procurado que não atira continua sendo só perseguido e preso quando o policial robô encosta.
+- Quem atira em um policial robô vira alvo de todos os policiais num raio de 70 m, por 60 s. Eles correm atrás atirando (tinta amarela), com mais alcance (26 m), tiros mais rápidos (menos de 1 s), mais dano (14) e mais pontaria. Dentro do carro é mais difícil de acertar.
+- As viaturas também vêm atrás de quem atirou na polícia, por 2 minutos, mesmo sem recompensa, e prendem quando alcançam.
