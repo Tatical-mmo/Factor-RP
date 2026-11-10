@@ -644,6 +644,17 @@ class Avatar {
   }
 }
 
+// "parado" padrão para todos: o idle do robô, só rotações (cada esqueleto fica na própria altura)
+let idlePadrao = null;
+async function obterIdlePadrao() {
+  if (idlePadrao) return idlePadrao;
+  idlePadrao = (async () => {
+    const g = await carregarGLB('assets/robos/Rusty_Scout_Bot.glb');
+    const c = g.animations.find((a) => a.name === 'idle'); if (!c) return null;
+    return new THREE.AnimationClip('idle', c.duration, c.tracks.filter((t) => t.name.endsWith('.quaternion')).map((t) => t.clone()));
+  })().catch(() => null);
+  return idlePadrao;
+}
 async function criarAvatar(pasta, id) {
   let gltf;
   // procura em assets/<pasta>/ e, para os personagens de evento, também em personagens/ (onde o robô colocou);
@@ -652,7 +663,10 @@ async function criarAvatar(pasta, id) {
     try { gltf = await carregarGLB(url); break; } catch (e) { console.warn('modelo não carregou:', url, e); }
   }
   const modelo = SkeletonUtils.clone(gltf.scene);
-  if (!gltf.userData.clipes) gltf.userData.clipes = prepararClipes(gltf.animations);
+  if (!gltf.userData.clipes) {
+    const idle = pasta === 'personagens' ? await obterIdlePadrao() : null;
+    gltf.userData.clipes = prepararClipes(idle ? [...gltf.animations.filter((a) => a.name !== 'idle'), idle] : gltf.animations);
+  }
   return new Avatar(modelo, gltf.userData.clipes);
 }
 
@@ -3229,7 +3243,7 @@ function atualizarSons() {
   for (const o of servicos.veiculosNpc()) {
     const nome = o.userData.sireneDe; if (nome && andando(o)) sons.continuo(nome, 0.55 * sons.perto(dist(o), 75));
   }
-  if (jogador.carro?.servico && jogador.carro.servico !== 'militar' && Math.abs(jogador.carro.vel) > 0.8) sons.continuo(jogador.carro.servico === 'ambulancia' ? 'sirene_ambulancia' : 'sirene_bombeiros', 0.45);
+  if ((jogador.carro?.servico === 'ambulancia' || jogador.carro?.servico === 'bombeiros') && Math.abs(jogador.carro.vel) > 0.8) sons.continuo(jogador.carro.servico === 'ambulancia' ? 'sirene_ambulancia' : 'sirene_bombeiros', 0.45);
   for (const r of remotos.values()) if (r.carro && (r.carroModelo === 'ambulancia' || r.carroModelo === 'bombeiros') && andando(r.carro)) sons.continuo(r.carroModelo === 'ambulancia' ? 'sirene_ambulancia' : 'sirene_bombeiros', 0.5 * sons.perto(dist(r.carro), 75));
   for (const v of viaturas) if ((v.perseguindo || remotoAtivo(v)) && andando(v.obj)) sons.continuo('sirene_policia', 0.6 * sons.perto(dist(v.obj), 85));
   // helicópteros: som de perto do chão e som do alto, conforme a altura
@@ -3240,6 +3254,14 @@ function atualizarSons() {
     const dentro = jogador.carro?.caminhao === c.d.id || jogador.passageiro?.c === c, vol = dentro ? 0.6 : 0.55 * sons.perto(dist(c.obj), 110);
     const k = THREE.MathUtils.clamp(alt / 12, 0, 1);
     sons.continuo('helicoptero_baixo', vol * (1 - k)); sons.continuo('helicoptero_alto', vol * k);
+  }
+  // helicópteros dos jogadores (executivo e do Exército): o mesmo som do helicóptero das empresas
+  const somHeli = (alt, vol) => { const k = THREE.MathUtils.clamp(alt / 12, 0, 1); sons.continuo('helicoptero_baixo', vol * (1 - k)); sons.continuo('helicoptero_alto', vol * k); };
+  if (jogador.carro?.voa && !jogador.carro.caminhao) somHeli(jogador.carro.alt || 0, 0.6);
+  if (jogador.passageiro?.piloto) { const o = jogador.passageiro.c.obj; if (civico.CARROS[remotos.get(jogador.passageiro.piloto)?.carroModelo]?.voa) somHeli(o.position.y - alturaChao(o.position.x, o.position.z), 0.6); }
+  for (const r of remotos.values()) {
+    if (!r.carro || !civico.CARROS[r.carroModelo]?.voa || jogador.passageiro?.piloto && remotos.get(jogador.passageiro.piloto) === r) continue;
+    somHeli(r.carro.position.y - alturaChao(r.carro.position.x, r.carro.position.z), 0.55 * sons.perto(dist(r.carro), 110));
   }
   // trem: barulho dentro e perto; buzina quando passa perto
   const trens = ferrovia.andando();

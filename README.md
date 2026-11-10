@@ -421,3 +421,8 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 ## Versão 10/11 (h) · personagens de evento carregando
 - O Robô separador colocou os 18 modelos em `personagens/` em vez de `assets/personagens/`: como o zip só tinha a pasta `assets`, o robô tirou essa pasta de cima. O jogo agora procura o modelo nos dois lugares.
 - Daqui para a frente os pacotes sempre vêm com mais de uma coisa na raiz, para isso não acontecer de novo.
+
+## Versão 10/11 (i) · pose parado e sons
+- Todos os personagens usam a mesma pose de "parado" dos personagens novos (o idle do robô). Cada um fica na própria altura.
+- Helicópteros dos jogadores (executivo e do Exército) tocam o mesmo som do primeiro helicóptero: rotor perto do chão e no alto, conforme a altura, para quem pilota, para os passageiros e para quem está perto.
+- O jipe e o caminhão do Exército ficam sem som (antes tocavam a sirene dos bombeiros por engano).
