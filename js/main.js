@@ -646,10 +646,10 @@ class Avatar {
 
 async function criarAvatar(pasta, id) {
   let gltf;
-  try { gltf = await carregarGLB(`assets/${pasta}/${id}.glb`); }
-  catch (e) {   // modelo que ainda não subiu: usa um personagem padrão para o jogo não travar
-    console.warn('personagem não carregou, usando o padrão:', id, e);
-    gltf = await carregarGLB('assets/personagens/Autumn_Traveler.glb');
+  // procura em assets/<pasta>/ e, para os personagens de evento, também em personagens/ (onde o robô colocou);
+  // se não achar, usa um personagem padrão para o jogo não travar
+  for (const url of [`assets/${pasta}/${id}.glb`, `${pasta}/${id}.glb`, 'assets/personagens/Autumn_Traveler.glb']) {
+    try { gltf = await carregarGLB(url); break; } catch (e) { console.warn('modelo não carregou:', url, e); }
   }
   const modelo = SkeletonUtils.clone(gltf.scene);
   if (!gltf.userData.clipes) gltf.userData.clipes = prepararClipes(gltf.animations);
