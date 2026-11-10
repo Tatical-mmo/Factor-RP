@@ -1419,7 +1419,8 @@ const ARMAS = {
 const ARMA_POR_COD = Object.fromEntries(Object.entries(ARMAS).map(([k, a]) => [a.cod, k]));
 function tipoArma() {
   const p = jogador.perfil; if (!p) return 'basica';
-  if (p.profissao === 'exercito' && jogador.armaPesada && p.arma_pesada_ate && Date.parse(p.arma_pesada_ate) > agoraServidor()) return 'pesada';
+  const general = p.cargo === 'admin';
+  if (jogador.armaPesada && (general || (p.profissao === 'exercito' && p.arma_pesada_ate && Date.parse(p.arma_pesada_ate) > agoraServidor()))) return 'pesada';
   if (militar()) return 'exercito';   // militar em serviço (o General Supremo sempre)
   if (p.policial) return 'policia';
   if (p.prf) return 'prf';
@@ -3929,6 +3930,7 @@ let cacada = null, tempoCacada = 5, tempoArma = 1;
 function usarArsenal() {
   const p = jogador.perfil;
   if (jogador.armaPesada) { jogador.armaPesada = false; conferirArma(); aviso('Arma pesada guardada no arsenal.', 2); return; }
+  if (p?.cargo === 'admin') { jogador.armaPesada = true; conferirArma(); aviso('💥 General Supremo: arma pesada equipada. Saque com o botão Arma.', 3.5); return; }
   if (p?.profissao !== 'exercito') { aviso('O arsenal é só para militares em serviço.', 2.5); return; }
   if (!p.arma_pesada_ate || Date.parse(p.arma_pesada_ate) < agoraServidor()) { aviso('Você precisa da autorização de um Tenente para cima (ou do General Supremo) para pegar a arma pesada.', 3.5); return; }
   jogador.armaPesada = true; conferirArma();

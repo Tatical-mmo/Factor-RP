@@ -446,3 +446,6 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 ## Versão 10/11 (l) · correção: armas novas não apareciam
 - A troca de arma no meio do jogo encaixava a arma na mão contando com o personagem parado na origem e virado para a frente. Com o personagem em outro lugar ou virado, a arma ia parar fora da mão. Agora o encaixe é calculado com o personagem na origem e depois ele volta para onde estava.
 - O General Supremo (administrador) usa sempre a arma do Exército.
+
+## Versão 10/11 (m) · General Supremo armado
+- O General Supremo (administrador) pega a arma pesada no Arsenal sem precisar de autorização, mesmo sem estar alistado. Tocar de novo no Arsenal guarda a arma pesada e volta para a arma do Exército.
