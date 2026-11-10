@@ -459,3 +459,8 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Pontos pelo anel acertado (10 na mosca), multiplicados pela distância. O total da sessão aparece na tela.
 - Virado para um alvo do estande, o tiro sai na curva certa para compensar a queda da tinta, assim os alvos de longe também podem ser acertados.
 - Atalho "Estande de tiro" no teleporte do painel.
+
+## Versão 10/11 (p) · mira das armas novas
+- Com uma arma nova sacada (Polícia, PRF, Exército, militar ou pesada), ou dirigindo o tanque, aparece uma mira que só você vê: uma linha tracejada com a curva da tinta e um círculo onde o tiro vai cair.
+- A mira tem a cor da sua tinta e fica vermelha quando o tiro vai pegar em alguém.
+- A arma básica continua sem mira.

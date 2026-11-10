@@ -2815,6 +2815,48 @@ function golpeSoco() {
   const c = caminhaoProximo(3.4);
   if (c) atacarCaminhao(c);
 }
+// mira das armas novas (e do tanque): só quem está usando vê. Mostra a curva da tinta e onde ela vai cair;
+// o círculo fica vermelho quando o tiro vai pegar em alguém.
+let mira = null;
+function criarMira() {
+  const N = 40, geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+  const linha = new THREE.Line(geo, new THREE.LineDashedMaterial({ color: '#ffffff', dashSize: 0.35, gapSize: 0.25, transparent: true, opacity: 0.85, depthTest: false }));
+  const anel = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.4, 28), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false }));
+  const ponto = new THREE.Mesh(new THREE.CircleGeometry(0.07, 12), anel.material);
+  anel.add(ponto); linha.renderOrder = anel.renderOrder = 999; linha.frustumCulled = false;
+  scene.add(linha, anel); mira = { linha, anel, N };
+}
+function atualizarMira() {
+  const j = jogador, tanque = j.carro?.servico === 'tanque';
+  const ligada = j.avatar && !j.morto && (tanque || (j.armado && !j.carro && j.armaTipo && j.armaTipo !== 'basica'));
+  if (!ligada) { if (mira) mira.linha.visible = mira.anel.visible = false; return; }
+  if (!mira) criarMira();
+  const A = ARMAS[j.armaTipo] || ARMAS.basica, f = new THREE.Vector3(Math.sin(j.yaw), 0, Math.cos(j.yaw));
+  let boca, v;
+  if (tanque) { const m = j.carro.mesh.position; boca = new THREE.Vector3(m.x, m.y + 2.2, m.z).addScaledVector(f, 4.6); v = f.clone().multiplyScalar(36).add(new THREE.Vector3(0, 2.2, 0)); }
+  else {
+    j.avatar.raiz.updateMatrixWorld(true);
+    boca = j.arma.localToWorld(new THREE.Vector3(...(modelos[A.modelo] ? A.boca : ARMAS.basica.boca)));
+    const vy = miraNoAlvo(boca, f, A.vel); v = f.clone().multiplyScalar(A.vel).add(new THREE.Vector3(0, vy ?? 1.2 * 24 / A.vel, 0));
+  }
+  const cor = tanque ? '#1f9e46' : A.cor || '#ffffff';
+  const pos = mira.linha.geometry.attributes.position, p = boca.clone(), vel = v.clone();
+  let n = 0, fim = p.clone(), alguem = false, dtp = tanque ? 0.07 : 0.05;
+  for (; n < mira.N; n++) {
+    pos.setXYZ(n, p.x, p.y, p.z); fim.copy(p);
+    for (const r of remotos.values()) if (r.av?.raiz.visible && Math.hypot(p.x - r.av.raiz.position.x, p.z - r.av.raiz.position.z) < 0.6 && p.y > r.av.raiz.position.y && p.y < r.av.raiz.position.y + 2) alguem = true;
+    for (const nn of npcs) if (nn.policia && nn.caido <= 0 && Math.hypot(p.x - nn.av.raiz.position.x, p.z - nn.av.raiz.position.z) < 0.6) alguem = true;
+    if (alguem || p.y <= alturaChao(p.x, p.z) + 0.03 || colisores.some((c) => c.tipo === 'caixa' && p.x > c.x0 && p.x < c.x1 && p.z > c.z0 && p.z < c.z1 && p.y < 7)) { n++; break; }
+    vel.y -= 9.8 * dtp; p.addScaledVector(vel, dtp);
+  }
+  for (let k = n; k < mira.N; k++) pos.setXYZ(k, fim.x, fim.y, fim.z);
+  pos.needsUpdate = true; mira.linha.geometry.setDrawRange(0, n); mira.linha.computeLineDistances();
+  mira.linha.material.color.set(cor);
+  mira.anel.material.color.set(alguem ? '#ff3030' : cor);
+  mira.anel.position.copy(fim); mira.anel.quaternion.copy(camera.quaternion);
+  mira.anel.scale.setScalar(tanque ? 2.2 : 1);
+  mira.linha.visible = mira.anel.visible = true;
+}
 // no estande, a mira compensa a queda da tinta: se você está virado para um alvo, o tiro sai na curva certa até ele
 function miraNoAlvo(boca, dir, vel) {
   if (!militar()) return null;
@@ -4965,6 +5007,7 @@ function quadro() {
   atualizarCacada(dt);
   tempoArma -= dt; if (tempoArma <= 0) { tempoArma = 0.5; conferirArma(); }
   atualizarExplosoes(dt);
+  atualizarMira();
   civico.atualizarQuartel(jogador.pos);
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
