@@ -634,6 +634,10 @@ class Avatar {
   }
   // segura a arma: calcula o encaixe na mão a partir da pose de mira
   encaixarArma(arma, pegaArma = [0, 0.1, -0.11]) {
+    // calcula com o personagem na origem, virado para +Z (no meio do jogo ele pode estar em qualquer lugar e direção)
+    const pos0 = this.raiz.position.clone(), rot0 = this.raiz.rotation.y, nome0 = this.nomeAtual;
+    this.raiz.position.set(0, 0, 0); this.raiz.rotation.y = 0;
+    if (arma.parent) arma.parent.remove(arma);
     const a = this.acao('mirar'); a.reset().play(); this.mixer.setTime(0.6);
     this.raiz.updateMatrixWorld(true);
     const pm = new THREE.Vector3().setFromMatrixPosition(this.maoD.matrixWorld);
@@ -645,6 +649,8 @@ class Avatar {
     arma.matrixAutoUpdate = false; arma.matrix.copy(local);
     this.maoD.add(arma);
     a.stop(); this.mixer.stopAllAction(); this.atual = null; this.nomeAtual = '';
+    this.raiz.position.copy(pos0); this.raiz.rotation.y = rot0; this.raiz.updateMatrixWorld(true);
+    if (nome0) this.tocar(nome0, { fade: 0 });
   }
 }
 
@@ -1414,7 +1420,7 @@ const ARMA_POR_COD = Object.fromEntries(Object.entries(ARMAS).map(([k, a]) => [a
 function tipoArma() {
   const p = jogador.perfil; if (!p) return 'basica';
   if (p.profissao === 'exercito' && jogador.armaPesada && p.arma_pesada_ate && Date.parse(p.arma_pesada_ate) > agoraServidor()) return 'pesada';
-  if (p.profissao === 'exercito') return 'exercito';
+  if (militar()) return 'exercito';   // militar em serviço (o General Supremo sempre)
   if (p.policial) return 'policia';
   if (p.prf) return 'prf';
   if (p.arma_militar && jogador.claInfo) return 'militar';

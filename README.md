@@ -442,3 +442,7 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Tanque do Exército: fica no pátio do quartel, só para militares. O botão Atirar (F no PC) dispara o canhão de tinta, com recarga de 2,5 s. Ele explode carros, helicópteros e caminhões: quem está dentro é jogado para fora e se machuca, e o carro volta para o dono 30 s depois. O tanque não tem som.
 - Ficha militar (💼 Trabalho): quem tem patente maior vê as mortes causadas pelos militares abaixo, marcadas com ✔ (com ordem) ou ✖ (sem ordem). De Tenente para cima dá para autorizar ou tirar a arma pesada, expulsar do Exército e retirar a expulsão. Quem é expulso não consegue se alistar de novo sozinho.
 - SQL desta versão: **37_armas_tanque.sql**.
+
+## Versão 10/11 (l) · correção: armas novas não apareciam
+- A troca de arma no meio do jogo encaixava a arma na mão contando com o personagem parado na origem e virado para a frente. Com o personagem em outro lugar ou virado, a arma ia parar fora da mão. Agora o encaixe é calculado com o personagem na origem e depois ele volta para onde estava.
+- O General Supremo (administrador) usa sempre a arma do Exército.
