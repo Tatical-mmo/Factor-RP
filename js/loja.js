@@ -1,6 +1,6 @@
 // Loja e mochila (etapa 3). Toda compra, venda e refeição é feita no banco.
 import * as rede from './rede.js';
-import { PERSONAGENS, PERSONAGENS_GRATIS, PRECO_PERSONAGEM, PRECO_NOME } from './config.js';
+import { PERSONAGENS, PERSONAGENS_GRATIS, PERSONAGENS_EVENTO, PRECO_PERSONAGEM, PRECO_NOME } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -209,9 +209,13 @@ function desenhar() {
 async function desenharVisual(c) {
   $('janelaTitulo').textContent = 'Personagem e nome';
   const p = ctx.perfil();
-  let meus = [];
-  try { meus = await rede.personagens.comprados(p.id); } catch (e) { c.textContent = e.message; return; }
+  let meus = [], evento = [];
+  try { [meus, evento] = await Promise.all([rede.personagens.comprados(p.id), rede.personagens.evento().catch(() => [])]); } catch (e) { c.textContent = e.message; return; }
   if (modo !== 'visual') return;
+  const ev = new Map((evento || []).map((x) => [x.id, x])), admin = p.cargo === 'admin', agora = Date.now();
+  const aberto = (id) => { const x = ev.get(id); return x?.liberado_ate && Date.parse(x.liberado_ate) > agora; };
+  const hora = (t) => new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const algumAberto = PERSONAGENS_EVENTO.some((x) => aberto(x.id));
   const tem = (id) => PERSONAGENS_GRATIS.includes(id) || meus.includes(id);
   c.innerHTML = `<p class="dica">Moedas: <b>${moedas()}</b>. Personagem comprado fica seu para sempre: troque quando quiser, de graça.</p>
     <div class="sub">Nome</div>
@@ -220,7 +224,15 @@ async function desenharVisual(c) {
     <div class="grade pequena">${PERSONAGENS.map((x) => `<div class="carta"><img src="assets/miniaturas/${x.id}.webp" alt="" loading="lazy"><div>${esc(x.nome)}</div>
       ${p.personagem === x.id ? '<button class="acao em-uso" disabled>Em uso</button>'
         : tem(x.id) ? `<button class="acao" data-usar="${x.id}">Usar</button>`
-        : `<button class="acao" data-comprar-p="${x.id}">🔒 ${PRECO_PERSONAGEM.toLocaleString('pt-BR')}</button>`}</div>`).join('')}</div>`;
+        : `<button class="acao" data-comprar-p="${x.id}">🔒 ${PRECO_PERSONAGEM.toLocaleString('pt-BR')}</button>`}</div>`).join('')}</div>
+    <div class="sub">✨ Personagens de evento</div>
+    <p class="dica">${algumAberto ? '<b>Vitrine aberta!</b> Compre antes que feche.' : 'Só ficam à venda quando a administração abre a vitrine do evento. Fique de olho nos avisos.'}</p>
+    <div class="grade pequena">${PERSONAGENS_EVENTO.map((x) => { const e = ev.get(x.id), meu = meus.includes(x.id) || admin;
+      return `<div class="carta"><img src="assets/miniaturas/${x.id}.webp" alt="" loading="lazy"><div>${esc(x.nome)}</div>
+      ${p.personagem === x.id ? '<button class="acao em-uso" disabled>Em uso</button>'
+        : meu ? `<button class="acao" data-usar${admin ? '-adm' : ''}="${x.id}">Usar</button>`
+        : aberto(x.id) ? `<button class="acao" data-comprar-p="${x.id}">✨ ${Number(e.preco).toLocaleString('pt-BR')}</button><small>até ${hora(e.liberado_ate)}</small>`
+        : `<button class="acao" disabled>🔒 Fora da vitrine</button>`}</div>`; }).join('')}</div>`;
   $('vNomeOk').onclick = () => {
     const n = $('vNome').value.trim(), b = $('vNomeOk');
     if (!/^[\p{L}\p{N} _.-]{3,16}$/u.test(n)) { msg('Use de 3 a 16 letras, números, espaço, ponto, hífen ou _.', false); return; }
@@ -228,6 +240,7 @@ async function desenharVisual(c) {
     executar(() => rede.personagens.trocarNome(n), `Agora você se chama ${n}.`);
   };
   c.querySelectorAll('[data-usar]').forEach((b) => { b.onclick = () => executar(() => rede.personagens.usar(b.dataset.usar), 'Personagem trocado!'); });
+  c.querySelectorAll('[data-usar-adm]').forEach((b) => { b.onclick = () => executar(() => rede.painel.skin(b.dataset.usarAdm), 'Personagem trocado!'); });
   c.querySelectorAll('[data-comprar-p]').forEach((b) => {
     b.onclick = () => { if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Confirmar'; return; }
       executar(() => rede.personagens.comprar(b.dataset.comprarP), 'Personagem comprado e em uso!'); };

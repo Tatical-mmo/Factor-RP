@@ -201,6 +201,7 @@ function traduzirRpc(m) {
     'a equipe nao e cacada': 'A equipe não pode ser caçada.',
     'ele nao esta no exercito': 'Ele não está no Exército.',
     'patente invalida': 'Patente inválida.',
+    'personagem de evento fora da vitrine': 'Esse personagem de evento não está à venda agora. Fique de olho nos avisos!',
     'digite RESETAR para confirmar': 'Digite RESETAR (em maiúsculas) para confirmar.',
     'escolha o que resetar': 'Marque pelo menos uma parte para resetar.',
     'vaga preenchida': 'Essa vaga já foi preenchida.',
@@ -455,6 +456,9 @@ export const personagens = {
   usar: (p) => rpc('usar_personagem', { p_personagem: p }),
   trocarNome: (nome) => rpc('trocar_nome', { p_nome: nome }),
   comprados: async (id) => (await sel(sb.from('personagens_comprados').select('personagem').eq('jogador', id))).map((r) => r.personagem),
+  evento: () => sel(sb.from('personagens_evento').select('*')),
+  liberarEvento: (ids, minutos) => rpc('admin_liberar_evento', { p_ids: ids, p_minutos: minutos }),
+  presentear: (jogador, id) => rpc('admin_presentear_personagem', { p_jogador: jogador, p_personagem: id }),
 };
 export const receberSalario = () => rpc('receber_salario');
 

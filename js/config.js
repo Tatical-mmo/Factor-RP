@@ -20,6 +20,19 @@ export const PERSONAGENS = [
   { id: 'Urban_Wanderer', nome: 'Andarilho Urbano' },
 ];
 
+// personagens de evento: só à venda quando o administrador abre a vitrine (preço e prazo vêm do banco)
+export const PERSONAGENS_EVENTO = [
+  { id: 'Veteran_Gamekeeper', nome: 'Veterano Guarda-Caça' }, { id: 'Molten_Dread_Knight', nome: 'Cavaleiro de Lava' },
+  { id: 'Runebound_Wolfguard', nome: 'Guarda-Lobo Rúnico' }, { id: 'Anubis_Sentinel', nome: 'Sentinela de Anúbis' },
+  { id: 'Armored_Crocodile_Commando', nome: 'Comando Crocodilo' }, { id: 'Bonebound_Reaper', nome: 'Ceifador de Ossos' },
+  { id: 'Grizzled_Vanguard', nome: 'Veterano da Vanguarda' }, { id: 'Ironbraid_Warden', nome: 'Guardiã Trança de Ferro' },
+  { id: 'Raccoon_Ranger', nome: 'Guaxinim Patrulheiro' }, { id: 'Crimson_Samurai', nome: 'Samurai Carmesim' },
+  { id: 'Iron_Vanguard', nome: 'Vanguarda de Ferro' }, { id: 'Ironclad_Sentinel', nome: 'Sentinela Blindada' },
+  { id: 'Azure_Vanguard', nome: 'Vanguarda Celeste' }, { id: 'Inferno_Warden', nome: 'Guardião do Inferno' },
+  { id: 'Rustguard_Automaton', nome: 'Autômato Enferrujado' }, { id: 'Ironhide_Armadillo', nome: 'Tatu Couraçado' },
+  { id: 'Elven_Warden', nome: 'Guardiã Élfica' }, { id: 'Tidebreaker_Sentinel', nome: 'Sentinela Quebra-Mar' },
+];
+
 // grátis ao criar a conta; os outros custam 8.000 na loja de personagens (mesma lista do banco)
 export const PERSONAGENS_GRATIS = ['Autumn_Traveler', 'Bandaged_Trailblazer', 'Curly_Wanderer', 'Desert_Scout_Ava',
   'Mustached_Explorer', 'Patchwork_Scout', 'Urban_Explorer', 'Urban_Wanderer'];

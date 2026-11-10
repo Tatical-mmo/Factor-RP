@@ -1,7 +1,7 @@
 // Painel da equipe (administrador e moderadores)
 // Toda ação é conferida no banco; aqui só mostramos os botões que fazem sentido.
 import * as rede from './rede.js';
-import { PERSONAGENS, ROBOS } from './config.js';
+import { PERSONAGENS, PERSONAGENS_EVENTO, ROBOS } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const PODERES = [
@@ -16,7 +16,7 @@ const ACOES = {
   perdoar: 'perdoou',
   moedas: 'mudou as moedas de', banir: 'baniu', desbanir: 'desbaniu', algemar: 'algemou', soltar_algemas: 'tirou as algemas de',
   prender: 'prendeu', soltar: 'soltou da cadeia', teleporte: 'teleportou', cargo: 'mudou o cargo de',
-  prefeito_nomeado: 'nomeou como prefeito', prefeito_afastado: 'afastou o prefeito', eleicao_convocada: 'convocou eleição extraordinária', patente: 'mudou a patente de', reset_mapa: 'resetou o mapa',
+  prefeito_nomeado: 'nomeou como prefeito', prefeito_afastado: 'afastou o prefeito', eleicao_convocada: 'convocou eleição extraordinária', presente_personagem: 'deu um personagem para', evento_personagens: 'mexeu na vitrine do evento', patente: 'mudou a patente de', reset_mapa: 'resetou o mapa',
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -106,7 +106,7 @@ async function abrirJogador(id) {
   const eu = ctx.perfil();
   const souEu = j.id === eu.id;
   const online = ctx.online().find((o) => o.id === j.id);
-  const nome = PERSONAGENS.find((p) => p.id === j.personagem)?.nome || j.personagem;
+  const nome = [...PERSONAGENS, ...PERSONAGENS_EVENTO].find((p) => p.id === j.personagem)?.nome || j.personagem;
   const equipe = j.cargo !== 'jogador';
   let h = `<button class="voltar" id="pVoltar">‹ Voltar</button>
     <div class="ficha"><img src="assets/miniaturas/${esc(j.personagem)}.webp" alt="">
@@ -134,6 +134,7 @@ async function abrirJogador(id) {
       ${j.banido ? '<button id="pDesbanir">Desbanir</button>' : '<input id="pMotivo" placeholder="Motivo"><button id="pBanir" class="perigo">Banir</button>'}</div>`;
   }
   if (eu.cargo === 'admin' && !j.banido) {
+    h += `<div class="sub">Presentear personagem de evento</div><div class="botoes"><select id="pPresSel">${PERSONAGENS_EVENTO.map((x) => `<option value="${x.id}">${esc(x.nome)}</option>`).join('')}</select><button id="pPresente">🎁 Presentear</button></div>`;
     h += `<div class="sub">Prefeitura</div><div class="botoes">${ctx.prefeito?.() === j.id ? '<small>🏛️ É o prefeito atual.</small>' : '<button id="pPrefeito">🏛️ Nomear prefeito</button>'}</div>`;
   }
   if (eu.cargo === 'admin' && !souEu && j.cargo !== 'admin') {
@@ -162,6 +163,7 @@ async function abrirJogador(id) {
   on('pDesbanir', () => executar(() => rede.painel.desbanir(j.id), `${j.nome} foi desbanido.`));
   on('pCargo', () => executar(() => rede.painel.definirCargo(j.id, j.cargo === 'moderador' ? 'jogador' : 'moderador', {}, 0),
     j.cargo === 'moderador' ? `${j.nome} voltou a ser jogador.` : `${j.nome} agora é moderador. Marque os poderes dele abaixo.`));
+  on('pPresente', () => { const id = $('pPresSel').value, n = PERSONAGENS_EVENTO.find((x) => x.id === id)?.nome; executar(() => rede.personagens.presentear(j.id, id), `${n} foi dado para ${j.nome}.`); });
   on('pPrefeito', () => { if (confirmarDuplo('pPrefeito', '🏛️ Nomear prefeito')) executar(async () => { await rede.painel.nomearPrefeito(j.id); await ctx.prefeitoMudou?.(); }, `${j.nome} agora é o prefeito.`); });
   on('pSalvarMod', () => {
     const poderes = {}; c.querySelectorAll('[data-poder]').forEach((x) => { if (x.checked) poderes[x.dataset.poder] = true; });
@@ -185,6 +187,10 @@ function abaEu() {
   if (eu.cargo === 'admin') h += '<div class="sub">Evento: arma dourada</div><p class="dica">Esconde a arma dourada (2 balas) exatamente onde você está. Quem achar pega; depois dos 2 tiros ela some.</p><div class="botoes"><button id="pArmaPd">✨ Esconder a arma dourada aqui</button></div>';
   if (eu.cargo === 'admin') h += '<div class="sub">Prefeitura</div><div id="pPref" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') {
+    h += `<div class="sub">Evento: personagens especiais</div><p class="dica">Abre a vitrine para os jogadores comprarem. Marque quais (nenhum marcado = todos) e o tempo.</p>
+      <div id="pEvLista" class="poderes">${PERSONAGENS_EVENTO.map((x) => `<label><input type="checkbox" data-ev="${x.id}"> ${esc(x.nome)}</label>`).join('')}</div>
+      <div class="botoes"><select id="pEvTempo">${[[30, '30 min'], [60, '1 h'], [180, '3 h'], [720, '12 h'], [1440, '1 dia'], [4320, '3 dias'], [10080, '7 dias']].map(([m, t]) => `<option value="${m}" ${m === 60 ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <button id="pEvAbrir">✨ Abrir vitrine</button><button id="pEvFechar">Fechar vitrine</button></div>`;
     h += `<div class="sub">Resetar o mapa</div><p class="dica">Para deixar o mapa limpo antes de abrir para os jogadores. As contas continuam; a equipe mantém o cargo. <b>Não dá para desfazer.</b></p>
       <div class="poderes">${[['moradia', 'Casas, terrenos, prédios e baús'], ['empresas', 'Empresas, veículos, pedidos e carros dos jogadores'], ['clas', 'Clãs, guerras e territórios'],
         ['jogadores', 'Moedas, mochila, carreiras, crimes, banco e personagens comprados'], ['prefeitura', 'Prefeito, eleição, cofre, outdoors e notícias']]
@@ -192,7 +198,7 @@ function abaEu() {
       <div class="botoes"><input id="pResetConf" placeholder="Digite RESETAR"><button id="pReset" class="perigo">🧹 Resetar o mapa</button></div>`;
   }
   if (pode('teleportar')) h += `<div class="sub">Teleportar para</div><div class="botoes">${ctx.locais().map((l, i) => `<button data-local="${i}">${esc(l.nome)}</button>`).join('')}</div>`;
-  h += `<div class="sub">Skin (grátis para a equipe)</div><div class="skins">${[...ROBOS.map((id) => ({ id, nome: id === 'Rusty_Scout_Bot' ? 'Robô Batedor' : 'Robô Sentinela' })), ...PERSONAGENS]
+  h += `<div class="sub">Skin (grátis para a equipe)</div><div class="skins">${[...ROBOS.map((id) => ({ id, nome: id === 'Rusty_Scout_Bot' ? 'Robô Batedor' : 'Robô Sentinela' })), ...PERSONAGENS, ...(eu.cargo === 'admin' ? PERSONAGENS_EVENTO : [])]
     .map((p) => `<button class="skin ${p.id === eu.personagem ? 'sel' : ''}" data-skin="${p.id}"><img src="assets/miniaturas/${p.id}.webp" alt=""><span>${esc(p.nome)}</span></button>`).join('')}</div>`;
   c.innerHTML = h;
   const apd = $('pArmaPd'); if (apd) apd.onclick = () => executar(() => ctx.esconderArmaPd(), 'Arma dourada escondida aqui. Todos foram avisados do evento.');
@@ -200,6 +206,9 @@ function abaEu() {
   c.querySelectorAll('[data-local]').forEach((x) => { x.onclick = () => { const l = ctx.locais()[x.dataset.local]; ctx.teleportar(l.x, l.z); msg('Teleportado: ' + l.nome); }; });
   c.querySelectorAll('[data-skin]').forEach((x) => { x.onclick = () => executar(() => rede.painel.skin(x.dataset.skin), 'Skin trocada.'); });
   if (eu.cargo === 'admin') blocoPrefeitura();
+  const evSel = () => [...c.querySelectorAll('[data-ev]')].filter((x) => x.checked).map((x) => x.dataset.ev);
+  const ba = $('pEvAbrir'); if (ba) ba.onclick = () => { const m = Number($('pEvTempo').value); executar(() => rede.personagens.liberarEvento(evSel(), m), 'Vitrine do evento aberta. Todos foram avisados.'); };
+  const bf = $('pEvFechar'); if (bf) bf.onclick = () => executar(() => rede.personagens.liberarEvento(evSel(), 0), 'Vitrine fechada.');
   const br = $('pReset'); if (br) br.onclick = () => {
     const partes = [...c.querySelectorAll('[data-reset]')].filter((x) => x.checked).map((x) => x.dataset.reset);
     if (confirmarDuplo('pReset', '🧹 Resetar o mapa')) executar(() => rede.painel.resetarMundo(partes, $('pResetConf').value.trim()), 'Mapa resetado. Todos foram avisados.');

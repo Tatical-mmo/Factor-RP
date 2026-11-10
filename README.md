@@ -397,3 +397,13 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Morro da Serra: atrás de Vila Serra, depois da mata, o terreno sobe até uns 50 m, com árvores. Dá para subir a pé ou de carro. Os morros de enfeite que entravam no mapa foram removidos; a serra de fundo ficou bem mais longe.
 - Painel › Eu › Resetar o mapa (só administrador): marque o que limpar (moradia, empresas, clãs, jogadores, prefeitura), digite RESETAR e toque duas vezes. As contas continuam e a equipe mantém o cargo.
 - SQL desta versão: **34e_general_reset.sql**.
+
+## Versão 10/11 (e) · personagens de evento
+- 18 personagens novos, com as mesmas 13 animações dos atuais: a corrida e a caminhada são as do próprio modelo; o resto é copiado do robô, que tem o mesmo esqueleto. Texturas em JPEG 1024.
+- São mais caros (45.000 a 90.000) e só ficam à venda quando o administrador abre a vitrine.
+- Painel › Eu › Evento: marque os personagens (nenhum marcado = todos), escolha o tempo (30 min a 7 dias) e toque em "Abrir vitrine". Todos recebem um aviso. "Fechar vitrine" encerra antes.
+- Painel › ficha do jogador › "🎁 Presentear" dá um personagem de evento para o jogador.
+- O administrador usa todos de graça (Loja › Personagem e nome, ou as skins do painel).
+- Na loja, os jogadores veem a seção "✨ Personagens de evento", com o preço e até quando a vitrine fica aberta.
+- SQL desta versão: **35_personagens_evento.sql**.
+- O pacote vem em 3 partes (código e 2 de personagens) porque os modelos somam ~58 MB.
