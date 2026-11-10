@@ -2886,6 +2886,10 @@ function acertoNoAlvo(b) {
 }
 function acertoDaBola(b) {
   const p = b.m.position;
+  if (cacada && esquadra.pronto) {   // atirou nos soldados da caçada: eles revidam
+    for (const u of esquadra.soldados) { const q = u.av.raiz.position; if (u.av.raiz.visible && Math.hypot(p.x - q.x, p.z - q.z) < 0.6 && p.y > q.y && p.y < q.y + 2) { esquadra.hostil = 60; manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); aviso('🎖️ Você atirou no Exército: os soldados estão revidando!', 2.5); return true; } }
+    for (const u of esquadra.jipes) { const q = u.obj.position; if (u.obj.visible && Math.hypot(p.x - q.x, p.z - q.z) < 2.2 && p.y < q.y + 2.5) { esquadra.hostil = 60; manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; } }
+  }
   if (b.tanque) return acertoTanque(b);
   for (const n of npcs) {
     if (!n.policia) continue;
@@ -3177,7 +3181,7 @@ function policiaNPCReage(n, dt) {
   if (d < 26 && n.tiro <= 0) {
     n.tiro = 0.75 + Math.random() * 0.25;
     const de = new THREE.Vector3(p.x, p.y + 1.4, p.z), t = Math.max(0.12, d / 30);
-    criarBola(de, new THREE.Vector3(dx / t, (jogador.pos.y + 1 - de.y) / t + 4.9 * t, dz / t), '#ffd23e');
+    criarBola(de, new THREE.Vector3(dx / t, (jogador.pos.y + 1 - de.y) / t + 4.9 * t, dz / t), n.corTiro || '#ffd23e');
     const acerto = jogador.carro ? 0.55 : d < 12 ? 0.85 : 0.65;
     setTimeout(() => { if (Math.random() < acerto && !jogador.morto) { jogador.ultimoAgressor = null; danoLocal(14); } }, t * 1000);
   }
@@ -4056,7 +4060,8 @@ function atualizarCacada(dt) {
     }).catch(() => {});
     else if (cacada) { cacada = null; recolherEsquadra(); }
   }
-  if (!cacada || !esquadra.pronto) return;
+  if (!cacada || !esquadra.pronto) { esquadra.hostil = 0; return; }
+  esquadra.hostil = Math.max(0, (esquadra.hostil || 0) - dt);
   if (Date.parse(cacada.ate) < agoraServidor() || j.pena > 0 || j.morto) { cacada = null; recolherEsquadra(); return; }
   const alvo = j.pos, rapido = j.carro && Math.abs(j.carro.vel) > 3, voando = j.carro?.voa && j.carro.alt > 3;
   let pegou = false;
@@ -4076,6 +4081,16 @@ function atualizarCacada(dt) {
     o.position.y = alturaChao(o.position.x, o.position.z);
     o.rotation.y = suavizarAngulo(o.rotation.y, Math.atan2(dx, dz), dt * 8);
     u.av.mixer.update(dt);
+    if (esquadra.hostil > 0 && d < 28) {   // revide: tinta verde, forte
+      u.tiro = (u.tiro || Math.random()) - dt;
+      if (u.tiro <= 0) {
+        u.tiro = 0.7 + Math.random() * 0.3;
+        const de = new THREE.Vector3(o.position.x, o.position.y + 1.4, o.position.z), t = Math.max(0.12, d / 30);
+        criarBola(de, new THREE.Vector3(dx / t, (j.pos.y + 1 - de.y) / t + 4.9 * t, dz / t), '#2fbf5a');
+        const acerto = j.carro ? 0.6 : d < 12 ? 0.9 : 0.7;
+        setTimeout(() => { if (Math.random() < acerto && !j.morto) { j.ultimoAgressor = null; danoLocal(16); } }, t * 1000);
+      }
+    }
     if (d < 2.2 && !j.carro && !j.passageiro) pegou = true;
   }
   if (pegou && !ocupado && !j.trem) {
@@ -4128,6 +4143,20 @@ async function criarPoliciaNPC() {
       const n = { id: k + 1, policia: true, av, rota, laco: laco(rota), vel: 1.5, fase: k * 41, vida: 100, caido: 0, hostil: 0, tiro: 0 };
       npcs.push(n); const p = patrulha(n); av.raiz.position.set(p.x, 0.18, p.z);
     } catch { /* sem policiais NPC */ }
+  }
+  // agentes da PRF (robôs): mesma regra da polícia, tinta azul
+  const QUADRAS_PRF = [[-1, 0], [0, -1], [4, 0], [0, 4]];
+  for (let k = 0; k < QUADRAS_PRF.length; k++) {
+    const cx = quadC(QUADRAS_PRF[k][0]), cz = quadC(QUADRAS_PRF[k][1]);
+    let rota = [[cx - d, cz - d], [cx + d, cz - d], [cx + d, cz + d], [cx - d, cz + d]];
+    if (k % 2) rota = rota.reverse();
+    try {
+      const av = await criarAvatar('robos', SKIN_POLICIA);
+      scene.add(av.raiz); av.tocar('walk', { velocidade: 0.85 });
+      const et = textoSprite('PRF', { escala: 0.6, fundo: 'rgba(20,40,90,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+      const n = { id: 101 + k, policia: true, prf: true, corTiro: '#3e8cff', av, rota, laco: laco(rota), vel: 1.5, fase: k * 37 + 11, vida: 100, caido: 0, hostil: 0, tiro: 0 };
+      npcs.push(n); const pp = patrulha(n); av.raiz.position.set(pp.x, 0.18, pp.z);
+    } catch { /* sem PRF NPC */ }
   }
   criarViaturas();
   rede.robos.listar().then((l) => { for (const r of l) aoRobo(r); }).catch(() => {});

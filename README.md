@@ -477,3 +477,8 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Procurado que não atira continua sendo só perseguido e preso quando o policial robô encosta.
 - Quem atira em um policial robô vira alvo de todos os policiais num raio de 70 m, por 60 s. Eles correm atrás atirando (tinta amarela), com mais alcance (26 m), tiros mais rápidos (menos de 1 s), mais dano (14) e mais pontaria. Dentro do carro é mais difícil de acertar.
 - As viaturas também vêm atrás de quem atirou na polícia, por 2 minutos, mesmo sem recompensa, e prendem quando alcançam.
+
+## Versão 10/11 (s) · PRF e Exército também revidam
+- 4 agentes da PRF (robôs) patrulham quarteirões perto da Prefeitura, do Banco, do Hospital e dos Bombeiros. Seguem a mesma regra da polícia: prendem procurado que não atira e, se alguém atirar neles, todos por perto revidam com tinta azul e as viaturas vêm atrás.
+- Exército: os soldados só agem com autorização, ou seja, numa caçada autorizada por um Tenente para cima ou pelo General Supremo. Durante a caçada, o procurado que não atira é preso. Quem atirar nos soldados ou nos jipes leva revide com tinta verde: tiros mais fortes (16) e mais certeiros que os da polícia, por 60 s.
+- Os soldados do quartel (marcha, corrida, sentinelas, recrutas) não reagem sozinhos.
