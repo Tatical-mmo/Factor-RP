@@ -19,6 +19,8 @@ export const EXERCITO = {
     { modelo: 'tanque', x: 200, z: 1059, ang: -Math.PI / 2 },
   ],
   arsenal: { x: 163, z: 986 },
+  estande: { x0: 150, x1: 250, z0: 1087, z1: 1103, linha: 157, entrada: { x: 199, z: 1084 } },
+  alvos: [],
   veiculos: [],
   comando: { x0: 210, x1: 242, z0: 974, z1: 990, porta: { x: 226, z: 991.5 } },
   balcao: { x: 226, z: 979.5 },
@@ -93,8 +95,32 @@ export function montarQuartelExercito() {
   col(188.8, 194.2, 1076.8, 1081.7);
   for (let k = 0; k < 6; k++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1.3, 14), mat(k % 2 ? '#3f5a2b' : '#4a4f3a')); t.position.set(244 + (k % 3) * 1.1, 0.8, 1060 + Math.floor(k / 3) * 1.1); t.castShadow = true; g.add(t); }
   col(243.4, 247, 1059.4, 1061.8);
+  // ---- estande de tiro (fundo do quartel, só militares): 4 raias com alvos a 8, 15, 25 e 40 m
+  const E = EXERCITO.estande;
+  b(concreto, 46, 1.2, 0.3, 173, 0.6, E.z0); col(150, 196, E.z0 - 0.15, E.z0 + 0.15);                 // mureta que separa
+  b(concreto, 48, 1.2, 0.3, 226, 0.6, E.z0); col(202, 250, E.z0 - 0.15, E.z0 + 0.15);
+  const ch = new THREE.Mesh(new THREE.PlaneGeometry(98, E.z1 - E.z0).rotateX(-Math.PI / 2), mat('#9c8f74', { roughness: 1 })); ch.position.set(200, 0.15, (E.z0 + E.z1) / 2); ch.receiveShadow = true; g.add(ch);
+  b(mat('#6f6450', { roughness: 1 }), 2.5, 4, E.z1 - E.z0, 246, 2, (E.z0 + E.z1) / 2); col(244.7, 247.3, E.z0, E.z1);   // barranco atrás dos alvos
+  const tAlvo = alvoTextura();
+  EXERCITO.alvos = [];
+  [8, 15, 25, 40].forEach((d, k) => {
+    const z = E.z0 + 3.5 + k * 3.8, x = E.linha + d;
+    b(madeira, 0.2, 1.1, 2.2, E.linha - 0.4, 0.55, z); col(E.linha - 0.5, E.linha - 0.3, z - 1.1, z + 1.1);           // bancada da raia
+    b(branco, d, 0.03, 0.06, E.linha + d / 2, 0.17, z - 1.9);                                                          // faixa entre as raias
+    b(escuro, 0.12, 1.2, 0.12, x + 0.1, 0.75, z); col(x - 0.1, x + 0.3, z - 0.1, z + 0.1);
+    const disco = new THREE.Mesh(new THREE.CircleGeometry(0.6, 32), new THREE.MeshStandardMaterial({ map: tAlvo, roughness: 0.8 }));
+    disco.position.set(x, 1.65, z); disco.rotation.y = -Math.PI / 2; disco.castShadow = true; g.add(disco);
+    const pl = ctx.textoSprite(`${d} m`, { escala: 0.5, fundo: 'rgba(52,62,34,.9)' }); pl.position.set(x, 2.6, z); ctx.scene.add(pl);
+    EXERCITO.alvos.push({ x, y: 1.65, z, d, raio: 0.6, disco });
+  });
+  const pe = ctx.textoSprite('🎯 Estande de tiro · só militares', { escala: 0.7, fundo: 'rgba(52,62,34,.94)' }); pe.position.set(E.linha + 2, 3.4, (E.z0 + E.z1) / 2); ctx.scene.add(pe);
   // ---- veículos expostos
   EXERCITO.veiculos = EXERCITO.vagas.map((v) => ({ ...v, mesh: veiculoDeServico(v.modelo, v) })).filter((v) => v.mesh);
+}
+function alvoTextura() {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  [['#f4f1e8', 64], ['#d62828', 52], ['#f4f1e8', 40], ['#d62828', 28], ['#f4f1e8', 16], ['#d62828', 7]].forEach(([cor, r]) => { g.fillStyle = cor; g.beginPath(); g.arc(64, 64, r, 0, Math.PI * 2); g.fill(); });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 // o teto do Comando some quando o jogador está dentro
 export function atualizarQuartel(p) {

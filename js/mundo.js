@@ -31,7 +31,7 @@ export function morro(x, z) {
   return base * 46 * ondas + picos * base;
 }   // cidade + a mata em volta
 // Quartel do Exército (Porto Sul, na mata a leste da cidade): muro, portão a oeste, pátio no meio
-export const QUARTEL = { x0: 150, x1: 250, z0: 966, z1: 1086, portao: { x: 146, z: 1053 }, patio: { x: 190, z: 1026 } };
+export const QUARTEL = { x0: 150, x1: 250, z0: 966, z1: 1104, portao: { x: 146, z: 1053 }, patio: { x: 190, z: 1026 } };
 
 let ctx = null;
 let s0 = 90210;

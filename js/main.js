@@ -1457,7 +1457,8 @@ function atirar(alvo) {
   const dir = new THREE.Vector3(Math.sin(jogador.yaw), 0, Math.cos(jogador.yaw));
   const dourada = tenhoArmaPd();
   const cor = dourada ? '#ffd23e' : A.cor || CORES_TINTA[Math.floor(Math.random() * CORES_TINTA.length)];
-  const v = dir.multiplyScalar(dourada ? 34 : A.vel).add(new THREE.Vector3(0, dourada ? 0.6 : 1.2 * 24 / A.vel, 0));
+  const vyMira = dourada ? null : miraNoAlvo(boca, dir, A.vel);
+  const v = dir.multiplyScalar(dourada ? 34 : A.vel).add(new THREE.Vector3(0, vyMira ?? (dourada ? 0.6 : 1.2 * 24 / A.vel), 0));
   criarBola(boca, v, cor, true, dourada ? 1 : A.bola || 1);
   bolas[bolas.length - 1].dano = A.dano;
   if (dourada) {
@@ -1474,7 +1475,7 @@ function criarBola(pos, vel, cor, minha = false, escala = 1) {
   if (escala < 3) sons.tocar('tiro', { vol: 0.7, dist: jogador.avatar ? Math.hypot(pos.x - jogador.pos.x, pos.z - jogador.pos.z) : 0, raio: 55, velocidade: 0.9 + Math.random() * 0.2 });
   const m = new THREE.Mesh(geoBola, new THREE.MeshStandardMaterial({ color: cor, roughness: 0.3 }));
   m.position.copy(pos); m.scale.setScalar(escala); scene.add(m);
-  bolas.push({ m, v: vel.clone(), vida: escala >= 3 ? 2.5 : 1.4, cor, minha, tanque: escala >= 3 });
+  bolas.push({ m, v: vel.clone(), vida: escala >= 3 ? 2.5 : 2, cor, minha, tanque: escala >= 3 });
 }
 // ---------------------------------------------------------------- tanque: canhão de tinta que explode veículos
 let recargaTanque = 0;
@@ -1556,7 +1557,7 @@ function atualizarBolas(dt) {
     const b = bolas[i]; b.vida -= dt; b.v.y -= 9.8 * dt;
     const ant = b.m.position.clone(); b.m.position.addScaledVector(b.v, dt);
     let fim = false;
-    if (b.minha) fim = acertoDaBola(b);
+    if (b.minha) fim = acertoNoAlvo(b) || acertoDaBola(b);
     if (!fim) for (const c of colisores) {
       if (c.tipo !== 'caixa') continue;
       const p = b.m.position;
@@ -2814,6 +2815,33 @@ function golpeSoco() {
   const c = caminhaoProximo(3.4);
   if (c) atacarCaminhao(c);
 }
+// no estande, a mira compensa a queda da tinta: se você está virado para um alvo, o tiro sai na curva certa até ele
+function miraNoAlvo(boca, dir, vel) {
+  if (!militar()) return null;
+  let melhor = null, mc = 0.985;
+  for (const a of civico.EXERCITO.alvos || []) {
+    const dx = a.x - boca.x, dz = a.z - boca.z, d = Math.hypot(dx, dz), c = (dx * dir.x + dz * dir.z) / d;
+    if (d > 2 && d < 60 && c > mc) { mc = c; melhor = { a, d }; }
+  }
+  if (!melhor) return null;
+  const t = melhor.d / vel; return (melhor.a.y - boca.y + 4.9 * t * t) / t;
+}
+// estande de tiro do quartel: pontos pelo anel acertado, mais pontos quanto mais longe
+let pontosEstande = 0, avisoEstande = 0;
+function acertoNoAlvo(b) {
+  const p = b.m.position;
+  for (const a of civico.EXERCITO.alvos || []) {
+    if (Math.abs(p.x - a.x) > 0.35 || Math.abs(p.z - a.z) > a.raio + 0.1 || Math.abs(p.y - a.y) > a.raio + 0.1) continue;
+    const r = Math.hypot(p.z - a.z, p.y - a.y); if (r > a.raio + 0.07) continue;
+    if (!militar()) return true;
+    const anel = r < 0.07 ? 10 : r < 0.17 ? 8 : r < 0.3 ? 6 : r < 0.42 ? 4 : 2, pts = Math.round(anel * (1 + a.d / 20));
+    pontosEstande += pts;
+    manchar(new THREE.Vector3(a.x - 0.03, p.y, p.z), new THREE.Vector3(-1, 0, 0), b.cor);
+    aviso(`🎯 Alvo de ${a.d} m: ${anel === 10 ? 'NA MOSCA! ' : ''}+${pts} pontos · total ${pontosEstande}`, 1.6);
+    return true;
+  }
+  return false;
+}
 function acertoDaBola(b) {
   const p = b.m.position;
   if (b.tanque) return acertoTanque(b);
@@ -3884,7 +3912,7 @@ const soldados = [];
 async function criarSoldadosNPC() {
   const Q = mundo.QUARTEL, px = Q.patio.x, pz = Q.patio.z;
   const patio = laco([[px - 16, pz - 13], [px + 16, pz - 13], [px + 16, pz + 13], [px - 16, pz + 13]]);
-  const mata = laco([[Q.x0 - 14, Q.z0 - 14], [Q.x1 + 14, Q.z0 - 14], [Q.x1 + 14, Q.z1 + 14], [Q.x0 - 14, Q.z1 + 14]]);
+  const mata = laco([[Q.x0 - 14, Q.z0 - 14], [Q.x1 + 14, Q.z0 - 14], [Q.x1 + 14, Math.min(Q.z1 + 4, 1107)], [Q.x0 - 14, Math.min(Q.z1 + 4, 1107)]]);
   const lista = [
     ...[0, 1, 2, 3, 4, 5].map((k) => ({ l: patio, fase: -k * 1.7, vel: 1.3 })),
     { parado: [Q.portao.x - 1, Q.portao.z - 5, -Math.PI / 2] }, { parado: [Q.portao.x - 1, Q.portao.z + 5, -Math.PI / 2] },
@@ -4546,6 +4574,7 @@ function montarLocais() {
   LOCAIS.push({ nome: 'Base Leste', x: BASE_X - 26, z: ruaC(2) });
   LOCAIS.push({ nome: 'Base Oeste', x: -BASE_X + 26, z: ruaC(2) });
   LOCAIS.push({ nome: 'Quartel do Exército', x: mundo.QUARTEL.portao.x - 4, z: mundo.QUARTEL.portao.z });
+  LOCAIS.push({ nome: 'Estande de tiro', x: 153, z: 1096 });
   for (const l of ferrovia.linhas) for (const lado of ['centro', 'destino']) { const p = l.plataformas[lado]; LOCAIS.push({ nome: p.nome, x: 0, z: p.zSaida }); }
 }
 
@@ -4937,6 +4966,8 @@ function quadro() {
   tempoArma -= dt; if (tempoArma <= 0) { tempoArma = 0.5; conferirArma(); }
   atualizarExplosoes(dt);
   civico.atualizarQuartel(jogador.pos);
+  { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
+    if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   enviarEstado(dt);

@@ -452,3 +452,10 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 
 ## Versão 10/11 (n) · armas apontando para a frente
 - A arma agora fica presa ao corpo do personagem, não ao osso da mão: aponta sempre para a frente, com a empunhadura na altura da mão direita, entre a cintura e o ombro, e sempre na frente do peito. Antes ela seguia a rotação da mão em cada animação, por isso apontava torta e, em personagens grandes, ficava dentro do corpo.
+
+## Versão 10/11 (o) · estande de tiro do Exército
+- O quartel cresceu para o norte e ganhou um estande de tiro no fundo, separado por uma mureta com passagem atrás do tanque. Só militares (e o General Supremo) entram: os outros são barrados na entrada.
+- Quatro raias com alvos a 8, 15, 25 e 40 m, bancadas na linha de tiro e um barranco atrás dos alvos.
+- Pontos pelo anel acertado (10 na mosca), multiplicados pela distância. O total da sessão aparece na tela.
+- Virado para um alvo do estande, o tiro sai na curva certa para compensar a queda da tinta, assim os alvos de longe também podem ser acertados.
+- Atalho "Estande de tiro" no teleporte do painel.
