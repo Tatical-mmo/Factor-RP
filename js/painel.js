@@ -16,7 +16,7 @@ const ACOES = {
   perdoar: 'perdoou',
   moedas: 'mudou as moedas de', banir: 'baniu', desbanir: 'desbaniu', algemar: 'algemou', soltar_algemas: 'tirou as algemas de',
   prender: 'prendeu', soltar: 'soltou da cadeia', teleporte: 'teleportou', cargo: 'mudou o cargo de',
-  prefeito_nomeado: 'nomeou como prefeito', prefeito_afastado: 'afastou o prefeito', eleicao_convocada: 'convocou eleição extraordinária', presente_personagem: 'deu um personagem para', evento_personagens: 'mexeu na vitrine do evento', patente: 'mudou a patente de', reset_mapa: 'resetou o mapa',
+  prefeito_nomeado: 'nomeou como prefeito', prefeito_afastado: 'afastou o prefeito', eleicao_convocada: 'convocou eleição extraordinária', salario: 'mudou um salário',  presente_personagem: 'deu um personagem para', evento_personagens: 'mexeu na vitrine do evento', patente: 'mudou a patente de', reset_mapa: 'resetou o mapa',
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -57,6 +57,7 @@ function desenhar() {
   else if (aba === 'eu') abaEu();
   else if (aba === 'equipe') abaEquipe();
   else if (aba === 'historico') abaHistorico();
+  else if (aba === 'salarios') abaSalarios();
 }
 
 // ------------------------------------------------------------ jogadores
@@ -179,6 +180,28 @@ function confirmarDuplo(id, texto = 'Banir') {
   return false;
 }
 
+// ------------------------------------------------------------ salários (só administrador)
+async function abaSalarios() {
+  const c = $('painelConteudo'); c.textContent = 'Carregando…';
+  let d; try { d = await rede.painel.salarios(); } catch (e) { c.textContent = e.message; return; }
+  const n = (v) => Number(v || 0).toLocaleString('pt-BR');
+  const linha = (id, rotulo, valor, dica) => `<div class="botoes"><span style="flex:1"><b>${esc(rotulo)}</b>${dica ? `<br><small>${dica}</small>` : ''}</span>
+    <input type="number" min="0" inputmode="numeric" value="${valor}" data-sal="${id}" style="max-width:110px"><button data-salvar="${id}">Salvar</button></div>`;
+  c.innerHTML = `<p class="dica">Valores pagos pelo jogo. Nas carreiras, o valor é por minuto em serviço e é multiplicado pela patente (de ×1 no primeiro cargo até ×4,5 no topo).</p>
+    <div class="sub">Serviço público</div>
+    ${linha('policia', 'Polícia', d.policia, `Mesmo valor que o prefeito define (50 a 250). Paga ${n(Math.round(d.policia / 3))} por minuto.`)}
+    ${(d.tabela || []).map((t) => linha(t.chave, t.rotulo, t.valor, t.chave === 'prefeito' ? 'Pago a cada ciclo em que o prefeito joga.' : '')).join('')}
+    <div class="sub">Moderadores (por dia)</div>
+    ${(d.moderadores || []).length ? d.moderadores.map((m) => linha('mod:' + m.id, m.nome, m.salario, 'Recebe uma vez a cada 24 h, quando entra no jogo.')).join('') : '<p class="dica">Nenhum moderador.</p>'}
+    <p class="dica">Os salários das empresas são definidos pelos donos de cada empresa.</p>`;
+  c.querySelectorAll('[data-salvar]').forEach((b) => {
+    b.onclick = () => {
+      const id = b.dataset.salvar, v = Math.floor(Number(c.querySelector(`[data-sal="${id}"]`).value));
+      if (!(v >= 0)) { msg('Digite um valor.', false); return; }
+      executar(() => (id.startsWith('mod:') ? rede.painel.salarioModerador(id.slice(4), v) : rede.painel.definirSalario(id, v)), 'Salário salvo.');
+    };
+  });
+}
 // ------------------------------------------------------------ eu
 function abaEu() {
   const c = $('painelConteudo'); const eu = ctx.perfil();
