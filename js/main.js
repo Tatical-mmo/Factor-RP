@@ -645,7 +645,12 @@ class Avatar {
 }
 
 async function criarAvatar(pasta, id) {
-  const gltf = await carregarGLB(`assets/${pasta}/${id}.glb`);
+  let gltf;
+  try { gltf = await carregarGLB(`assets/${pasta}/${id}.glb`); }
+  catch (e) {   // modelo que ainda não subiu: usa um personagem padrão para o jogo não travar
+    console.warn('personagem não carregou, usando o padrão:', id, e);
+    gltf = await carregarGLB('assets/personagens/Autumn_Traveler.glb');
+  }
   const modelo = SkeletonUtils.clone(gltf.scene);
   if (!gltf.userData.clipes) gltf.userData.clipes = prepararClipes(gltf.animations);
   return new Avatar(modelo, gltf.userData.clipes);

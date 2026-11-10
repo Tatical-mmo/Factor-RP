@@ -413,3 +413,7 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - O telhado da garagem do quartel some quando você chega perto, e dá para ver os veículos lá dentro.
 - Mais NPCs no quartel: um pelotão de 8 correndo em volta do pátio e do heliponto, e uma turma de 6 recrutas que chega pela estrada, entra pelo portão e vai até o alojamento (a cada ~2 min chega outra turma).
 - SQL desta versão: **36_general_sem_alistar.sql**.
+
+## Versão 10/11 (g) · correção: o jogo não abria
+- Se o modelo 3D do personagem escolhido ainda não estiver no repositório (por exemplo, um personagem de evento cujo pacote não subiu), o jogo usa um personagem padrão em vez de travar na tela de carregamento.
+- Os 18 personagens de evento agora vêm em 6 pacotes menores (pacote-personagens-1 a 6, com 3 personagens cada).
