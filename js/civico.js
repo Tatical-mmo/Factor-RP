@@ -7,9 +7,22 @@ export const CONCESSIONARIA = { x: 135, z: -135, balcao: { x: 135, z: -127.5 } }
 export const BANCO = { x: 81, z: -135, balcao: { x: 75, z: -124 }, empregos: { x: 88, z: -124 } };
 export const HOSPITAL = { x: -135, z: 135, balcao: { x: -131, z: 125 }, saida: { x: -139, z: 124 }, vaga: { x: -145, z: 126, ang: -Math.PI / 2 }, veiculo: null };
 export const CEMITERIO = { x: 135, z: 135 };
-// Quartel do Exército (Porto Sul): o jipe fica na frente da garagem
-export const EXERCITO = { vaga: { x: 171, z: 1059, ang: -Math.PI / 2 }, veiculo: null };
-export function montarQuartelExercito() { EXERCITO.veiculo = veiculoDeServico('militar', EXERCITO.vaga); }
+// Quartel do Exército (Porto Sul): jipe e caminhão na frente da garagem e o helicóptero no heliponto.
+// São ilimitados: cada militar que pega um leva uma cópia, e o da vitrine continua lá.
+export const EXERCITO = {
+  vagas: [
+    { modelo: 'militar', x: 163, z: 1059, ang: -Math.PI / 2 },
+    { modelo: 'exercito_caminhao', x: 178, z: 1060, ang: -Math.PI / 2 },
+    { modelo: 'helicoptero_exercito', x: 232, z: 1027, ang: -Math.PI / 2 },
+  ],
+  veiculos: [],
+};
+export function montarQuartelExercito() {
+  EXERCITO.veiculos = EXERCITO.vagas.map((v) => ({ ...v, mesh: veiculoDeServico(v.modelo, v) })).filter((v) => v.mesh);
+  // heliponto
+  const h = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 0.08, 32), mat('#4d5346', { roughness: 0.9 })); h.position.set(232, 0.16, 1027); h.receiveShadow = true; ctx.scene.add(h);
+  for (const [w, d, x, z] of [[0.9, 6, -1.6, 0], [0.9, 6, 1.6, 0], [3.2, 0.9, 0, 0]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(w, 0.02, d), mat('#e8e4d4')); b.position.set(232 + x, 0.21, 1027 + z); ctx.scene.add(b); }
+}
 export const BOMBEIROS = { x: -81, z: 135, balcao: { x: -88, z: 125 }, vaga: { x: -77, z: 125.5, ang: Math.PI + 0.15 }, veiculo: null };
 export const CARROS = {
   popular: { nome: 'Popular', preco: 40000, vel: 10 },
@@ -19,8 +32,14 @@ export const CARROS = {
   viatura: { nome: 'Viatura', preco: 0, vel: 12 },
   bombeiros: { nome: 'Caminhão dos bombeiros', preco: 0, vel: 10 },
   presidencial: { nome: 'Presidencial', preco: 0, vel: 12 },
-  militar: { nome: 'Jipe do Exército', preco: 0, vel: 13 },
+  militar: { nome: 'Jipe do Exército', preco: 0, vel: 14 },
+  exercito_caminhao: { nome: 'Caminhão do Exército', preco: 0, vel: 11 },
+  helicoptero_exercito: { nome: 'Helicóptero do Exército', preco: 0, vel: 26, voa: true },
+  helicoptero: { nome: 'Helicóptero executivo', preco: 1500000, vel: 24, voa: true },
 };
+// quantos passageiros cada veículo leva (além do motorista); veículos do Exército só levam militares
+export const LUGARES = { militar: 3, exercito_caminhao: 8, helicoptero_exercito: 6, helicoptero: 4, suv: 3, popular: 3, esportivo: 1, presidencial: 3 };
+export const DO_EXERCITO = new Set(['militar', 'exercito_caminhao', 'helicoptero_exercito']);
 export const CORES_CARRO = ['#c0392b', '#2c3e50', '#ecf0f1', '#f1c40f', '#2980b9', '#16a085', '#8e44ad', '#1f1f1f', '#d35400'];
 
 const mat = (cor, ex = {}) => new THREE.MeshStandardMaterial({ color: cor, roughness: 0.6, ...ex });
@@ -29,8 +48,8 @@ function bloco(g, m, w, h, d, x, y, z) {
 }
 
 export function iniciar(contexto) { ctx = contexto; }
-const GLB_CARRO = { militar: 'carro_suv', viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros' };
-const SEM_TINTA = new Set(['presidencial', 'ambulancia', 'bombeiros']);
+const GLB_CARRO = { militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros' };
+const SEM_TINTA = new Set(['presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
 export function montarPrefeitura() {
@@ -233,9 +252,8 @@ export function modeloCarro(modelo, cor) {
   const base = ctx?.modelo?.(GLB_CARRO[modelo]);
   if (base) {   // modelo 3D: pinta de leve com a cor escolhida (o presidencial fica como é)
     const g = base.clone(true);
-    if (modelo === 'militar') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#4b5a2e'), 0.75); } }); }
-    else if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
-    else if (SEM_TINTA.has(modelo)) sirene(g, { ambulancia: [3.4, 0.9], bombeiros: [3.15, 2.5] }[modelo]);
+    if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
+    else if (SEM_TINTA.has(modelo)) { const sr = { ambulancia: [3.4, 0.9], bombeiros: [3.15, 2.5] }[modelo]; if (sr) sirene(g, sr); }
     else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), 0.45); } });
     cacheCarro.set(chave, g);
     return g.clone();

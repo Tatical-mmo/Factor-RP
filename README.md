@@ -373,3 +373,15 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Soldados NPC: um pelotão marcha em volta do pátio, 2 sentinelas ficam no portão e 2 soldados patrulham a mata em volta do muro.
 - Jipe do Exército (provisório, é o SUV verde-oliva até chegarem os GLB dos veículos militares). Fica na frente da garagem para quem é do Exército. Militares também veem os procurados no mapa.
 - SQL desta versão: **34c_exercito.sql**. Se ainda não rodou, rode antes o 34a e o 34b.
+
+## Versão 10/11 (c) · modelos 3D novos, helicópteros e caçada do Exército
+- Modelos 3D novos:
+  - Trem: o modelo 3D aparece por fora; quem está dentro vê o vagão com interior.
+  - Árvores: comum, pinheiro e palmeira (no Porto Sul). As árvores perto do jogador viram os modelos 3D; as de longe continuam leves.
+  - Jipe, caminhão e helicóptero do Exército, e o helicóptero executivo.
+- Helicóptero executivo na concessionária por 1.500.000, o item mais caro do jogo. Acelere para decolar e pare para pousar. Dá para voar entre a metrópole e as cidades vizinhas, mas só dá para descer pousando numa cidade ou na mata. Leva até 4 passageiros.
+- Veículos do Exército, ilimitados para militares: jipe (3 passageiros) e caminhão (8) na frente da garagem e helicóptero (6) no heliponto. Só Tenente para cima (ou o General Supremo) pilota o helicóptero. Só militares embarcam nos veículos do Exército.
+- Passageiro: chegue perto do veículo de outro jogador (parado ou pousado) e toque em Embarcar. Você desce quando ele parar ou pousar.
+- Caçada: em 💼 Trabalho, um militar de Tenente para cima vê os procurados online e pode "Autorizar caçada" por 10 min. O procurado é perseguido por 2 jipes e 4 soldados do Exército, mais rápidos que a polícia, e vai preso quando alcançado.
+- Carros e helicópteros agora podem estacionar nas cidades vizinhas e na mata.
+- SQL desta versão: **34d_helicoptero_cacada.sql** (rode depois do 34a, 34b e 34c).

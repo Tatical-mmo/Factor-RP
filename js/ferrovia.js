@@ -186,7 +186,10 @@ function montarTrens(l, mats, modelos) {
   l.trens = [0, 1].map(() => ({
     carros: CARROS.map((c, i) => {
       const g = modelos[c.tipo].clone(); ctx.scene.add(g);
-      return { g, len: c.len, off: offs[i], b: c.len / 2 - 2.6, tipo: c.tipo, x: 0, z: 0, yaw: 0 };
+      // modelo 3D por fora; o feito por código (com o interior) aparece só para quem está dentro do trem
+      let ext = null;
+      if (modelos.glb) { ext = modelos.glb.clone(); ext.scale.set(0.66, 0.8, c.len / 15); ctx.scene.add(ext); g.visible = false; }
+      return { g, ext, len: c.len, off: offs[i], b: c.len / 2 - 2.6, tipo: c.tipo, x: 0, z: 0, yaw: 0 };
     }),
     est: null, tetoOculto: false,
   }));
@@ -287,7 +290,7 @@ export function nomeParada(l, lado) { return lado === 'centro' ? (l.sinal < 0 ? 
 export function montar(contexto) {
   ctx = contexto;
   const mats = materiaisTrem();
-  const modelos = { loco: modeloLoco(mats), vagao: modeloVagao(mats) };
+  const modelos = { loco: modeloLoco(mats), vagao: modeloVagao(mats), glb: ctx.modelo?.('trem') || null };
   for (const [i, c] of [{ nome: 'Linha Norte', destino: 'Vila Serra', sinal: -1 }, { nome: 'Linha Sul', destino: 'Porto Sul', sinal: 1 }].entries()) {
     const t = tracado(c.sinal);
     const l = { ...c, ...t, id: i, fase: i * 37.5 };
@@ -308,12 +311,14 @@ export function atualizar(t) {
       pos(l, tr.est.s + c.off + c.b, _a); pos(l, tr.est.s + c.off - c.b, _b);
       c.x = (_a[0] + _b[0]) / 2; c.z = (_a[1] + _b[1]) / 2; c.yaw = Math.atan2(_a[0] - _b[0], _a[1] - _b[1]);
       c.g.position.set(c.x, TRILHO, c.z); c.g.rotation.y = c.yaw;
+      if (c.ext) { c.ext.position.set(c.x, TRILHO - 0.3, c.z); c.ext.rotation.y = c.yaw; }
     }
   });
 }
 export function ocultarTeto(li, k, oculto) {
   const tr = linhas[li]?.trens[k]; if (!tr || tr.tetoOculto === oculto) return;
   tr.tetoOculto = oculto;
+  for (const c of tr.carros) if (c.ext) { c.ext.visible = !oculto; c.g.visible = oculto; }
   for (const c of tr.carros) if (c.tipo === 'vagao') c.g.traverse((o) => { if (o.userData.parte === 'teto' || o.userData.parte === 'luz') o.visible = !oculto; });
 }
 // posição de uma vaga (em pé dentro do vagão)

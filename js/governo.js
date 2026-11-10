@@ -132,7 +132,7 @@ async function telaCarros(c) {
   const meus = ctx.meusCarros();
   c.innerHTML = `<p class="dica">Moedas: <b>${num(ctx.perfil().moedas)}</b>. Até 3 carros por jogador. O carro novo fica estacionado aqui na frente: chegue perto e toque em <b>Dirigir</b>. Ele fica onde você descer.</p>
     <div class="sub">Cor</div><div class="cores">${CORES_CARRO.map((k, i) => `<button data-cor="${k}" class="${i === 0 ? 'sel' : ''}" style="background:${k}"></button>`).join('')}</div>
-    <div class="lista">${['popular', 'suv', 'esportivo'].map((m) => `<div class="linha item"><span class="nm"><b>${CARROS[m].nome}</b><small>${num(CARROS[m].preco)} · até ${Math.round(CARROS[m].vel * 3.6)} km/h</small></span>
+    <div class="lista">${['popular', 'suv', 'esportivo', 'helicoptero'].map((m) => `<div class="linha item"><span class="nm"><b>${CARROS[m].nome}</b><small>${num(CARROS[m].preco)} · até ${Math.round(CARROS[m].vel * 3.6)} km/h</small></span>
       <span class="bts"><button data-carro="${m}">Comprar</button></span></div>`).join('')}</div>
     <div class="sub">Seus carros</div>
     <div class="lista">${meus.length ? meus.map((k) => `<div class="linha item"><span class="nm"><b style="color:${esc(k.cor)}">■</b> <b>${CARROS[k.modelo]?.nome}</b><small>${k.modelo === 'presidencial' ? 'do cargo de prefeito' : `vende por ${num(CARROS[k.modelo].preco / 2)}`}</small></span>
@@ -216,9 +216,24 @@ async function quadroTrabalho() {
       <small>${num(meu.salario)}/min · ${num(meu.minutos)} min trabalhados${meu.ponto_em && Date.now() - Date.parse(meu.ponto_em) < 150000 ? ' · 🟢 trabalhando agora' : ' · fique perto da empresa para bater ponto'}</small></span>
       <span class="bts"><button data-irempresa="${meu.empresa}">📍 Ir</button><button data-demissao="1" class="perigo">Demissão</button></span></div>`;
   if (souDono) h += `<div class="linha item"><span class="ic">🏢</span><span class="nm"><b>Dono da ${esc(meu.emp?.nome)}</b><small>Anuncie vagas na tela da empresa › Equipe.</small></span></div>`;
+  if (atual === 'exercito') h += await blocoExercito(car);
   return h ? `<div class="lista">${h}</div>` : '<p class="dica">Você está sem trabalho. Escolha uma vaga abaixo: a contratação é na hora.</p>';
 }
+// Exército: veículos e, para Tenente para cima, as ordens de caçada aos procurados
+async function blocoExercito(car) {
+  const cmd = ctx.perfil().cargo === 'admin' || (car?.nivel || 0) >= 8;
+  let h = `<div class="linha"><small>🚙 Jipe (3 passageiros), 🚚 caminhão (8) e 🚁 helicóptero (6, só Tenente para cima pilota) ficam no quartel, em Porto Sul. São ilimitados: chegue perto e toque em Dirigir. Militares embarcam como passageiros.</small></div>`;
+  if (!cmd) return h + '<div class="linha"><small>A partir de Tenente você pode autorizar os soldados a caçar procurados.</small></div>';
+  const [lista, cacadas] = await Promise.all([rede.exercito.procurados().catch(() => []), rede.exercito.cacadas().catch(() => [])]);
+  const ativa = new Map((cacadas || []).map((k) => [k.alvo, k]));
+  h += `<div class="linha"><b>🎖️ Ordens de caçada</b><small>Os soldados e jipes do Exército vão atrás do procurado por 10 min e prendem quando alcançam.</small></div>`;
+  h += (lista || []).length ? lista.map((p) => `<div class="linha item"><span class="ic">🚨</span><span class="nm"><b>${esc(p.nome)}</b><small>${p.crimes} crime${p.crimes > 1 ? 's' : ''}${ativa.has(p.id) ? ` · caçada até ${new Date(ativa.get(p.id).ate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</small></span>
+    <span class="bts">${ativa.has(p.id) ? `<button data-cancelacaca="${p.id}">Suspender</button>` : `<button data-caca="${p.id}">Autorizar caçada</button>`}</span></div>`).join('') : '<div class="linha"><small>Nenhum procurado online agora.</small></div>';
+  return h;
+}
 function ligarQuadroTrabalho(c) {
+  c.querySelectorAll('[data-caca]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.ordenar(b.dataset.caca), 'Caçada autorizada! Os soldados estão a caminho.'); });
+  c.querySelectorAll('[data-cancelacaca]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.cancelar(b.dataset.cancelacaca), 'Caçada suspensa.'); });
   c.querySelectorAll('[data-rastrear]').forEach((b) => { b.onclick = () => { const l = ctx.locaisTrabalho?.()[b.dataset.rastrear]; if (l) { ctx.rastrear?.({ nome: 'Seu trabalho', x: l.x, z: l.z }); fechar(); } }; });
   c.querySelectorAll('[data-sairpub]').forEach((b) => { b.onclick = () => executar(() => sairDoServico(ctx.perfil()), 'Você saiu do serviço.'); });
   c.querySelectorAll('[data-irempresa]').forEach((b) => { b.onclick = () => { const p = ctx.portaoEmpresa?.(Number(b.dataset.irempresa)); if (p) { ctx.rastrear?.({ nome: 'Seu trabalho (empresa)', x: p.x, z: p.z }); fechar(); } else msg('Não achei o prédio da empresa.', false); }; });

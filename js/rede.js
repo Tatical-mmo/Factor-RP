@@ -196,6 +196,9 @@ function traduzirRpc(m) {
     'ja tem eleicao em andamento': 'Já tem uma eleição extraordinária em andamento.',
     'nao ha eleicao extraordinaria': 'Não há eleição extraordinária em andamento.',
     'jogador invalido': 'Jogador inválido.',
+    'so tenente para cima autoriza a cacada': 'Só militares de Tenente para cima autorizam a caçada.',
+    'ele nao e procurado': 'Ele não é procurado.',
+    'a equipe nao e cacada': 'A equipe não pode ser caçada.',
     'vaga preenchida': 'Essa vaga já foi preenchida.',
     'a empresa e sua': 'Essa empresa é sua.',
     'voce nao tem emprego': 'Você não tem emprego.',
@@ -381,6 +384,15 @@ export const veiculos = {
 export const jornal = {
   publicar: (tipo, ref, titulo, x, z) => rpc('publicar_noticia', { p_tipo: tipo, p_ref: ref, p_titulo: titulo, p_x: x, p_z: z }),
   ultimas: () => sel(sb.from('noticias').select('*').order('id', { ascending: false }).limit(12)),
+};
+export const exercito = {
+  procurados: () => sel(sb.from('perfis').select('id,nome,crimes,recompensa').gt('crimes', 0).eq('cargo', 'jogador')
+    .gt('visto_em', new Date(Date.now() - 10 * 60000).toISOString()).order('crimes', { ascending: false }).limit(20)),
+  cacadas: () => sel(sb.from('cacadas').select('*').gt('ate', new Date().toISOString())),
+  minha: async (id) => (await sel(sb.from('cacadas').select('*').eq('alvo', id).maybeSingle())),
+  ordenar: (alvo) => rpc('ordenar_cacada', { p_alvo: alvo }),
+  cancelar: (alvo) => rpc('cancelar_cacada', { p_alvo: alvo }),
+  preso: () => rpc('preso_pelo_exercito'),
 };
 export const pd = {
   estado: () => sel(sb.from('arma_pd').select('*').eq('id', 1).maybeSingle()),

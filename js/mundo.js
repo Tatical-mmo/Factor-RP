@@ -574,6 +574,7 @@ function montarMalhas() {
   const verdes = ['#5a8a3c', '#679a42', '#4b7d36', '#78a34a', '#5f8a3a', '#6e9a3e'];
   const escuros = ['#3f6b38', '#355f33', '#47753c'];
   let kf = 0, kp = 0;
+  const info = [];
   arvores.forEach(([x, z, s], k) => {
     const y = altura(x, z) ?? 0, var1 = 0.88 + ((x * 31 + z * 17) % 1 + 1) % 1 * 0.3, sc = s * var1;
     const giro = (x * 13 + z * 7) % 6.28;
@@ -581,15 +582,28 @@ function montarMalhas() {
     if (pinheiro(x, z)) {
       _m.compose(_v.set(x, y, z), _q, _e.set(sc * 0.8, sc * 0.7, sc * 0.8)); tronco.setMatrixAt(k, _m);
       _m.compose(_v.set(x, y + 0.6 * sc, z), _q, _e.set(sc, sc * 1.1, sc)); pinho.setMatrixAt(kp, _m);
+      info.push({ x, z, y, sc, giro, tipo: 1, idx: kp, perto: false });
       pinho.setColorAt(kp++, _c.set(escuros[k % escuros.length]));
     } else {
       _m.compose(_v.set(x, y, z), _q, _e.set(sc, sc, sc)); tronco.setMatrixAt(k, _m);
       _m.compose(_v.set(x, y + 2.55 * sc, z), _q, _e.set(sc * 1.05, sc * 1.0, sc * 1.05)); copa.setMatrixAt(kf, _m);
+      info.push({ x, z, y, sc, giro, tipo: z > 880 && Math.abs(x * 7) % 2 > 1 ? 2 : 0, idx: kf, perto: false });   // Porto Sul: metade vira palmeira
       copa.setColorAt(kf++, _c.set(verdes[k % verdes.length]));
     }
   });
   pinho.castShadow = true; pinho.receiveShadow = true; if (pinheiros.length) scene.add(pinho);
   tronco.castShadow = true; copa.castShadow = true; copa.receiveShadow = true; scene.add(tronco); if (folhosas.length) scene.add(copa);
+  // árvores 3D (GLB) perto do jogador; as de longe continuam leves
+  const MAXA = window.matchMedia?.('(pointer: coarse)').matches ? 70 : 150;
+  const glbA = ['arvore_comum', 'arvore_pinheiro', 'arvore_palmeira'].map((n) => {
+    const base = ctx.modelo?.(n); let malha = null; if (!base) return null;
+    base.updateMatrixWorld(true); base.traverse((o) => { if (o.isMesh && !malha) malha = o; }); if (!malha) return null;
+    const geo = malha.geometry.clone().applyMatrix4(new THREE.Matrix4().copy(base.matrixWorld).invert().multiply(malha.matrixWorld));
+    const m = [].concat(malha.material)[0].clone(); m.vertexColors = true; m.flatShading = true; m.roughness = 0.9;
+    const im = new THREE.InstancedMesh(geo, m, MAXA); im.count = 0; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; scene.add(im);
+    return im;
+  });
+  arvoresLod = { info, tronco, copa, pinho, glb: glbA, max: MAXA, t: 0, ESC: [0.68, 0.6, 0.78] };
   // arbustos da mata (sem colisão)
   if (arbustos.length) {
     const ab = new THREE.InstancedMesh(geoCopa([[0, 0.45, 0, 0.7], [0.55, 0.3, 0.2, 0.5], [-0.5, 0.3, -0.2, 0.55]]), MAT.copa, arbustos.length);
@@ -818,7 +832,38 @@ function montarMobiliario() {
   });
   estacionados = { carros, caixas: [ic, iv, ir], glb, max: MAX, t: 0 };
 }
-let estacionados = null;
+let estacionados = null, arvoresLod = null;
+// troca as árvores perto do jogador pelos modelos 3D
+export function arvoresPerto(px, pz, dt) {
+  const A = arvoresLod; if (!A || !A.glb.some(Boolean)) return;
+  if ((A.t -= dt) > 0) return; A.t = 0.5;
+  const conta = [0, 0, 0], novo = new Set();
+  const perto = []; A.info.forEach((a, k) => { const d = Math.abs(a.x - px) + Math.abs(a.z - pz); if (d < 120) perto.push([d, k]); });
+  perto.sort((a, b) => a[0] - b[0]);
+  for (const [, k] of perto) {
+    const a = A.info[k], im = A.glb[a.tipo]; if (!im || conta[a.tipo] >= A.max) continue;
+    const e = a.sc * A.ESC[a.tipo];
+    _q.setFromAxisAngle(_e.set(0, 1, 0), a.giro); _m.compose(_v.set(a.x, a.y, a.z), _q, _e.set(e, e, e));
+    im.setMatrixAt(conta[a.tipo]++, _m); novo.add(k);
+  }
+  A.glb.forEach((im, i) => { if (im) { im.count = conta[i]; im.instanceMatrix.needsUpdate = true; } });
+  let mT = false, mC = false, mP = false;
+  A.info.forEach((a, k) => {
+    const p = novo.has(k); if (p === a.perto) return; a.perto = p; mT = true;
+    _q.setFromAxisAngle(_e.set(0, 1, 0), a.giro);
+    const z0 = p ? 0 : 1;
+    if (a.tipo === 1) {
+      _m.compose(_v.set(a.x, a.y, a.z), _q, _e.set(a.sc * 0.8 * z0, a.sc * 0.7 * z0, a.sc * 0.8 * z0)); A.tronco.setMatrixAt(k, _m);
+      _m.compose(_v.set(a.x, a.y + 0.6 * a.sc, a.z), _q, _e.set(a.sc * z0, a.sc * 1.1 * z0, a.sc * z0)); A.pinho.setMatrixAt(a.idx, _m); mP = true;
+    } else {
+      _m.compose(_v.set(a.x, a.y, a.z), _q, _e.set(a.sc * z0, a.sc * z0, a.sc * z0)); A.tronco.setMatrixAt(k, _m);
+      _m.compose(_v.set(a.x, a.y + 2.55 * a.sc, a.z), _q, _e.set(a.sc * 1.05 * z0, a.sc * z0, a.sc * 1.05 * z0)); A.copa.setMatrixAt(a.idx, _m); mC = true;
+    }
+  });
+  if (mT) A.tronco.instanceMatrix.needsUpdate = true;
+  if (mC) A.copa.instanceMatrix.needsUpdate = true;
+  if (mP) A.pinho.instanceMatrix.needsUpdate = true;
+}
 // troca as caixinhas perto do jogador pelos modelos 3D (chamado algumas vezes por segundo)
 export function carrosPerto(px, pz, dt) {
   const E = estacionados; if (!E || !E.glb.some(Boolean)) return;
