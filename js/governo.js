@@ -217,7 +217,7 @@ async function quadroTrabalho() {
       <span class="bts"><button data-irempresa="${meu.empresa}">📍 Ir</button><button data-demissao="1" class="perigo">Demissão</button></span></div>`;
   if (souDono) h += `<div class="linha item"><span class="ic">🏢</span><span class="nm"><b>Dono da ${esc(meu.emp?.nome)}</b><small>Anuncie vagas na tela da empresa › Equipe.</small></span></div>`;
   if (atual === 'exercito') h += await blocoExercito(car);
-  else if (eu.cargo === 'admin') h += await blocoGeneral();
+  else if (eu.cargo === 'admin') h += await blocoExercito(null);
   return h ? `<div class="lista">${h}</div>` : '<p class="dica">Você está sem trabalho. Escolha uma vaga abaixo: a contratação é na hora.</p>';
 }
 // Exército: veículos e, para Tenente para cima, as ordens de caçada aos procurados

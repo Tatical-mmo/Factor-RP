@@ -1615,7 +1615,7 @@ function desenharMapa() {
     for (const f of servicos.listaIncendios()) desenhar(f.x, f.z, piscaS ? '#ff7a1a' : '#ffd23e', 10);
     if (civico.BOMBEIROS.veiculo && !jogador.carro) desenhar(civico.BOMBEIROS.veiculo.position.x, civico.BOMBEIROS.veiculo.position.z, '#ff4a2a', 6);
   }
-  if (prof === 'exercito' && !jogador.carro) { for (const v of civico.EXERCITO.veiculos) desenhar(v.mesh.position.x, v.mesh.position.z, '#7d9a3e', 5); if (meuMilitar) desenhar(meuMilitar.mesh.position.x, meuMilitar.mesh.position.z, '#b6e05a', 6); }
+  if (militar() && !jogador.carro) { for (const v of civico.EXERCITO.veiculos) desenhar(v.mesh.position.x, v.mesh.position.z, '#7d9a3e', 5); if (meuMilitar) desenhar(meuMilitar.mesh.position.x, meuMilitar.mesh.position.z, '#b6e05a', 6); }
   if (jogador.perfil?.policial || jogador.perfil?.prf || prof === 'exercito') {
     const pisca = Math.sin(performance.now() / 150) > 0;
     for (const r of remotos.values()) if (r.meta?.crimes > 0 && r.av) desenhar(r.av.raiz.position.x, r.av.raiz.position.z, pisca ? '#ff2020' : '#ffffff', 6);
@@ -2715,7 +2715,7 @@ function atualizarDirigido(c, dt) {
 function servicoProximo() {
   if (jogador.carro || jogador.trem) return null;
   const prof = jogador.perfil?.profissao;
-  if (prof === 'exercito') {   // Exército: o veículo da vitrine (ilimitado) ou o seu, onde você deixou
+  if (militar()) {   // Exército (e o General Supremo): o veículo da exposição (ilimitado) ou o seu, onde você deixou
     const lista = [...civico.EXERCITO.veiculos, ...(meuMilitar ? [{ modelo: meuMilitar.modelo, mesh: meuMilitar.mesh, meu: true }] : [])];
     let melhor = null, dm = 6;
     for (const v of lista) { const d = Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z); if (d < dm) { dm = d; melhor = v; } }
@@ -2725,6 +2725,7 @@ function servicoProximo() {
   if (!base?.veiculo || Math.hypot(base.veiculo.position.x - jogador.pos.x, base.veiculo.position.z - jogador.pos.z) > 5.5) return null;
   return { base, modelo: prof === 'medico' ? 'ambulancia' : prof === 'exercito' ? 'militar' : 'bombeiros' };
 }
+function militar() { return jogador.perfil?.profissao === 'exercito' || jogador.perfil?.cargo === 'admin'; }
 let meuMilitar = null;   // { modelo, mesh }: o veículo do Exército que você pegou (fica onde você deixar)
 function podePilotarHeliExercito() { return jogador.perfil?.cargo === 'admin' || (jogador.patenteNivel || 0) >= 8; }
 function entrarServico(sv) {
@@ -3169,7 +3170,7 @@ function caronaDeJogador() {
   if (jogador.carro || jogador.passageiro || jogador.trem) return null;
   for (const [id, r] of remotos) {
     const o = r.carro, lug = civico.LUGARES[r.carroModelo]; if (!o || !lug) continue;
-    if (civico.DO_EXERCITO.has(r.carroModelo) && jogador.perfil?.profissao !== 'exercito') continue;
+    if (civico.DO_EXERCITO.has(r.carroModelo) && !militar()) continue;
     if (Math.hypot(o.position.x - jogador.pos.x, o.position.z - jogador.pos.z) > 6.5 || o.position.y > alturaChao(o.position.x, o.position.z) + 1) continue;
     const ocupados = [...remotos.values()].filter((x) => x.alvo?.pg === id).length;
     if (ocupados >= lug) continue;
@@ -3681,13 +3682,18 @@ async function criarSoldadosNPC() {
     ...[0, 1, 2, 3, 4, 5].map((k) => ({ l: patio, fase: -k * 1.7, vel: 1.3 })),
     { parado: [Q.portao.x - 1, Q.portao.z - 5, -Math.PI / 2] }, { parado: [Q.portao.x - 1, Q.portao.z + 5, -Math.PI / 2] },
     { l: mata, fase: 0, vel: 1.4 }, { l: mata, fase: -2, vel: 1.4 },
+    // pelotão correndo em volta do pátio e do heliponto
+    ...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => ({ l: laco([[168, 994], [246, 994], [246, 1047], [168, 1047]]), fase: -k * 1.5, vel: 3.4, corre: true })),
+    // turma nova chegando: entra pelo portão e vai para o alojamento (some lá dentro e a próxima turma chega)
+    ...[0, 1, 2, 3, 4, 5].map((k) => ({ trajeto: trajeto([[96, 1052.5], [150, 1053], [204, 1053], [226, 1061.5]]), fase: -k * 2.2, vel: 1.3, espera: 40, recruta: true })),
   ];
+  const civis = PERSONAGENS.map((p) => p.id).sort(() => Math.random() - 0.5);
   for (const d of lista) {
     try {
-      const av = await criarAvatar('robos', 'Rusty_Scout_Bot');
-      const et = textoSprite('Exército', { escala: 0.55, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+      const av = d.recruta ? await criarAvatar('personagens', civis[soldados.length % civis.length]) : await criarAvatar('robos', 'Rusty_Scout_Bot');
+      const et = textoSprite(d.recruta ? 'Recruta' : 'Exército', { escala: 0.55, fundo: d.recruta ? 'rgba(90,90,90,.9)' : 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
       av.raiz.visible = false; scene.add(av.raiz);
-      if (d.parado) { av.raiz.position.set(d.parado[0], 0.12, d.parado[1]); av.raiz.rotation.y = d.parado[2]; av.tocar('idle'); } else av.tocar('walk', { velocidade: 0.8 });
+      if (d.parado) { av.raiz.position.set(d.parado[0], 0.12, d.parado[1]); av.raiz.rotation.y = d.parado[2]; av.tocar('idle'); } else av.tocar(d.corre ? 'run' : 'walk', { velocidade: d.corre ? 1 : 0.8 });
       soldados.push({ av, ...d });
     } catch { /* sem soldados NPC */ }
   }
@@ -3697,7 +3703,12 @@ function atualizarSoldados(dt) {
   const Q = mundo.QUARTEL, perto = Math.hypot(jogador.pos.x - (Q.x0 + Q.x1) / 2, jogador.pos.z - (Q.z0 + Q.z1) / 2) < 220;
   for (const s of soldados) {
     s.av.raiz.visible = perto; if (!perto) continue;
-    if (s.l) {
+    if (s.trajeto) {   // caminho de ida: depois de chegar, fica escondido um tempo e recomeça
+      const T = s.trajeto, ciclo = T.total + s.espera * s.vel, u = ((agoraServidor() / 1000 * s.vel + s.fase) % ciclo + ciclo) % ciclo;
+      if (u > T.total) { s.av.raiz.visible = false; continue; }
+      const p = pontoNoLaco(T, u);
+      s.av.raiz.position.set(p.x, alturaChao(p.x, p.z), p.z); s.av.raiz.rotation.y = suavizarAngulo(s.av.raiz.rotation.y, p.ang, dt * 6);
+    } else if (s.l) {
       const p = pontoNoLaco(s.l, agoraServidor() / 1000 * s.vel + s.fase);
       s.av.raiz.position.set(p.x, alturaChao(p.x, p.z), p.z);
       s.av.raiz.rotation.y = suavizarAngulo(s.av.raiz.rotation.y, p.ang, dt * 6);
@@ -3822,6 +3833,12 @@ async function criarPoliciaNPC() {
 function laco(pts) {
   let total = 0; const seg = [];
   for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length], d = Math.hypot(b[0] - a[0], b[1] - a[1]); seg.push([a, b, d]); total += d; }
+  return { seg, total };
+}
+// caminho aberto (não volta ao começo)
+function trajeto(pts) {
+  let total = 0; const seg = [];
+  for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1], d = Math.hypot(b[0] - a[0], b[1] - a[1]); seg.push([a, b, d]); total += d; }
   return { seg, total };
 }
 function pontoNoLaco(l, s) {

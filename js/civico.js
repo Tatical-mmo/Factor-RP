@@ -71,7 +71,8 @@ export function montarQuartelExercito() {
   const G = { x0: 154, x1: 186, z0: 1066, z1: 1082 };
   b(oliva, G.x1 - G.x0, 5.2, 0.4, (G.x0 + G.x1) / 2, 2.6, G.z1 - 0.2); col(G.x0, G.x1, G.z1 - 0.4, G.z1);
   b(oliva, 0.4, 5.2, G.z1 - G.z0, G.x0 + 0.2, 2.6, (G.z0 + G.z1) / 2); col(G.x0, G.x0 + 0.4, G.z0, G.z1);
-  b(escuro, G.x1 - G.x0 + 1, 0.35, G.z1 - G.z0 + 1.5, (G.x0 + G.x1) / 2, 5.4, (G.z0 + G.z1) / 2 - 0.4);
+  const tetoG = new THREE.Group(); g.add(tetoG); EXERCITO.tetoGaragem = tetoG; EXERCITO.garagem = G;
+  b(escuro, G.x1 - G.x0 + 1, 0.35, G.z1 - G.z0 + 1.5, (G.x0 + G.x1) / 2, 5.4, (G.z0 + G.z1) / 2 - 0.4, tetoG);
   for (const x of [G.x0 + 8, G.x0 + 16, G.x0 + 24, G.x1 - 0.3]) { b(metal, 0.35, 5.2, 0.35, x, 2.6, G.z0 + 0.2); col(x - 0.2, x + 0.2, G.z0, G.z0 + 0.4); }
   const pg = new THREE.Mesh(new THREE.PlaneGeometry(G.x1 - G.x0, G.z1 - G.z0).rotateX(-Math.PI / 2), mat('#5f5f58', { roughness: 0.95 })); pg.position.set((G.x0 + G.x1) / 2, 0.15, (G.z0 + G.z1) / 2); g.add(pg);
   const pgp = ctx.textoSprite('🚙 Viaturas do Exército · militares pegam à vontade', { escala: 0.55, fundo: 'rgba(52,62,34,.92)' }); pgp.position.set(170, 6.6, G.z0); ctx.scene.add(pgp);
@@ -88,7 +89,7 @@ export function montarQuartelExercito() {
   const canhao = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 5, 10).rotateX(Math.PI / 2), escuro); canhao.position.set(0, 2, 3.4); tanque.add(canhao);
   col(197, 203, 1056, 1064);
   for (let k = 0; k < 4; k++) { b(madeira, 3, 1.2, 0.3, 160 + k * 6, 0.74, 1000); col(158.5 + k * 6, 161.5 + k * 6, 999.8, 1000.2); }   // pista de obstáculos
-  for (const x of [166, 172]) { b(metal, 0.12, 2.4, 0.12, x - 1, 1.3, 1006); b(metal, 0.12, 2.4, 0.12, x + 1, 1.3, 1006); b(metal, 2.1, 0.1, 0.1, x, 2.4, 1006); }
+  for (const x of [186, 192]) { b(metal, 0.12, 2.4, 0.12, x - 1, 1.3, 987); b(metal, 0.12, 2.4, 0.12, x + 1, 1.3, 987); b(metal, 2.1, 0.1, 0.1, x, 2.4, 987); }
   for (const [x, z] of [[190, 1078], [193, 1078], [191.5, 1080.5]]) { b(madeira, 2.2, 1.4, 2.2, x, 0.85, z); }
   col(188.8, 194.2, 1076.8, 1081.7);
   for (let k = 0; k < 6; k++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1.3, 14), mat(k % 2 ? '#3f5a2b' : '#4a4f3a')); t.position.set(244 + (k % 3) * 1.1, 0.8, 1060 + Math.floor(k / 3) * 1.1); t.castShadow = true; g.add(t); }
@@ -100,6 +101,8 @@ export function montarQuartelExercito() {
 export function atualizarQuartel(p) {
   const C = EXERCITO.comando; if (!EXERCITO.teto) return;
   EXERCITO.teto.visible = !(p.x > C.x0 && p.x < C.x1 && p.z > C.z0 && p.z < C.z1);
+  const G = EXERCITO.garagem;   // garagem: o telhado some quando você chega perto, para ver os veículos
+  if (G) EXERCITO.tetoGaragem.visible = !(p.x > G.x0 - 4 && p.x < G.x1 + 4 && p.z > G.z0 - 12 && p.z < G.z1 + 2);
 }
 export const BOMBEIROS = { x: -81, z: 135, balcao: { x: -88, z: 125 }, vaga: { x: -77, z: 125.5, ang: Math.PI + 0.15 }, veiculo: null };
 export const CARROS = {

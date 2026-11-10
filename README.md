@@ -407,3 +407,9 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Na loja, os jogadores veem a seção "✨ Personagens de evento", com o preço e até quando a vitrine fica aberta.
 - SQL desta versão: **35_personagens_evento.sql**.
 - O pacote vem em 3 partes (código e 2 de personagens) porque os modelos somam ~58 MB.
+
+## Versão 10/11 (f) · General Supremo sem alistar e quartel vivo
+- O administrador conta como militar sem precisar se alistar: pega jipe, caminhão e helicóptero, embarca nos veículos do Exército e autoriza caçadas.
+- O telhado da garagem do quartel some quando você chega perto, e dá para ver os veículos lá dentro.
+- Mais NPCs no quartel: um pelotão de 8 correndo em volta do pátio e do heliponto, e uma turma de 6 recrutas que chega pela estrada, entra pelo portão e vai até o alojamento (a cada ~2 min chega outra turma).
+- SQL desta versão: **36_general_sem_alistar.sql**.
