@@ -430,3 +430,15 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 ## Versão 10/11 (j) · pés e corpo alinhados
 - As animações que vêm do robô (parado, socos, tiro, pegar, levar dano, morrer, carregar, andar atirando) agora são adaptadas para o esqueleto de cada personagem ao carregar. Antes elas eram copiadas direto, e como cada esqueleto tem a pose de descanso um pouco diferente, os pés ficavam virados e o corpo torto.
 - Correr e andar continuam sendo as animações próprias de cada personagem.
+
+## Versão 10/11 (k) · armas das corporações, tanque e disciplina militar
+- O nome acima da cabeça fica um pouco mais alto e acompanha a altura de cada personagem.
+- Armas próprias de cada corporação, que só valem no expediente e substituem a arma básica. Todas atiram mais rápido e são mais letais que a básica:
+  - Polícia: tinta amarela.
+  - PRF: tinta azul.
+  - Exército: tinta verde.
+- Arma militar dos clãs: o Contrabandista, no Morro da Serra atrás de Vila Serra, vende por 60.000 só para membros de clã. A compra é ilegal (+1 crime). Ela substitui a arma básica e atira bolas coloridas, com mais dano e mais rápida.
+- Arma pesada do Exército: fica no Arsenal do quartel (balcão na frente do paiol). Só sai com autorização de um Tenente para cima (ou do General Supremo), por 2 h, e só no expediente. Matar sem ordem tira a autorização na hora.
+- Tanque do Exército: fica no pátio do quartel, só para militares. O botão Atirar (F no PC) dispara o canhão de tinta, com recarga de 2,5 s. Ele explode carros, helicópteros e caminhões: quem está dentro é jogado para fora e se machuca, e o carro volta para o dono 30 s depois. O tanque não tem som.
+- Ficha militar (💼 Trabalho): quem tem patente maior vê as mortes causadas pelos militares abaixo, marcadas com ✔ (com ordem) ou ✖ (sem ordem). De Tenente para cima dá para autorizar ou tirar a arma pesada, expulsar do Exército e retirar a expulsão. Quem é expulso não consegue se alistar de novo sozinho.
+- SQL desta versão: **37_armas_tanque.sql**.

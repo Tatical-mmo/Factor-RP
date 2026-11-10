@@ -181,6 +181,7 @@
   #volante { position:absolute; inset:0; pointer-events:none; display:none; }
   body.dirigindo #volante { display:block; }
   body.dirigindo #joy, body.dirigindo #btSoco, body.dirigindo #btArma, body.dirigindo #btTiro { display:none; }
+  body.dirigindo.tanque #btTiro { display:block; }
   body.dirigindo #botoes { bottom:calc(200px + env(safe-area-inset-bottom)); grid-template-columns:66px; }
   #setas { position:absolute; left:calc(18px + env(safe-area-inset-left)); bottom:calc(24px + env(safe-area-inset-bottom)); display:flex; gap:14px; pointer-events:auto; }
   #pedais { position:absolute; right:calc(16px + env(safe-area-inset-right)); bottom:calc(24px + env(safe-area-inset-bottom)); display:flex; gap:12px; align-items:flex-end; pointer-events:auto; }
@@ -234,21 +235,21 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261110j",
-  "./js/mundo.js": "./js/mundo.js?v=20261110j",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261110j",
-  "./js/cla.js": "./js/cla.js?v=20261110j",
-  "./js/config.js": "./js/config.js?v=20261110j",
-  "./js/empresa.js": "./js/empresa.js?v=20261110j",
-  "./js/loja.js": "./js/loja.js?v=20261110j",
-  "./js/painel.js": "./js/painel.js?v=20261110j",
-  "./js/rede.js": "./js/rede.js?v=20261110j",
-  "./js/sedes.js": "./js/sedes.js?v=20261110j",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261110j",
-  "./js/civico.js": "./js/civico.js?v=20261110j",
-  "./js/governo.js": "./js/governo.js?v=20261110j",
-  "./js/servicos.js": "./js/servicos.js?v=20261110j",
-  "./js/sons.js": "./js/sons.js?v=20261110j"
+  "./js/main.js": "./js/main.js?v=20261110k",
+  "./js/mundo.js": "./js/mundo.js?v=20261110k",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261110k",
+  "./js/cla.js": "./js/cla.js?v=20261110k",
+  "./js/config.js": "./js/config.js?v=20261110k",
+  "./js/empresa.js": "./js/empresa.js?v=20261110k",
+  "./js/loja.js": "./js/loja.js?v=20261110k",
+  "./js/painel.js": "./js/painel.js?v=20261110k",
+  "./js/rede.js": "./js/rede.js?v=20261110k",
+  "./js/sedes.js": "./js/sedes.js?v=20261110k",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261110k",
+  "./js/civico.js": "./js/civico.js?v=20261110k",
+  "./js/governo.js": "./js/governo.js?v=20261110k",
+  "./js/servicos.js": "./js/servicos.js?v=20261110k",
+  "./js/sons.js": "./js/sons.js?v=20261110k"
 } }
 </script>
 </head>
@@ -389,7 +390,7 @@
   </div>
 </div>
 
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 10/11 · pés alinhados</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 10/11 · armas e tanque</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

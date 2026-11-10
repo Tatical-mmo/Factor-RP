@@ -610,6 +610,10 @@ class Avatar {
     this.mixer = new THREE.AnimationMixer(modelo);
     this.acoes = {};
     this.atual = null; this.nomeAtual = '';
+    // altura pela malha na pose de descanso (sem esqueleto), para o nome ficar acima da cabeça
+    let alt = 0; modelo.updateMatrixWorld(true);
+    modelo.traverse((o) => { if (o.isMesh && o.geometry) { if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld); if (Number.isFinite(b.max.y)) alt = Math.max(alt, b.max.y); } });
+    this.altura = alt > 0.5 && alt < 3.5 ? alt : 1.8;
     this.maoD = modelo.getObjectByName('mixamorigRightHand');
     this.maoE = modelo.getObjectByName('mixamorigLeftHand');
   }
@@ -629,13 +633,13 @@ class Avatar {
     this.atual = prox; this.nomeAtual = nome;
   }
   // segura a arma: calcula o encaixe na mão a partir da pose de mira
-  encaixarArma(arma) {
+  encaixarArma(arma, pegaArma = [0, 0.1, -0.11]) {
     const a = this.acao('mirar'); a.reset().play(); this.mixer.setTime(0.6);
     this.raiz.updateMatrixWorld(true);
     const pm = new THREE.Vector3().setFromMatrixPosition(this.maoD.matrixWorld);
     const pe = new THREE.Vector3().setFromMatrixPosition(this.maoE.matrixWorld);
     const meio = pm.clone().lerp(pe, 0.35);
-    const pega = new THREE.Vector3(0, 0.1, -0.11);                // empunhadura no espaço da arma
+    const pega = new THREE.Vector3(...pegaArma);                   // empunhadura no espaço da arma
     const desejada = new THREE.Matrix4().compose(meio.sub(pega), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1));
     const local = this.maoD.matrixWorld.clone().invert().multiply(desejada);
     arma.matrixAutoUpdate = false; arma.matrix.copy(local);
@@ -791,7 +795,7 @@ window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase(); teclas.add(k);
   if (!jogador.avatar || e.repeat) return;
   if (k === 'e') acaoContexto();
-  if (k === 'f') socar();
+  if (k === 'f') { if (jogador.carro?.servico === 'tanque') atirarTanque(); else socar(); }
   if (k === 'q') alternarArma();
   if (k === 'z') girarCamera(-1);
   if (k === 'x') girarCamera(1);
@@ -928,6 +932,8 @@ function acaoContexto() {
   if (perto(civico.BANCO.empregos, 3.2)) { abrirServico('empregos'); return; }
   if (perto(civico.HOSPITAL.balcao, 3.2)) { abrirServico('hospital'); return; }
   if (perto(civico.BOMBEIROS.balcao, 3.2)) { abrirServico('bombeiros'); return; }
+  if (perto(civico.EXERCITO.arsenal, 3.2)) { usarArsenal(); return; }
+  if (perto(CONTRABANDISTA, 3.2)) { falarContrabandista(); return; }
   if (perto(civico.EXERCITO.balcao, 3.2)) { abrirServico(jogador.perfil?.profissao === 'exercito' ? 'trabalho' : 'empregos'); return; }
   if (jogador.perfil.profissao === 'jornalista') { const rp = reportagemProxima(); if (rp) { reportar(rp); return; } }
   if (perto(civico.PREFEITURA.jornal, 3.2)) { abrirServico('jornal'); return; }
@@ -1083,6 +1089,7 @@ function sincronizarCarros(lista) {
     if (!v || v.d.cor !== d.cor || v.d.modelo !== d.modelo) { if (v) scene.remove(v.mesh); v = { d, mesh: civico.modeloCarro(d.modelo, d.cor) }; scene.add(v.mesh); carrosMundo.set(d.id, v); }
     v.d = d;
     if (jogador.carro?.id === d.id || v.chamada) continue;
+    if (d.destruido_ate && Date.parse(d.destruido_ate) > agoraServidor()) { v.mesh.visible = false; continue; }
     v.mesh.visible = !outros.has(d.id);
     v.mesh.position.set(d.x, alturaChao(d.x, d.z), d.z); v.mesh.rotation.y = d.ang;
   }
@@ -1099,7 +1106,7 @@ function meuCarroProximo() {
   }
   return melhor;
 }
-function modoVolante(sim) { document.body.classList.toggle('dirigindo', sim); for (const k in pedais) pedais[k] = false; joy.ativo = false; joy.x = joy.y = 0; }
+function modoVolante(sim) { if (!sim && document.body.classList.contains('tanque')) { document.body.classList.remove('tanque'); $('btTiro').classList.toggle('oculto', !jogador.armado || !TOQUE); } document.body.classList.toggle('dirigindo', sim); for (const k in pedais) pedais[k] = false; joy.ativo = false; joy.x = joy.y = 0; }
 function entrarCarro(v) {
   if (jogador.carregando) { aviso('Largue a caixa antes de dirigir.'); return; }
   modoVolante(true);
@@ -1391,23 +1398,62 @@ function alternarArma() {
   jogador.trava = 0.2;
 }
 
+// nome acima da cabeça, com uma folga (os personagens têm alturas diferentes)
+function alturaNome(av) { return Math.max(2.2, (av?.altura || 1.8) + 0.45); }
+
+// armas: a básica de todos e as das corporações (só em serviço), a militar dos clãs e a pesada do Exército
+const ARMAS = {
+  basica: { cod: 1, modelo: 'arma_paintball', dano: 20, recarga: 0.28, vel: 24, cor: null, pega: [0, 0.1, -0.11], boca: [0, 0.22, 0.3] },
+  policia: { cod: 2, modelo: 'arma_policia', dano: 27, recarga: 0.19, vel: 28, cor: '#ffd23e', pega: [0, 0.07, -0.1], boca: [0, 0.14, 0.3] },
+  prf: { cod: 3, modelo: 'arma_prf', dano: 27, recarga: 0.19, vel: 28, cor: '#3e8cff', pega: [0, 0.15, -0.2], boca: [0, 0.33, 0.3] },
+  exercito: { cod: 4, modelo: 'arma_exercito', dano: 32, recarga: 0.16, vel: 30, cor: '#2fbf5a', pega: [0, 0.15, -0.25], boca: [0, 0.3, 0.4] },
+  militar: { cod: 5, modelo: 'arma_militar', dano: 30, recarga: 0.16, vel: 30, cor: null, pega: [0, 0.12, -0.21], boca: [0, 0.22, 0.45] },
+  pesada: { cod: 6, modelo: 'arma_grande_porte', dano: 55, recarga: 0.45, vel: 34, cor: '#1f9e46', pega: [0, 0.15, -0.18], boca: [0, 0.25, 0.58], bola: 2.2 },
+};
+const ARMA_POR_COD = Object.fromEntries(Object.entries(ARMAS).map(([k, a]) => [a.cod, k]));
+function tipoArma() {
+  const p = jogador.perfil; if (!p) return 'basica';
+  if (p.profissao === 'exercito' && jogador.armaPesada && p.arma_pesada_ate && Date.parse(p.arma_pesada_ate) > agoraServidor()) return 'pesada';
+  if (p.profissao === 'exercito') return 'exercito';
+  if (p.policial) return 'policia';
+  if (p.prf) return 'prf';
+  if (p.arma_militar && jogador.claInfo) return 'militar';
+  return 'basica';
+}
+function novaArma(tipo, av) {
+  const a = ARMAS[tipo];
+  const arma = modelos[a.modelo] ? clonar(a.modelo) : clonar('arma_paintball');
+  av.encaixarArma(arma, modelos[a.modelo] ? a.pega : ARMAS.basica.pega); return arma;
+}
+// troca a arma na mão quando muda o serviço (só no expediente) ou a autorização
+function conferirArma() {
+  const j = jogador; if (!j.avatar || !j.arma) return;
+  const tipo = tipoArma(); if (j.armaTipo === tipo) return;
+  const velha = j.arma, nova = novaArma(tipo, j.avatar);
+  velha.parent?.remove(velha); nova.visible = j.armado; j.arma = nova; j.armaTipo = tipo;
+  if (j.armaTipo !== 'basica' && j.armado) aviso({ policia: '🔫 Arma da Polícia (tinta amarela).', prf: '🔫 Arma da PRF (tinta azul).', exercito: '🔫 Arma do Exército (tinta verde).', militar: '🔫 Arma militar do clã.', pesada: '💥 ARMA PESADA equipada.' }[tipo], 2.5);
+}
+
 // tiros de paintball
 const bolas = []; const manchas = [];
 const geoBola = new THREE.SphereGeometry(0.07, 10, 8);
 const geoMancha = new THREE.CircleGeometry(0.35, 14);
 const CORES_TINTA = ['#ff3e6c', '#35d07f', '#3ea8ff', '#ffd23e', '#b05cff', '#ff8a2a'];
 function atirar(alvo) {
+  if (jogador.carro?.servico === 'tanque') { atirarTanque(); return; }
   if (!jogador.armado || jogador.trava > 0 || jogador.recarga > 0 || !livre()) return;
+  const A = ARMAS[jogador.armaTipo || 'basica'];
   jogador.alvo = null;
   if (alvo) jogador.yaw = Math.atan2(alvo.x - jogador.pos.x, alvo.z - jogador.pos.z);
   jogador.avatar.raiz.rotation.y = jogador.yaw;
   jogador.avatar.raiz.updateMatrixWorld(true);
-  const boca = jogador.arma.localToWorld(new THREE.Vector3(0, 0.22, 0.3));
+  const boca = jogador.arma.localToWorld(new THREE.Vector3(...(modelos[A.modelo] ? A.boca : ARMAS.basica.boca)));
   const dir = new THREE.Vector3(Math.sin(jogador.yaw), 0, Math.cos(jogador.yaw));
   const dourada = tenhoArmaPd();
-  const cor = dourada ? '#ffd23e' : CORES_TINTA[Math.floor(Math.random() * CORES_TINTA.length)];
-  const v = dir.multiplyScalar(dourada ? 34 : 24).add(new THREE.Vector3(0, dourada ? 0.6 : 1.2, 0));
-  criarBola(boca, v, cor, true);
+  const cor = dourada ? '#ffd23e' : A.cor || CORES_TINTA[Math.floor(Math.random() * CORES_TINTA.length)];
+  const v = dir.multiplyScalar(dourada ? 34 : A.vel).add(new THREE.Vector3(0, dourada ? 0.6 : 1.2 * 24 / A.vel, 0));
+  criarBola(boca, v, cor, true, dourada ? 1 : A.bola || 1);
+  bolas[bolas.length - 1].dano = A.dano;
   if (dourada) {
     bolas[bolas.length - 1].pd = true; bolas[bolas.length - 1].m.scale.setScalar(1.6);
     armaPd = { ...armaPd, balas: armaPd.balas - 1 };
@@ -1415,14 +1461,83 @@ function atirar(alvo) {
     jogador.recarga = 1.2;
   }
   const r2 = (n) => Math.round(n * 100) / 100;
-  conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: cor });
-  if (!dourada) jogador.recarga = 0.28;
+  conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: cor, s: A.bola || 1 });
+  if (!dourada) jogador.recarga = A.recarga;
 }
-function criarBola(pos, vel, cor, minha = false) {
-  sons.tocar('tiro', { vol: 0.7, dist: jogador.avatar ? Math.hypot(pos.x - jogador.pos.x, pos.z - jogador.pos.z) : 0, raio: 55, velocidade: 0.9 + Math.random() * 0.2 });
+function criarBola(pos, vel, cor, minha = false, escala = 1) {
+  if (escala < 3) sons.tocar('tiro', { vol: 0.7, dist: jogador.avatar ? Math.hypot(pos.x - jogador.pos.x, pos.z - jogador.pos.z) : 0, raio: 55, velocidade: 0.9 + Math.random() * 0.2 });
   const m = new THREE.Mesh(geoBola, new THREE.MeshStandardMaterial({ color: cor, roughness: 0.3 }));
-  m.position.copy(pos); scene.add(m);
-  bolas.push({ m, v: vel.clone(), vida: 1.4, cor, minha });
+  m.position.copy(pos); m.scale.setScalar(escala); scene.add(m);
+  bolas.push({ m, v: vel.clone(), vida: escala >= 3 ? 2.5 : 1.4, cor, minha, tanque: escala >= 3 });
+}
+// ---------------------------------------------------------------- tanque: canhão de tinta que explode veículos
+let recargaTanque = 0;
+function atirarTanque() {
+  const c = jogador.carro;
+  if (performance.now() < recargaTanque) { aviso('Canhão recarregando…', 0.8); return; }
+  recargaTanque = performance.now() + 2500;
+  const f = new THREE.Vector3(Math.sin(jogador.yaw), 0, Math.cos(jogador.yaw));
+  const boca = new THREE.Vector3(c.mesh.position.x, c.mesh.position.y + 2.2, c.mesh.position.z).addScaledVector(f, 4.6);
+  const v = f.clone().multiplyScalar(36).add(new THREE.Vector3(0, 2.2, 0));
+  criarBola(boca, v, '#1f9e46', true, 3.5); bolas[bolas.length - 1].dano = 70;
+  const r2 = (n) => Math.round(n * 100) / 100;
+  conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: '#1f9e46', s: 3.5 });
+  tremor = 0.25;
+}
+function acertoTanque(b) {
+  const p = b.m.position;
+  for (const n of npcs) { const q = n.av.raiz.position; if (n.policia && n.caido <= 0 && Math.hypot(p.x - q.x, p.z - q.z) < 1.3 && p.y < q.y + 2.5) { acertarPoliciaNPC(n, 100); explodir(p); return true; } }
+  for (const [id, r] of remotos) {
+    if (r.carro && Math.hypot(p.x - r.carro.position.x, p.z - r.carro.position.z) < 3 && p.y < r.carro.position.y + 3.5) { explodir(r.carro.position, r.carroId); return true; }
+    if (r.av?.raiz.visible && Math.hypot(p.x - r.av.raiz.position.x, p.z - r.av.raiz.position.z) < 1.4 && p.y < r.av.raiz.position.y + 2.2) { aplicarDanoRemoto(id, 70); explodir(p); return true; }
+  }
+  for (const v of carrosMundo.values()) {
+    if (!v.mesh.visible || jogador.carro?.id === v.d.id) continue;
+    if (Math.hypot(p.x - v.mesh.position.x, p.z - v.mesh.position.z) < 2.8 && p.y < v.mesh.position.y + 3) { explodir(v.mesh.position, v.d.id); return true; }
+  }
+  for (const c of caminhoes.values()) {
+    if (!c.obj.visible) continue;
+    if (Math.hypot(p.x - c.obj.position.x, p.z - c.obj.position.z) < 3 && p.y < c.obj.position.y + 3.5) { atacarCaminhao(c); explodir(c.obj.position); return true; }
+  }
+  return false;
+}
+// explosão: efeito para todos; carro de jogador some por 30 s e volta para o dono; quem estava dentro é jogado para fora
+function explodir(pos, carro = null) {
+  const e = { x: Math.round(pos.x * 10) / 10, y: Math.round((pos.y || 0) * 10) / 10, z: Math.round(pos.z * 10) / 10, cv: carro, de: jogador.perfil?.id };
+  efeitoExplosao(e.x, e.y, e.z);
+  conexao?.enviar('explosao', e);
+  const v = carro != null && carrosMundo.get(Number(carro)); if (v) { v.mesh.visible = false; rede.exercito.explodirCarro(Number(carro)).catch(() => {}); }
+  for (const [id, r] of remotos) if (r.av?.raiz.visible && Math.hypot(e.x - r.av.raiz.position.x, e.z - r.av.raiz.position.z) < 4.5) aplicarDanoRemoto(id, 35);
+}
+function receberExplosao(e) {
+  efeitoExplosao(e.x, e.y, e.z);
+  const v = e.cv != null && carrosMundo.get(Number(e.cv)); if (v && jogador.carro?.id !== v.d.id) v.mesh.visible = false;
+  if (e.cv != null && jogador.carro && String(jogador.carro.id) === String(e.cv)) {
+    sairCarro(); jogador.ultimoAgressor = e.de; danoLocal(50);
+    aviso('💥 Seu veículo explodiu com o tanque! Ele volta para você em 30 s.', 4); return;
+  }
+  if (!jogador.carro && Math.hypot(e.x - jogador.pos.x, e.z - jogador.pos.z) < 4.5) { jogador.ultimoAgressor = e.de; danoLocal(35); }
+}
+const explosoes = [];
+const geoExplosao = new THREE.SphereGeometry(1, 16, 12);
+function efeitoExplosao(x, y, z) {
+  const fogo = new THREE.Mesh(geoExplosao, new THREE.MeshBasicMaterial({ color: '#ffb23a', transparent: true, opacity: 0.95, toneMapped: false }));
+  const tinta = new THREE.Mesh(geoExplosao, new THREE.MeshStandardMaterial({ color: '#1f9e46', transparent: true, opacity: 0.9, roughness: 0.6 }));
+  const fumaca = new THREE.Mesh(geoExplosao, new THREE.MeshStandardMaterial({ color: '#3b3b3b', transparent: true, opacity: 0.6, roughness: 1, depthWrite: false }));
+  for (const m of [fogo, tinta, fumaca]) { m.position.set(x, y + 1, z); scene.add(m); }
+  explosoes.push({ fogo, tinta, fumaca, t: 0 });
+  manchar(new THREE.Vector3(x, alturaChao(x, z) + 0.02, z), new THREE.Vector3(0, 1, 0), '#1f9e46');
+  sons.tocar('tiro', { vol: 1, dist: Math.hypot(x - jogador.pos.x, z - jogador.pos.z), raio: 120, velocidade: 0.45 });
+  tremor = Math.max(tremor, Math.hypot(x - jogador.pos.x, z - jogador.pos.z) < 30 ? 0.35 : 0);
+}
+function atualizarExplosoes(dt) {
+  for (let i = explosoes.length - 1; i >= 0; i--) {
+    const e = explosoes[i]; e.t += dt; const k = e.t / 1.6;
+    e.fogo.scale.setScalar(0.5 + k * 6); e.fogo.material.opacity = Math.max(0, 0.95 - k * 2.2);
+    e.tinta.scale.setScalar(0.4 + k * 4); e.tinta.material.opacity = Math.max(0, 0.9 - k * 1.4);
+    e.fumaca.scale.setScalar(1 + k * 7); e.fumaca.position.y += dt * 2.5; e.fumaca.material.opacity = Math.max(0, 0.6 - k * 0.6);
+    if (k >= 1) { for (const m of [e.fogo, e.tinta, e.fumaca]) { scene.remove(m); m.material.dispose(); } explosoes.splice(i, 1); }
+  }
 }
 function manchar(p, normal, cor) {
   const m = new THREE.Mesh(geoMancha, new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
@@ -1447,6 +1562,7 @@ function atualizarBolas(dt) {
     }
     const chao = alturaChao(b.m.position.x, b.m.position.z);
     if (!fim && (b.m.position.y <= chao + 0.02 || b.vida <= 0)) { manchar(new THREE.Vector3(b.m.position.x, chao + 0.01, b.m.position.z), new THREE.Vector3(0, 1, 0), b.cor); fim = true; }
+    if (fim && b.tanque && b.minha && !b.explodiu) { b.explodiu = true; explodir(b.m.position); }
     if (fim) { scene.remove(b.m); b.m.material.dispose(); bolas.splice(i, 1); }
   }
 }
@@ -1755,13 +1871,14 @@ async function iniciarJogo(perfil) {
   civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n] });
   civico.montarPrefeitura(); civico.montarConcessionaria();
   civico.montarBanco(); civico.montarHospital(); civico.montarBombeiros(); civico.montarCemiterio(); civico.montarQuartelExercito();
+  balcao(CONTRABANDISTA.x, CONTRABANDISTA.z, '#5a2d2d', 'Contrabandista', 'Arma militar · só clãs');
   criarCaminhaoMovel();
 
   // jogador
   const av = await avatarP;
   jogador.avatar = av; jogador.nome = nome;
   const arma = clonar('arma_paintball');
-  av.encaixarArma(arma); arma.visible = false; jogador.arma = arma;
+  av.encaixarArma(arma); arma.visible = false; jogador.arma = arma; jogador.armaTipo = 'basica';
   jogador.pos.set(perfil.pos_x ?? 0, 0, perfil.pos_z ?? quadC(2));
   if (jogador.pos.x > 1500) jogador.pos.set(contratante.x + 6, 0, contratante.z + 6);
   jogador.pena = perfil.pena_seg || 0;
@@ -1772,7 +1889,7 @@ async function iniciarJogo(perfil) {
   jogador.yaw = Math.PI;
   alvoCam.set(jogador.pos.x, 0.9, jogador.pos.z);
   scene.add(av.raiz);
-  jogador.etiqueta = textoSprite(nome, { escala: 0.8, cor: '#f2a33a' }); jogador.etiqueta.position.y = 2.15; av.raiz.add(jogador.etiqueta);
+  jogador.etiqueta = textoSprite(nome, { escala: 0.8, cor: '#f2a33a' }); jogador.etiqueta.position.y = alturaNome(av); av.raiz.add(jogador.etiqueta);
   av.tocar('idle');
   jogador.algemado = !!perfil.algemado; mostrarAlgemas(jogador.algemado);
 
@@ -1931,7 +2048,8 @@ function conectarMultiplayer(perfil) {
       atualizarInfo();
     },
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
-    tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c),
+    tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1),
+    explosao: (e) => receberExplosao(e),
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m),
     meta: () => metaPresenca(),
   });
@@ -1946,9 +2064,9 @@ async function adicionarRemoto(id, meta) {
     const pasta = ROBOS.includes(meta.personagem) ? 'robos' : 'personagens';
     const av = await criarAvatar(pasta, meta.personagem);
     if (remotos.get(id) !== r) return;          // saiu enquanto carregava
-    const arma = clonar('arma_paintball'); av.encaixarArma(arma); arma.visible = false;
+    const arma = clonar('arma_paintball'); av.encaixarArma(arma); arma.visible = false; r.armaCod = 1;
     const et = textoSprite(meta.nome, { escala: 0.8, cor: meta.cargo === 'admin' ? '#ff6b6b' : meta.cargo === 'moderador' ? '#7fb8ff' : '#ffffff' });
-    et.position.y = 2.15; av.raiz.add(et);
+    et.position.y = alturaNome(av); av.raiz.add(et);
     av.raiz.visible = false; scene.add(av.raiz); av.tocar('idle');
     r.av = av; r.arma = arma; etiquetaStatus(r);
   } catch (e) { console.warn('jogador remoto não carregou', e); }
@@ -2000,6 +2118,7 @@ function atualizarRemotos(dt) {
       const umaVez = a.a in ANIM_UMA_VEZ;
       r.av.tocar(a.a, { umaVez, velocidade: ANIM_UMA_VEZ[a.a] || ANIM_VEL[a.a] || 1, fade: umaVez ? 0.1 : 0.2 });
     }
+    if (a.ar && a.ar !== r.armaCod && ARMA_POR_COD[a.ar]) { const nova = novaArma(ARMA_POR_COD[a.ar], r.av); r.arma.parent?.remove(r.arma); r.arma = nova; r.armaCod = a.ar; }
     r.arma.visible = !!a.ar;
     if (r.caixa && codigoCaixa(r.caixa) !== (a.cx || 0)) { scene.remove(r.caixa); r.caixa = null; }
     if (a.cx && !r.caixa) r.caixa = criarCaixa(tipoDoCodigo(a.cx));
@@ -2018,7 +2137,7 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? 1 : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || 0, cs: codigoEsquadra() };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || 0, cs: codigoEsquadra() };
   const u = ultimoEnvio;
   const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs;
   if (!mudou && tempoKeepAlive > 0) return;
@@ -2664,7 +2783,7 @@ function etiquetaStatus(r) {
   const fundo = m.ferido ? 'rgba(200,40,40,.95)' : m.recompensa > 0 ? 'rgba(110,0,0,.97)' : inimigo ? 'rgba(140,10,10,.95)' : m.crimes > 0 ? 'rgba(170,30,30,.92)' : m.prefeito ? 'rgba(242,194,48,.95)' : m.policial ? 'rgba(30,70,160,.92)'
     : m.prf ? 'rgba(20,40,90,.95)' : m.profissao === 'medico' ? 'rgba(240,240,240,.95)' : m.profissao === 'bombeiro' ? 'rgba(200,60,20,.95)' : m.profissao === 'exercito' ? 'rgba(62,78,40,.95)' : 'rgba(40,40,40,.85)';
   r.status = textoSprite(txt, { escala: 0.6, cor: m.prefeito || m.profissao === 'medico' && !m.ferido && !inimigo && !(m.crimes > 0) ? '#20160a' : '#ffffff', fundo });
-  r.status.position.y = 2.6; r.av.raiz.add(r.status);
+  r.status.position.y = alturaNome(r.av) + 0.45; r.av.raiz.add(r.status);
 }
 
 function aplicarDanoRemoto(id, valor) {
@@ -2691,16 +2810,17 @@ function golpeSoco() {
 }
 function acertoDaBola(b) {
   const p = b.m.position;
+  if (b.tanque) return acertoTanque(b);
   for (const n of npcs) {
     if (!n.policia) continue;
     const q = n.av.raiz.position;
-    if (n.caido <= 0 && Math.hypot(p.x - q.x, p.z - q.z) < 0.55 && p.y > q.y + 0.1 && p.y < q.y + 2) { acertarPoliciaNPC(n, b.pd ? 100 : 20); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
+    if (n.caido <= 0 && Math.hypot(p.x - q.x, p.z - q.z) < 0.55 && p.y > q.y + 0.1 && p.y < q.y + 2) { acertarPoliciaNPC(n, b.pd ? 100 : b.dano || 20); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
   }
   for (const [id, r] of remotos) {
     if (!r.av?.raiz.visible) continue;
     const q = r.av.raiz.position;
     if (Math.hypot(p.x - q.x, p.z - q.z) < 0.5 && p.y > q.y + 0.1 && p.y < q.y + 1.9) {
-      if (b.pd) acertoDourado(id); else aplicarDanoRemoto(id, 20);
+      if (b.pd) acertoDourado(id); else aplicarDanoRemoto(id, b.dano || 20);
       manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true;
     }
   }
@@ -2816,7 +2936,10 @@ function entrarServico(sv) {
     raio: sv.modelo === 'bombeiros' || sv.modelo === 'exercito_caminhao' ? 1.9 : 1.6, voa: !!civico.CARROS[sv.modelo].voa, alt: 0 };
   jogador.pos.set(m.position.x, alturaChao(m.position.x, m.position.z), m.position.z); jogador.yaw = m.rotation.y; jogador.alvo = null;
   jogador.avatar.raiz.visible = false;
-  if (civico.DO_EXERCITO.has(sv.modelo)) aviso(sv.modelo === 'helicoptero_exercito' ? 'Helicóptero do Exército: acelere para decolar e pare para pousar. Leva até 6 militares.' : `${civico.CARROS[sv.modelo].nome}: leva até ${civico.LUGARES[sv.modelo]} militares de passageiro.`, 3.5);
+  document.body.classList.toggle('tanque', sv.modelo === 'tanque');
+  if (sv.modelo === 'tanque' && TOQUE) $('btTiro').classList.remove('oculto');
+  if (sv.modelo === 'tanque') aviso('Tanque: toque em Atirar (no PC, F) para disparar o canhão de tinta. Ele explode veículos; eles voltam para o dono em 30 s.', 4.5);
+  else if (civico.DO_EXERCITO.has(sv.modelo)) aviso(sv.modelo === 'helicoptero_exercito' ? 'Helicóptero do Exército: acelere para decolar e pare para pousar. Leva até 6 militares.' : `${civico.CARROS[sv.modelo].nome}: leva até ${civico.LUGARES[sv.modelo]} militares de passageiro.`, 3.5);
   else aviso(sv.modelo === 'ambulancia' ? 'Ambulância: os feridos aparecem no mapa (✚). Pare perto, desça e socorra.' : 'Caminhão dos bombeiros: os incêndios aparecem no mapa (🔥). Pare perto e toque em Jato, sem descer.', 4);
   if (sv.modelo === 'bombeiros' && !rastreio) {   // já aponta o fogo mais perto
     const f = [...servicos.listaIncendios()].sort((a, b) => Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z) - Math.hypot(b.x - jogador.pos.x, b.z - jogador.pos.z))[0];
@@ -3651,7 +3774,7 @@ function receberDano(d) {
   if (jogador.perfil.imortal || jogador.pena > 0) return;
   const r = remotos.get(d.de);
   if (!r?.av || r.av.raiz.position.distanceTo(jogador.pos) > 30) return;     // golpe de longe demais: ignora
-  const v = Math.max(0, Math.min(25, Number(d.v) || 0));
+  const v = Math.max(0, Math.min(80, Number(d.v) || 0));
   jogador.vida -= v; jogador.ultimoAgressor = d.de;
   desenharFome();
   if (jogador.vida <= 0) { morrerLocal(); return; }
@@ -3675,6 +3798,7 @@ async function morrerLocal(pd = false) {
     return;
   }
   try {
+    if (j.ultimoAgressor && remotos.get(j.ultimoAgressor)?.meta?.profissao === 'exercito') rede.exercito.morteMilitar(j.ultimoAgressor).catch(() => {});
     const perdeu = await rede.combate.morrer(j.ultimoAgressor || null);
     aviso(`Você está FERIDO${quem ? ' (' + quem + ')' : ''}.${perdeu ? ` Perdeu ${perdeu} moedas.` : ''} A ambulância está a caminho.`, 6);
   } catch { aviso('Você está ferido. A ambulância está a caminho.', 5); }
@@ -3794,7 +3918,27 @@ function atualizarSoldados(dt) {
   }
 }
 // caçada do Exército (roda no jogo de quem está sendo caçado): 2 jipes e 4 soldados vão atrás dele
-let cacada = null, tempoCacada = 5;
+let cacada = null, tempoCacada = 5, tempoArma = 1;
+// arsenal do quartel: a arma pesada só sai com autorização de um superior e só no expediente
+function usarArsenal() {
+  const p = jogador.perfil;
+  if (jogador.armaPesada) { jogador.armaPesada = false; conferirArma(); aviso('Arma pesada guardada no arsenal.', 2); return; }
+  if (p?.profissao !== 'exercito') { aviso('O arsenal é só para militares em serviço.', 2.5); return; }
+  if (!p.arma_pesada_ate || Date.parse(p.arma_pesada_ate) < agoraServidor()) { aviso('Você precisa da autorização de um Tenente para cima (ou do General Supremo) para pegar a arma pesada.', 3.5); return; }
+  jogador.armaPesada = true; conferirArma();
+  aviso('💥 Arma pesada equipada. Use só com ordem: matar sem autorização tira o seu direito de usar.', 4);
+}
+// contrabandista no Morro da Serra: vende a arma militar para membros de clã (é ilegal: +1 crime)
+const CONTRABANDISTA = { x: -150, z: -1236 };
+let confirmaContrabando = 0;
+async function falarContrabandista() {
+  if (jogador.perfil?.arma_militar) { aviso('Contrabandista: "Você já tem a minha melhor peça. Some daqui."', 3); return; }
+  if (!jogador.claInfo) { aviso('Contrabandista: "Só negocio com gente de clã."', 3); return; }
+  if (performance.now() > confirmaContrabando) { confirmaContrabando = performance.now() + 4000; aviso('Contrabandista: "Arma militar, 60.000. Mais dano, mais rápida. Toque de novo para fechar."', 4); return; }
+  confirmaContrabando = 0;
+  try { await rede.exercito.comprarArmaMilitar(); aviso('🔫 Você comprou a ARMA MILITAR. Ela substitui a arma básica (fora do expediente). Você virou procurado.', 4.5); }
+  catch (e) { aviso(e.message, 3); }
+}
 const esquadra = { jipes: [], soldados: [], pronto: false, criando: false };
 async function montarEsquadra() {
   if (esquadra.pronto || esquadra.criando) return; esquadra.criando = true;
@@ -4438,10 +4582,10 @@ async function trocarAvatar(personagem) {
     const arma = clonar('arma_paintball'); novo.encaixarArma(arma); arma.visible = jogador.armado;
     const velho = jogador.avatar;
     scene.remove(velho.raiz); velho.raiz.remove(jogador.etiqueta);
-    novo.raiz.add(jogador.etiqueta);
+    novo.raiz.add(jogador.etiqueta); jogador.etiqueta.position.y = alturaNome(novo);
     novo.raiz.position.copy(jogador.pos); novo.raiz.rotation.y = jogador.yaw;
     scene.add(novo.raiz); novo.tocar('idle');
-    jogador.avatar = novo; jogador.arma = arma;
+    jogador.avatar = novo; jogador.arma = arma; jogador.armaTipo = 'basica';
   } finally { trocandoAvatar = false; }
 }
 
@@ -4696,6 +4840,8 @@ function contexto() {
   if (perto(civico.BANCO.empregos, 3.2)) return ['agência de empregos: vagas nas empresas', 'Vagas'];
   if (perto(civico.HOSPITAL.balcao, 3.2)) return ['hospital: tratamento e plantão médico', 'Hospital'];
   if (perto(civico.BOMBEIROS.balcao, 3.2)) return ['quartel dos bombeiros', 'Bombeiros'];
+  if (perto(civico.EXERCITO.arsenal, 3.2)) return [jogador.armaPesada ? 'guardar a arma pesada' : 'arsenal: pegar a arma pesada (com autorização)', 'Arsenal'];
+  if (perto(CONTRABANDISTA, 3.2)) return [jogador.perfil?.arma_militar ? 'contrabandista (você já tem a arma militar)' : 'contrabandista: arma militar por 60.000 (só clãs, é crime)', 'Negociar'];
   if (perto(civico.EXERCITO.balcao, 3.2)) return [jogador.perfil?.profissao === 'exercito' ? 'comando do Exército: ordens e caçadas' : 'comando do Exército: alistar-se', 'Comando'];
   if (jogador.perfil?.profissao === 'jornalista' && reportagemProxima()) return [`reportar: ${reportagemProxima().titulo} (+200)`, 'Reportar'];
   if (perto(civico.PREFEITURA.jornal, 3.2)) return ['Jornal da Cidade: virar jornalista e ler as notícias', 'Jornal'];
@@ -4781,6 +4927,8 @@ function quadro() {
   atualizarNPCs(dt);
   atualizarSoldados(dt);
   atualizarCacada(dt);
+  tempoArma -= dt; if (tempoArma <= 0) { tempoArma = 0.5; conferirArma(); }
+  atualizarExplosoes(dt);
   civico.atualizarQuartel(jogador.pos);
   atualizarRemotos(dt);
   enviarEstado(dt);

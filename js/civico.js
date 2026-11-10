@@ -16,7 +16,9 @@ export const EXERCITO = {
     { modelo: 'exercito_caminhao', x: 173, z: 1072.5, ang: Math.PI },
     { modelo: 'exercito_caminhao', x: 181, z: 1072.5, ang: Math.PI },
     { modelo: 'helicoptero_exercito', x: 232, z: 1027, ang: -Math.PI / 2 },
+    { modelo: 'tanque', x: 200, z: 1059, ang: -Math.PI / 2 },
   ],
+  arsenal: { x: 163, z: 986 },
   veiculos: [],
   comando: { x0: 210, x1: 242, z0: 974, z1: 990, porta: { x: 226, z: 991.5 } },
   balcao: { x: 226, z: 979.5 },
@@ -51,6 +53,7 @@ export function montarQuartelExercito() {
   const piso = new THREE.Mesh(new THREE.PlaneGeometry(W - 2 * e, D - 2 * e).rotateX(-Math.PI / 2), mat('#8d8a7a', { roughness: 0.7 })); piso.position.set(cx, 0.14, cz); piso.receiveShadow = true; g.add(piso);
   const tapete = new THREE.Mesh(new THREE.PlaneGeometry(3, 10).rotateX(-Math.PI / 2), mat('#7a1f22', { roughness: 1 })); tapete.position.set(C.porta.x, 0.15, C.z1 - 6); g.add(tapete);
   ctx.balcao(EXERCITO.balcao.x, EXERCITO.balcao.z, '#4b5a2e', 'Comando do Exército', 'Ordens, caçadas e carreira');
+  ctx.balcao(EXERCITO.arsenal.x, EXERCITO.arsenal.z, '#3a3f2c', 'Arsenal', 'Arma pesada (com autorização)');
   // bandeiras atrás do balcão
   for (const [x, cor] of [[221, '#2f7d3a'], [231, '#2f7d3a']]) {
     b(metal, 0.08, 3.6, 0.08, x, 1.95, C.z0 + 1.2); b(mat(cor), 1.4, 1, 0.04, x + 0.75, 3.2, C.z0 + 1.2); b(mat('#e2c234'), 0.7, 0.5, 0.05, x + 0.75, 3.2, C.z0 + 1.2);
@@ -84,10 +87,6 @@ export function montarQuartelExercito() {
   const saco = mat('#b7a77a', { roughness: 1 });
   for (const sz of [-1, 1]) for (let k = 0; k < 3; k++) { b(saco, 4, 0.5, 1, 156, 0.4 + k * 0.5, 1053 + sz * 8); }
   col(154, 158, 1044.5, 1045.5); col(154, 158, 1060.5, 1061.5);
-  const tanque = new THREE.Group(); tanque.position.set(200, 0.14, 1060); tanque.rotation.y = -0.5; g.add(tanque);
-  b(oliva, 3.6, 1.1, 7, 0, 0.9, 0, tanque); b(escuro, 4, 0.9, 7.4, 0, 0.45, 0, tanque); b(oliva, 2.6, 0.9, 3, 0, 1.9, -0.3, tanque);
-  const canhao = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 5, 10).rotateX(Math.PI / 2), escuro); canhao.position.set(0, 2, 3.4); tanque.add(canhao);
-  col(197, 203, 1056, 1064);
   for (let k = 0; k < 4; k++) { b(madeira, 3, 1.2, 0.3, 160 + k * 6, 0.74, 1000); col(158.5 + k * 6, 161.5 + k * 6, 999.8, 1000.2); }   // pista de obstáculos
   for (const x of [186, 192]) { b(metal, 0.12, 2.4, 0.12, x - 1, 1.3, 987); b(metal, 0.12, 2.4, 0.12, x + 1, 1.3, 987); b(metal, 2.1, 0.1, 0.1, x, 2.4, 987); }
   for (const [x, z] of [[190, 1078], [193, 1078], [191.5, 1080.5]]) { b(madeira, 2.2, 1.4, 2.2, x, 0.85, z); }
@@ -117,10 +116,11 @@ export const CARROS = {
   exercito_caminhao: { nome: 'Caminhão do Exército', preco: 0, vel: 11 },
   helicoptero_exercito: { nome: 'Helicóptero do Exército', preco: 0, vel: 26, voa: true },
   helicoptero: { nome: 'Helicóptero executivo', preco: 1500000, vel: 24, voa: true },
+  tanque: { nome: 'Tanque do Exército', preco: 0, vel: 7 },
 };
 // quantos passageiros cada veículo leva (além do motorista); veículos do Exército só levam militares
-export const LUGARES = { militar: 3, exercito_caminhao: 8, helicoptero_exercito: 6, helicoptero: 4, suv: 3, popular: 3, esportivo: 1, presidencial: 3 };
-export const DO_EXERCITO = new Set(['militar', 'exercito_caminhao', 'helicoptero_exercito']);
+export const LUGARES = { tanque: 1, militar: 3, exercito_caminhao: 8, helicoptero_exercito: 6, helicoptero: 4, suv: 3, popular: 3, esportivo: 1, presidencial: 3 };
+export const DO_EXERCITO = new Set(['militar', 'exercito_caminhao', 'helicoptero_exercito', 'tanque']);
 export const CORES_CARRO = ['#c0392b', '#2c3e50', '#ecf0f1', '#f1c40f', '#2980b9', '#16a085', '#8e44ad', '#1f1f1f', '#d35400'];
 
 const mat = (cor, ex = {}) => new THREE.MeshStandardMaterial({ color: cor, roughness: 0.6, ...ex });
@@ -129,8 +129,8 @@ function bloco(g, m, w, h, d, x, y, z) {
 }
 
 export function iniciar(contexto) { ctx = contexto; }
-const GLB_CARRO = { militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros' };
-const SEM_TINTA = new Set(['presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
+const GLB_CARRO = { tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros' };
+const SEM_TINTA = new Set(['tanque', 'presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
 export function montarPrefeitura() {

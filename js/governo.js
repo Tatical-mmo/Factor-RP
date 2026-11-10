@@ -225,12 +225,25 @@ async function blocoExercito(car) {
   const cmd = ctx.perfil().cargo === 'admin' || (car?.nivel || 0) >= 8;
   let h = `<div class="linha"><small>🚙 Jipe (3 passageiros), 🚚 caminhão (8) e 🚁 helicóptero (6, só Tenente para cima pilota) ficam no quartel, em Porto Sul. São ilimitados: chegue perto e toque em Dirigir. Militares embarcam como passageiros.</small></div>`;
   if (ctx.perfil().cargo === 'admin') h += await blocoGeneral();
+  h += await blocoFicha(cmd);
   if (!cmd) return h + '<div class="linha"><small>A partir de Tenente você pode autorizar os soldados a caçar procurados.</small></div>';
   const [lista, cacadas] = await Promise.all([rede.exercito.procurados().catch(() => []), rede.exercito.cacadas().catch(() => [])]);
   const ativa = new Map((cacadas || []).map((k) => [k.alvo, k]));
   h += `<div class="linha"><b>🎖️ Ordens de caçada</b><small>Os soldados e jipes do Exército vão atrás do procurado por 10 min e prendem quando alcançam.</small></div>`;
   h += (lista || []).length ? lista.map((p) => `<div class="linha item"><span class="ic">🚨</span><span class="nm"><b>${esc(p.nome)}</b><small>${p.crimes} crime${p.crimes > 1 ? 's' : ''}${ativa.has(p.id) ? ` · caçada até ${new Date(ativa.get(p.id).ate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</small></span>
     <span class="bts">${ativa.has(p.id) ? `<button data-cancelacaca="${p.id}">Suspender</button>` : `<button data-caca="${p.id}">Autorizar caçada</button>`}</span></div>`).join('') : '<div class="linha"><small>Nenhum procurado online agora.</small></div>';
+  return h;
+}
+// ficha militar: quem está abaixo de mim, as mortes que causou (com ou sem ordem), arma pesada e expulsão
+async function blocoFicha(cmd) {
+  const lista = await rede.exercito.ficha().catch(() => []);
+  if (!(lista || []).length) return '';
+  const quando = (t) => new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  let h = '<div class="linha"><b>📋 Ficha militar</b><small>Militares abaixo de você. Toda morte causada por eles aparece aqui; "sem ordem" é quando a vítima não era procurada nem estava sendo caçada.</small></div>';
+  h += lista.map((m) => `<div class="linha item"><span class="ic">${m.expulso ? '⛔' : m.sem_ordem > 0 ? '⚠️' : '🎖️'}</span><span class="nm"><b>${esc(m.jogador)}</b>
+    <small>${m.expulso ? 'EXPULSO' : esc(m.patente || 'Recruta')} · ${m.mortes} morte${m.mortes === 1 ? '' : 's'}${m.sem_ordem ? ` (${m.sem_ordem} sem ordem)` : ''}${m.pesada ? ' · 💥 arma pesada liberada' : ''}</small>
+    ${(m.ultimas || []).map((u) => `<small>${u.autorizada ? '✔' : '✖'} ${esc(u.vitima || '?')} · ${quando(u.quando)}</small>`).join('')}</span>
+    ${cmd ? `<span class="bts">${m.expulso ? `<button data-readmitir="${m.id}">Readmitir</button>` : `${m.pesada ? `<button data-pesada="${m.id}" data-h="0">Tirar arma pesada</button>` : `<button data-pesada="${m.id}" data-h="2">Arma pesada 2 h</button>`}<button class="perigo" data-expulsar="${m.id}">Expulsar</button>`}</span>` : ''}</div>`).join('');
   return h;
 }
 const PATENTES_EX = ['Recruta', 'Soldado', 'Cabo', '3º Sargento', '2º Sargento', '1º Sargento', 'Subtenente', 'Tenente', 'Capitão', 'Major', 'Tenente-Coronel', 'Coronel', 'General'];
@@ -244,6 +257,9 @@ async function blocoGeneral() {
   return h;
 }
 function ligarQuadroTrabalho(c) {
+  c.querySelectorAll('[data-pesada]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.armaPesada(b.dataset.pesada, Number(b.dataset.h)), Number(b.dataset.h) ? 'Arma pesada autorizada por 2 h.' : 'Autorização retirada.'); });
+  c.querySelectorAll('[data-expulsar]').forEach((b) => { b.onclick = () => confirmar(b, () => executar(() => rede.exercito.expulsar(b.dataset.expulsar, true), 'Militar expulso do Exército.')); });
+  c.querySelectorAll('[data-readmitir]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.expulsar(b.dataset.readmitir, false), 'Expulsão retirada.'); });
   c.querySelectorAll('[data-promover]').forEach((b) => { b.onclick = () => { const n = Number(c.querySelector(`[data-patsel="${b.dataset.promover}"]`).value); executar(() => rede.exercito.promover(b.dataset.promover, n), (nome) => `Patente salva: ${nome}.`); }; });
   c.querySelectorAll('[data-caca]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.ordenar(b.dataset.caca), 'Caçada autorizada! Os soldados estão a caminho.'); });
   c.querySelectorAll('[data-cancelacaca]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.cancelar(b.dataset.cancelacaca), 'Caçada suspensa.'); });

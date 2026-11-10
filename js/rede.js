@@ -73,6 +73,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'dano' }, ({ payload }) => eventos.dano?.(payload));
   canal.on('broadcast', { event: 'atropelo' }, ({ payload }) => eventos.atropelo?.(payload));
   canal.on('broadcast', { event: 'chat' }, ({ payload }) => eventos.chat?.(payload));
+  canal.on('broadcast', { event: 'explosao' }, ({ payload }) => eventos.explosao?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
@@ -201,6 +202,11 @@ function traduzirRpc(m) {
     'a equipe nao e cacada': 'A equipe não pode ser caçada.',
     'ele nao esta no exercito': 'Ele não está no Exército.',
     'patente invalida': 'Patente inválida.',
+    'voce foi expulso do exercito': 'Você foi expulso do Exército. Só um superior pode retirar a expulsão.',
+    'so patente maior': 'Só quem tem patente maior (Tenente para cima) pode fazer isso.',
+    'so membros de cla compram': 'O contrabandista só vende para membros de clã.',
+    'voce ja tem a arma militar': 'Você já tem a arma militar.',
+    'so o exercito': 'Só o Exército pode fazer isso.',
     'personagem de evento fora da vitrine': 'Esse personagem de evento não está à venda agora. Fique de olho nos avisos!',
     'digite RESETAR para confirmar': 'Digite RESETAR (em maiúsculas) para confirmar.',
     'escolha o que resetar': 'Marque pelo menos uma parte para resetar.',
@@ -401,6 +407,12 @@ export const exercito = {
   preso: () => rpc('preso_pelo_exercito'),
   membros: () => rpc('membros_exercito'),
   promover: (id, nivel) => rpc('admin_promover_exercito', { p_jogador: id, p_nivel: nivel }),
+  ficha: () => rpc('ficha_militar'),
+  expulsar: (id, sim) => rpc('expulsar_exercito', { p_alvo: id, p_expulsar: sim }),
+  armaPesada: (id, horas) => rpc('autorizar_arma_pesada', { p_alvo: id, p_horas: horas }),
+  morteMilitar: (id) => rpc('registrar_morte_militar', { p_militar: id }),
+  comprarArmaMilitar: () => rpc('comprar_arma_militar'),
+  explodirCarro: (id) => rpc('explodir_carro', { p_carro: id }),
 };
 export const pd = {
   estado: () => sel(sb.from('arma_pd').select('*').eq('id', 1).maybeSingle()),
