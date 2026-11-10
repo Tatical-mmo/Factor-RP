@@ -21,7 +21,9 @@ export const CIDADES = [
   { id: 'sul', nome: 'Porto Sul', s: 1 },
 ];
 const CID = { ruas: [945, 999, 1053, 1107], colunas: [-81, -27, 27, 81], blocos: [972, 1026, 1080], xs: [-54, 0, 54] };
-export const CIDADE_Z = { min: 922.2, max: 1110, x: 84 };
+export const CIDADE_Z = { min: 900, max: 1170, maxSul: 1108, x: 300 };   // cidade + a mata em volta
+// Quartel do Exército (Porto Sul, na mata a leste da cidade): muro, portão a oeste, pátio no meio
+export const QUARTEL = { x0: 150, x1: 250, z0: 966, z1: 1086, portao: { x: 146, z: 1053 }, patio: { x: 190, z: 1026 } };
 
 let ctx = null;
 let s0 = 90210;
@@ -77,7 +79,7 @@ export function limitar(p) {
   if (Math.abs(p.z) > 700) {
     const s = Math.sign(p.z);
     p.x = THREE.MathUtils.clamp(p.x, -CIDADE_Z.x, CIDADE_Z.x);
-    const a = Math.abs(THREE.MathUtils.clamp(Math.abs(p.z), CIDADE_Z.min, CIDADE_Z.max));
+    const a = Math.abs(THREE.MathUtils.clamp(Math.abs(p.z), CIDADE_Z.min, s > 0 ? CIDADE_Z.maxSul : CIDADE_Z.max));
     p.z = s * a; return;
   }
   p.x = THREE.MathUtils.clamp(p.x, -LIM, LIM); p.z = THREE.MathUtils.clamp(p.z, -LIM, LIM);
@@ -439,14 +441,64 @@ function gerarCidade(cid) {
     if (cid.id === 'norte') quadra(x, z, rnd() < 0.75 ? 'casas' : 'predios', [1, 3]);
     else quadra(x, z, bz === 1080 ? 'galpoes' : (rnd() < 0.5 ? 'predios' : 'casas'), [2, 4]);
   }
-  // em volta: mata, morros ou o mar
-  for (let k = 0; k < 160; k++) {
-    const x = entre(-260, 260), z = s * entre(900, 1240);
+  // em volta: a mata (dá para andar nela; as árvores perto do caminho têm colisão)
+  const Q = QUARTEL;
+  for (let k = 0; k < 420; k++) {
+    const x = entre(-300, 300), z = s * entre(898, 1240);
     if (Math.abs(x) < 95 && Math.abs(z) < 1118) continue;
     if (cid.id === 'sul' && Math.abs(z) > 1112) continue;
     if (Math.abs(x) < 50 && Math.abs(z) < 935) continue;
-    arvore(x, z, entre(0.9, 1.6), false);
+    if (cid.id === 'sul' && x > Q.x0 - 18 && x < Q.x1 + 18 && z > Q.z0 - 18 && z < Q.z1 + 18) continue;   // terreno do quartel
+    if (cid.id === 'sul' && x > 80 && x < Q.x0 && Math.abs(z - Q.portao.z) < 9) continue;            // estrada do quartel
+    const longe = Math.abs(x) > 300 || Math.abs(z) > 1172;
+    arvore(x, z, entre(0.9, 1.7), !longe);
   }
+  // arbustos baixos no chão da mata
+  for (let k = 0; k < 160; k++) {
+    const x = entre(-300, 300), z = s * entre(900, 1170);
+    if (Math.abs(x) < 95 && Math.abs(z) < 1118) continue;
+    if (cid.id === 'sul' && (Math.abs(z) > 1108 || (x > Q.x0 - 18 && x < Q.x1 + 18 && z > Q.z0 - 18 && z < Q.z1 + 18) || (x > 80 && x < Q.x0 && Math.abs(z - Q.portao.z) < 9))) continue;
+    arbustos.push([x, z, entre(0.6, 1.3)]);
+  }
+  if (cid.id === 'sul') montarQuartel();
+}
+const arbustos = [];
+function montarQuartel() {
+  const Q = QUARTEL, cx = (Q.x0 + Q.x1) / 2, cz = (Q.z0 + Q.z1) / 2, pz = Q.portao.z;
+  rua((86 + Q.x0) / 2, pz, Q.x0 - 86, RW);                                    // estrada da cidade até o portão
+  calcadas.push([cx, cz, Q.x1 - Q.x0, Q.z1 - Q.z0, 0.12]);                   // chão do quartel
+  pisos.push({ x0: Q.x0, x1: Q.x1, z0: Q.z0, z1: Q.z1, h: 0.12 });
+  extras.push({ x0: Q.x0, x1: Q.x1, z0: Q.z0, z1: Q.z1, cor: '#7d8a5c' });
+  // muro com portão no lado oeste
+  const muro = (x0, z0, x1, z1) => {
+    const w = Math.max(0.6, x1 - x0), d = Math.max(0.6, z1 - z0);
+    extrasMesh.push({ geo: [w, 3, d], cor: '#8c8a6e', pos: [(x0 + x1) / 2, 1.5, (z0 + z1) / 2] });
+    addCol({ tipo: 'caixa', x0, x1: x0 + w, z0, z1: z0 + d });
+  };
+  muro(Q.x0, Q.z0, Q.x1, Q.z0 + 0.6); muro(Q.x0, Q.z1 - 0.6, Q.x1, Q.z1); muro(Q.x1 - 0.6, Q.z0, Q.x1, Q.z1);
+  muro(Q.x0, Q.z0, Q.x0 + 0.6, pz - 6); muro(Q.x0, pz + 6, Q.x0 + 0.6, Q.z1);
+  // guarita e cancela no portão
+  extrasMesh.push({ geo: [3, 3.2, 3], cor: '#5e6b45', pos: [Q.x0 + 2, 1.6, pz - 8.5] });
+  extrasMesh.push({ geo: [3.4, 0.25, 3.4], cor: '#3b4430', pos: [Q.x0 + 2, 3.3, pz - 8.5] });
+  addCol({ tipo: 'caixa', x0: Q.x0 + 0.5, x1: Q.x0 + 3.5, z0: pz - 10, z1: pz - 7 });
+  // torres de vigia nos cantos
+  for (const [x, z] of [[Q.x0 + 2, Q.z0 + 2], [Q.x1 - 2, Q.z0 + 2], [Q.x0 + 2, Q.z1 - 2], [Q.x1 - 2, Q.z1 - 2]]) {
+    extrasMesh.push({ geo: [0.5, 8, 0.5], cor: '#4a5238', pos: [x, 4, z] });
+    extrasMesh.push({ geo: [3.4, 2.2, 3.4], cor: '#5e6b45', pos: [x, 9.1, z] });
+    extrasMesh.push({ geo: [4, 0.3, 4], cor: '#3b4430', pos: [x, 10.35, z] });
+  }
+  // prédios: comando, alojamento e garagem (verde-oliva e areia)
+  predio(cx + 26, Q.z0 + 16, 34, 18, 10.5, { y: 0.12, cor: '#c9bd8f', loja: false });       // comando
+  predio(cx + 26, Q.z1 - 15, 34, 16, 7, { y: 0.12, cor: '#9aa070', loja: false });          // alojamento
+  predio(Q.x0 + 16, Q.z1 - 13, 22, 14, 6.5, { y: 0.12, cor: '#7d8462', loja: false, det: false });   // garagem
+  predio(Q.x0 + 16, Q.z0 + 12, 18, 12, 5, { y: 0.12, cor: '#8f9470', loja: false, det: false });     // paiol
+  // pátio de formatura e mastro
+  calcadas.push([Q.patio.x, Q.patio.z, 40, 34, 0.14]);
+  extrasMesh.push({ geo: [0.25, 12, 0.25], cor: '#d8d8d0', pos: [Q.patio.x + 22, 6, Q.patio.z] });
+  extrasMesh.push({ geo: [0.06, 1.6, 2.6], cor: '#2f7d3a', pos: [Q.patio.x + 22, 11, Q.patio.z + 1.35] });
+  extrasMesh.push({ geo: [0.07, 0.9, 1.4], cor: '#e2c234', pos: [Q.patio.x + 22, 11, Q.patio.z + 1.35] });
+  addCol({ tipo: 'circ', x: Q.patio.x + 22, z: Q.patio.z, r: 0.3 });
+  for (const sz of [-1, 1]) for (let k = 0; k < 5; k++) arvore(Q.x0 + 6 + k * 9, pz + sz * 14, 0.8);
 }
 
 // ---------------------------------------------------------------- malhas
@@ -538,6 +590,12 @@ function montarMalhas() {
   });
   pinho.castShadow = true; pinho.receiveShadow = true; if (pinheiros.length) scene.add(pinho);
   tronco.castShadow = true; copa.castShadow = true; copa.receiveShadow = true; scene.add(tronco); if (folhosas.length) scene.add(copa);
+  // arbustos da mata (sem colisão)
+  if (arbustos.length) {
+    const ab = new THREE.InstancedMesh(geoCopa([[0, 0.45, 0, 0.7], [0.55, 0.3, 0.2, 0.5], [-0.5, 0.3, -0.2, 0.55]]), MAT.copa, arbustos.length);
+    arbustos.forEach(([x, z, e], k) => { _m.compose(_v.set(x, 0, z), _q.setFromAxisAngle(_e.set(0, 1, 0), x * 3.1), _e.set(e, e * 0.8, e)); ab.setMatrixAt(k, _m); ab.setColorAt(k, _c.set(['#4f7d36', '#5b8a3c', '#466f33'][k % 3])); });
+    ab.receiveShadow = true; scene.add(ab);
+  }
 }
 
 function plano(x, z, w, d, y, mat) {

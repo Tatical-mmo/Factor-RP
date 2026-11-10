@@ -1046,7 +1046,7 @@ function sairCarro() {
     const lx = Math.cos(jogador.yaw) * 2.8, lz = -Math.sin(jogador.yaw) * 2.8;
     jogador.pos.x += lx; jogador.pos.z += lz; resolverColisao(jogador.pos, jogador.raio);
     civico.atualizarSirenes(0, c.mesh); jogador.avatar.raiz.visible = true;
-    aviso(c.servico === 'ambulancia' ? 'Ambulância estacionada. Socorra o ferido (✚) e volte para ela.' : 'Caminhão estacionado aqui. Volte para ele quando terminar.', 3);
+    aviso(c.servico === 'ambulancia' ? 'Ambulância estacionada. Socorra o ferido (✚) e volte para ela.' : c.servico === 'militar' ? 'Jipe estacionado aqui. Volte para ele quando quiser.' : 'Caminhão estacionado aqui. Volte para ele quando terminar.', 3);
     return;
   }
   if (c.caminhao) {
@@ -1448,8 +1448,8 @@ function suavizarAngulo(a, b, t) {
 const MAPA_ESC = 1.2, MAPA_R = 110;             // pixels por metro no fundo; raio visível em metros
 const REGIOES_MAPA = [
   { x0: -mundo.FIM_HORIZONTE, z0: -mundo.FIM_HORIZONTE, x1: mundo.FIM_HORIZONTE, z1: mundo.FIM_HORIZONTE },
-  { x0: -170, z0: -1190, x1: 170, z1: -810 },
-  { x0: -170, z0: 810, x1: 170, z1: 1190 },
+  { x0: -320, z0: -1190, x1: 320, z1: -810 },
+  { x0: -320, z0: 810, x1: 320, z1: 1190 },
 ];
 let fundosMapa = [];
 function regiaoMapa(x, z) { return REGIOES_MAPA.findIndex((r) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1); }
@@ -1606,7 +1606,8 @@ function desenharMapa() {
     for (const f of servicos.listaIncendios()) desenhar(f.x, f.z, piscaS ? '#ff7a1a' : '#ffd23e', 10);
     if (civico.BOMBEIROS.veiculo && !jogador.carro) desenhar(civico.BOMBEIROS.veiculo.position.x, civico.BOMBEIROS.veiculo.position.z, '#ff4a2a', 6);
   }
-  if (jogador.perfil?.policial || jogador.perfil?.prf) {
+  if (prof === 'exercito' && civico.EXERCITO.veiculo && !jogador.carro) desenhar(civico.EXERCITO.veiculo.position.x, civico.EXERCITO.veiculo.position.z, '#7d9a3e', 6);
+  if (jogador.perfil?.policial || jogador.perfil?.prf || prof === 'exercito') {
     const pisca = Math.sin(performance.now() / 150) > 0;
     for (const r of remotos.values()) if (r.meta?.crimes > 0 && r.av) desenhar(r.av.raiz.position.x, r.av.raiz.position.z, pisca ? '#ff2020' : '#ffffff', 6);
     for (const o of ocorrencias) desenhar(o.x, o.z, '#ff5a1f', 8);
@@ -1675,7 +1676,7 @@ async function iniciarJogo(perfil) {
   montarAgencias();
   civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n] });
   civico.montarPrefeitura(); civico.montarConcessionaria();
-  civico.montarBanco(); civico.montarHospital(); civico.montarBombeiros(); civico.montarCemiterio();
+  civico.montarBanco(); civico.montarHospital(); civico.montarBombeiros(); civico.montarCemiterio(); civico.montarQuartelExercito();
   criarCaminhaoMovel();
 
   // jogador
@@ -1754,7 +1755,7 @@ async function iniciarJogo(perfil) {
     veiculos: meusVeiculos, acaoVeiculo, amigosMudaram: () => carregarAmigos(),
     rastrear: (a) => rastrear(a), portaoEmpresa: (id) => portaoDaEmpresa(id),
     locaisTrabalho: () => ({ policia: pontos.delegacia, prf: civico.PREFEITURA.prf, medico: civico.HOSPITAL.balcao, bombeiro: civico.BOMBEIROS.balcao,
-      jornalista: civico.PREFEITURA.jornal, agencia: civico.BANCO.empregos }), destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); }, pontoMudou: () => servicos.recomecarPonto(),
+      jornalista: civico.PREFEITURA.jornal, exercito: mundo.QUARTEL.portao, agencia: civico.BANCO.empregos }), destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); }, pontoMudou: () => servicos.recomecarPonto(),
   });
   $('btVeiculos').onclick = () => abrirServico('veiculos');
   $('btAmigos').onclick = () => abrirServico('amigos');
@@ -1782,6 +1783,7 @@ async function iniciarJogo(perfil) {
   iniciarCla({ perfil: () => jogador.perfil, recarregar: () => { tempoSocial = 0; servicos.recarregarGuerras(); }, definirCla: (id, info) => { jogador.cla = id; if ((info?.nome || null) !== (jogador.claInfo?.nome || null)) { jogador.claInfo = info; conexao?.rastrear(metaPresenca()); } } });
   carregarCidadeSocial().catch(() => {});
   criarPoliciaNPC();
+  criarSoldadosNPC();
   $('btFianca').onclick = async () => { try { await rede.policia.fianca(); aviso('Fiança paga. Você está livre.'); } catch (e) { aviso(e.message); } };
   iniciarPainel({
     perfil: () => jogador.perfil,
@@ -2576,10 +2578,10 @@ function etiquetaStatus(r) {
   const inimigo = m.cla && inimigos.has(m.cla);
   const txt = m.ferido ? '✚ FERIDO' : m.recompensa > 0 ? `🎯 PROCURADO · ${Number(m.recompensa).toLocaleString('pt-BR')}` : inimigo ? `⚔️ INIMIGO [${m.cla}]` : m.crimes > 0 ? `PROCURADO${m.eleitoral ? ' (PRF)' : ''} ${'★'.repeat(Math.min(5, m.crimes))}` : m.prefeito ? '★ PREFEITO ★'
     : m.policial ? `POLÍCIA${m.patente ? ` · ${m.patente}` : ''}` : m.prf ? `PRF${m.patente ? ` · ${m.patente}` : ''}` : m.profissao === 'medico' ? `✚ ${(m.patente || 'MÉDICO').toUpperCase()}`
-    : m.profissao === 'bombeiro' ? `🚒 ${(m.patente || 'BOMBEIRO').toUpperCase()}` : m.profissao === 'jornalista' ? `📰 ${(m.patente || 'IMPRENSA').toUpperCase()}` : m.cla ? `[${m.cla}]` : null;
+    : m.profissao === 'bombeiro' ? `🚒 ${(m.patente || 'BOMBEIRO').toUpperCase()}` : m.profissao === 'jornalista' ? `📰 ${(m.patente || 'IMPRENSA').toUpperCase()}` : m.profissao === 'exercito' ? `🎖️ ${(m.patente || 'EXÉRCITO').toUpperCase()}` : m.cla ? `[${m.cla}]` : null;
   if (!txt) return;
   const fundo = m.ferido ? 'rgba(200,40,40,.95)' : m.recompensa > 0 ? 'rgba(110,0,0,.97)' : inimigo ? 'rgba(140,10,10,.95)' : m.crimes > 0 ? 'rgba(170,30,30,.92)' : m.prefeito ? 'rgba(242,194,48,.95)' : m.policial ? 'rgba(30,70,160,.92)'
-    : m.prf ? 'rgba(20,40,90,.95)' : m.profissao === 'medico' ? 'rgba(240,240,240,.95)' : m.profissao === 'bombeiro' ? 'rgba(200,60,20,.95)' : 'rgba(40,40,40,.85)';
+    : m.prf ? 'rgba(20,40,90,.95)' : m.profissao === 'medico' ? 'rgba(240,240,240,.95)' : m.profissao === 'bombeiro' ? 'rgba(200,60,20,.95)' : m.profissao === 'exercito' ? 'rgba(62,78,40,.95)' : 'rgba(40,40,40,.85)';
   r.status = textoSprite(txt, { escala: 0.6, cor: m.prefeito || m.profissao === 'medico' && !m.ferido && !inimigo && !(m.crimes > 0) ? '#20160a' : '#ffffff', fundo });
   r.status.position.y = 2.6; r.av.raiz.add(r.status);
 }
@@ -2701,9 +2703,9 @@ function atualizarDirigido(c, dt) {
 function servicoProximo() {
   if (jogador.carro || jogador.trem) return null;
   const prof = jogador.perfil?.profissao;
-  const base = prof === 'medico' ? civico.HOSPITAL : prof === 'bombeiro' ? civico.BOMBEIROS : null;
+  const base = prof === 'medico' ? civico.HOSPITAL : prof === 'bombeiro' ? civico.BOMBEIROS : prof === 'exercito' ? civico.EXERCITO : null;
   if (!base?.veiculo || Math.hypot(base.veiculo.position.x - jogador.pos.x, base.veiculo.position.z - jogador.pos.z) > 5.5) return null;
-  return { base, modelo: prof === 'medico' ? 'ambulancia' : 'bombeiros' };
+  return { base, modelo: prof === 'medico' ? 'ambulancia' : prof === 'exercito' ? 'militar' : 'bombeiros' };
 }
 function entrarServico(sv) {
   if (jogador.carregando) { aviso('Largue a caixa antes de dirigir.'); return; }
@@ -2713,7 +2715,8 @@ function entrarServico(sv) {
   jogador.carro = { id: 's' + jogador.perfil.id.slice(0, 8), servico: sv.modelo, modelo: sv.modelo, cor: '#ffffff', vel: 0, mesh: m, salvar: 1e9, max: civico.CARROS[sv.modelo].vel, raio: sv.modelo === 'bombeiros' ? 1.9 : 1.6 };
   jogador.pos.set(m.position.x, alturaChao(m.position.x, m.position.z), m.position.z); jogador.yaw = m.rotation.y; jogador.alvo = null;
   jogador.avatar.raiz.visible = false;
-  aviso(sv.modelo === 'ambulancia' ? 'Ambulância: os feridos aparecem no mapa (✚). Pare perto, desça e socorra.' : 'Caminhão dos bombeiros: os incêndios aparecem no mapa (🔥). Pare perto e toque em Jato, sem descer.', 4);
+  if (sv.modelo === 'militar') aviso('Jipe do Exército: dirija pela mata e pelas cidades. Toque em Sair para estacionar.', 3.5);
+  else aviso(sv.modelo === 'ambulancia' ? 'Ambulância: os feridos aparecem no mapa (✚). Pare perto, desça e socorra.' : 'Caminhão dos bombeiros: os incêndios aparecem no mapa (🔥). Pare perto e toque em Jato, sem descer.', 4);
   if (sv.modelo === 'bombeiros' && !rastreio) {   // já aponta o fogo mais perto
     const f = [...servicos.listaIncendios()].sort((a, b) => Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z) - Math.hypot(b.x - jogador.pos.x, b.z - jogador.pos.z))[0];
     if (f) rastrear({ nome: `🔥 ${f.nome}`, x: f.x, z: f.z });
@@ -3168,7 +3171,7 @@ function atualizarSons() {
   for (const o of servicos.veiculosNpc()) {
     const nome = o.userData.sireneDe; if (nome && andando(o)) sons.continuo(nome, 0.55 * sons.perto(dist(o), 75));
   }
-  if (jogador.carro?.servico && Math.abs(jogador.carro.vel) > 0.8) sons.continuo(jogador.carro.servico === 'ambulancia' ? 'sirene_ambulancia' : 'sirene_bombeiros', 0.45);
+  if (jogador.carro?.servico && jogador.carro.servico !== 'militar' && Math.abs(jogador.carro.vel) > 0.8) sons.continuo(jogador.carro.servico === 'ambulancia' ? 'sirene_ambulancia' : 'sirene_bombeiros', 0.45);
   for (const r of remotos.values()) if (r.carro && (r.carroModelo === 'ambulancia' || r.carroModelo === 'bombeiros') && andando(r.carro)) sons.continuo(r.carroModelo === 'ambulancia' ? 'sirene_ambulancia' : 'sirene_bombeiros', 0.5 * sons.perto(dist(r.carro), 75));
   for (const v of viaturas) if ((v.perseguindo || remotoAtivo(v)) && andando(v.obj)) sons.continuo('sirene_policia', 0.6 * sons.perto(dist(v.obj), 85));
   // helicópteros: som de perto do chão e som do alto, conforme a altura
@@ -3616,6 +3619,40 @@ async function usarRemedio() {
 // ================================================================= POLÍCIA (etapa 6)
 // 12 policiais robôs a pé, cada um dando a volta numa quadra diferente (centro e bairros)
 const QUADRAS_POLICIA = [[1, 1], [2, 2], [0, 0], [3, 3], [0, 3], [3, 0], [-1, 1], [4, 2], [1, -1], [2, 4], [-1, 3], [4, 0]];
+// soldados NPC do quartel: pelotão marchando em volta do pátio, sentinelas no portão e uma patrulha na mata
+const soldados = [];
+async function criarSoldadosNPC() {
+  const Q = mundo.QUARTEL, px = Q.patio.x, pz = Q.patio.z;
+  const patio = laco([[px - 16, pz - 13], [px + 16, pz - 13], [px + 16, pz + 13], [px - 16, pz + 13]]);
+  const mata = laco([[Q.x0 - 14, Q.z0 - 14], [Q.x1 + 14, Q.z0 - 14], [Q.x1 + 14, Q.z1 + 14], [Q.x0 - 14, Q.z1 + 14]]);
+  const lista = [
+    ...[0, 1, 2, 3, 4, 5].map((k) => ({ l: patio, fase: -k * 1.7, vel: 1.3 })),
+    { parado: [Q.portao.x - 1, Q.portao.z - 5, -Math.PI / 2] }, { parado: [Q.portao.x - 1, Q.portao.z + 5, -Math.PI / 2] },
+    { l: mata, fase: 0, vel: 1.4 }, { l: mata, fase: -2, vel: 1.4 },
+  ];
+  for (const d of lista) {
+    try {
+      const av = await criarAvatar('robos', 'Rusty_Scout_Bot');
+      const et = textoSprite('Exército', { escala: 0.55, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+      av.raiz.visible = false; scene.add(av.raiz);
+      if (d.parado) { av.raiz.position.set(d.parado[0], 0.12, d.parado[1]); av.raiz.rotation.y = d.parado[2]; av.tocar('idle'); } else av.tocar('walk', { velocidade: 0.8 });
+      soldados.push({ av, ...d });
+    } catch { /* sem soldados NPC */ }
+  }
+}
+function atualizarSoldados(dt) {
+  if (!soldados.length) return;
+  const Q = mundo.QUARTEL, perto = Math.hypot(jogador.pos.x - (Q.x0 + Q.x1) / 2, jogador.pos.z - (Q.z0 + Q.z1) / 2) < 220;
+  for (const s of soldados) {
+    s.av.raiz.visible = perto; if (!perto) continue;
+    if (s.l) {
+      const p = pontoNoLaco(s.l, agoraServidor() / 1000 * s.vel + s.fase);
+      s.av.raiz.position.set(p.x, alturaChao(p.x, p.z), p.z);
+      s.av.raiz.rotation.y = suavizarAngulo(s.av.raiz.rotation.y, p.ang, dt * 6);
+    }
+    s.av.mixer.update(dt);
+  }
+}
 async function criarPoliciaNPC() {
   if (!cadeia) return;
   const d = QB / 2 - 1.1;
@@ -4116,6 +4153,7 @@ function montarLocais() {
   if (pontos.bancadas[0]) LOCAIS.push({ nome: 'Bancada (chocolate)', x: pontos.bancadas[0].x, z: pontos.bancadas[0].z + 2.5 });
   LOCAIS.push({ nome: 'Base Leste', x: BASE_X - 26, z: ruaC(2) });
   LOCAIS.push({ nome: 'Base Oeste', x: -BASE_X + 26, z: ruaC(2) });
+  LOCAIS.push({ nome: 'Quartel do Exército', x: mundo.QUARTEL.portao.x - 4, z: mundo.QUARTEL.portao.z });
   for (const l of ferrovia.linhas) for (const lado of ['centro', 'destino']) { const p = l.plataformas[lado]; LOCAIS.push({ nome: p.nome, x: 0, z: p.zSaida }); }
 }
 
@@ -4191,7 +4229,7 @@ function aplicarPerfil(novo) {
       base.veiculo.position.set(base.vaga.x, 0.18, base.vaga.z); base.veiculo.rotation.y = base.vaga.ang;
     }
   }
-  if (novo.profissao !== antigo.profissao) aviso(novo.profissao === 'medico' ? 'Plantão médico: socorra os feridos (✚) pela cidade. +250 por socorro.' : novo.profissao === 'bombeiro' ? 'Você está em serviço nos bombeiros. Apague os incêndios (🔥). +400 por fogo.' : novo.profissao === 'jornalista' ? 'Você é jornalista: vá até incêndios, ocorrências e feridos e toque em Reportar (+200).' : 'Você saiu do serviço público.', 4);
+  if (novo.profissao !== antigo.profissao) aviso(novo.profissao === 'medico' ? 'Plantão médico: socorra os feridos (✚) pela cidade. +250 por socorro.' : novo.profissao === 'bombeiro' ? 'Você está em serviço nos bombeiros. Apague os incêndios (🔥). +400 por fogo.' : novo.profissao === 'jornalista' ? 'Você é jornalista: vá até incêndios, ocorrências e feridos e toque em Reportar (+200).' : novo.profissao === 'exercito' ? 'Você entrou no Exército! Apresente-se no Quartel em Porto Sul. Cada minuto em serviço conta para a patente.' : 'Você saiu do serviço público.', 4);
   if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome || novo.crimes !== antigo.crimes || novo.policial !== antigo.policial || novo.prf !== antigo.prf || novo.eleitoral !== antigo.eleitoral || novo.profissao !== antigo.profissao || novo.recompensa !== antigo.recompensa) {
     conexao?.rastrear(metaPresenca());
   }
@@ -4427,7 +4465,7 @@ function contexto() {
   if (taxi?.modo === 'roubo' && taxi.fase === 'esperando' && Math.hypot(taxi.c.obj.position.x - jogador.pos.x, taxi.c.obj.position.z - jogador.pos.z) < 8) return ['RENDER MOTORISTA: ele leva a carga para o seu território ou casa', 'Render'];
   if (armaPdPerto()) return ['pegar a ARMA DOURADA (2 balas)', 'Pegar'];
   { const vp = veiculoProximo(); if (vp && !jogador.carregando) return vp.texto; }
-  { const sv = servicoProximo(); if (sv) return [sv.modelo === 'ambulancia' ? 'dirigir a ambulância' : 'dirigir o caminhão dos bombeiros', 'Dirigir']; }
+  { const sv = servicoProximo(); if (sv) return [sv.modelo === 'ambulancia' ? 'dirigir a ambulância' : sv.modelo === 'militar' ? 'dirigir o jipe do Exército' : 'dirigir o caminhão dos bombeiros', 'Dirigir']; }
   if (taxi?.fase === 'esperando' && taxi.modo !== 'roubo' && Math.hypot(taxi.c.obj.position.x - jogador.pos.x, taxi.c.obj.position.z - jogador.pos.z) < 8) return [`embarcar no seu ${NOME_VEICULO[taxi.c.d.tipo]?.toLowerCase() || 'veículo'}`, 'Embarcar'];
   if (heliParaPassageiro()) return ['embarcar como passageiro no helicóptero', 'Embarcar'];
   if (agenciaProxima() && !jogador.carregando) return ['pegar uma encomenda para outra cidade', 'Encomenda'];
@@ -4497,6 +4535,7 @@ function quadro() {
   atualizarPolicia(dt);
   atualizarSocial(dt);
   atualizarNPCs(dt);
+  atualizarSoldados(dt);
   atualizarRemotos(dt);
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }

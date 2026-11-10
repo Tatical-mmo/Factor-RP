@@ -186,6 +186,7 @@ const PUBLICOS = [
   { id: 'medico', nome: '✚ Hospital', inicio: 'Socorrista', req: 'ficha limpa', onde: 'Hospital', base: '30/min' },
   { id: 'bombeiro', nome: '🚒 Bombeiros', inicio: 'Recruta', req: 'ficha limpa', onde: 'Quartel dos Bombeiros', base: '30/min' },
   { id: 'jornalista', nome: '📰 Jornal da Cidade', inicio: 'Estagiário', req: 'ficha limpa', onde: 'Prefeitura (balcão do jornal)', base: '24/min' },
+  { id: 'exercito', nome: '🎖️ Exército', inicio: 'Recruta', req: 'ficha limpa (a equipe também pode entrar)', onde: 'Quartel do Exército (Porto Sul)', base: '35/min' },
 ];
 const servicoAtual = (eu) => (eu.policial ? 'policia' : eu.prf ? 'prf' : eu.profissao || null);
 async function sairDoServico(eu) {
@@ -259,6 +260,7 @@ const CARGOS = {
   medico: 'Socorrista → Enfermeiro → Doutor → Supervisor → Diretor (Doutor em diante trabalha dentro do hospital)',
   bombeiro: 'Recruta → Bombeiro → Cabo → Sargento → Tenente → Capitão → Comandante',
   jornalista: 'Estagiário → Repórter → Repórter Sênior → Editor → Editor-chefe',
+  exercito: 'Recruta → Soldado → Cabo → Sargentos → Subtenente → Tenente → Capitão → Major → Tenente-Coronel → Coronel → General (o administrador é o General Supremo)',
 };
 async function cartaoCarreira(prof) {
   const lista = await rede.carreiras.minhas().catch(() => []);

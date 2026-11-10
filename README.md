@@ -365,3 +365,11 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Painel › Eu › Prefeitura (só administrador): convocar eleição extraordinária (1 a 6 ciclos), cancelar a eleição e afastar o prefeito. Para nomear, abra a ficha do jogador e toque em "🏛️ Nomear prefeito" (toque duas vezes para confirmar).
 - Eleição extraordinária: a campanha abre na hora para o mandato atual. Na apuração o mais votado assume até o fim do mandato. Se ninguém votar, nada muda. Não dá para convocar perto da eleição normal (últimos 4 ciclos do mandato).
 - SQL desta versão: rode **34a_moradia_cidades.sql** e **34b_prefeito_admin.sql**.
+
+## Versão 10/11 (b) · mata e Exército
+- Nas duas cidades vizinhas dá para sair da rua e entrar na mata (até uns 300 m para os lados). A mata tem mais árvores, com colisão, e arbustos. No Porto Sul o limite é o mar.
+- Quartel do Exército na mata a leste de Porto Sul, com estrada até o portão (rua de baixo da cidade). Tem muro, guarita, 4 torres de vigia, comando, alojamento, garagem, paiol, pátio de formatura e mastro com bandeira.
+- Carreira no Exército (Agência de Empregos ou 💼 Trabalho), com as mesmas regras da polícia e da PRF: ficha limpa, turno a cada minuto e 35/min × patente. Patentes: Recruta → Soldado → Cabo → Sargentos → Subtenente → Tenente → Capitão → Major → Tenente-Coronel → Coronel → General. Exceção: a equipe pode entrar, e o administrador é sempre o **General Supremo**.
+- Soldados NPC: um pelotão marcha em volta do pátio, 2 sentinelas ficam no portão e 2 soldados patrulham a mata em volta do muro.
+- Jipe do Exército (provisório, é o SUV verde-oliva até chegarem os GLB dos veículos militares). Fica na frente da garagem para quem é do Exército. Militares também veem os procurados no mapa.
+- SQL desta versão: **34c_exercito.sql**. Se ainda não rodou, rode antes o 34a e o 34b.

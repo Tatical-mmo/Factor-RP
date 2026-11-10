@@ -7,6 +7,9 @@ export const CONCESSIONARIA = { x: 135, z: -135, balcao: { x: 135, z: -127.5 } }
 export const BANCO = { x: 81, z: -135, balcao: { x: 75, z: -124 }, empregos: { x: 88, z: -124 } };
 export const HOSPITAL = { x: -135, z: 135, balcao: { x: -131, z: 125 }, saida: { x: -139, z: 124 }, vaga: { x: -145, z: 126, ang: -Math.PI / 2 }, veiculo: null };
 export const CEMITERIO = { x: 135, z: 135 };
+// Quartel do Exército (Porto Sul): o jipe fica na frente da garagem
+export const EXERCITO = { vaga: { x: 171, z: 1059, ang: -Math.PI / 2 }, veiculo: null };
+export function montarQuartelExercito() { EXERCITO.veiculo = veiculoDeServico('militar', EXERCITO.vaga); }
 export const BOMBEIROS = { x: -81, z: 135, balcao: { x: -88, z: 125 }, vaga: { x: -77, z: 125.5, ang: Math.PI + 0.15 }, veiculo: null };
 export const CARROS = {
   popular: { nome: 'Popular', preco: 40000, vel: 10 },
@@ -16,6 +19,7 @@ export const CARROS = {
   viatura: { nome: 'Viatura', preco: 0, vel: 12 },
   bombeiros: { nome: 'Caminhão dos bombeiros', preco: 0, vel: 10 },
   presidencial: { nome: 'Presidencial', preco: 0, vel: 12 },
+  militar: { nome: 'Jipe do Exército', preco: 0, vel: 13 },
 };
 export const CORES_CARRO = ['#c0392b', '#2c3e50', '#ecf0f1', '#f1c40f', '#2980b9', '#16a085', '#8e44ad', '#1f1f1f', '#d35400'];
 
@@ -25,7 +29,7 @@ function bloco(g, m, w, h, d, x, y, z) {
 }
 
 export function iniciar(contexto) { ctx = contexto; }
-const GLB_CARRO = { viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros' };
+const GLB_CARRO = { militar: 'carro_suv', viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros' };
 const SEM_TINTA = new Set(['presidencial', 'ambulancia', 'bombeiros']);
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
@@ -229,7 +233,8 @@ export function modeloCarro(modelo, cor) {
   const base = ctx?.modelo?.(GLB_CARRO[modelo]);
   if (base) {   // modelo 3D: pinta de leve com a cor escolhida (o presidencial fica como é)
     const g = base.clone(true);
-    if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
+    if (modelo === 'militar') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#4b5a2e'), 0.75); } }); }
+    else if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
     else if (SEM_TINTA.has(modelo)) sirene(g, { ambulancia: [3.4, 0.9], bombeiros: [3.15, 2.5] }[modelo]);
     else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), 0.45); } });
     cacheCarro.set(chave, g);
