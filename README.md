@@ -449,3 +449,6 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 
 ## Versão 10/11 (m) · General Supremo armado
 - O General Supremo (administrador) pega a arma pesada no Arsenal sem precisar de autorização, mesmo sem estar alistado. Tocar de novo no Arsenal guarda a arma pesada e volta para a arma do Exército.
+
+## Versão 10/11 (n) · armas apontando para a frente
+- A arma agora fica presa ao corpo do personagem, não ao osso da mão: aponta sempre para a frente, com a empunhadura na altura da mão direita, entre a cintura e o ombro, e sempre na frente do peito. Antes ela seguia a rotação da mão em cada animação, por isso apontava torta e, em personagens grandes, ficava dentro do corpo.

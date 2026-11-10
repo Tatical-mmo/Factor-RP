@@ -633,26 +633,25 @@ class Avatar {
     this.atual = prox; this.nomeAtual = nome;
   }
   // segura a arma: calcula o encaixe na mão a partir da pose de mira
+  // A arma fica presa ao corpo (não ao osso da mão): sempre apontada para a frente do personagem, com a empunhadura
+  // na altura da mão direita e nunca dentro do corpo. Assim funciona igual em personagens de qualquer tamanho.
   encaixarArma(arma, pegaArma = [0, 0.1, -0.11]) {
-    // calcula com o personagem na origem, virado para +Z (no meio do jogo ele pode estar em qualquer lugar e direção)
-    const pos0 = this.raiz.position.clone(), rot0 = this.raiz.rotation.y, nome0 = this.nomeAtual;
-    this.raiz.position.set(0, 0, 0); this.raiz.rotation.y = 0;
     if (arma.parent) arma.parent.remove(arma);
-    const a = this.acao('mirar'); a.reset().play(); this.mixer.setTime(0.6);
+    arma.matrixAutoUpdate = true; arma.rotation.set(0, 0, 0); arma.userData.pega = pegaArma;
+    this.raiz.add(arma); this.arma = arma; this.posicionarArma(true);
+  }
+  posicionarArma(forcar = false) {
+    const arma = this.arma; if (!arma || !this.maoD || (!arma.visible && !forcar)) return;
     this.raiz.updateMatrixWorld(true);
-    const pm = new THREE.Vector3().setFromMatrixPosition(this.maoD.matrixWorld);
-    const pe = new THREE.Vector3().setFromMatrixPosition(this.maoE.matrixWorld);
-    const meio = pm.clone().lerp(pe, 0.35);
-    const pega = new THREE.Vector3(...pegaArma);                   // empunhadura no espaço da arma
-    const desejada = new THREE.Matrix4().compose(meio.sub(pega), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1));
-    const local = this.maoD.matrixWorld.clone().invert().multiply(desejada);
-    arma.matrixAutoUpdate = false; arma.matrix.copy(local);
-    this.maoD.add(arma);
-    a.stop(); this.mixer.stopAllAction(); this.atual = null; this.nomeAtual = '';
-    this.raiz.position.copy(pos0); this.raiz.rotation.y = rot0; this.raiz.updateMatrixWorld(true);
-    if (nome0) this.tocar(nome0, { fade: 0 });
+    const m = this.maoD.getWorldPosition(_maoArma); this.raiz.worldToLocal(m);
+    const h = this.altura || 1.8, [px, py, pz] = arma.userData.pega || [0, 0.1, -0.11];
+    const lado = Math.sign(m.x) || -1; m.x = lado * THREE.MathUtils.clamp(Math.abs(m.x), 0.04 * h, 0.16 * h);   // do lado da mão direita, sem atravessar o peito
+    m.y = THREE.MathUtils.clamp(m.y, 0.52 * h, 0.74 * h);          // entre a cintura e o ombro
+    m.z = Math.max(m.z, 0.14 * h + 0.12);                           // sempre na frente do corpo
+    arma.position.set(m.x - px, m.y - py, m.z - pz); arma.rotation.set(0, 0, 0);
   }
 }
+const _maoArma = new THREE.Vector3();
 
 // As animações (menos correr e andar, que são de cada personagem) vêm do robô, que tem o mesmo esqueleto Mixamo.
 // Copiar as rotações direto deixava pés e corpo tortos, porque cada esqueleto tem a pose de descanso um pouco diferente.
@@ -4939,6 +4938,7 @@ function quadro() {
   atualizarExplosoes(dt);
   civico.atualizarQuartel(jogador.pos);
   atualizarRemotos(dt);
+  jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
