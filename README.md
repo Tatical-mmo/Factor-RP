@@ -426,3 +426,7 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Todos os personagens usam a mesma pose de "parado" dos personagens novos (o idle do robô). Cada um fica na própria altura.
 - Helicópteros dos jogadores (executivo e do Exército) tocam o mesmo som do primeiro helicóptero: rotor perto do chão e no alto, conforme a altura, para quem pilota, para os passageiros e para quem está perto.
 - O jipe e o caminhão do Exército ficam sem som (antes tocavam a sirene dos bombeiros por engano).
+
+## Versão 10/11 (j) · pés e corpo alinhados
+- As animações que vêm do robô (parado, socos, tiro, pegar, levar dano, morrer, carregar, andar atirando) agora são adaptadas para o esqueleto de cada personagem ao carregar. Antes elas eram copiadas direto, e como cada esqueleto tem a pose de descanso um pouco diferente, os pés ficavam virados e o corpo torto.
+- Correr e andar continuam sendo as animações próprias de cada personagem.

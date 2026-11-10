@@ -644,16 +644,59 @@ class Avatar {
   }
 }
 
-// "parado" padrão para todos: o idle do robô, só rotações (cada esqueleto fica na própria altura)
-let idlePadrao = null;
-async function obterIdlePadrao() {
-  if (idlePadrao) return idlePadrao;
-  idlePadrao = (async () => {
-    const g = await carregarGLB('assets/robos/Rusty_Scout_Bot.glb');
-    const c = g.animations.find((a) => a.name === 'idle'); if (!c) return null;
-    return new THREE.AnimationClip('idle', c.duration, c.tracks.filter((t) => t.name.endsWith('.quaternion')).map((t) => t.clone()));
-  })().catch(() => null);
-  return idlePadrao;
+// As animações (menos correr e andar, que são de cada personagem) vêm do robô, que tem o mesmo esqueleto Mixamo.
+// Copiar as rotações direto deixava pés e corpo tortos, porque cada esqueleto tem a pose de descanso um pouco diferente.
+// Aqui elas são adaptadas "no mundo": cada osso faz o mesmo movimento que faz no robô, a partir da própria pose de descanso.
+const DO_ROBO = ['punch_combo', 'shoot', 'death', 'pickup', 'hit', 'idle', 'punch_left', 'idle_long', 'punch_right', 'walk_shoot', 'carry_walk'];
+let roboBase = null;
+function obterRoboBase() {
+  if (!roboBase) roboBase = carregarGLB('assets/robos/Rusty_Scout_Bot.glb').then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => null);
+  return roboBase;
+}
+function ossosPorNome(cena) { const m = new Map(); cena.traverse((o) => { if (o.name.startsWith('mixamorig')) m.set(o.name, o); }); return m; }
+function adaptarClipe(clip, cenaR, cenaN) {
+  cenaN.updateMatrixWorld(true);
+  const R = ossosPorNome(cenaR), N = ossosPorNome(cenaN);
+  const restoMundoR = new Map(), restoMundoN = new Map();
+  for (const [n, o] of R) restoMundoR.set(n, o.getWorldQuaternion(new THREE.Quaternion()));
+  for (const [n, o] of N) restoMundoN.set(n, o.getWorldQuaternion(new THREE.Quaternion()));
+  const faixas = new Map(); let hipsPos = null, tempos = null;
+  for (const t of clip.tracks) {
+    const [osso, prop] = t.name.split('.');
+    if (prop === 'quaternion') { faixas.set(osso, t); if (!tempos || t.times.length > tempos.length) tempos = t.times; }
+    else if (prop === 'position' && osso === 'mixamorigHips') hipsPos = t;
+  }
+  if (!tempos) return clip;
+  const interp = new Map([...faixas].map(([n, t]) => [n, t.createInterpolant()]));
+  // ordem: pais antes dos filhos
+  const ordemR = [], ordemN = [];
+  cenaR.traverse((o) => { if (R.has(o.name) && o === R.get(o.name)) ordemR.push(o); });
+  cenaN.traverse((o) => { if (N.has(o.name) && o === N.get(o.name)) ordemN.push(o); });
+  const valores = new Map(ordemN.filter((o) => R.has(o.name)).map((o) => [o.name, new Float32Array(tempos.length * 4)]));
+  const mundoR = new Map(), mundoN = new Map(), q = new THREE.Quaternion(), qp = new THREE.Quaternion();
+  for (let k = 0; k < tempos.length; k++) {
+    const t = tempos[k];
+    for (const o of ordemR) {
+      const it = interp.get(o.name), loc = it ? q.fromArray(it.evaluate(t)) : q.copy(o.quaternion);
+      const pai = mundoR.get(o.parent?.name) || o.parent.getWorldQuaternion(qp);
+      mundoR.set(o.name, (mundoR.get(o.name) || new THREE.Quaternion()).copy(pai).multiply(loc));
+    }
+    for (const o of ordemN) {
+      const pai = mundoN.get(o.parent?.name) || o.parent.getWorldQuaternion(qp);
+      const m = mundoN.get(o.name) || new THREE.Quaternion();
+      if (R.has(o.name)) m.copy(mundoR.get(o.name)).multiply(restoMundoR.get(o.name).clone().invert()).multiply(restoMundoN.get(o.name));
+      else m.copy(pai).multiply(o.quaternion);
+      mundoN.set(o.name, m);
+      const v = valores.get(o.name);
+      if (v) { const loc = pai.clone().invert().multiply(m); if (k && loc.dot(q.fromArray(v, (k - 1) * 4)) < 0) loc.set(-loc.x, -loc.y, -loc.z, -loc.w); loc.toArray(v, k * 4); }
+    }
+  }
+  const tracks = [...valores].map(([n, v]) => new THREE.QuaternionKeyframeTrack(`${n}.quaternion`, tempos, v));
+  if (hipsPos && R.get('mixamorigHips') && N.get('mixamorigHips')) {
+    const e = N.get('mixamorigHips').position.y / (R.get('mixamorigHips').position.y || 1);
+    tracks.push(new THREE.VectorKeyframeTrack('mixamorigHips.position', hipsPos.times, hipsPos.values.map((x) => x * e)));
+  }
+  return new THREE.AnimationClip(clip.name, clip.duration, tracks);
 }
 async function criarAvatar(pasta, id) {
   let gltf;
@@ -664,8 +707,15 @@ async function criarAvatar(pasta, id) {
   }
   const modelo = SkeletonUtils.clone(gltf.scene);
   if (!gltf.userData.clipes) {
-    const idle = pasta === 'personagens' ? await obterIdlePadrao() : null;
-    gltf.userData.clipes = prepararClipes(idle ? [...gltf.animations.filter((a) => a.name !== 'idle'), idle] : gltf.animations);
+    let anims = gltf.animations;
+    const robo = pasta === 'personagens' ? await obterRoboBase() : null;
+    if (robo) {
+      try {
+        const novos = robo.animations.filter((c) => DO_ROBO.includes(c.name)).map((c) => adaptarClipe(c, robo.scene, gltf.scene));
+        anims = [...gltf.animations.filter((a) => !DO_ROBO.includes(a.name)), ...novos];
+      } catch (e) { console.warn('não adaptou as animações:', id, e); }
+    }
+    if (!gltf.userData.clipes) gltf.userData.clipes = prepararClipes(anims);
   }
   return new Avatar(modelo, gltf.userData.clipes);
 }
