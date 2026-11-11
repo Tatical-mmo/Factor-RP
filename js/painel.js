@@ -119,6 +119,7 @@ async function abrirJogador(id) {
       ${j.banido && j.banido_motivo ? `<br><small>Motivo do banimento: ${esc(j.banido_motivo)}</small>` : ''}</div></div>`;
 
   if (eu.cargo === 'admin' && (souEu || equipe) && (j.crimes > 0 || j.recompensa > 0)) h += '<div class="sub">Crimes</div><div class="botoes"><button id="pPerdoar">⚖️ Perdoar todos os crimes</button></div>';
+  if (!souEu && online) h += '<div class="sub">Averiguar</div><div class="botoes"><button id="pAveriguar">👁️ Averiguar (ver o que ele está fazendo)</button></div>';
   if (pode('teleportar')) {
     h += `<div class="sub">Teleporte</div><div class="botoes">
       ${online && !souEu ? '<button id="pIr">Ir até ele</button>' : ''}
@@ -157,6 +158,7 @@ async function abrirJogador(id) {
 
   const on = (idb, fn) => { const b = $(idb); if (b) b.onclick = fn; };
   on('pVoltar', () => { selecionado = null; listaJogadores(); });
+  on('pAveriguar', () => { fechar(); ctx.averiguar(j.id, j.nome); });
   on('pIr', () => { const p = ctx.posicaoDe(j.id); if (p) { ctx.teleportar(p.x + 1.2, p.z + 1.2); msg('Você foi até ' + j.nome + '.'); } else msg('Posição ainda desconhecida.', false); });
   on('pTrazer', () => { const p = ctx.minhaPosicao(); executar(() => rede.painel.teleporte(j.id, p.x + 1.2, p.z), `${j.nome} foi trazido até você.`); });
   const valor = () => Math.min(2147483647, Math.floor(Number($('pValor').value)));   // limite do saldo (2,1 bilhões)
@@ -261,7 +263,8 @@ async function abaDenuncias() {
   c.innerHTML = `<p class="dica">Denúncias abertas feitas pelos jogadores. Abra o jogador para agir (banir, prender, algemar…) e marque como resolvida.</p>
     ${l.length ? l.map((d) => `<div class="linha item" style="flex-direction:column;align-items:stretch"><span><b>${esc(d.alvo_nome)}</b> · ${MOTIVO_TXT[d.motivo] || d.motivo}${d.vezes > 1 ? ` · <i class="tag ruim">${d.vezes} denúncias</i>` : ''}</span>
       ${d.detalhes ? `<small style="white-space:pre-wrap">${esc(d.detalhes)}</small>` : ''}<small>por ${esc(d.autor_nome)} · ${new Date(d.criada_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small>
-      <div class="botoes"><button data-abrir="${d.alvo}">Abrir jogador</button><button data-resolver="${d.id}">Resolvida ✓</button></div></div>`).join('') : '<p class="vazio">Nenhuma denúncia aberta. 🎉</p>'}`;
+      <div class="botoes">${ctx.online().some((o) => o.id === d.alvo) ? `<button data-averiguar="${d.alvo}" data-nome="${esc(d.alvo_nome)}">👁️ Averiguar</button>` : '<small>offline</small>'}<button data-abrir="${d.alvo}">Abrir jogador</button><button data-resolver="${d.id}">Resolvida ✓</button></div></div>`).join('') : '<p class="vazio">Nenhuma denúncia aberta. 🎉</p>'}`;
+  c.querySelectorAll('[data-averiguar]').forEach((b) => { b.onclick = () => { fechar(); ctx.averiguar(b.dataset.averiguar, b.dataset.nome); }; });
   c.querySelectorAll('[data-abrir]').forEach((b) => { b.onclick = () => { aba = 'jogadores'; selecionado = b.dataset.abrir; desenhar(); }; });
   c.querySelectorAll('[data-resolver]').forEach((b) => { b.onclick = async () => { try { await rede.painel.resolverDenuncia(Number(b.dataset.resolver)); msg('Denúncia resolvida.'); abaDenuncias(); } catch (e) { msg(e.message, false); } }; });
 }

@@ -241,6 +241,10 @@ Prefeitura (gabinete, urna, outdoors, sala de imprensa), quartel dos bombeiros (
 - A metrópole não acaba mais num muro invisível: dá para andar e dirigir pelas ruas entre os prédios altos do horizonte até o fim do mapa (a ferrovia continua só de trem).
 - Os **carros estacionados nas ruas** podem ser roubados (2,5 s arrombando, é crime). Largado, o carro fica onde parou e volta sozinho para a vaga depois de **5 minutos parado**. Outro jogador pode roubar o carro largado.
 
+## Averiguar (moderadores e administrador)
+
+No painel (página do jogador ou aba Denúncias), **👁️ Averiguar**: a câmera passa a seguir o jogador em qualquer lugar do mapa, com uma barra mostrando o que ele faz (andando, dirigindo, armado, crimes, rua), as mensagens que ele escreve (inclusive no modo privado) e botões para ir até ele, algemar, prender 10 min, banir (com motivo) ou abrir no painel. Seu personagem fica parado enquanto isso.
+
 ## Controles no PC
 
 | Tecla | Ação |

@@ -2050,6 +2050,7 @@ async function iniciarJogo(perfil) {
     climaMudou: async () => { await carregarClima(); conexao?.enviar('clima', {}); },
     climaAgora: () => clima.atual(), climaConfig: () => clima.config(),
     online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta.nome })),
+    averiguar: (id, nome) => iniciarAveriguar(id, nome),
     posicaoDe: (id) => { const r = remotos.get(id); return r?.av?.raiz.visible ? r.av.raiz.position : (r?.alvo || null); },
     minhaPosicao: () => jogador.pos,
     teleportar,
@@ -3713,6 +3714,7 @@ function iniciarChat() {
 }
 function receberChat(m) {
   if (!m || typeof m.texto !== 'string' || !m.de) return;
+  if (averiguando && m.de === averiguando.id) mostrarFalaAveriguado(m);   // equipe averiguando vê tudo o que ele escreve (até o privado)
   if (m.privado && !amigosIds.has(m.de)) return;      // modo privado: só os amigos veem
   if (bloqueados.has(m.de)) return;                   // bloqueado: some do meu chat
   mostrarChat({ ...m, texto: m.texto.slice(0, 120), nome: String(m.nome || '?').slice(0, 24) }, false);
@@ -4957,7 +4959,7 @@ function atualizarJogador(dt) {
   if (teclas.has('d') || teclas.has('arrowright')) ix += 1;
   if (teclas.has('a') || teclas.has('arrowleft')) ix -= 1;
   if (joy.ativo) { ix = joy.x; iy = joy.y; }
-  if (j.morto || (j.algemado && algemadoPreso(dt))) { ix = 0; iy = 0; j.alvo = null; }
+  if (j.morto || averiguando || (j.algemado && algemadoPreso(dt))) { ix = 0; iy = 0; j.alvo = null; }
   const dir = new THREE.Vector3().addScaledVector(direita, ix).addScaledVector(frente, iy);
   let forca = Math.min(1, dir.length());
   if (forca > 0.01) { dir.normalize(); j.alvo = null; }
@@ -5050,7 +5052,7 @@ function atualizarCamera(dt) {
     camAtras = true;
   } else if (camAtras && !atras) { anguloCam = Math.round(anguloCamSuave); camAtras = false; }
   anguloCamSuave += (anguloCam - anguloCamSuave) * Math.min(1, dt * (dirigindo ? 3 : atras ? 2.2 : 8));
-  alvoCam.lerp(new THREE.Vector3(jogador.pos.x, 0.9, jogador.pos.z), Math.min(1, dt * 6));
+  { const f = foco(); alvoCam.lerp(new THREE.Vector3(f.x, 0.9 + (f.y || 0), f.z), Math.min(1, dt * 6)); }
   const off = offsetCamera(anguloCamSuave);
   camera.position.copy(alvoCam).addScaledVector(off, 150);
   if (tremor > 0) { tremor -= dt; camera.position.x += (Math.random() - 0.5) * tremor * 2; camera.position.z += (Math.random() - 0.5) * tremor * 2; }
@@ -5216,11 +5218,11 @@ function quadro() {
   const dt = Math.min(relogio.getDelta(), 0.05);
   ferrovia.atualizar(agoraServidor() / 1000);
   atualizarCeu(agoraServidor() / 1000);
-  clima.atualizar(dt, agoraServidor() / 1000, CICLO_DIA, { x: jogador.pos.x, y: jogador.pos.y - 2, z: jogador.pos.z, dentro: !!jogador.dentroCasa }, { sol, hemi, cena: scene });
+  clima.atualizar(dt, agoraServidor() / 1000, CICLO_DIA, { x: foco().x, y: (foco().y || 0) - 2, z: foco().z, dentro: !!jogador.dentroCasa && !averiguando }, { sol, hemi, cena: scene });
   tempoClima -= dt; if (tempoClima <= 0) { tempoClima = 30; carregarClima(); }
   mundo.atualizar(dt);
-  mundo.carrosPerto(jogador.pos.x, jogador.pos.z, dt);
-  mundo.arvoresPerto(jogador.pos.x, jogador.pos.z, dt);
+  mundo.carrosPerto(foco().x, foco().z, dt);
+  mundo.arvoresPerto(foco().x, foco().z, dt);
   sedes.atualizar(dt);
   if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); checarTrem(); atualizarArmaPd(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
   atualizarJogador(dt);
@@ -5240,14 +5242,14 @@ function quadro() {
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
-  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua();
+  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
   atualizarBolas(dt);
   atualizarCamera(dt);
-  mundo.atualizarOclusao(dt, jogador.pos, offsetCamera(anguloCamSuave));
+  mundo.atualizarOclusao(dt, averiguando ? foco() : jogador.pos, offsetCamera(anguloCamSuave));
   atualizarHUD(dt);
   renderer.render(scene, camAtiva);
 }
@@ -6418,3 +6420,86 @@ function atualizarCarrosRua() {
   }
 }
 const roubadosRua = new Map();   // k -> última vez que alguém foi visto dirigindo
+
+// ================================================================= averiguar (moderadores e administrador)
+// A câmera passa a seguir o jogador (de qualquer lugar do mapa), com uma barra mostrando o que ele faz agora,
+// o que escreve no chat (até no modo privado) e botões para punir: algemar, prender, banir, ir até ele ou encerrar.
+let averiguando = null;
+const ANIM_TXT = { idle: 'parado', idle_long: 'parado', walk: 'andando', run: 'correndo', punch_left: 'dando soco', punch_right: 'dando soco', punch_combo: 'dando soco', shoot: 'atirando', walk_shoot: 'atirando andando', pegar: 'pegando algo', carregar: 'carregando caixa', carregar_parado: 'carregando caixa', death: 'caído', hit: 'levando dano' };
+function foco() {
+  const a = averiguando && remotos.get(averiguando.id)?.alvo;
+  return a ? { x: a.x, y: Math.max(0, a.y - alturaChao(a.x, a.z)), z: a.z } : jogador.pos;
+}
+function iniciarAveriguar(id, nome) {
+  if (!['admin', 'moderador'].includes(jogador.perfil?.cargo)) return;
+  if (!remotos.get(id)) { aviso(`${nome} não está online agora.`, 3); return; }
+  averiguando = { id, nome, falas: [] };
+  let bar = $('barraAveriguar');
+  if (!bar) {
+    bar = document.createElement('div'); bar.id = 'barraAveriguar';
+    bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom));z-index:30;width:min(560px,96vw);background:rgba(18,22,32,.94);border:2px solid #e0a83a;border-radius:14px;padding:8px 10px;color:#e8edf5;font:13px system-ui;pointer-events:auto';
+    document.body.appendChild(bar);
+  }
+  bar.style.display = 'block'; document.body.classList.add('averiguando');
+  desenharBarraAveriguar();
+  aviso(`👁️ Averiguando ${nome}. A câmera segue ele; seu personagem fica parado onde está.`, 4);
+}
+function encerrarAveriguar() {
+  averiguando = null; const bar = $('barraAveriguar'); if (bar) bar.style.display = 'none'; document.body.classList.remove('averiguando');
+}
+function estadoAveriguado() {
+  const r = remotos.get(averiguando.id); if (!r?.alvo) return 'fora do jogo';
+  const a = r.alvo, t = [];
+  if (a.cv) t.push(`dirigindo ${civico.CARROS[String(a.cv).split('|')[1]]?.nome || 'um carro'}`);
+  else if (a.pg) t.push('passageiro de outro jogador');
+  else if (a.tr) t.push('no trem');
+  else if (a.x > 1500) t.push('dentro de um prédio ou casa');
+  else t.push(ANIM_TXT[a.a] || a.a || 'parado');
+  if (a.ar) t.push('🔫 armado'); if (a.al) t.push('🔗 algemado'); if (a.cx) t.push('📦 com caixa');
+  if (r.meta?.crimes > 0) t.push(`🚨 ${r.meta.crimes} crimes`);
+  if (r.meta?.cla) t.push(`⚔️ clã ${r.meta.cla}`);
+  const rua = a.x < 1500 ? nomeDaRua(a.x, a.z) : '';
+  return `${t.join(' · ')}${rua ? ` · ${rua}` : ''} · x ${Math.round(a.x)}, z ${Math.round(a.z)}`;
+}
+function desenharBarraAveriguar() {
+  const bar = $('barraAveriguar'); if (!bar || !averiguando) return;
+  const pode = (k) => jogador.perfil?.cargo === 'admin' || jogador.perfil?.poderes?.[k];
+  bar.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>👁️ Averiguando ${esc(averiguando.nome)}</b><button data-av="sair" style="border:0;background:#2d3650;color:#fff;border-radius:8px;padding:4px 10px">✕ Encerrar</button></div>
+    <div id="avEstado" style="margin:4px 0;color:#ffd98a"></div>
+    <div id="avFalas" style="max-height:66px;overflow:auto;font-size:12px;color:#c9d6e2">${averiguando.falas.map((f) => `<div>💬 ${f.privado ? '🔒 ' : ''}${esc(f.texto)}</div>`).join('') || '<i>Nenhuma mensagem dele ainda.</i>'}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+      ${pode('teleportar') ? '<button data-av="ir">📍 Ir até ele</button>' : ''}
+      ${pode('algemar') ? '<button data-av="algemar">🔗 Algemar</button>' : ''}
+      ${pode('prender') ? '<button data-av="prender">🚔 Prender 10 min</button>' : ''}
+      ${pode('banir') ? '<button data-av="banir" style="background:#8a2525">⛔ Banir</button>' : ''}
+      <button data-av="painel">🛡 Abrir no painel</button></div>`;
+  bar.querySelectorAll('button').forEach((b) => { b.style.cssText += ';border:0;border-radius:8px;padding:6px 10px;color:#fff;font-weight:700;' + (b.dataset.av === 'banir' ? '' : 'background:#2d3650'); b.onclick = () => acaoAveriguar(b.dataset.av); });
+  $('avEstado').textContent = estadoAveriguado();
+}
+function mostrarFalaAveriguado(m) {
+  if (!averiguando) return;
+  averiguando.falas = [...averiguando.falas, { texto: String(m.texto).slice(0, 120), privado: !!m.privado }].slice(-4);
+  desenharBarraAveriguar();
+}
+async function acaoAveriguar(a) {
+  const alvo = averiguando; if (!alvo) return;
+  try {
+    if (a === 'sair') { encerrarAveriguar(); return; }
+    if (a === 'ir') { const r = remotos.get(alvo.id)?.alvo; if (r) { jogador.dentroCasa = null; teleportar(r.x + 1.2, r.z + 1.2); } encerrarAveriguar(); return; }
+    if (a === 'painel') { encerrarAveriguar(); $('btPainel').click(); return; }
+    if (a === 'algemar') { await rede.painel.algemar(alvo.id, true); aviso(`🔗 ${alvo.nome} foi algemado.`); return; }
+    if (a === 'prender') { await rede.painel.prender(alvo.id, 10); aviso(`🚔 ${alvo.nome} foi preso por 10 min.`); return; }
+    if (a === 'banir') {
+      escolher(`⛔ Banir ${esc(alvo.nome)}?`, '<input id="avMotivo" placeholder="Motivo do banimento" style="width:100%;padding:8px;border-radius:8px">', [
+        { rotulo: '⛔ Confirmar banimento', fn: async () => { const motivo = ($('avMotivo')?.value || '').trim() || 'Comportamento inadequado'; try { await rede.painel.banir(alvo.id, motivo); aviso(`${alvo.nome} foi banido.`, 3); encerrarAveriguar(); } catch (e) { aviso(e.message, 3); } } },
+        { rotulo: 'Cancelar', fn: () => {} }]);
+    }
+  } catch (e) { aviso(e.message, 3); }
+}
+let tempoAveriguar = 0;
+function atualizarAveriguar(dt) {
+  if (!averiguando) return;
+  if (!remotos.get(averiguando.id)) { aviso(`${averiguando.nome} saiu do jogo.`, 3); encerrarAveriguar(); return; }
+  tempoAveriguar -= dt; if (tempoAveriguar > 0) return; tempoAveriguar = 0.5;
+  const el = $('avEstado'); if (el) el.textContent = estadoAveriguado();
+}

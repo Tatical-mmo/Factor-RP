@@ -182,6 +182,7 @@
   body.dirigindo #volante { display:block; }
   body.dirigindo #joy, body.dirigindo #btSoco, body.dirigindo #btArma, body.dirigindo #btTiro { display:none; }
   body.dirigindo.tanque #btTiro { display:block; }
+  body.averiguando #toque, body.averiguando #btFalar { display:none !important; }
   #btAlgema { font-size:12px; line-height:1.1; background:rgba(120,90,20,.8); }
   #btFalar { pointer-events:auto; position:fixed; left:12px; bottom:200px; z-index:30; width:58px; height:58px; border-radius:50%; border:2px solid rgba(255,255,255,.6); background:rgba(20,30,45,.75); color:#fff; font-size:26px; touch-action:none; user-select:none; -webkit-user-select:none; }
   #btFalar.falando { background:rgba(200,40,40,.85); border-color:#fff; transform:scale(1.08); }
@@ -245,24 +246,24 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261111q",
-  "./js/mundo.js": "./js/mundo.js?v=20261111q",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261111q",
-  "./js/cla.js": "./js/cla.js?v=20261111q",
-  "./js/config.js": "./js/config.js?v=20261111q",
-  "./js/empresa.js": "./js/empresa.js?v=20261111q",
-  "./js/loja.js": "./js/loja.js?v=20261111q",
-  "./js/painel.js": "./js/painel.js?v=20261111q",
-  "./js/rede.js": "./js/rede.js?v=20261111q",
-  "./js/sedes.js": "./js/sedes.js?v=20261111q",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261111q",
-  "./js/civico.js": "./js/civico.js?v=20261111q",
-  "./js/governo.js": "./js/governo.js?v=20261111q",
-  "./js/servicos.js": "./js/servicos.js?v=20261111q",
-  "./js/sons.js": "./js/sons.js?v=20261111q",
-  "./js/voz.js": "./js/voz.js?v=20261111q",
-  "./js/clima.js": "./js/clima.js?v=20261111q",
-  "./js/jornal.js": "./js/jornal.js?v=20261111q"
+  "./js/main.js": "./js/main.js?v=20261111r",
+  "./js/mundo.js": "./js/mundo.js?v=20261111r",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261111r",
+  "./js/cla.js": "./js/cla.js?v=20261111r",
+  "./js/config.js": "./js/config.js?v=20261111r",
+  "./js/empresa.js": "./js/empresa.js?v=20261111r",
+  "./js/loja.js": "./js/loja.js?v=20261111r",
+  "./js/painel.js": "./js/painel.js?v=20261111r",
+  "./js/rede.js": "./js/rede.js?v=20261111r",
+  "./js/sedes.js": "./js/sedes.js?v=20261111r",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261111r",
+  "./js/civico.js": "./js/civico.js?v=20261111r",
+  "./js/governo.js": "./js/governo.js?v=20261111r",
+  "./js/servicos.js": "./js/servicos.js?v=20261111r",
+  "./js/sons.js": "./js/sons.js?v=20261111r",
+  "./js/voz.js": "./js/voz.js?v=20261111r",
+  "./js/clima.js": "./js/clima.js?v=20261111r",
+  "./js/jornal.js": "./js/jornal.js?v=20261111r"
 } }
 </script>
 </head>
@@ -409,7 +410,7 @@
   </div>
 </div>
 
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 11/11 · menu carreiras</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 11/11 · averiguar</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {
