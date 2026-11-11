@@ -83,8 +83,18 @@ export function altura(x, z) {
   return null;
 }
 // mantém o jogador nas áreas andáveis (a ferrovia só se cruza de trem)
+// partes do porto por onde se anda no mar: píer, rampa de embarque e convés do navio
+export const AREAS_NAVIO = [{ x0: 43.6, x1: 52.4, z0: 1100, z1: 1182 }, { x0: 52, x1: 60, z0: 1149.5, z1: 1153.5 }, { x0: 59.6, x1: 72.4, z0: 1130, z1: 1190 }];
 export function limitar(p) {
   if (p.x > 1500) return;                                   // interiores das casas
+  if (p.z > CIDADE_Z.maxSul && p.z < 1200 && p.x > 30 && p.x < 80) {   // píer, rampa e convés do cargueiro
+    let melhor = null, md = Infinity;
+    for (const r of AREAS_NAVIO) {
+      const x = THREE.MathUtils.clamp(p.x, r.x0, r.x1), z = THREE.MathUtils.clamp(p.z, r.z0, r.z1), d = Math.hypot(x - p.x, z - p.z);
+      if (d < md) { md = d; melhor = [x, z]; }
+    }
+    if (md < 3) { p.x = melhor[0]; p.z = melhor[1]; return; }
+  }
   if (Math.abs(p.z) > 700) {
     const s = Math.sign(p.z);
     p.x = THREE.MathUtils.clamp(p.x, -CIDADE_Z.x, CIDADE_Z.x);

@@ -235,6 +235,7 @@ const METADE = TOTAL / 2;
 const ruaC = (i) => -METADE + RW / 2 + i * (QB + RW);
 const quadC = (i) => -METADE + RW + QB / 2 + i * (QB + RW);
 const BASE_X = METADE + 42;
+const PORTAS_QG = {};   // porta de cada base de clã (leste, oeste)
 
 const colisores = [];      // {tipo:'caixa', x0,x1,z0,z1} | {tipo:'circ', x,z,r}
 const predios = [];        // {obj, caixa:Box3, mats:[]}
@@ -565,6 +566,13 @@ function montarQuarteiroes() {
   // bases de clã fora da cidade
   for (const s of [-1, 1]) {
     colocarPredio('base_cla', s * BASE_X, ruaC(2), s > 0 ? -Math.PI / 2 : Math.PI / 2);
+    { // porta do QG do clã: no lado virado para a cidade
+      const cx = predios[predios.length - 1].caixa, px = s > 0 ? cx.min.x - 1.4 : cx.max.x + 1.4, pz = ruaC(2);
+      PORTAS_QG[s > 0 ? 'leste' : 'oeste'] = { x: px, z: pz };
+      const tapete = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.6), new THREE.MeshStandardMaterial({ color: '#3a2a1a', roughness: 0.9 }));
+      tapete.rotation.x = -Math.PI / 2; tapete.position.set(px, 0.2, pz); scene.add(tapete);
+      const pl = textoSprite('🏴 QG do clã', { escala: 0.75, fundo: 'rgba(40,20,20,.9)' }); pl.position.set(px, 3, pz); scene.add(pl);
+    }
     // o anel e a placa do território vêm do banco (dono e defesa), em carregarCidadeSocial
     itensMapa.push({ tipo: 'territorio', x: s * BASE_X, z: ruaC(2), r: 24 });
   }
@@ -937,6 +945,7 @@ function acaoContexto() {
   if (conviteAperto() && !jogador.armado && !jogador.carregando) { aceitarAperto(); return; }
   if (jogador.carregando?.userData.pedido) { acaoCaixaPedido(); return; }
   if (jogador.carregando?.userData.encomenda && !jogador.trem && !ferrovia.plataformaEm(jogador.pos.x, jogador.pos.z)) { acaoEncomenda(); return; }
+  if (jogador.dentroCasa === 'qg') { acaoQG(); return; }
   if (jogador.dentroCasa) {
     if (pontoInterior('porta', 1.8)) sairDeCasa();
     else if (pontoInterior('cama', 2)) descansar();
@@ -952,6 +961,8 @@ function acaoContexto() {
   if (jogador.perfil.prf) { const alvo = eleitoralProximo(2.4); if (alvo) { prenderEleitoral(alvo); return; } }
   if (jogador.perfil.profissao === 'medico') { const fer = feridoProximo(2.8); if (fer) { socorrerFerido(fer); return; } }
   const fogo = servicos.fogoProximo(9); if (fogo && !jogador.carregando) { servicos.apagar(fogo); return; }
+  { const q = portaQGPerto(); if (q) { if (meuQG(q)) entrarNoQG(q); else aviso('🏴 Só os membros do clã dono desta base entram no QG.', 3); return; } }
+  { const k = conteinerPerto(); if (k !== null) { arrombarConteiner(k); return; } }
   if (perto(civico.BANCO.balcao, 3.2)) { abrirServico('banco'); return; }
   if (perto(civico.BANCO.empregos, 3.2)) { abrirServico('empregos'); return; }
   if (perto(civico.HOSPITAL.balcao, 3.2)) { abrirServico('hospital'); return; }
@@ -1445,7 +1456,7 @@ function tipoArma() {
   if (militar()) return 'exercito';   // militar em serviço (o General Supremo sempre)
   if (p.policial) return 'policia';
   if (p.prf) return 'prf';
-  if (p.arma_militar && jogador.claInfo) return 'militar';
+  if ((p.arma_militar || jogador.armaDoQG) && jogador.claInfo) return 'militar';
   return 'basica';
 }
 function novaArma(tipo, av) {
@@ -1896,6 +1907,7 @@ async function iniciarJogo(perfil) {
   ferrovia.montar({ scene, textoSprite, modelo: (n) => modelos[n] });
   clima.iniciar({ scene, alturaChao, naRua, mudou: (t) => { if (jogador.avatar) aviso(t === 'limpo' ? '☀️ O tempo abriu.' : { chuva: '🌧️ Começou a chover.', tempestade: '⛈️ Tempestade chegando! Fique atento aos raios.', neve: '❄️ Começou a nevar.' }[t], 3.5); } });
   carregarClima();
+  montarCargueiro();
   mundo.finalizar();
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
@@ -1949,7 +1961,7 @@ async function iniciarJogo(perfil) {
   conectarMultiplayer(perfil);
   rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando, inventario: recarregarInventario });
   iniciarLoja({ perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, curar: usarRemedio, vida: () => jogador.vida,
-    casaId: () => jogador.dentroCasa || null,
+    casaId: () => (jogador.dentroCasa && jogador.dentroCasa !== 'qg' ? jogador.dentroCasa : null),
     meuTerreno: () => { const d = casasMundo.get(portaAberta)?.d; return d?.tipo === 'terreno' && d.dono === jogador.perfil.id ? d : null; },
     portaAtual: () => { const d = casasMundo.get(portaAberta)?.d; return moraEm(d) ? d : null; },
     predioAberto: () => casasMundo.get(portaAberta)?.d || null,
@@ -2087,7 +2099,7 @@ function conectarMultiplayer(perfil) {
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
     tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1),
     explosao: (e) => receberExplosao(e),
-    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(),
+    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a),
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m),
     meta: () => metaPresenca(),
   });
@@ -2192,7 +2204,7 @@ function enviarEstado(dt) {
 
 async function salvarAgora() {
   if (!jogador.perfil || !jogador.avatar) return;
-  const c = jogador.dentroCasa ? casasMundo.get(jogador.dentroCasa)?.d : null;
+  const c = jogador.dentroCasa === 'qg' ? (PORTAS_QG[jogador.qg] ? { x: PORTAS_QG[jogador.qg].x - 2, z: PORTAS_QG[jogador.qg].z } : null) : jogador.dentroCasa ? casasMundo.get(jogador.dentroCasa)?.d : null;
   let x = c ? c.x + 2 : jogador.pos.x, z = c ? c.z : jogador.pos.z;
   if (jogador.trem) { const p = ferrovia.pontoDeSaida(jogador.trem.li, jogador.trem.origem, 0); x = p.x; z = p.z; }
   try { await rede.salvarPosicao(jogador.perfil.id, Math.round(x * 10) / 10, Math.round(z * 10) / 10, jogador.fome); } catch { /* tenta de novo depois */ }
@@ -2386,6 +2398,7 @@ function entrarEmCasa(c) {
   aviso('Bem-vindo à sua casa. Use a cama para recuperar a vida.', 3);
 }
 function sairDeCasa() {
+  if (jogador.dentroCasa === 'qg') { sairDoQG(); return; }
   const c = casasMundo.get(jogador.dentroCasa)?.d;
   jogador.dentroCasa = null;
   if (c) teleportar(c.x + 2, c.z); else teleportar(contratante.x + 6, contratante.z + 6);
@@ -2403,10 +2416,11 @@ function descansar() {
 }
 function limitarInterior(p) {
   const i = interiores.get(jogador.dentroCasa); if (!i) return;
-  p.x = THREE.MathUtils.clamp(p.x, i.base.x - SALA.w / 2 + 0.5, i.base.x + SALA.w / 2 - 0.5);
-  p.z = THREE.MathUtils.clamp(p.z, i.base.z - SALA.d / 2 + 0.5, i.base.z + SALA.d / 2 - 0.5);
-  // não atravessa cama, baú e mesa
-  for (const [x0, x1, z0, z1] of [[-5.5, -3.3, -4.8, -1.4], [3.4, 5.0, -4.8, -3.7], [-0.3, 1.9, -1.2, 0.2]]) {
+  const sala = i.sala || SALA;
+  p.x = THREE.MathUtils.clamp(p.x, i.base.x - sala.w / 2 + 0.5, i.base.x + sala.w / 2 - 0.5);
+  p.z = THREE.MathUtils.clamp(p.z, i.base.z - sala.d / 2 + 0.5, i.base.z + sala.d / 2 - 0.5);
+  // não atravessa os móveis
+  for (const [x0, x1, z0, z1] of i.obst || [[-5.5, -3.3, -4.8, -1.4], [3.4, 5.0, -4.8, -3.7], [-0.3, 1.9, -1.2, 0.2]]) {
     const ax = i.base.x + x0, bx = i.base.x + x1, az = i.base.z + z0, bz = i.base.z + z1;
     if (p.x > ax && p.x < bx && p.z > az && p.z < bz) {
       const op = [[p.x - ax, 'x', ax], [bx - p.x, 'x', bx], [p.z - az, 'z', az], [bz - p.z, 'z', bz]].sort((a, b) => a[0] - b[0])[0];
@@ -3950,7 +3964,7 @@ function policiaPersegue(n, dt) {
     }
     n.perseguindo = true; n.cerco = null;     // saiu de casa: a perseguição continua
   }
-  if (!procurado) { if (n.perseguindo) { n.perseguindo = false; n.av.tocar('walk', { velocidade: 0.85 }); } return false; }
+  if (!procurado || refugiado()) { if (n.perseguindo) { n.perseguindo = false; n.av.tocar('walk', { velocidade: 0.85 }); } n.cerco = null; return false; }
   if (j.dentroCasa) return n.perseguindo;
   const dx = j.pos.x - p.x, dz = j.pos.z - p.z, d = Math.hypot(dx, dz);
   if (!n.perseguindo && d < 25) { n.perseguindo = true; aviso('🚓 A polícia robô viu você! Fuja ou se esconda.', 3); }
@@ -5067,6 +5081,7 @@ function contexto() {
     return ag?.id === enc.destino ? [`entregar a encomenda (+${enc.valor})`, 'Entregar'] : [`encomenda para ${NOMES_AGENCIA[enc.destino]} (vá de trem)`, 'Largar'];
   }
   if (jogador.morto) return ['', ''];
+  if (jogador.dentroCasa === 'qg') return contextoQG();
   if (jogador.dentroCasa) {
     if (pontoInterior('porta', 1.8)) return ['sair de casa', 'Sair'];
     if (pontoInterior('cama', 2)) return ['descansar (vida cheia)', 'Dormir'];
@@ -5113,6 +5128,9 @@ function contexto() {
   if (pertoContratante()) return ['ver missões do Contratante', 'Falar'];
   if (ocorrenciaProxima()) return ['atender a ocorrência (+300)', 'Atender'];
   if (jogador.assalto) return [`assaltando… ${Math.ceil(jogador.assalto.t)} s (não se afaste)`, 'Assalto'];
+  if (jogador.arrombando) return [`arrombando o contêiner… ${Math.ceil(jogador.arrombando.t)} s (não se afaste)`, 'Arrombar'];
+  { const q = portaQGPerto(); if (q) return meuQG(q) ? ['entrar no QG do clã', 'QG'] : ['QG do clã (só membros do clã dono da base)', 'QG']; }
+  { const k = conteinerPerto(); if (k !== null) return ['ARROMBAR o contêiner do cargueiro (crime)', 'Arrombar']; }
   { const cv = conviteAperto(); if (cv && !jogador.armado && !jogador.carregando) return [`🤝 apertar a mão de ${remotos.get(cv.de)?.meta?.nome || 'alguém'}`, 'Apertar']; }
   if (pontoProximo(pontos.lojas, 3.2)) return jogador.armado && !jogador.perfil?.policial && !jogador.perfil?.prf ? ['ASSALTAR a loja (crime!)', 'Assaltar'] : ['abrir a loja', 'Loja'];
   if (jogador.carregando) {
@@ -5188,7 +5206,7 @@ function quadro() {
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
-  voz.atualizar(dt); atualizarAperto(dt);
+  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
@@ -5324,3 +5342,239 @@ function naRua(x, z) {
   if (az > 928 && az < 1115 && Math.abs(x) < 90) return [945, 999, 1053, 1107].some((c) => Math.abs(az - c) < m) || [-81, -27, 27, 81].some((c) => Math.abs(x - c) < m) || (az > 928 && az < 940);
   return false;
 }
+
+// ================================================================= QG do clã (dentro da base) e assalto ao cargueiro
+// Só os membros do clã dono da base entram. Lá dentro: cofre do clã, mesa de planejamento (assalto ao cargueiro),
+// arsenal (pega a arma do clã), enfermaria (cura) e refúgio (1 min lá dentro e a polícia perde o seu rastro).
+const QG_SALA = { w: 16, d: 12 };
+let refugioAte = 0, assaltoNavio = null, tempoAssalto = 3, avisoAssaltoId = null;
+function territorioBase(id) { for (const v of territorios.values()) if (v.d.id === id) return v.d; return null; }
+function meuQG(id) { const t = territorioBase(id); return !!(t && jogador.cla && t.dono_cla === jogador.cla); }
+function portaQGPerto() {
+  if (jogador.carro || jogador.dentroCasa) return null;
+  for (const [id, p] of Object.entries(PORTAS_QG)) if (Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z) < 2.6) return id;
+  return null;
+}
+function criarQG() {
+  if (interiores.has('qg')) return interiores.get('qg');
+  const bx = 3200, bz = 0, W = QG_SALA.w, D = QG_SALA.d;
+  const g = new THREE.Group(); g.position.set(bx, 0, bz); scene.add(g);
+  const mat = (cor, r = 0.8, m = 0) => new THREE.MeshStandardMaterial({ color: cor, roughness: r, metalness: m });
+  const caixa = (w, h, d, cor, x, y, z, m = 0) => { const k = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), typeof cor === 'string' ? mat(cor, 0.7, m) : cor); k.position.set(x, y, z); k.castShadow = true; k.receiveShadow = true; g.add(k); return k; };
+  const piso = texturaCanvas(256, (gx, t) => { gx.fillStyle = '#4a4d52'; gx.fillRect(0, 0, t, t); for (let i = 0; i <= 4; i++) { gx.fillStyle = 'rgba(0,0,0,.25)'; gx.fillRect(i * t / 4, 0, 2, t); gx.fillRect(0, i * t / 4, t, 2); } ruido(gx, t, 4000, 0.1, 1.2); });
+  piso.repeat.set(4, 3);
+  const chao = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: piso, roughness: 0.9 })); chao.rotation.x = -Math.PI / 2; chao.receiveShadow = true; g.add(chao);
+  caixa(W, 3.6, 0.3, '#6b5f55', 0, 1.8, -D / 2); caixa(0.3, 3.6, D, '#5f554c', -W / 2, 1.8, 0);
+  const bandeira = caixa(3.2, 1.8, 0.05, '#c43b3b', 0, 2.3, -D / 2 + 0.2);
+  // cofre (fundo à direita)
+  caixa(2.2, 2.2, 1.4, '#3d4248', 6.1, 1.1, -5, 0.6); caixa(0.5, 0.5, 0.08, '#c9a227', 6.1, 1.2, -4.27, 0.8);
+  // mesa de planejamento com o mapa do porto
+  caixa(3.2, 0.12, 2.0, '#5a3f28', 0, 0.95, -1); for (const [x, z] of [[-1.4, -1.8], [1.4, -1.8], [-1.4, -0.2], [1.4, -0.2]]) caixa(0.12, 0.95, 0.12, '#3b2a1a', x, 0.47, z);
+  const mapa = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 1.6), new THREE.MeshStandardMaterial({ map: texturaCanvas(128, (gx, t) => { gx.fillStyle = '#d9c9a0'; gx.fillRect(0, 0, t, t); gx.fillStyle = '#4a7fa8'; gx.fillRect(0, t * 0.55, t, t * 0.45); gx.fillStyle = '#7d2a24'; gx.fillRect(t * 0.55, t * 0.62, t * 0.12, t * 0.3); gx.strokeStyle = '#c00'; gx.lineWidth = 3; gx.beginPath(); gx.arc(t * 0.61, t * 0.75, 12, 0, 7); gx.stroke(); }), roughness: 0.9 }));
+  mapa.rotation.x = -Math.PI / 2; mapa.position.set(0, 1.02, -1); g.add(mapa);
+  // arsenal (parede da esquerda)
+  caixa(0.5, 2.4, 3.2, '#2f3a2c', -7.5, 1.2, -4);
+  for (let k = 0; k < 4; k++) caixa(0.12, 0.16, 1.1, '#1a1a1a', -7.15, 1.0 + k * 0.4, -4 + (k % 2 ? 0.4 : -0.4), 0.7);
+  // enfermaria: maca e armário com cruz
+  caixa(2.2, 0.7, 1.0, '#e8ecef', -6, 0.35, 3); caixa(0.6, 0.15, 0.9, '#ffffff', -6.8, 0.78, 3);
+  caixa(0.9, 1.6, 0.5, '#f2f2f2', -7.5, 0.8, 1.2); caixa(0.5, 0.12, 0.06, '#d42a2a', -7.22, 1.2, 1.2); caixa(0.12, 0.5, 0.06, '#d42a2a', -7.22, 1.2, 1.2);
+  // porta de saída
+  caixa(1.6, 0.05, 1.0, '#3b2a1a', 7, 0.03, 5.3);
+  const luz = new THREE.PointLight('#ffe2b8', 9, 22, 1.5); luz.position.set(0, 3.2, 0); g.add(luz);
+  const placa = (txt, x, z, y = 2.2) => { const sp = textoSprite(txt, { escala: 0.55 }); sp.position.set(x, y, z); g.add(sp); };
+  placa('Cofre', 6.1, -5, 2.8); placa('Mesa de planejamento', 0, -1, 2); placa('Arsenal', -7.3, -4, 2.9); placa('Enfermaria', -6, 3, 1.8); placa('Sair', 7, 5.3, 1.4);
+  const i = { base: { x: bx, z: bz }, sala: QG_SALA, bandeira,
+    obst: [[4.9, 7.4, -6, -4.2], [-1.75, 1.75, -2.1, 0.1], [-8, -7.1, -5.7, -2.3], [-7.2, -4.8, 2.4, 3.6], [-8, -6.9, 0.8, 1.6]],
+    pontos: { porta: { x: bx + 7, z: bz + 5.3 }, cofre: { x: bx + 6.1, z: bz - 3.6 }, mesa: { x: bx, z: bz + 0.9 }, arsenal: { x: bx - 6.3, z: bz - 4 }, maca: { x: bx - 6, z: bz + 4.3 } } };
+  interiores.set('qg', i);
+  return i;
+}
+function entrarNoQG(id) {
+  const i = criarQG();
+  i.bandeira.material.color.set(clasCache.get(jogador.cla)?.cor || jogador.claInfo?.cor || '#c43b3b');
+  jogador.dentroCasa = 'qg'; jogador.qg = id; jogador.qgDesde = performance.now();
+  if (jogador.carregando) { scene.remove(jogador.carregando); jogador.carregando = null; }
+  teleportar(i.base.x + 6, i.base.z + 4.4);
+  aviso((jogador.perfil?.crimes || 0) > 0 ? '🏴 QG do clã. Você está no refúgio: fique 1 minuto aqui e a polícia perde o seu rastro.' : '🏴 Bem-vindo ao QG do clã.', 4);
+}
+function sairDoQG() {
+  const p = PORTAS_QG[jogador.qg] || PORTAS_QG.leste;
+  jogador.dentroCasa = null;
+  teleportar(p.x + (p.x > 0 ? -2 : 2), p.z);
+  if (refugioAte > performance.now()) aviso('🛡️ A polícia perdeu o seu rastro por enquanto. Aproveite.', 3);
+}
+// refúgio: depois de 1 min no QG, a polícia larga a perseguição (e fica 2 min sem achar você ao sair)
+function refugiado() { return refugioAte > performance.now(); }
+function atualizarQG(dt) {
+  if (jogador.dentroCasa === 'qg' && (jogador.perfil?.crimes || 0) > 0 && performance.now() - jogador.qgDesde > 60000) {
+    if (!refugiado()) aviso('🛡️ A polícia perdeu o seu rastro. Saia com calma.', 3);
+    refugioAte = performance.now() + 120000;
+  }
+  atualizarArrombar(dt);
+  tempoAssalto -= dt;
+  const perto = Math.abs(jogador.pos.z) > 800 || jogador.dentroCasa === 'qg';
+  if (tempoAssalto <= 0) { tempoAssalto = assaltoNavio || perto ? 8 : 30; carregarAssalto(); }
+  desenharConteineres();
+}
+function contextoQG() {
+  if (pontoInterior('porta', 1.8)) return ['sair do QG', 'Sair'];
+  if (pontoInterior('cofre', 2)) return ['cofre do clã (entregar a carga do cargueiro aqui)', 'Cofre'];
+  if (pontoInterior('mesa', 2.4)) return [assaltoNavio ? `assalto em andamento: ${assaltoNavio.cla_nome}` : 'mesa de planejamento: assalto ao cargueiro', 'Planejar'];
+  if (pontoInterior('arsenal', 2)) return [jogador.armaDoQG || jogador.perfil?.arma_militar ? 'arsenal (você já tem a arma do clã)' : 'arsenal: pegar a arma do clã', 'Arsenal'];
+  if (pontoInterior('maca', 2.2)) return ['enfermaria: curar a vida', 'Curar'];
+  return ['', ''];
+}
+async function acaoQG() {
+  if (pontoInterior('porta', 1.8)) { sairDoQG(); return; }
+  if (pontoInterior('cofre', 2)) { abrirCofreQG(); return; }
+  if (pontoInterior('mesa', 2.4)) { planejarAssalto(); return; }
+  if (pontoInterior('arsenal', 2)) {
+    if (!jogador.armaDoQG && !jogador.perfil?.arma_militar) { jogador.armaDoQG = true; aviso('🔫 Você pegou a ARMA DO CLÃ no arsenal (vale até sair do jogo). Ela é ilegal: cuidado com a polícia.', 4); }
+    if (!jogador.armado) alternarArma();
+    tempoArma = 0; return;
+  }
+  if (pontoInterior('maca', 2.2)) {
+    jogador.trava = 1.5; jogador.alvo = null; jogador.avatar.tocar('idle_long', { fade: 0.3 }); aviso('✚ Cuidando dos ferimentos…', 1.5);
+    jogador.eventos.push({ t: 1.5, fn: () => { jogador.vida = 100; desenharFome(); aviso('✚ Vida recuperada!'); } });
+  }
+}
+
+// ---------------------------------------------------------------- cofre do clã
+function janelaQG() {
+  let el = $('qgJanela');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'qgJanela'; el.className = 'modal oculto';
+    el.innerHTML = '<div class="topo"><b>🏴 Cofre do clã</b><button id="qgFechar" aria-label="Fechar">✕</button></div><div id="qgConteudo" class="conteudo"></div><div id="qgMsg" class="msg"></div>';
+    document.body.appendChild(el); $('qgFechar').onclick = () => el.classList.add('oculto');
+  }
+  return el;
+}
+function msgQG(t, ok = true) { const m = $('qgMsg'); if (!m) return; m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'erro'); clearTimeout(msgQG.t); msgQG.t = setTimeout(() => { m.textContent = ''; }, 4500); }
+async function abrirCofreQG() {
+  janelaQG().classList.remove('oculto');
+  // carga do cargueiro na mochila: entrega primeiro
+  try {
+    const inv = await rede.carregarInventario(jogador.perfil.id);
+    if (inv.carga_navio > 0) { const r = await rede.qg.entregar(); msgQG(`📦 ${r.cargas} carga(s) entregue(s): +${num(r.cla)} para o clã e +${num(r.voce)} para você!`); recarregarInventario(); }
+  } catch (e) { msgQG(e.message, false); }
+  desenharCofreQG();
+}
+async function desenharCofreQG() {
+  const c = $('qgConteudo'); c.textContent = 'Carregando…';
+  let d, inv; try { [d, inv] = await Promise.all([rede.qg.cofre(), rede.carregarInventario(jogador.perfil.id)]); } catch (e) { c.textContent = e.message; return; }
+  if (!d) { c.textContent = 'Não foi possível abrir o cofre.'; return; }
+  const nomes = {}; try { for (const p of await rede.carregarPrecos()) nomes[p.item] = p.nome; } catch { /* sem nomes */ }
+  const mochila = Object.entries(inv).filter(([k, q]) => q > 0 && k !== 'carga_navio' && k !== 'desbloqueio');
+  c.innerHTML = `<p class="dica">Caixa do clã: <b>${num(d.caixa)}</b> moedas. Qualquer membro guarda; ${d.retirar ? 'você pode retirar.' : 'só o líder e quem ele autorizar retiram.'}</p>
+    <div class="sub">Moedas</div>
+    <div class="botoes"><input id="qgValor" type="number" min="1" inputmode="numeric" placeholder="Valor" style="max-width:120px"><button id="qgDep">Depositar</button>${d.retirar ? '<button id="qgSac">Sacar</button>' : ''}</div>
+    <div class="sub">No cofre</div>
+    ${d.itens.length ? d.itens.map((x) => `<div class="botoes"><span style="flex:1">${esc(x.nome)}: <b>${x.qtd}</b></span>${d.retirar ? `<button data-ret="${x.item}">Retirar 1</button>` : ''}</div>`).join('') : '<p class="dica">Vazio.</p>'}
+    <div class="sub">Sua mochila</div>
+    ${mochila.length ? mochila.map(([k, q]) => `<div class="botoes"><span style="flex:1">${esc(nomes[k] || k)}: <b>${q}</b></span><button data-guar="${k}">Guardar 1</button><button data-guart="${k}" data-q="${q}">Guardar tudo</button></div>`).join('') : '<p class="dica">Nada para guardar.</p>'}
+    ${d.lider && d.membros.length ? `<div class="sub">Quem pode retirar (além de você)</div>${d.membros.map((m) => `<div class="botoes"><span style="flex:1">${esc(m.nome)}</span><button data-aut="${m.id}" data-sim="${m.cofre ? 0 : 1}" class="${m.cofre ? 'ativo' : ''}">${m.cofre ? 'Autorizado ✓' : 'Autorizar'}</button></div>`).join('')}` : ''}`;
+  const fazer = async (fn, ok) => { try { await fn(); msgQG(ok); recarregarInventario(); desenharCofreQG(); } catch (e) { msgQG(e.message, false); } };
+  const valor = () => Math.floor(Number($('qgValor').value));
+  $('qgDep').onclick = () => { const v = valor(); if (v > 0) fazer(() => rede.cla.depositar(v), `Depositou ${num(v)}.`); };
+  if ($('qgSac')) $('qgSac').onclick = () => { const v = valor(); if (v > 0) fazer(() => rede.qg.sacar(v), `Sacou ${num(v)}.`); };
+  c.querySelectorAll('[data-ret]').forEach((b) => { b.onclick = () => fazer(() => rede.qg.retirar(b.dataset.ret, 1), 'Retirado para a mochila.'); });
+  c.querySelectorAll('[data-guar]').forEach((b) => { b.onclick = () => fazer(() => rede.qg.guardar(b.dataset.guar, 1), 'Guardado no cofre.'); });
+  c.querySelectorAll('[data-guart]').forEach((b) => { b.onclick = () => fazer(() => rede.qg.guardar(b.dataset.guart, Number(b.dataset.q)), 'Tudo guardado no cofre.'); });
+  c.querySelectorAll('[data-aut]').forEach((b) => { b.onclick = () => fazer(() => rede.qg.autorizar(b.dataset.aut, b.dataset.sim === '1'), 'Permissão alterada.'); });
+}
+
+// ---------------------------------------------------------------- assalto ao cargueiro (Porto Sul)
+// 6 contêineres no convés, entre as pilhas e a ponte de comando. Sobe pelo píer e pela rampa.
+const CONTEINERES = [[61.6, 1162], [61.6, 1167], [61.6, 1172], [70.4, 1162], [70.4, 1167], [70.4, 1172]];
+const conteineres = [];
+function montarCargueiro() {
+  mundo.addPiso({ x0: 43, x1: 53, z0: 1108, z1: 1183, h: 0.5 });
+  mundo.addPiso({ x0: 59, x1: 73, z0: 1129, z1: 1191, h: 4.0 });
+  mundo.addPiso({ x0: 52, x1: 60, z0: 1149.5, z1: 1153.5, h: 4, rampa: { eixo: 'x', de: 53, ate: 59.6, h0: 0.5, h1: 4.0 } });
+  // rampa de embarque com corrimão
+  const rampa = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(6.6, 3.5), 0.15, 3.6), new THREE.MeshStandardMaterial({ color: '#8a8f96', roughness: 0.6, metalness: 0.5 }));
+  rampa.position.set(56.3, 2.2, 1151.5); rampa.rotation.z = Math.atan2(3.5, 6.6); rampa.receiveShadow = true; rampa.castShadow = true; scene.add(rampa);
+  for (const dz of [-1.8, 1.8]) { const c = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(6.6, 3.5), 0.08, 0.08), new THREE.MeshStandardMaterial({ color: '#d8b13a' })); c.position.set(56.3, 3.2, 1151.5 + dz); c.rotation.z = rampa.rotation.z; scene.add(c); }
+  // grade em volta do convés
+  const grade = new THREE.MeshStandardMaterial({ color: '#e8e8e2', roughness: 0.6 });
+  for (const x of [59.2, 72.8]) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.9, 62), grade); r.position.set(x, 4.45, 1160); scene.add(r); }
+  // as pilhas de contêineres e a ponte de comando não se atravessam
+  colisores.push({ tipo: 'caixa', x0: 61.3, x1: 70.7, z0: 1136.8, z1: 1157.2 }, { tipo: 'caixa', x0: 60.5, x1: 71.5, z0: 1177, z1: 1187 });
+  const cores = ['#c43b3b', '#2f9e5b', '#3b6fd2', '#c98a1c', '#8a3bc4', '#3b9ec4'];
+  CONTEINERES.forEach(([x, z], k) => {
+    const g = new THREE.Group(); g.position.set(x, 4.0, z); scene.add(g);
+    const corpo = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.6, 4.2), new THREE.MeshStandardMaterial({ color: cores[k], roughness: 0.7 })); corpo.position.y = 1.3; corpo.castShadow = true; corpo.receiveShadow = true; g.add(corpo);
+    const porta = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.4, 3.9), new THREE.MeshStandardMaterial({ color: '#2a2a2a', roughness: 0.6, metalness: 0.4 })); porta.position.set(x < 66 ? 1.32 : -1.32, 1.3, 0); g.add(porta);
+    const marca = textoSprite('💰 Contêiner', { escala: 0.6, fundo: 'rgba(160,20,20,.9)' }); marca.position.y = 3.6; marca.visible = false; g.add(marca);
+    colisores.push({ tipo: 'caixa', x0: x - 1.4, x1: x + 1.4, z0: z - 2.2, z1: z + 2.2 });
+    conteineres.push({ k, x, z, g, porta, marca, ponto: { x: x < 66 ? x + 2.2 : x - 2.2, z } });
+  });
+}
+async function carregarAssalto() {
+  try {
+    const a = await rede.qg.assaltoAtual();
+    assaltoNavio = a && Date.parse(a.fim) > agoraServidor() ? a : null;
+  } catch { /* tenta depois */ }
+}
+function desenharConteineres() {
+  const meu = assaltoNavio && jogador.cla && assaltoNavio.cla === jogador.cla;
+  for (const c of conteineres) {
+    const aberto = !!assaltoNavio?.abertos?.includes(c.k);
+    c.porta.visible = !aberto;
+    c.marca.visible = !!meu && !aberto;
+  }
+}
+function conteinerPerto() {
+  if (!assaltoNavio || !jogador.cla || assaltoNavio.cla !== jogador.cla || jogador.carro || jogador.pos.y < 3) return null;
+  for (const c of conteineres) if (!assaltoNavio.abertos?.includes(c.k) && Math.hypot(c.ponto.x - jogador.pos.x, c.ponto.z - jogador.pos.z) < 2.2) return c.k;
+  return null;
+}
+function arrombarConteiner(k) {
+  if (jogador.arrombando) return;
+  const c = conteineres[k];
+  jogador.arrombando = { k, t: 12, x: c.ponto.x, z: c.ponto.z, aviso: 0 };
+  virarPara(c.x, c.z); jogador.alvo = null;
+  conexao?.enviar('assalto', { tipo: 'arrombando', cla: assaltoNavio?.cla_nome });
+  aviso('🔧 Arrombando o contêiner… não se afaste (12 s).', 3);
+}
+function atualizarArrombar(dt) {
+  const a = jogador.arrombando; if (!a) return;
+  if (jogador.morto || jogador.algemado || jogador.pena > 0 || Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z) > 3.5) { jogador.arrombando = null; aviso('Arrombamento abandonado.'); return; }
+  a.t -= dt; a.aviso -= dt;
+  if (a.aviso <= 0 && a.t > 0) { a.aviso = 3; jogador.avatar.tocar('punch_right', { umaVez: true, velocidade: 1.7, fade: 0.1 }); }
+  if (a.t <= 0) {
+    jogador.arrombando = null;
+    rede.qg.arrombar(a.k).then(() => {
+      aviso('📦 Carga roubada! Leve até o COFRE do QG do clã. Se for preso no caminho, a polícia confisca. Você está PROCURADO!', 5);
+      recarregarInventario(); tempoAssalto = 0;
+      const p = PORTAS_QG[territorioBase('leste')?.dono_cla === jogador.cla ? 'leste' : 'oeste'];
+      if (p) rastrear({ nome: '🏴 QG do clã', x: p.x, z: p.z });
+    }).catch((e) => aviso(e.message, 3));
+  }
+}
+async function planejarAssalto() {
+  if (assaltoNavio) {
+    const resta = Math.max(0, Math.ceil((Date.parse(assaltoNavio.fim) - agoraServidor()) / 60000));
+    aviso(assaltoNavio.cla === jogador.cla ? `Assalto do seu clã em andamento: ${resta} min. Contêineres abertos: ${assaltoNavio.abertos.length}/6.` : `O cargueiro já está sendo assaltado (${assaltoNavio.cla_nome}).`, 4);
+    if (assaltoNavio.cla === jogador.cla) rastrear({ nome: '🚢 Cargueiro', x: 66, z: 1150 });
+    return;
+  }
+  if (performance.now() > (planejarAssalto.conf || 0)) { planejarAssalto.conf = performance.now() + 4000; aviso('🗺️ Assalto ao cargueiro do Porto Sul: 15 min, 6 contêineres, a polícia vai reagir. Toque de novo para começar.', 4.5); return; }
+  planejarAssalto.conf = 0;
+  try {
+    assaltoNavio = await rede.qg.iniciarAssalto();
+    conexao?.enviar('assalto', { tipo: 'inicio', cla: assaltoNavio?.cla_nome });
+    aviso('🚢 ASSALTO COMEÇOU! 15 minutos. Vão até o cargueiro no Porto Sul: suba pelo píer e arrombe os contêineres.', 5);
+    rastrear({ nome: '🚢 Cargueiro', x: 50, z: 1110 });
+  } catch (e) { aviso(e.message, 3.5); }
+}
+// todos ficam sabendo do assalto (polícia, PRF e Exército podem ir até lá)
+function avisoAssalto(a) {
+  tempoAssalto = Math.min(tempoAssalto, 1);
+  if (a?.tipo === 'inicio' && avisoAssaltoId !== a.cla) {
+    avisoAssaltoId = a.cla;
+    aviso(`🚨 ALERTA: o clã ${a.cla || '?'} está assaltando o cargueiro no Porto Sul!`, 5);
+    const p = jogador.perfil; if (p?.policial || p?.prf || militar()) rastrear({ nome: '🚨 Assalto ao cargueiro', x: 50, z: 1110 });
+  }
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }

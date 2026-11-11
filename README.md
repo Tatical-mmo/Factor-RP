@@ -191,6 +191,15 @@ Regras: algemas e prisão não funcionam na equipe, o admin não pode ser banido
 
 Motores por veículo (carros comuns, esportivo, jipe, caminhões, vans; o tom sobe com a velocidade), partida ao entrar no carro, barulho da cidade grande e passarinhos nas cidades menores, nas praças e na mata. Os sons longos só baixam quando vão tocar.
 
+## QG do clã e assalto ao cargueiro (SQL 41a e 41b)
+
+O clã dono da Base Leste ou Oeste entra no **QG** pela porta marcada "🏴 QG do clã", no lado da base virado para a cidade.
+- **Cofre:** qualquer membro guarda itens da mochila e deposita moedas; o líder e quem ele autorizar retiram e sacam.
+- **Mesa de planejamento:** começa o assalto ao cargueiro do Porto Sul (15 min, 6 contêineres; um assalto por vez na cidade, cada clã a cada 2 h). Suba pelo píer e pela rampa, arrombe os contêineres (12 s, +2 crimes) e leve a carga ao cofre: 6.000 para o clã e 1.500 para quem entregou, por carga. Preso no caminho, a polícia confisca. Todo mundo recebe o alerta.
+- **Arsenal:** pega a arma do clã (vale até sair do jogo).
+- **Enfermaria:** cura a vida.
+- **Refúgio:** procurado que fica 1 minuto no QG faz a polícia perder o rastro (e tem 2 minutos de folga ao sair).
+
 ## Controles no PC
 
 | Tecla | Ação |

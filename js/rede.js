@@ -77,6 +77,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'voz' }, ({ payload }) => eventos.voz?.(payload));
   canal.on('broadcast', { event: 'gesto' }, ({ payload }) => eventos.gesto?.(payload));
   canal.on('broadcast', { event: 'clima' }, ({ payload }) => eventos.clima?.(payload));
+  canal.on('broadcast', { event: 'assalto' }, ({ payload }) => eventos.assalto?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
@@ -112,6 +113,13 @@ function traduzirRpc(m) {
   const t = {
     'sem permissao': 'Você não tem esse poder.',
     'chances invalidas': 'As chances somadas não podem passar de 100%.',
+    'seu cla nao tem base': 'Seu clã precisa ser dono da Base Leste ou Oeste.',
+    'cargueiro ja esta sendo assaltado': 'O cargueiro já está sendo assaltado por outro clã.',
+    'aguarde para outro assalto': 'Seu clã já assaltou o cargueiro há pouco. Espere 2 horas entre um assalto e outro.',
+    'nenhum assalto do seu cla': 'Não há assalto do seu clã em andamento. Planeje na mesa do QG.',
+    'cedo demais': 'Calma! Espere alguns segundos depois de começar o assalto.',
+    'conteiner ja aberto': 'Esse contêiner já foi arrombado.',
+    'sem carga': 'Você não tem carga do cargueiro.',
     'voce nao pode banir esse jogador': 'Você não pode banir esse jogador.',
     'voce nao pode desbanir esse jogador': 'Você não pode desbanir esse jogador.',
     'voce nao pode algemar esse jogador': 'Você não pode algemar esse jogador.',
@@ -302,6 +310,17 @@ function traduzirRpc(m) {
   if (espera) return `Aguarde ${espera[1]} s.`;
   return t[m] || m;
 }
+export const qg = {
+  cofre: () => rpc('cla_cofre'),
+  guardar: (item, qtd) => rpc('cla_guardar', { p_item: item, p_qtd: qtd }),
+  retirar: (item, qtd) => rpc('cla_cofre_retirar', { p_item: item, p_qtd: qtd }),
+  sacar: (valor) => rpc('cla_cofre_sacar', { valor }),
+  autorizar: (jogador, sim) => rpc('cla_autorizar_cofre', { p_jogador: jogador, p_sim: sim }),
+  assaltoAtual: () => rpc('assalto_navio_atual'),
+  iniciarAssalto: () => rpc('cla_assalto_iniciar'),
+  arrombar: (k) => rpc('cla_assalto_arrombar', { p_k: k }),
+  entregar: () => rpc('cla_assalto_entregar'),
+};
 export const clima = {
   async ler() { const { data, error } = await sb.from('clima').select('*').eq('id', 1).maybeSingle(); if (error) throw error; return data; },
   agora: (tipo, minutos) => rpc('admin_clima_agora', { p_tipo: tipo, p_minutos: minutos }),
