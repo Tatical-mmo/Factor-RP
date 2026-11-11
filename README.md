@@ -245,6 +245,10 @@ Prefeitura (gabinete, urna, outdoors, sala de imprensa), quartel dos bombeiros (
 
 No painel (página do jogador ou aba Denúncias), **👁️ Averiguar**: a câmera passa a seguir o jogador em qualquer lugar do mapa, com uma barra mostrando o que ele faz (andando, dirigindo, armado, crimes, rua), as mensagens que ele escreve (inclusive no modo privado) e botões para ir até ele, algemar, prender 10 min, banir (com motivo) ou abrir no painel. Seu personagem fica parado enquanto isso.
 
+## Carceragem
+
+Os presos não ficam mais na grade do lado de fora: vão para uma das 8 celas da **carceragem** (porta "🔒 Carceragem" dentro da delegacia e do posto da PRF) e só andam dentro da cela. Policiais e PRF em serviço (e o admin) entram e, na **guarita**, autorizam a visita de um jogador: ele recebe o convite e fica 3 minutos na área de visita, em frente às celas, para conversar (chat ou voz por perto).
+
 ## Controles no PC
 
 | Tecla | Ação |

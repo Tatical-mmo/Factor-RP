@@ -472,21 +472,9 @@ function criarCaixa(tipo) {
 const codigoCaixa = (c) => !c ? 0 : (PRODUTOS[c.userData.tipo]?.codigo || 1);
 const tipoDoCodigo = (n) => Object.keys(PRODUTOS).find((k) => PRODUTOS[k].codigo === n) || null;
 let cadeia = null;
-const RAIO_CADEIA = 2.2;
 function criarCadeia(caixaDelegacia) {
   cadeia = { x: caixaDelegacia.max.x + 3.2, z: (caixaDelegacia.min.z + caixaDelegacia.max.z) / 2 };
-  const mat = new THREE.MeshStandardMaterial({ color: '#30353d', metalness: 0.7, roughness: 0.4 });
-  const barra = new THREE.CylinderGeometry(0.045, 0.045, 2.6, 6);
-  const grade = new THREE.InstancedMesh(barra, mat, 40);
-  const m = new THREE.Matrix4();
-  for (let i = 0; i < 40; i++) {
-    const a = i / 40 * Math.PI * 2;
-    m.makeTranslation(cadeia.x + Math.cos(a) * (RAIO_CADEIA + 0.3), 0.18 + 1.3, cadeia.z + Math.sin(a) * (RAIO_CADEIA + 0.3)); grade.setMatrixAt(i, m);
-  }
-  grade.castShadow = true; scene.add(grade);
-  const aro = new THREE.Mesh(new THREE.TorusGeometry(RAIO_CADEIA + 0.3, 0.06, 6, 48), mat);
-  aro.rotation.x = Math.PI / 2; aro.position.set(cadeia.x, 2.75, cadeia.z); scene.add(aro);
-  const placa = textoSprite('Cadeia', { escala: 0.7, cor: '#ffb4a8' }); placa.position.set(cadeia.x, 3.3, cadeia.z); scene.add(placa);
+  // os presos ficam na carceragem, dentro da delegacia (sala 'carceragem'); aqui fica só o ponto de saída
   pontos.delegacia = { x: (caixaDelegacia.min.x + caixaDelegacia.max.x) / 2, z: caixaDelegacia.max.z + 1.3 };
   const pd = textoSprite('Delegacia · serviço policial', { escala: 0.65, fundo: 'rgba(30,70,160,.92)' }); pd.position.set(pontos.delegacia.x, 2.6, pontos.delegacia.z); scene.add(pd);
 }
@@ -1940,7 +1928,7 @@ async function iniciarJogo(perfil) {
   if (jogador.pos.x > 1500) jogador.pos.set(contratante.x + 6, 0, contratante.z + 6);
   jogador.pena = perfil.pena_seg || 0;
   jogador.fome = typeof perfil.fome === 'number' ? perfil.fome : 100;
-  if (jogador.pena > 0 && cadeia) jogador.pos.set(cadeia.x, 0, cadeia.z);
+  if (jogador.pena > 0 && cadeia) { const c = posCela(); jogador.pos.set(c.x, 0, c.z); jogador.dentroCasa = 'carceragem'; jogador.saidaSala = { x: cadeia.x + 4.5, z: cadeia.z }; }
   resolverColisao(jogador.pos, jogador.raio);
   jogador.pos.y = alturaChao(jogador.pos.x, jogador.pos.z);
   jogador.yaw = Math.PI;
@@ -2436,6 +2424,7 @@ function descansar() {
 }
 function limitarInterior(p) {
   const i = interiores.get(jogador.dentroCasa); if (!i) return;
+  if (i.celas && jogador.pena > 0) { const b = caixaCela(); p.x = THREE.MathUtils.clamp(p.x, b.x0, b.x1); p.z = THREE.MathUtils.clamp(p.z, b.z0, b.z1); return; }   // preso: só dentro da cela
   const sala = i.sala || SALA;
   p.x = THREE.MathUtils.clamp(p.x, i.base.x - sala.w / 2 + 0.5, i.base.x + sala.w / 2 - 0.5);
   p.z = THREE.MathUtils.clamp(p.z, i.base.z - sala.d / 2 + 0.5, i.base.z + sala.d / 2 - 0.5);
@@ -4832,7 +4821,7 @@ function montarLocais() {
 function teleportar(x, z) {
   if (jogador.carro) sairCarro();
   if (jogador.trem) { ferrovia.ocultarTeto(jogador.trem.li, jogador.trem.k, false); jogador.trem = null; }
-  if (jogador.pena > 0 && cadeia) { x = cadeia.x; z = cadeia.z; }
+  if (jogador.pena > 0 && cadeia) { const c = posCela(); x = c.x; z = c.z; jogador.dentroCasa = 'carceragem'; jogador.saidaSala = { x: cadeia.x + 4.5, z: cadeia.z }; }
   if (x < 1500) jogador.dentroCasa = null;     // interiores ficam em x >= 2000
   jogador.pos.set(x, alturaChao(x, z), z);
   resolverColisao(jogador.pos, jogador.raio);
@@ -5002,8 +4991,7 @@ function atualizarJogador(dt) {
   resolverColisao(j.pos, j.raio);
   if (j.dentroCasa) limitarInterior(j.pos);
   if (j.pena > 0 && cadeia) {
-    const dx = j.pos.x - cadeia.x, dz = j.pos.z - cadeia.z, d = Math.hypot(dx, dz);
-    if (d > RAIO_CADEIA) { j.pos.x = cadeia.x + dx / d * RAIO_CADEIA; j.pos.z = cadeia.z + dz / d * RAIO_CADEIA; }
+    if (j.dentroCasa !== 'carceragem') { const c = posCela(); teleportar(c.x, c.z); }
     j.pena = Math.max(0, j.pena - dt);
     j.sincPena -= dt;
     if (j.sincPena <= 0) {
@@ -5244,7 +5232,7 @@ function quadro() {
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
-  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt);
+  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt); atualizarVisita();
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
@@ -5297,6 +5285,9 @@ function receberGesto(g) {
   if (!jogador.perfil || g.para !== jogador.perfil.id) return;
   const nome = remotos.get(g.de)?.meta?.nome || 'Alguém';
   if (g.tipo === 'estudio') { conviteEstudio(g); return; }
+  if (g.tipo === 'visita') { conviteVisita(g); return; }
+  if (g.tipo === 'visitaOk') { aviso(`🔒 ${nome} chegou para a visita na carceragem.`, 4); return; }
+  if (g.tipo === 'visitaNao') { aviso(`${nome} recusou a visita.`, 3); return; }
   if (g.tipo === 'estudioOk') { aviso(`📸 ${nome} chegou ao estúdio. Toque em Foto quando quiser.`, 4); return; }
   if (g.tipo === 'estudioNao') { aviso(`${nome} recusou o convite para o estúdio.`, 3); return; }
   if (g.tipo === 'convite') { convitesAperto.set(g.de, performance.now()); aviso(`🤝 ${nome} quer apertar a sua mão. Toque em "Apertar".`, 4); }
@@ -6127,6 +6118,7 @@ function salaDelegacia(chave, bz, titulo, cor) {
     for (const z of [-4, 0.5]) { for (let k = 0; k < 6; k++) caixa(0.08, 2.6, 0.08, '#777', 15.6, 1.3, z - 1.4 + k * 0.56, 0.7); caixa(2, 0.5, 1, '#5a5a5a', 17, 0.25, z); }
     placa('Celas', 17, -1.8, 3);
     estandeInterno(i, chave, -14, -2);
+    caixa(1.6, 2.4, 0.15, '#2b2f36', 4, 1.2, -6.8); i.pontos.celas = { x: i.base.x + 4, z: i.base.z - 5.8 }; placa('🔒 Carceragem', 4, -6.5, 2.9);
   });
 }
 function salaBombeiros() {
@@ -6162,6 +6154,7 @@ const servicoPolicia = () => (jogador.perfil?.policial ? 'sair do serviço polic
 SALAS.delegacia = {
   contexto: () => {
     if (naPorta()) return ['sair da delegacia', 'Sair'];
+    if (pontoInterior('celas', 1.6)) return [daPolicia() ? 'entrar na carceragem (celas dos presos)' : 'carceragem (só policiais e PRF)', 'Celas'];
     if (pontoInterior('balcao', 1.8)) return [servicoPolicia(), 'Polícia'];
     if (pontoInterior('quadro', 1.8)) return ['quadro de procurados', 'Ver'];
     if (pontoInterior('estande', 2.2)) return [daPolicia() ? 'estande de tiro: saque a arma e mire nos alvos' : 'estande de tiro (só policiais)', 'Estande'];
@@ -6169,6 +6162,7 @@ SALAS.delegacia = {
   },
   acao: () => {
     if (naPorta()) { sairSala(); return; }
+    if (pontoInterior('celas', 1.6)) { entrarCarceragem(); return; }
     if (pontoInterior('balcao', 1.8)) { alternarServico(); return; }
     if (pontoInterior('quadro', 1.8)) { quadroProcurados(); return; }
     if (pontoInterior('estande', 2.2)) aviso(daPolicia() ? '🎯 Saque a arma (Arma) e atire nos alvos: a mira compensa a distância.' : 'Só policiais usam o estande.', 3);
@@ -6177,6 +6171,7 @@ SALAS.delegacia = {
 SALAS.prf = {
   contexto: () => {
     if (naPorta()) return ['sair do posto da PRF', 'Sair'];
+    if (pontoInterior('celas', 1.6)) return [daPolicia() ? 'entrar na carceragem (celas dos presos)' : 'carceragem (só policiais e PRF)', 'Celas'];
     if (pontoInterior('balcao', 1.8)) return ['posto da PRF: serviço e investigações', 'PRF'];
     if (pontoInterior('quadro', 1.8)) return ['quadro de procurados', 'Ver'];
     if (pontoInterior('estande', 2.2)) return [daPolicia() ? 'estande de tiro: saque a arma e mire nos alvos' : 'estande de tiro (só agentes)', 'Estande'];
@@ -6184,6 +6179,7 @@ SALAS.prf = {
   },
   acao: () => {
     if (naPorta()) { sairSala(); return; }
+    if (pontoInterior('celas', 1.6)) { entrarCarceragem(); return; }
     if (pontoInterior('balcao', 1.8)) { abrirPrefeitura('prf'); return; }
     if (pontoInterior('quadro', 1.8)) { quadroProcurados(); return; }
     if (pontoInterior('estande', 2.2)) aviso(daPolicia() ? '🎯 Saque a arma (Arma) e atire nos alvos: a mira compensa a distância.' : 'Só agentes usam o estande.', 3);
@@ -6504,4 +6500,92 @@ function atualizarAveriguar(dt) {
   if (!remotos.get(averiguando.id)) { aviso(`${averiguando.nome} saiu do jogo.`, 3); encerrarAveriguar(); return; }
   tempoAveriguar -= dt; if (tempoAveriguar > 0) return; tempoAveriguar = 0.5;
   const el = $('avEstado'); if (el) el.textContent = estadoAveriguado();
+}
+
+// ================================================================= carceragem (dentro da delegacia e do posto da PRF)
+// Oito celas. Quem é preso vai para uma cela (sempre a mesma para o mesmo jogador) e só anda dentro dela.
+// Policiais e PRF em serviço (e o administrador) entram pela porta "Carceragem". Só eles autorizam visitas:
+// o visitante recebe o convite e fica 3 minutos no corredor, em frente às celas, para conversar.
+const CELAS = 8, VISITA_MS = 180000;
+function salaCarceragem() {
+  return montarSala('carceragem', 3000, 2200, 30, 18, { piso: '#55595f', parede: '#9aa0a6', luz: '#f2f6ff' }, (i) => {
+    const { caixa, placa, g } = i;
+    i.celas = true;
+    const ferro = i.mat('#30353d', 0.4, 0.7), barra = new THREE.CylinderGeometry(0.04, 0.04, 2.7, 6);
+    const grades = new THREE.InstancedMesh(barra, ferro, CELAS * 13); let n = 0; const m4 = new THREE.Matrix4();
+    for (let k = 0; k < CELAS; k++) {
+      const x = celaX(k);
+      caixa(0.15, 2.8, 6, '#7d838a', x - 1.7, 1.4, -6);                        // parede entre celas
+      caixa(1.0, 0.45, 2.1, '#6b5a48', x - 0.9, 0.23, -7.6); caixa(0.9, 0.12, 1.9, '#d9d4c8', x - 0.9, 0.5, -7.6);   // cama
+      caixa(0.45, 0.4, 0.45, '#e6e6e6', x + 1.1, 0.2, -8.4);                   // vaso
+      for (let b = 0; b < 13; b++) { m4.makeTranslation(x - 1.55 + b * 0.26, 1.35, -3); grades.setMatrixAt(n++, m4); }
+      placa(`Cela ${k + 1}`, x, -3, 3.1);
+    }
+    caixa(0.15, 2.8, 6, '#7d838a', celaX(CELAS - 1) + 1.7, 1.4, -6);
+    caixa(CELAS * 3.4, 0.12, 0.12, '#30353d', 0, 2.7, -3, 0.7);
+    grades.castShadow = true; g.add(grades);
+    i.obst.push([-15, 15, -9, -2.75]);                                         // ninguém de fora entra nas celas
+    // guarita e área de visita
+    caixa(2.6, 1.1, 1.0, '#2b4fa8', 10, 0.55, 5); movel(i, 'guarita', 10, 5, 2.6, 1, [0, -1]); placa('Guarita: autorizar visitas', 10, 5, 2.3);
+    for (const x of [-6, -2, 2, 6]) caixa(0.5, 0.45, 0.5, '#4a4f58', x, 0.22, -1.2);
+    placa('Área de visita', 0, -1.4, 2.2);
+    i.pontos.visita = { x: i.base.x, z: i.base.z - 1.6 };
+  });
+}
+const celaX = (k) => -11.9 + k * 3.4;
+function celaDe(id) { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % CELAS; }
+function posCela() { const i = salaCarceragem(), k = celaDe(jogador.perfil?.id || ''); return { x: i.base.x + celaX(k), z: i.base.z - 5.8 }; }
+function caixaCela() { const i = salaCarceragem(), k = celaDe(jogador.perfil?.id || ''), x = i.base.x + celaX(k); return { x0: x - 1.35, x1: x + 1.35, z0: i.base.z - 8.4, z1: i.base.z - 3.4 }; }
+function entrarCarceragem() {
+  if (!daPolicia()) { aviso('🔒 Só policiais e agentes da PRF em serviço entram na carceragem.', 3); return; }
+  const i = salaCarceragem(), s = jogador.saidaSala;
+  jogador.dentroCasa = null;
+  entrarSala('carceragem', s || { x: pontos.delegacia.x, z: pontos.delegacia.z + 1.5 }, i.pontos.porta.x - 1, i.pontos.porta.z - 1);
+  aviso('🔒 Carceragem. Na guarita você autoriza um visitante para falar com um preso.', 3.5);
+}
+SALAS.carceragem = {
+  contexto: () => {
+    if (jogador.pena > 0) return [`cumprindo pena: ${formatarTempo(jogador.pena)} (quem visitar pode falar com você)`, ''];
+    if (naPorta()) return [jogador.visitaAte ? 'encerrar a visita e sair' : 'sair da carceragem', 'Sair'];
+    if (pontoInterior('guarita', 1.8)) return [daPolicia() ? 'autorizar a visita de um jogador' : 'guarita (só policiais)', 'Visita'];
+    if (jogador.visitaAte) return [`visita: ${Math.max(0, Math.ceil((jogador.visitaAte - performance.now()) / 1000))} s (fale com o preso pela grade)`, ''];
+    return ['', ''];
+  },
+  acao: () => {
+    if (jogador.pena > 0) return;
+    if (naPorta()) { jogador.visitaAte = 0; sairSala(); return; }
+    if (pontoInterior('guarita', 1.8)) { if (daPolicia()) autorizarVisita(); else aviso('Só policiais autorizam visitas.'); }
+  },
+  sair: () => { jogador.visitaAte = 0; },
+};
+function autorizarVisita() {
+  const lista = [...remotos.entries()].filter(([id]) => !bloqueados.has(id));
+  if (!lista.length) { aviso('Ninguém online para trazer.'); return; }
+  escolher('🔒 Autorizar visita', 'O jogador recebe o convite e, se aceitar, vem para a área de visita da carceragem por 3 minutos.', lista.map(([id, r]) => ({
+    rotulo: `👤 ${esc(r.meta?.nome || 'jogador')}`,
+    fn: () => { conexao?.enviar('gesto', { de: jogador.perfil.id, para: id, tipo: 'visita', nome: jogador.perfil.nome }); aviso(`Convite de visita enviado para ${r.meta?.nome || 'o jogador'}.`, 3); },
+  })));
+}
+function conviteVisita(g) {
+  if (bloqueados.has(g.de)) return;
+  const quem = remotos.get(g.de)?.meta;
+  if (!(quem?.policial || quem?.prf || quem?.cargo === 'admin')) return;   // só polícia, PRF e admin convidam
+  const nome = String(g.nome || quem?.nome || 'Um policial').slice(0, 24);
+  const responder = (tipo) => conexao?.enviar('gesto', { de: jogador.perfil.id, para: g.de, tipo });
+  escolher('🔒 Visita na carceragem', `<b>${esc(nome)}</b> autorizou você a visitar os presos na carceragem por 3 minutos.`, [
+    { rotulo: '✅ Aceitar e ir', fn: () => {
+      if (jogador.pena > 0 || jogador.algemado || jogador.morto || jogador.passageiro || jogador.trem) { aviso('Agora você não pode ir.'); responder('visitaNao'); return; }
+      const i = salaCarceragem();
+      jogador.dentroCasa = null;
+      entrarSala('carceragem', { x: pontos.delegacia.x, z: pontos.delegacia.z + 1.5 }, i.pontos.visita.x, i.pontos.visita.z);
+      jogador.visitaAte = performance.now() + VISITA_MS; jogador.yaw = Math.PI;
+      aviso('🔒 Visita autorizada: 3 minutos. Converse com o preso pela grade (chat ou voz por perto).', 4);
+      responder('visitaOk');
+    } },
+    { rotulo: 'Agora não', fn: () => responder('visitaNao') }]);
+}
+function atualizarVisita() {
+  if (jogador.visitaAte && jogador.dentroCasa === 'carceragem' && performance.now() > jogador.visitaAte && !daPolicia()) {
+    jogador.visitaAte = 0; sairSala(); aviso('⏱️ O horário de visita acabou.', 3);
+  }
 }
