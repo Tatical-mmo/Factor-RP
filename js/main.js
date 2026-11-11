@@ -172,23 +172,24 @@ let anguloCam = 0;                      // 0..3 (90° cada)
 let anguloCamSuave = 0;
 let camAtras = false;
 const alvoCam = new THREE.Vector3();
-// segunda câmera: perto e por cima do ombro, em perspectiva (escolha no ☰ › Câmera)
-const camPerto = new THREE.PerspectiveCamera(50, 1, 0.1, 900);
+// segunda câmera (☰ › Câmera): a câmera de cima que gira e fica atrás do personagem, igual a de dirigir
+const ultimaPosCam = {};
 let modoCam = (() => { try { return localStorage.getItem('fator_cam') || 'iso'; } catch { return 'iso'; } })();
-let camAtiva = modoCam === 'perto' ? camPerto : camera;
+if (modoCam === 'perto') modoCam = 'atras';
+const camAtiva = camera;
 function ajustarCamera() {
   const a = window.innerWidth / window.innerHeight;
   camera.left = -zoom * a / 2; camera.right = zoom * a / 2; camera.top = zoom / 2; camera.bottom = -zoom / 2;
   camera.updateProjectionMatrix();
-  camPerto.aspect = a; camPerto.fov = a < 1 ? 62 : 50; camPerto.updateProjectionMatrix();
 }
 // pás do rotor dos helicópteros 3D (nó "rotor" dentro do modelo)
 const rotores = new WeakMap();
 function rotorDe(o) { if (!rotores.has(o)) rotores.set(o, o.getObjectByName('rotor') || null); return rotores.get(o); }
 function trocarCamera() {
-  modoCam = modoCam === 'perto' ? 'iso' : 'perto'; camAtiva = modoCam === 'perto' ? camPerto : camera;
+  modoCam = modoCam === 'atras' ? 'iso' : 'atras';
   try { localStorage.setItem('fator_cam', modoCam); } catch { /* sem armazenamento */ }
-  aviso(modoCam === 'perto' ? '🎥 Câmera de perto (por cima do ombro).' : '🎥 Câmera de cima (padrão).', 2);
+  if (modoCam === 'iso') { anguloCam = Math.round(anguloCamSuave); camAtras = false; }
+  aviso(modoCam === 'atras' ? '🎥 Câmera atrás do personagem (igual ao carro): ela gira e acompanha para onde você anda.' : '🎥 Câmera de cima (padrão).', 3);
 }
 window.addEventListener('resize', () => { renderer.setSize(window.innerWidth, window.innerHeight); ajustarCamera(); });
 ajustarCamera();
@@ -4996,24 +4997,22 @@ function posicionarCaixa(av, caixa, yaw) {
 function atualizarCamera(dt) {
   // dirigindo, a câmera gira para ficar atrás do veículo: a frente dele aponta sempre para cima da tela
   const dirigindo = jogador.carro && !jogador.carro.taxi;
-  if (dirigindo) {
+  // câmera "atrás": a pé, faz o mesmo que dirigindo, girando aos poucos para ficar atrás de quem anda
+  const atras = modoCam === 'atras' && !jogador.carro && !jogador.passageiro && !jogador.trem && !jogador.dentroCasa;
+  const andou = Math.hypot(jogador.pos.x - (ultimaPosCam.x ?? jogador.pos.x), jogador.pos.z - (ultimaPosCam.z ?? jogador.pos.z)) > 0.4 * dt;
+  ultimaPosCam.x = jogador.pos.x; ultimaPosCam.z = jogador.pos.z;
+  if (dirigindo || (atras && andou)) {
     let alvo = (jogador.yaw - Math.PI * 1.25) / (Math.PI / 2);
     alvo += 4 * Math.round((anguloCamSuave - alvo) / 4);
-    anguloCam = alvo; camAtras = true;
-  } else if (camAtras) { anguloCam = Math.round(anguloCamSuave); camAtras = false; }
-  anguloCamSuave += (anguloCam - anguloCamSuave) * Math.min(1, dt * (dirigindo ? 3 : 8));
+    if (dirigindo || Math.abs(alvo - anguloCamSuave) < 1.15) anguloCam = alvo;   // andando para trás (de frente para a câmera) ela não dá meia-volta
+    camAtras = true;
+  } else if (camAtras && !atras) { anguloCam = Math.round(anguloCamSuave); camAtras = false; }
+  anguloCamSuave += (anguloCam - anguloCamSuave) * Math.min(1, dt * (dirigindo ? 3 : atras ? 2.2 : 8));
   alvoCam.lerp(new THREE.Vector3(jogador.pos.x, 0.9, jogador.pos.z), Math.min(1, dt * 6));
   const off = offsetCamera(anguloCamSuave);
   camera.position.copy(alvoCam).addScaledVector(off, 150);
   if (tremor > 0) { tremor -= dt; camera.position.x += (Math.random() - 0.5) * tremor * 2; camera.position.z += (Math.random() - 0.5) * tremor * 2; }
   camera.lookAt(alvoCam);
-  if (modoCam === 'perto') {   // perto: mesma direção da câmera de cima, mais baixa e próxima, em perspectiva
-    const h = new THREE.Vector3(off.x, 0, off.z).normalize(), dist = jogador.carro ? (jogador.carro.voa ? 22 : 15) : 9.5, pit = THREE.MathUtils.degToRad(jogador.carro?.voa ? 40 : 50);
-    const yAlvo = jogador.carro?.voa ? jogador.carro.mesh.position.y : alvoCam.y;
-    camPerto.position.set(alvoCam.x + h.x * dist * Math.cos(pit), yAlvo + dist * Math.sin(pit), alvoCam.z + h.z * dist * Math.cos(pit));
-    if (tremor > 0) { camPerto.position.x += (Math.random() - 0.5) * tremor; camPerto.position.z += (Math.random() - 0.5) * tremor; }
-    camPerto.lookAt(alvoCam.x, yAlvo + 0.8, alvoCam.z);
-  }
   sol.position.copy(alvoCam).addScaledVector(SOL_DIR, 80);
   sol.target.position.copy(alvoCam);
   // prédios na frente do jogador ficam transparentes
