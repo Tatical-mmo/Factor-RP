@@ -384,7 +384,7 @@ async function telaJornal(c) {
       <div class="lista"><input id="mtTitulo" maxlength="90" placeholder="Título"><textarea id="mtTexto" maxlength="600" rows="4" placeholder="Texto (até 600 letras)"></textarea>
       <input id="mtImagem" placeholder="Link de uma imagem (https://…, opcional)"><label class="dica">Publicar em: <input id="mtQuando" type="datetime-local"></label>
       <div class="botoes"><button id="mtSalvar">📰 Publicar</button><button id="mtLimpar">Limpar</button></div><input id="mtId" type="hidden"></div>` : ''}
-    <div class="botoes"><button id="mtRedacao">🏢 Ir à redação (escritório e estúdio de fotos)</button>${redator ? '<button id="mtFoto">📷 Tirar foto agora</button>' : ''}</div>
+    <div class="botoes"><button id="mtRedacao">🏢 Ir à redação (escritório e estúdio de fotos)</button>${redator ? '<button id="mtFoto">📷 Tirar foto agora</button><button id="mtConvidar">📨 Convidar para o estúdio</button>' : ''}</div>
     <div class="sub">📰 Matérias</div>
     <div class="lista" id="mtLista">${materias.length ? materias.map((m) => `<div class="materia">${cartao(m)}<small style="opacity:.6">${quando(m.publicar_em)}${m.editada_em ? ` · editada por ${esc(m.editor_nome || '')}` : ''}</small>
       ${redator ? `<div class="botoes"><button data-editar="${m.id}">Editar texto</button><button class="perigo" data-apagar="${m.id}">Apagar</button></div>` : ''}</div>`).join('') : '<span class="vazio">Nenhuma matéria ainda.</span>'}</div>
@@ -395,6 +395,7 @@ async function telaJornal(c) {
   carregarImagens($('mtLista'), materias);
   $('mtRedacao').onclick = () => { fechar(); ctx.irRedacao(); };
   if ($('mtFoto')) $('mtFoto').onclick = () => { fechar(); ctx.tirarFoto(); };
+  if ($('mtConvidar')) $('mtConvidar').onclick = () => { fechar(); ctx.convidarEstudio(); };
   if (!redator) return;
   const pegar = (id) => materias.find((m) => String(m.id) === String(id));
   c.querySelectorAll('[data-editar]').forEach((b) => { b.onclick = () => { const m = pegar(b.dataset.editar); $('mtId').value = m.id; $('mtTitulo').value = m.titulo; $('mtTexto').value = m.texto || ''; $('mtImagem').value = m.imagem || ''; $('mtQuando').value = local(m.publicar_em); $('mtSalvar').textContent = '💾 Salvar edição'; $('mtTitulo').scrollIntoView({ block: 'center' }); }; });

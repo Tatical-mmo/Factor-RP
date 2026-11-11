@@ -2002,7 +2002,7 @@ async function iniciarJogo(perfil) {
     minhasEmpresas: () => [...empresas.values()].filter((e) => e.dono === jogador.perfil.id),
     meusCarros: () => [...carrosMundo.values()].map((v) => v.d).filter((d) => d.dono === jogador.perfil.id),
     veiculos: meusVeiculos, acaoVeiculo, amigosMudaram: () => carregarAmigos(), jornalMudou: () => { tempoJornal = 0.3; tempoTelao = 0; },
-    irRedacao: () => entrarRedacao(), tirarFoto: () => tirarFotoRua(),
+    irRedacao: () => entrarRedacao(), tirarFoto: () => tirarFotoRua(), convidarEstudio: () => convidarEstudio(),
     online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta?.nome || '?' })), bloqueado: (id) => bloqueados.has(id),
     bloqueiosMudaram: () => carregarBloqueios(), sairDaConta: async () => { await rede.sair(); location.reload(); },
     rastrear: (a) => rastrear(a), portaoEmpresa: (id) => portaoDaEmpresa(id),
@@ -5289,6 +5289,9 @@ function aceitarAperto() {
 function receberGesto(g) {
   if (!jogador.perfil || g.para !== jogador.perfil.id) return;
   const nome = remotos.get(g.de)?.meta?.nome || 'Alguém';
+  if (g.tipo === 'estudio') { conviteEstudio(g); return; }
+  if (g.tipo === 'estudioOk') { aviso(`📸 ${nome} chegou ao estúdio. Toque em Foto quando quiser.`, 4); return; }
+  if (g.tipo === 'estudioNao') { aviso(`${nome} recusou o convite para o estúdio.`, 3); return; }
   if (g.tipo === 'convite') { convitesAperto.set(g.de, performance.now()); aviso(`🤝 ${nome} quer apertar a sua mão. Toque em "Apertar".`, 4); }
   else if (g.tipo === 'aceito' && performance.now() - meuPedidoAperto < 12000) { meuPedidoAperto = 0; comecarAperto(g.de); }
 }
@@ -5835,7 +5838,11 @@ SALAS.redacao = {
   acao: () => {
     if (naPorta()) { sairSala(); return; }
     if (pontoInterior('mesa', 1.6)) { if (redator()) jornal.abrirEditor(); else aviso('Só jornalistas usam a mesa de edição.'); return; }
-    if (pontoInterior('estudio', 2.6)) { if (redator()) fotoEstudio(); else { jogador.yaw = 0; aviso('😄 Pose! Olhe para a câmera e espere o jornalista.'); } return; }
+    if (pontoInterior('estudio', 2.6)) {
+      if (redator()) escolher('📸 Estúdio', 'A câmera fixa fotografa quem está na marca amarela.', [{ rotulo: '📸 Tirar a foto agora', fn: () => fotoEstudio() }, { rotulo: '📨 Convidar alguém para o estúdio', fn: () => convidarEstudio() }]);
+      else { jogador.yaw = 0; aviso('😄 Pose! Olhe para a câmera e espere o jornalista.'); }
+      return;
+    }
     if (pontoInterior('mural', 1.8)) abrirServico('jornal');
   },
 };
@@ -6309,3 +6316,29 @@ function atualizarEsteiras(dt) {
 // ---------------------------------------------------------------- bloqueios (o bloqueado some do meu chat e da minha voz)
 const bloqueados = new Set();
 async function carregarBloqueios() { try { const l = await rede.conta.bloqueios(); bloqueados.clear(); for (const b of l || []) bloqueados.add(b.alvo); } catch { /* tenta depois */ } }
+
+// ---------------------------------------------------------------- convite para o estúdio de fotos (jornalista → jogador)
+function convidarEstudio() {
+  const lista = [...remotos.entries()].filter(([id]) => !bloqueados.has(id));
+  if (!lista.length) { aviso('Ninguém online para convidar agora.'); return; }
+  escolher('📨 Convidar para o estúdio', 'O jogador recebe o convite e, se aceitar, vem direto para a marca do estúdio na redação.', lista.map(([id, r]) => ({
+    rotulo: `📸 ${esc(r.meta?.nome || 'jogador')}`,
+    fn: () => { conexao?.enviar('gesto', { de: jogador.perfil.id, para: id, tipo: 'estudio', nome: jogador.perfil.nome }); aviso(`📨 Convite enviado para ${r.meta?.nome || 'o jogador'}.`, 3); },
+  })));
+}
+function conviteEstudio(g) {
+  if (bloqueados.has(g.de)) return;
+  const nome = String(g.nome || remotos.get(g.de)?.meta?.nome || 'Um jornalista').slice(0, 24);
+  const responder = (tipo) => conexao?.enviar('gesto', { de: jogador.perfil.id, para: g.de, tipo });
+  escolher('📸 Convite do Jornal', `<b>${esc(nome)}</b> convidou você para uma sessão de fotos no estúdio do Jornal da Cidade. A foto pode sair numa reportagem!`, [
+    { rotulo: '✅ Aceitar e ir ao estúdio', fn: () => {
+      if (jogador.pena > 0 || jogador.algemado || jogador.morto) { aviso('Agora você não pode ir.'); responder('estudioNao'); return; }
+      if (jogador.passageiro || jogador.trem) { aviso('Desça primeiro e aceite de novo.'); responder('estudioNao'); return; }
+      if (jogador.dentroCasa !== 'redacao') entrarRedacao();
+      const p = interiores.get('redacao')?.pontos.estudio;
+      if (p) { teleportar(p.x, p.z); jogador.yaw = 0; jogador.alvo = null; }
+      aviso('😄 Você está na marca do estúdio. Olhe para a câmera e espere a foto!', 4);
+      responder('estudioOk');
+    } },
+    { rotulo: 'Agora não', fn: () => responder('estudioNao') }]);
+}
