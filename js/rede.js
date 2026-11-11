@@ -202,6 +202,10 @@ function traduzirRpc(m) {
     'a equipe nao e cacada': 'A equipe não pode ser caçada.',
     'ele nao esta no exercito': 'Ele não está no Exército.',
     'patente invalida': 'Patente inválida.',
+    'so jornalistas': 'Só jornalistas (e o administrador) escrevem no jornal.',
+    'titulo curto': 'O título precisa de pelo menos 3 letras.',
+    'link da imagem invalido': 'O link da imagem precisa começar com https://',
+    'materia nao existe': 'Essa matéria não existe mais.',
     'ele nao e moderador': 'Ele não é moderador.',
     'voce foi expulso do exercito': 'Você foi expulso do Exército. Só um superior pode retirar a expulsão.',
     'so patente maior': 'Só quem tem patente maior (Tenente para cima) pode fazer isso.',
@@ -400,6 +404,10 @@ export const veiculos = {
 export const jornal = {
   publicar: (tipo, ref, titulo, x, z) => rpc('publicar_noticia', { p_tipo: tipo, p_ref: ref, p_titulo: titulo, p_x: x, p_z: z }),
   ultimas: () => sel(sb.from('noticias').select('*').order('id', { ascending: false }).limit(12)),
+  materias: () => sel(sb.from('materias').select('*').order('publicar_em', { ascending: false }).limit(20)),
+  redacao: () => rpc('materias_redacao'),
+  salvar: (id, titulo, texto, imagem, quando) => rpc('salvar_materia', { p_id: id || null, p_titulo: titulo, p_texto: texto, p_imagem: imagem || null, p_publicar_em: quando || null }),
+  apagar: (id) => rpc('apagar_materia', { p_id: id }),
 };
 export const exercito = {
   procurados: () => sel(sb.from('perfis').select('id,nome,crimes,recompensa').gt('crimes', 0).eq('cargo', 'jogador')
@@ -631,6 +639,7 @@ export async function listarBau(casa) {
   const b = {}; for (const r of d) b[r.item] = r.qtd; return b;
 }
 export const perdoar = (alvo) => rpc('admin_perdoar', { alvo });
+export const procuradosTodos = () => sel(sb.from('perfis').select('id,nome,crimes,recompensa,pena_seg').or('crimes.gt.0,recompensa.gt.0').order('crimes', { ascending: false }).limit(40));
 export const listarClas = () => sel(sb.from('clas').select('*, lider_perfil:perfis!clas_lider_fkey(nome)').order('id'));
 export const membrosDoCla = (id) => sel(sb.from('membros_cla').select('jogador, desde, perfil:perfis!membros_cla_jogador_fkey(nome)').eq('cla', id).order('desde'));
 export async function meuClaId(id) { const d = await sel(sb.from('membros_cla').select('cla').eq('jogador', id).maybeSingle()); return d?.cla ?? null; }

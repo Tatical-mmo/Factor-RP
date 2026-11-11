@@ -482,3 +482,17 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - 4 agentes da PRF (robôs) patrulham quarteirões perto da Prefeitura, do Banco, do Hospital e dos Bombeiros. Seguem a mesma regra da polícia: prendem procurado que não atira e, se alguém atirar neles, todos por perto revidam com tinta azul e as viaturas vêm atrás.
 - Exército: os soldados só agem com autorização, ou seja, numa caçada autorizada por um Tenente para cima ou pelo General Supremo. Durante a caçada, o procurado que não atira é preso. Quem atirar nos soldados ou nos jipes leva revide com tinta verde: tiros mais fortes (16) e mais certeiros que os da polícia, por 60 s.
 - Os soldados do quartel (marcha, corrida, sentinelas, recrutas) não reagem sozinhos.
+
+## Versão 11/11 (a) · perdão, jornal, telões, câmera de perto e rotor girando
+- ⚖️ Perdão:
+  - Painel › Eu › "Perdoar crimes" lista todos com crime ou recompensa, inclusive você, e perdoa com um toque.
+  - Na ficha do jogador, o botão "Perdoar todos os crimes" agora também zera recompensa, pena, algemas, crime eleitoral e caçada. O administrador pode se perdoar.
+- 📰 Jornal:
+  - Novo botão "Jornal" no ☰, e bancas de jornal nas praças das estações de Vila Serra e Porto Sul.
+  - Jornalistas (e o administrador) escrevem matérias na Redação: título, texto, link de imagem (https) e data para agendar. Eles podem editar ou apagar qualquer matéria.
+  - A faixa de notícias no alto da tela abre o Jornal com um toque e pode ser minimizada com o "–".
+- 📺 Telões de LED na frente da Prefeitura e nas praças de Vila Serra e Porto Sul mostram as matérias (com imagem, quando o site da imagem permite) e as reportagens, trocando a cada 10 s. As agendadas só entram na hora marcada.
+- 🎥 Câmera de perto: ☰ › Câmera troca entre a câmera de cima (padrão) e uma câmera mais baixa e próxima, por cima do ombro, em perspectiva. Os botões ⟲ ⟳ giram as duas. A escolha fica salva.
+- 🚁 Os helicópteros executivo e do Exército agora têm as pás do rotor separadas: giram quando alguém está pilotando (mais rápido no ar) e ficam paradas quando estacionados. Vale para quem pilota e para quem vê.
+- 📱 Com o celular deitado, o menu ☰ vira uma grade de 2 colunas com rolagem e cabe na tela.
+- SQL desta versão: **39_perdao_materias.sql**.

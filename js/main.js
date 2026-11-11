@@ -169,10 +169,23 @@ let anguloCam = 0;                      // 0..3 (90° cada)
 let anguloCamSuave = 0;
 let camAtras = false;
 const alvoCam = new THREE.Vector3();
+// segunda câmera: perto e por cima do ombro, em perspectiva (escolha no ☰ › Câmera)
+const camPerto = new THREE.PerspectiveCamera(50, 1, 0.1, 900);
+let modoCam = (() => { try { return localStorage.getItem('fator_cam') || 'iso'; } catch { return 'iso'; } })();
+let camAtiva = modoCam === 'perto' ? camPerto : camera;
 function ajustarCamera() {
   const a = window.innerWidth / window.innerHeight;
   camera.left = -zoom * a / 2; camera.right = zoom * a / 2; camera.top = zoom / 2; camera.bottom = -zoom / 2;
   camera.updateProjectionMatrix();
+  camPerto.aspect = a; camPerto.fov = a < 1 ? 62 : 50; camPerto.updateProjectionMatrix();
+}
+// pás do rotor dos helicópteros 3D (nó "rotor" dentro do modelo)
+const rotores = new WeakMap();
+function rotorDe(o) { if (!rotores.has(o)) rotores.set(o, o.getObjectByName('rotor') || null); return rotores.get(o); }
+function trocarCamera() {
+  modoCam = modoCam === 'perto' ? 'iso' : 'perto'; camAtiva = modoCam === 'perto' ? camPerto : camera;
+  try { localStorage.setItem('fator_cam', modoCam); } catch { /* sem armazenamento */ }
+  aviso(modoCam === 'perto' ? '🎥 Câmera de perto (por cima do ombro).' : '🎥 Câmera de cima (padrão).', 2);
 }
 window.addEventListener('resize', () => { renderer.setSize(window.innerWidth, window.innerHeight); ajustarCamera(); });
 ajustarCamera();
@@ -815,7 +828,7 @@ const raycaster = new THREE.Raycaster();
 const planoChao = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 function pontoNoChao(cx, cy) {
   const ndc = new THREE.Vector2(cx / window.innerWidth * 2 - 1, -(cy / window.innerHeight) * 2 + 1);
-  raycaster.setFromCamera(ndc, camera);
+  raycaster.setFromCamera(ndc, camAtiva);
   const p = new THREE.Vector3();
   return raycaster.ray.intersectPlane(planoChao, p) ? p : null;
 }
@@ -939,6 +952,7 @@ function acaoContexto() {
   if (perto(civico.BOMBEIROS.balcao, 3.2)) { abrirServico('bombeiros'); return; }
   if (perto(civico.EXERCITO.arsenal, 3.2)) { usarArsenal(); return; }
   if (perto(CONTRABANDISTA, 3.2)) { falarContrabandista(); return; }
+  if (BANCAS.some((b) => perto(b, 3.2))) { abrirServico('jornal'); return; }
   if (perto(civico.EXERCITO.balcao, 3.2)) { abrirServico(jogador.perfil?.profissao === 'exercito' ? 'trabalho' : 'empregos'); return; }
   if (jogador.perfil.profissao === 'jornalista') { const rp = reportagemProxima(); if (rp) { reportar(rp); return; } }
   if (perto(civico.PREFEITURA.jornal, 3.2)) { abrirServico('jornal'); return; }
@@ -1194,7 +1208,7 @@ function dirigir(dt) {
     jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x, -700, 700); jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z, -1200, 1200);
     c.alt += ((Math.abs(c.vel) > 1 ? 22 : 0) - c.alt) * Math.min(1, dt * 1.2);
     jogador.pos.y = chao; c.mesh.position.set(jogador.pos.x, chao + c.alt, jogador.pos.z); c.mesh.rotation.y = jogador.yaw;
-    const ro = c.mesh.userData.rotor; if (ro) { ro.visible = true; ro.rotation.y += dt * (c.alt > 1 || Math.abs(c.vel) > 0.5 ? 28 : 6); }
+    const ro = c.mesh.userData.rotor || rotorDe(c.mesh); if (ro) { ro.visible = true; ro.rotation.y += dt * (c.alt > 1 || Math.abs(c.vel) > 0.5 ? 28 : 12); }
     jogador.avatar.raiz.position.copy(jogador.pos);
     return;
   }
@@ -1879,6 +1893,8 @@ async function iniciarJogo(perfil) {
   civico.montarPrefeitura(); civico.montarConcessionaria();
   civico.montarBanco(); civico.montarHospital(); civico.montarBombeiros(); civico.montarCemiterio(); civico.montarQuartelExercito();
   balcao(CONTRABANDISTA.x, CONTRABANDISTA.z, '#5a2d2d', 'Contrabandista', 'Arma militar · só clãs');
+  for (const b of BANCAS) balcao(b.x, b.z, '#c0392b', 'Banca de Jornal', 'Notícias da cidade');
+  criarTeloes();
   criarCaminhaoMovel();
 
   // jogador
@@ -1954,7 +1970,7 @@ async function iniciarJogo(perfil) {
     clas: () => [...clasCache.values()], territorios: () => [...territorios.values()].map((v) => v.d),
     minhasEmpresas: () => [...empresas.values()].filter((e) => e.dono === jogador.perfil.id),
     meusCarros: () => [...carrosMundo.values()].map((v) => v.d).filter((d) => d.dono === jogador.perfil.id),
-    veiculos: meusVeiculos, acaoVeiculo, amigosMudaram: () => carregarAmigos(),
+    veiculos: meusVeiculos, acaoVeiculo, amigosMudaram: () => carregarAmigos(), jornalMudou: () => { tempoJornal = 0.3; tempoTelao = 0; },
     rastrear: (a) => rastrear(a), portaoEmpresa: (id) => portaoDaEmpresa(id),
     locaisTrabalho: () => ({ policia: pontos.delegacia, prf: civico.PREFEITURA.prf, medico: civico.HOSPITAL.balcao, bombeiro: civico.BOMBEIROS.balcao,
       jornalista: civico.PREFEITURA.jornal, exercito: mundo.QUARTEL.portao, agencia: civico.BANCO.empregos }), destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); }, pontoMudou: () => servicos.recomecarPonto(),
@@ -1962,8 +1978,10 @@ async function iniciarJogo(perfil) {
   $('btVeiculos').onclick = () => abrirServico('veiculos');
   $('btAmigos').onclick = () => abrirServico('amigos');
   $('btTrabalho').onclick = () => abrirServico('trabalho');
+  $('btJornal').onclick = () => { abrirServico('jornal'); $('menuBar').classList.remove('aberto'); };
   $('btMenu').onclick = () => $('menuBar').classList.toggle('aberto');
   $('menuItens').addEventListener('click', (e) => { if (e.target.closest('button') && e.target.closest('button').id !== 'btMenu') $('menuBar').classList.remove('aberto'); });
+  $('btCamera').onclick = () => { trocarCamera(); $('menuBar').classList.remove('aberto'); };
   $('btSom').onclick = () => { const l = sons.alternar(); $('btSom').firstChild.textContent = l ? '🔊' : '🔇'; };
   $('btSom').firstChild.textContent = sons.estaLigado() ? '🔊' : '🔇';
   sons.preparar();
@@ -2101,6 +2119,7 @@ function atualizarRemotos(dt) {
         r.arma.visible = false; r.av.mixer.update(dt); continue;
       }
     }
+    if (r.carro && civico.CARROS[r.carroModelo]?.voa) { const ro = rotorDe(r.carro); if (ro) ro.rotation.y += dt * (r.carro.position.y > alturaChao(r.carro.position.x, r.carro.position.z) + 1 ? 28 : 12); }
     if (a.pg) { raiz.position.set(a.x, a.y, a.z); raiz.visible = false; r.av.mixer.update(dt); continue; }   // passageiro de outro jogador
     if (a.vc) {   // dirigindo um veículo de empresa: o veículo segue a posição dele
       pilotos.set(Number(a.vc), { x: a.x, y: a.y, z: a.z, r: a.r, t: performance.now() });
@@ -2853,7 +2872,7 @@ function atualizarMira() {
   pos.needsUpdate = true; mira.linha.geometry.setDrawRange(0, n); mira.linha.computeLineDistances();
   mira.linha.material.color.set(cor);
   mira.anel.material.color.set(alguem ? '#ff3030' : cor);
-  mira.anel.position.copy(fim); mira.anel.quaternion.copy(camera.quaternion);
+  mira.anel.position.copy(fim); mira.anel.quaternion.copy(camAtiva.quaternion);
   mira.anel.scale.setScalar(tanque ? 2.2 : 1);
   mira.linha.visible = mira.anel.visible = true;
 }
@@ -3767,22 +3786,76 @@ async function reportar(rp) {
   catch (e) { aviso(e.message); }
   finally { ocupado = false; }
 }
-// faixa de manchetes no alto da tela (as 5 mais recentes da última hora, uma de cada vez)
+// faixa de manchetes no alto da tela: matérias do dia e reportagens da última hora, uma de cada vez.
+// Tocar abre o Jornal; o "–" minimiza (fica só um 📰 pequeno). Os telões da cidade mostram as mesmas notícias.
 let tempoJornal = 2, manchetes = [], mancheteI = 0, tempoManchete = 0, faixaJornal = null;
+let jornalMin = (() => { try { return localStorage.getItem('fator_jornal_min') === '1'; } catch { return false; } })();
 function atualizarJornal(dt) {
   if (!faixaJornal) {
     faixaJornal = document.createElement('div');
-    faixaJornal.style.cssText = 'position:fixed;top:calc(40px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:12;max-width:70vw;background:rgba(40,32,16,.88);color:#ffe7a8;padding:4px 10px;border-radius:8px;font:600 12px system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;display:none';
+    faixaJornal.style.cssText = 'position:fixed;top:calc(40px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:12;max-width:72vw;display:none;align-items:center;gap:6px;background:rgba(40,32,16,.9);color:#ffe7a8;padding:4px 6px 4px 10px;border-radius:8px;font:600 12px system-ui;pointer-events:auto;cursor:pointer';
+    faixaJornal.innerHTML = '<span class="txt" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span><button style="border:0;background:rgba(255,255,255,.15);color:inherit;border-radius:6px;padding:0 7px;font:700 14px system-ui">–</button>';
+    faixaJornal.querySelector('.txt').onclick = () => abrirServico('jornal');
+    faixaJornal.querySelector('button').onclick = (e) => { e.stopPropagation(); jornalMin = !jornalMin; try { localStorage.setItem('fator_jornal_min', jornalMin ? '1' : '0'); } catch { /* ok */ } tempoManchete = 0; };
     document.body.appendChild(faixaJornal);
   }
   tempoJornal -= dt; tempoManchete -= dt;
   if (tempoJornal <= 0) {
-    tempoJornal = 25;
-    rede.jornal.ultimas().then((l) => { manchetes = l.filter((n) => Date.now() - Date.parse(n.criada_em) < 3600000).slice(0, 5); }).catch(() => {});
+    tempoJornal = 30;
+    Promise.all([rede.jornal.materias().catch(() => []), rede.jornal.ultimas().catch(() => [])]).then(([mt, rp]) => {
+      const dia = (mt || []).filter((m) => Date.now() - Date.parse(m.publicar_em) < 86400000).map((m) => ({ ...m, materia: true }));
+      manchetes = [...dia.slice(0, 6), ...(rp || []).filter((n) => Date.now() - Date.parse(n.criada_em) < 3600000).slice(0, 4)];
+      noticiasTelao = [...(mt || []).slice(0, 8).map((m) => ({ ...m, materia: true })), ...(rp || []).slice(0, 4)];
+    });
   }
+  atualizarTeloes(dt);
   if (!manchetes.length) { faixaJornal.style.display = 'none'; return; }
-  if (tempoManchete <= 0) { tempoManchete = 7; mancheteI = (mancheteI + 1) % manchetes.length; faixaJornal.textContent = `📰 ${manchetes[mancheteI].titulo} · ${manchetes[mancheteI].autor_nome}`; }
-  faixaJornal.style.display = 'block';
+  faixaJornal.style.display = 'flex';
+  const txt = faixaJornal.querySelector('.txt'), bt = faixaJornal.querySelector('button');
+  if (jornalMin) { txt.textContent = '📰'; bt.textContent = '+'; return; }
+  bt.textContent = '–';
+  if (tempoManchete <= 0) { tempoManchete = 7; mancheteI = (mancheteI + 1) % manchetes.length; const m = manchetes[mancheteI]; txt.textContent = `📰 ${m.titulo} · ${m.autor_nome}`; }
+}
+// telões de LED (centro, Vila Serra e Porto Sul): mostram as matérias e reportagens, trocando a cada 10 s
+let noticiasTelao = [], teloes = [], tempoTelao = 0, telaoI = 0;
+const LUGARES_TELAO = [{ x: -151.5, z: -117, ang: 0 }, { x: 30, z: -939.5, ang: 0 }, { x: 30, z: 939.5, ang: Math.PI }];
+function criarTeloes() {
+  const metal = new THREE.MeshStandardMaterial({ color: '#2b2f36', metalness: 0.6, roughness: 0.4 });
+  for (const L of LUGARES_TELAO) {
+    const cv = document.createElement('canvas'); cv.width = 640; cv.height = 360;
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    const g = new THREE.Group(); g.position.set(L.x, alturaChao(L.x, L.z), L.z); g.rotation.y = L.ang; scene.add(g);
+    for (const sx of [-3.4, 3.4]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.35, 6.2, 0.35), metal); p.position.set(sx, 3.1, -0.2); p.castShadow = true; g.add(p); }
+    const caixa = new THREE.Mesh(new THREE.BoxGeometry(8.4, 4.9, 0.4), metal); caixa.position.set(0, 6.6, -0.25); caixa.castShadow = true; g.add(caixa);
+    const tela = new THREE.Mesh(new THREE.PlaneGeometry(8, 4.5), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })); tela.position.set(0, 6.6, -0.04); g.add(tela);
+    colisores.push({ tipo: 'circ', x: L.x - 3.4 * Math.cos(L.ang), z: L.z, r: 0.3 }, { tipo: 'circ', x: L.x + 3.4 * Math.cos(L.ang), z: L.z, r: 0.3 });
+    teloes.push({ cv, tex, img: null, imgUrl: '' });
+  }
+}
+function desenharTelao(t, n) {
+  const g = t.cv.getContext('2d'), W = t.cv.width, H = t.cv.height;
+  g.fillStyle = '#0b1220'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#c0392b'; g.fillRect(0, 0, W, 44); g.fillStyle = '#fff'; g.font = '700 24px system-ui'; g.fillText('📰 JORNAL DA CIDADE', 16, 31);
+  g.font = '600 18px system-ui'; g.fillStyle = '#ffd9d3'; g.textAlign = 'right'; g.fillText(n ? (n.materia ? 'MATÉRIA' : 'AO VIVO') : '', W - 16, 30); g.textAlign = 'left';
+  if (!n) { g.fillStyle = '#9fb3c8'; g.font = '600 26px system-ui'; g.fillText('Sem notícias no momento.', 24, 200); t.tex.needsUpdate = true; return; }
+  let x0 = 20;
+  if (n.imagem) {
+    if (t.imgUrl !== n.imagem) { t.imgUrl = n.imagem; t.img = new window.Image(); t.img.crossOrigin = 'anonymous'; t.img.onload = () => desenharTelao(t, n); t.img.onerror = () => { t.img = null; }; t.img.src = n.imagem; }
+    if (t.img?.complete && t.img.naturalWidth) { try { g.drawImage(t.img, 20, 60, 260, 280); x0 = 296; } catch { /* imagem bloqueada */ } }
+  }
+  const linhas = (txt, larg, fonte, max) => { g.font = fonte; const out = []; let l = ''; for (const w of String(txt).split(/\s+/)) { const tt = l ? l + ' ' + w : w; if (g.measureText(tt).width > larg && l) { out.push(l); l = w; if (out.length >= max) break; } else l = tt; } if (out.length < max && l) out.push(l); return out; };
+  g.fillStyle = '#ffffff'; let y = 92;
+  for (const l of linhas(n.titulo, W - x0 - 20, '800 30px system-ui', 3)) { g.fillText(l, x0, y); y += 36; }
+  g.fillStyle = '#c9d6e2'; y += 6;
+  for (const l of linhas(n.texto || '', W - x0 - 20, '500 20px system-ui', 6)) { g.fillText(l, x0, y); y += 26; }
+  g.fillStyle = '#8aa0b6'; g.font = '600 17px system-ui'; g.fillText(`por ${n.autor_nome}`, x0, H - 18);
+  t.tex.needsUpdate = true;
+}
+function atualizarTeloes(dt) {
+  if (!teloes.length) return;
+  tempoTelao -= dt; if (tempoTelao > 0) return; tempoTelao = 10;
+  teloes.forEach((t, k) => desenharTelao(t, noticiasTelao.length ? noticiasTelao[(telaoI + k) % noticiasTelao.length] : null));
+  telaoI++;
 }
 
 // ---------------------------------------------------------------- muito procurados e perseguição da polícia robô
@@ -4016,6 +4089,7 @@ function usarArsenal() {
 }
 // contrabandista no Morro da Serra: vende a arma militar para membros de clã (é ilegal: +1 crime)
 const CONTRABANDISTA = { x: -150, z: -1236 };
+const BANCAS = [{ x: -22, z: -936 }, { x: -22, z: 936 }];
 let confirmaContrabando = 0;
 async function falarContrabandista() {
   if (jogador.perfil?.arma_militar) { aviso('Contrabandista: "Você já tem a minha melhor peça. Some daqui."', 3); return; }
@@ -4877,10 +4951,17 @@ function atualizarCamera(dt) {
   camera.position.copy(alvoCam).addScaledVector(off, 150);
   if (tremor > 0) { tremor -= dt; camera.position.x += (Math.random() - 0.5) * tremor * 2; camera.position.z += (Math.random() - 0.5) * tremor * 2; }
   camera.lookAt(alvoCam);
+  if (modoCam === 'perto') {   // perto: mesma direção da câmera de cima, mais baixa e próxima, em perspectiva
+    const h = new THREE.Vector3(off.x, 0, off.z).normalize(), dist = jogador.carro ? (jogador.carro.voa ? 22 : 15) : 9.5, pit = THREE.MathUtils.degToRad(jogador.carro?.voa ? 40 : 50);
+    const yAlvo = jogador.carro?.voa ? jogador.carro.mesh.position.y : alvoCam.y;
+    camPerto.position.set(alvoCam.x + h.x * dist * Math.cos(pit), yAlvo + dist * Math.sin(pit), alvoCam.z + h.z * dist * Math.cos(pit));
+    if (tremor > 0) { camPerto.position.x += (Math.random() - 0.5) * tremor; camPerto.position.z += (Math.random() - 0.5) * tremor; }
+    camPerto.lookAt(alvoCam.x, yAlvo + 0.8, alvoCam.z);
+  }
   sol.position.copy(alvoCam).addScaledVector(SOL_DIR, 80);
   sol.target.position.copy(alvoCam);
   // prédios na frente do jogador ficam transparentes
-  const origem = camera.position.clone();
+  const origem = camAtiva.position.clone();
   const cabeca = new THREE.Vector3(jogador.pos.x, jogador.pos.y + 1.2, jogador.pos.z);
   const ray = new THREE.Ray(origem, cabeca.clone().sub(origem).normalize());
   const dist = origem.distanceTo(cabeca);
@@ -4954,6 +5035,7 @@ function contexto() {
   if (perto(civico.HOSPITAL.balcao, 3.2)) return ['hospital: tratamento e plantão médico', 'Hospital'];
   if (perto(civico.BOMBEIROS.balcao, 3.2)) return ['quartel dos bombeiros', 'Bombeiros'];
   if (perto(civico.EXERCITO.arsenal, 3.2)) return [jogador.armaPesada ? 'guardar a arma pesada' : 'arsenal: pegar a arma pesada (com autorização)', 'Arsenal'];
+  if (BANCAS.some((b) => perto(b, 3.2))) return ['banca de jornal: ler as notícias', 'Jornal'];
   if (perto(CONTRABANDISTA, 3.2)) return [jogador.perfil?.arma_militar ? 'contrabandista (você já tem a arma militar)' : 'contrabandista: arma militar por 60.000 (só clãs, é crime)', 'Negociar'];
   if (perto(civico.EXERCITO.balcao, 3.2)) return [jogador.perfil?.profissao === 'exercito' ? 'comando do Exército: ordens e caçadas' : 'comando do Exército: alistar-se', 'Comando'];
   if (jogador.perfil?.profissao === 'jornalista' && reportagemProxima()) return [`reportar: ${reportagemProxima().titulo} (+200)`, 'Reportar'];
@@ -5055,5 +5137,5 @@ function quadro() {
   atualizarCamera(dt);
   mundo.atualizarOclusao(dt, jogador.pos, offsetCamera(anguloCamSuave));
   atualizarHUD(dt);
-  renderer.render(scene, camera);
+  renderer.render(scene, camAtiva);
 }

@@ -115,6 +115,7 @@ async function abrirJogador(id) {
       ${esc(nome)} · ${Number(j.moedas).toLocaleString('pt-BR')} moedas
       ${j.banido && j.banido_motivo ? `<br><small>Motivo do banimento: ${esc(j.banido_motivo)}</small>` : ''}</div></div>`;
 
+  if (eu.cargo === 'admin' && (souEu || equipe) && (j.crimes > 0 || j.recompensa > 0)) h += '<div class="sub">Crimes</div><div class="botoes"><button id="pPerdoar">⚖️ Perdoar todos os crimes</button></div>';
   if (pode('teleportar')) {
     h += `<div class="sub">Teleporte</div><div class="botoes">
       ${online && !souEu ? '<button id="pIr">Ir até ele</button>' : ''}
@@ -128,7 +129,7 @@ async function abrirJogador(id) {
     if (pode('algemar')) h += `<div class="sub">Algemas</div><div class="botoes"><button id="pAlgemar">${j.algemado ? 'Tirar as algemas' : 'Algemar'}</button></div>`;
     if (pode('prender')) h += `<div class="sub">Cadeia</div><div class="botoes">
       ${j.pena_seg > 0 ? '<button id="pSoltar">Soltar agora</button>' : '<input id="pMin" type="number" min="1" max="1440" value="7" inputmode="numeric"><button id="pPrender">Prender (min)</button>'}
-      ${j.crimes > 0 ? '<button id="pPerdoar">Perdoar (zerar crimes)</button>' : ''}</div>`;
+      ${j.crimes > 0 || j.recompensa > 0 ? '<button id="pPerdoar">⚖️ Perdoar todos os crimes</button>' : ''}</div>`;
   }
   if (!souEu && pode('banir') && (eu.cargo === 'admin' ? j.cargo !== 'admin' : !equipe)) {
     h += `<div class="sub">Banimento</div><div class="botoes">
@@ -208,6 +209,7 @@ function abaEu() {
   let h = '';
   if (pode('imortal')) h += `<div class="sub">Modo imortal</div><div class="botoes"><button id="pImortal" class="${eu.imortal ? 'ativo' : ''}">${eu.imortal ? 'Imortal: ligado' : 'Imortal: desligado'}</button></div>`;
   if (eu.cargo === 'admin') h += '<div class="sub">Evento: arma dourada</div><p class="dica">Esconde a arma dourada (2 balas) exatamente onde você está. Quem achar pega; depois dos 2 tiros ela some.</p><div class="botoes"><button id="pArmaPd">✨ Esconder a arma dourada aqui</button></div>';
+  if (eu.cargo === 'admin') h += '<div class="sub">⚖️ Perdoar crimes</div><div id="pPerdao" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') h += '<div class="sub">Prefeitura</div><div id="pPref" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') {
     h += `<div class="sub">Evento: personagens especiais</div><p class="dica">Abre a vitrine para os jogadores comprarem. Marque quais (nenhum marcado = todos) e o tempo.</p>
@@ -228,7 +230,7 @@ function abaEu() {
   const b = $('pImortal'); if (b) b.onclick = () => executar(() => rede.painel.imortal(!eu.imortal), eu.imortal ? 'Modo imortal desligado.' : 'Modo imortal ligado.');
   c.querySelectorAll('[data-local]').forEach((x) => { x.onclick = () => { const l = ctx.locais()[x.dataset.local]; ctx.teleportar(l.x, l.z); msg('Teleportado: ' + l.nome); }; });
   c.querySelectorAll('[data-skin]').forEach((x) => { x.onclick = () => executar(() => rede.painel.skin(x.dataset.skin), 'Skin trocada.'); });
-  if (eu.cargo === 'admin') blocoPrefeitura();
+  if (eu.cargo === 'admin') { blocoPrefeitura(); blocoPerdao(); }
   const evSel = () => [...c.querySelectorAll('[data-ev]')].filter((x) => x.checked).map((x) => x.dataset.ev);
   const ba = $('pEvAbrir'); if (ba) ba.onclick = () => { const m = Number($('pEvTempo').value); executar(() => rede.personagens.liberarEvento(evSel(), m), 'Vitrine do evento aberta. Todos foram avisados.'); };
   const bf = $('pEvFechar'); if (bf) bf.onclick = () => executar(() => rede.personagens.liberarEvento(evSel(), 0), 'Vitrine fechada.');
@@ -236,6 +238,15 @@ function abaEu() {
     const partes = [...c.querySelectorAll('[data-reset]')].filter((x) => x.checked).map((x) => x.dataset.reset);
     if (confirmarDuplo('pReset', '🧹 Resetar o mapa')) executar(() => rede.painel.resetarMundo(partes, $('pResetConf').value.trim()), 'Mapa resetado. Todos foram avisados.');
   };
+}
+// todos com crime ou recompensa (inclusive você e a equipe); um toque perdoa tudo
+async function blocoPerdao() {
+  const el = $('pPerdao'); if (!el) return;
+  let lista; try { lista = await rede.procuradosTodos(); } catch (e) { el.textContent = e.message; return; }
+  el.className = '';
+  el.innerHTML = (lista || []).length ? `<div class="lista">${lista.map((p) => `<div class="linha item"><span class="nm"><b>${esc(p.nome)}</b><small>${p.crimes} crime${p.crimes === 1 ? '' : 's'}${p.recompensa ? ` · recompensa ${Number(p.recompensa).toLocaleString('pt-BR')}` : ''}${p.pena_seg > 0 ? ' · preso' : ''}</small></span>
+    <span class="bts"><button data-perdoar="${p.id}">Perdoar</button></span></div>`).join('')}</div>` : '<p class="dica">Ninguém com crimes agora.</p>';
+  el.querySelectorAll('[data-perdoar]').forEach((b) => { b.onclick = () => executar(() => rede.perdoar(b.dataset.perdoar), 'Crimes perdoados. Ficha limpa!'); });
 }
 // estado da prefeitura e ações do administrador (nomear é na ficha do jogador)
 async function blocoPrefeitura() {

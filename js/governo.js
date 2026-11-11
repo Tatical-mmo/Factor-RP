@@ -369,13 +369,34 @@ async function telaTaxi(c) {
 }
 
 async function telaJornal(c) {
-  const lista = await rede.jornal.ultimas();
-  const carreira = await cartaoCarreira('jornalista');
-  const quando = (t) => { const m = Math.max(0, Math.round((Date.now() - Date.parse(t)) / 60000)); return m < 1 ? 'agora' : m < 60 ? `há ${m} min` : `há ${Math.floor(m / 60)} h`; };
-  c.innerHTML = `${carreira}${telaProfissao(c, 'jornalista', 'Jornalista', 'Jornalistas em serviço vão até os acontecimentos da cidade (incêndio, ocorrência policial ou alguém ferido) e tocam em <b>Reportar</b>. A manchete sai no jornal para todos e a reportagem vale <b>200</b>. Cada acontecimento só rende uma reportagem: chegue primeiro!')}
-    <div class="sub">Últimas notícias</div>
-    <div class="lista">${lista.length ? lista.map((n) => `<div class="linha item"><span class="nm"><b>${esc(n.titulo)}</b><small>por ${esc(n.autor_nome)} · ${quando(n.criada_em)}</small></span></div>`).join('') : '<span class="vazio">Nenhuma notícia ainda.</span>'}</div>`;
+  const eu = ctx.perfil(), redator = eu.profissao === 'jornalista' || eu.cargo === 'admin';
+  const [lista, materias, carreira] = await Promise.all([rede.jornal.ultimas().catch(() => []), (redator ? rede.jornal.redacao() : rede.jornal.materias()).catch(() => []), cartaoCarreira('jornalista')]);
+  const quando = (t) => { const m = Math.round((Date.now() - Date.parse(t)) / 60000); return m < 0 ? `agendada para ${new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : m < 1 ? 'agora' : m < 60 ? `há ${m} min` : m < 1440 ? `há ${Math.floor(m / 60)} h` : `há ${Math.floor(m / 1440)} d`; };
+  const local = (t) => { const d = new Date(t); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+  c.innerHTML = `${redator ? `<div class="sub">✍️ Redação</div>
+      <p class="dica">Escreva uma matéria (aparece no Jornal, na faixa do alto da tela e nos telões da cidade). Deixe a data vazia para publicar agora ou agende. Jornalistas podem editar ou apagar qualquer matéria.</p>
+      <div class="lista"><input id="mtTitulo" maxlength="90" placeholder="Título"><textarea id="mtTexto" maxlength="600" rows="4" placeholder="Texto (até 600 letras)"></textarea>
+      <input id="mtImagem" placeholder="Link de uma imagem (https://…, opcional)"><label class="dica">Publicar em: <input id="mtQuando" type="datetime-local"></label>
+      <div class="botoes"><button id="mtSalvar">📰 Publicar</button><button id="mtLimpar">Limpar</button></div><input id="mtId" type="hidden"></div>` : ''}
+    <div class="sub">📰 Matérias</div>
+    <div class="lista">${materias.length ? materias.map((m) => `<div class="linha item materia"><span class="nm"><b>${esc(m.titulo)}</b>
+      ${m.imagem ? `<img src="${esc(m.imagem)}" alt="" loading="lazy" style="max-width:100%;border-radius:8px;margin:4px 0" onerror="this.remove()">` : ''}
+      ${m.texto ? `<span style="white-space:pre-wrap;font-size:13px">${esc(m.texto)}</span>` : ''}
+      <small>por ${esc(m.autor_nome)} · ${quando(m.publicar_em)}${m.editada_em ? ` · editada por ${esc(m.editor_nome || '')}` : ''}</small></span>
+      ${redator ? `<span class="bts"><button data-editar="${m.id}">Editar</button><button class="perigo" data-apagar="${m.id}">Apagar</button></span>` : ''}</div>`).join('') : '<span class="vazio">Nenhuma matéria ainda.</span>'}</div>
+    <div class="sub">🚨 Reportagens da rua</div>
+    <div class="lista">${lista.length ? lista.map((n) => `<div class="linha item"><span class="nm"><b>${esc(n.titulo)}</b><small>por ${esc(n.autor_nome)} · ${quando(n.criada_em)}</small></span></div>`).join('') : '<span class="vazio">Nenhuma notícia ainda.</span>'}</div>
+    ${carreira}${telaProfissao(c, 'jornalista', 'Jornalista', 'Jornalistas em serviço vão até os acontecimentos da cidade (incêndio, ocorrência policial ou alguém ferido) e tocam em <b>Reportar</b>. A manchete sai no jornal para todos e a reportagem vale <b>200</b>. Cada acontecimento só rende uma reportagem: chegue primeiro! Na Redação, escrevem matérias para o Jornal e os telões.')}`;
   ligarProfissao('jornalista');
+  if (!redator) return;
+  const pegar = (id) => materias.find((m) => String(m.id) === String(id));
+  c.querySelectorAll('[data-editar]').forEach((b) => { b.onclick = () => { const m = pegar(b.dataset.editar); $('mtId').value = m.id; $('mtTitulo').value = m.titulo; $('mtTexto').value = m.texto || ''; $('mtImagem').value = m.imagem || ''; $('mtQuando').value = local(m.publicar_em); $('mtSalvar').textContent = '💾 Salvar edição'; $('mtTitulo').scrollIntoView({ block: 'center' }); }; });
+  c.querySelectorAll('[data-apagar]').forEach((b) => { b.onclick = () => confirmar(b, () => executar(() => rede.jornal.apagar(Number(b.dataset.apagar)), 'Matéria apagada.')); });
+  $('mtLimpar').onclick = () => { for (const k of ['mtId', 'mtTitulo', 'mtTexto', 'mtImagem', 'mtQuando']) $(k).value = ''; $('mtSalvar').textContent = '📰 Publicar'; };
+  $('mtSalvar').onclick = () => {
+    const q = $('mtQuando').value ? new Date($('mtQuando').value).toISOString() : null;
+    executar(() => rede.jornal.salvar(Number($('mtId').value) || null, $('mtTitulo').value, $('mtTexto').value, $('mtImagem').value.trim(), q), () => { ctx.jornalMudou?.(); return q && Date.parse(q) > Date.now() ? 'Matéria agendada.' : 'Matéria publicada!'; });
+  };
 }
 
 async function telaAmigos(c) {
