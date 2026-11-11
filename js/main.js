@@ -2132,14 +2132,14 @@ async function adicionarRemoto(id, meta) {
     const et = textoSprite(meta.nome, { escala: 0.8, cor: meta.cargo === 'admin' ? '#ff6b6b' : meta.cargo === 'moderador' ? '#7fb8ff' : '#ffffff' });
     et.position.y = alturaNome(av); av.raiz.add(et);
     av.raiz.visible = false; scene.add(av.raiz); av.tocar('idle');
-    r.av = av; r.arma = arma; etiquetaStatus(r);
+    r.av = av; r.arma = arma; r.et = et; r.etCla = null; etiquetaStatus(r);
   } catch (e) { console.warn('jogador remoto não carregou', e); }
 }
 
 function removerRemoto(id) {
   const r = remotos.get(id); remotos.delete(id);
   if (!r) return;
-  if (r.av) scene.remove(r.av.raiz);
+  if (r.av) { scene.remove(r.av.raiz); if (r.av.uniforme) scene.remove(r.av.uniforme.colete, r.av.uniforme.chapeu); }
   if (r.caixa) scene.remove(r.caixa);
   if (r.algemas) scene.remove(r.algemas);
   if (r.esq) { for (const o of r.esq.jipes) scene.remove(o); for (const av of r.esq.soldados) scene.remove(av.raiz); }
@@ -3306,13 +3306,13 @@ function meusVeiculos() {
   const eu = jogador.perfil?.id;
   const carros = [...carrosMundo.values()].filter((v) => v.d.dono === eu).map((v) => ({ id: v.d.id, nome: civico.CARROS[v.d.modelo]?.nome || 'Carro',
     info: v.d.ladrao ? `🚨 ROUBADO${v.d.bloqueio_em ? ' · bloqueio acionado' : ''}` : `a ${Math.round(Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z))} m${v.chamada ? ' · a caminho' : ''}`,
-    acoes: v.d.ladrao ? ['bloquear'] : v.d.modelo === 'presidencial' ? ['chamar'] : ['chamar', 'recolher'] }));
+    acoes: v.d.ladrao ? ['bloquear'] : v.d.modelo === 'presidencial' ? ['chamar', 'materializar'] : ['chamar', 'materializar', 'recolher'] }));
   const frota = [...caminhoes.values()].filter((c) => donoDoVeiculo(c)).map((c) => {
     const d = c.d, heli = d.tipo === 'helicoptero', acoes = [];
     let info = d.status === 'parado' ? 'na garagem' : d.status === 'em_rota' ? 'em entrega' : d.status === 'voltando' ? 'voltando' : 'na rua';
     if (d.sequestrado) { info = d.motorista ? '🚨 ROUBADO (com o ladrão)' : '🚨 ROUBADO (abandonado)'; acoes.push('bloquear'); }
     else {
-      if (d.status === 'parado' || (d.status === 'dirigido' && !d.motorista)) acoes.push('taxi');
+      if (d.status === 'parado' || (d.status === 'dirigido' && !d.motorista)) acoes.push('taxi', 'materializar');
       if (taxi?.c === c) info = heli ? 'táxi aéreo' : 'dando carona';
       else if (d.status === 'dirigido' && !d.motorista) acoes.push('recolher');
     }
@@ -3321,6 +3321,7 @@ function meusVeiculos() {
   return { carros, frota };
 }
 function acaoVeiculo(acao, tipo, id) {
+  if (acao === 'materializar') { materializar(tipo, id); return; }
   if (tipo === 'carro') { if (acao === 'bloquear') { bloquearCarro(id); return; } const v = carrosMundo.get(id); if (v) chamarCarro(v, acao === 'recolher'); return; }
   const c = caminhoes.get(id); if (!c) return;
   if (acao === 'chamar') chamarVeiculo(c);
@@ -4857,7 +4858,7 @@ async function trocarAvatar(personagem) {
     const novo = await criarAvatar(ROBOS.includes(personagem) ? 'robos' : 'personagens', personagem);
     const arma = clonar('arma_paintball'); novo.encaixarArma(arma); arma.visible = jogador.armado;
     const velho = jogador.avatar;
-    scene.remove(velho.raiz); velho.raiz.remove(jogador.etiqueta);
+    scene.remove(velho.raiz); velho.raiz.remove(jogador.etiqueta); vestir(velho, null);
     novo.raiz.add(jogador.etiqueta); jogador.etiqueta.position.y = alturaNome(novo);
     novo.raiz.position.copy(jogador.pos); novo.raiz.rotation.y = jogador.yaw;
     scene.add(novo.raiz); novo.tocar('idle');
@@ -5232,8 +5233,9 @@ function quadro() {
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
-  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt); atualizarVisita();
+  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
+  atualizarUniformes();
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
@@ -6587,5 +6589,128 @@ function conviteVisita(g) {
 function atualizarVisita() {
   if (jogador.visitaAte && jogador.dentroCasa === 'carceragem' && performance.now() > jogador.visitaAte && !daPolicia()) {
     jogador.visitaAte = 0; sairSala(); aviso('⏱️ O horário de visita acabou.', 3);
+  }
+}
+
+// ---------------------------------------------------------------- materializar: o veículo aparece do lado do dono na hora (150)
+async function materializar(tipo, id) {
+  if (jogador.carro || jogador.dentroCasa || jogador.trem) { aviso('Saia do veículo ou do prédio primeiro.'); return; }
+  const p = pertoDeMim(), ang = jogador.yaw;
+  try {
+    if (tipo === 'carro') {
+      const v = carrosMundo.get(id); if (!v) return;
+      await rede.carros.materializar(id, p.x, p.z, ang);
+      v.chamada = null; v.d = { ...v.d, x: p.x, z: p.z, ang };
+      v.mesh.position.set(p.x, alturaChao(p.x, p.z), p.z); v.mesh.rotation.y = ang; v.mesh.visible = true;
+      aviso(`✨ Seu ${civico.CARROS[v.d.modelo]?.nome || 'carro'} apareceu aqui. -150 moedas.`, 3);
+    } else {
+      const c = caminhoes.get(id); if (!c) return;
+      await rede.veiculos.materializar(id, p.x, p.z, ang);
+      c.chamada = null; c.d = { ...c.d, status: 'dirigido', motorista: null, pos_x: p.x, pos_z: p.z, ang };
+      c.obj.position.set(p.x, alturaChao(p.x, p.z), p.z); c.obj.rotation.y = ang; c.obj.visible = true;
+      aviso(`✨ ${NOME_VEICULO[c.d.tipo] || 'Veículo'} apareceu aqui. -150 moedas.`, 3);
+    }
+    const f = $('flashMat') || document.createElement('div'); f.id = 'flashMat';
+    f.style.cssText = 'position:fixed;inset:0;background:radial-gradient(circle,rgba(160,220,255,.55),transparent 60%);z-index:20;pointer-events:none;opacity:1;transition:opacity .6s';
+    document.body.appendChild(f); window.requestAnimationFrame(() => { f.style.opacity = 0; });
+  } catch (e) { aviso(e.message, 3); }
+}
+
+// ================================================================= uniformes e símbolo do clã
+// Em serviço, cada corporação veste um colete e um boné/capacete com a cor dela, visíveis para todos:
+// Polícia azul-escuro, PRF preto com faixa amarela, Bombeiros vermelho com faixa refletiva, Hospital branco com cruz
+// vermelha e Exército verde. Quem é de clã ganha o símbolo do clã (cor e iniciais) ao lado do nome.
+const UNIFORMES = {
+  policia: { cor: '#1b2a4a', texto: 'POLÍCIA', letra: '#ffffff', faixa: null, chapeu: '#14203a' },
+  prf: { cor: '#111111', texto: 'PRF', letra: '#f2c230', faixa: '#f2c230', chapeu: '#111111' },
+  bombeiro: { cor: '#b3261e', texto: 'BOMBEIROS', letra: '#ffffff', faixa: '#e8e36a', chapeu: '#c9a227' },
+  medico: { cor: '#f4f4f4', texto: '✚ RESGATE', letra: '#c0392b', faixa: '#c0392b', chapeu: '#f4f4f4' },
+  exercito: { cor: '#4b5d33', texto: 'EXÉRCITO', letra: '#e8e3c8', faixa: null, chapeu: '#3c4a28' },
+};
+function papelDe(m) { return m?.policial ? 'policia' : m?.prf ? 'prf' : UNIFORMES[m?.profissao] ? m.profissao : null; }
+const _texUni = new Map();
+function texturaUniforme(u) {
+  if (_texUni.has(u.texto)) return _texUni.get(u.texto);
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = u.cor; g.fillRect(0, 0, 512, 128);
+  if (u.faixa) { g.fillStyle = u.faixa; g.fillRect(0, 84, 512, 14); }
+  g.fillStyle = u.letra; g.font = '800 26px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(u.texto, 128, 52); g.fillText(u.texto, 384, 52);          // na frente e nas costas
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; _texUni.set(u.texto, t); return t;
+}
+function vestir(av, papel) {
+  if (!av) return;
+  if (av.uniforme?.papel === papel) return;
+  if (av.uniforme) { scene.remove(av.uniforme.colete, av.uniforme.chapeu); av.uniforme = null; }
+  if (!papel) return;
+  const u = UNIFORMES[papel], o = (n) => av.modelo.getObjectByName('mixamorig' + n);
+  const ossos = { base: o('Spine1') || o('Spine'), pescoco: o('Neck'), cabeca: o('Head'), topo: o('HeadTop_End') };
+  if (!ossos.base || !ossos.pescoco || !ossos.cabeca) return;
+  const colete = new THREE.Mesh(new THREE.CylinderGeometry(1, 0.94, 1, 14, 1, true), new THREE.MeshStandardMaterial({ map: texturaUniforme(u), roughness: 0.8, side: THREE.DoubleSide }));
+  const chapeu = new THREE.Group();
+  const copa = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1, 0.55, 14), new THREE.MeshStandardMaterial({ color: u.chapeu, roughness: 0.6, metalness: papel === 'bombeiro' ? 0.4 : 0 }));
+  copa.position.y = 0.27; chapeu.add(copa);
+  const aba = new THREE.Mesh(new THREE.CylinderGeometry(papel === 'exercito' ? 1.12 : 0.9, papel === 'exercito' ? 1.12 : 0.9, 0.08, 14), copa.material); aba.position.set(0, 0.03, papel === 'exercito' ? 0 : 0.35); aba.scale.set(1, 1, papel === 'exercito' ? 1 : 0.7); chapeu.add(aba);
+  colete.castShadow = true; scene.add(colete, chapeu);
+  av.uniforme = { papel, colete, chapeu, ossos };
+}
+const _ua = new THREE.Vector3(), _ub = new THREE.Vector3(), _uc = new THREE.Vector3(), _ud = new THREE.Vector3(), _um = new THREE.Matrix4(), _ux = new THREE.Vector3();
+function posicionarUniforme(av) {
+  const U = av?.uniforme; if (!U) return;
+  const vis = av.raiz.visible; U.colete.visible = U.chapeu.visible = vis; if (!vis) return;
+  const alt = av.altura || 1.8, yaw = av.raiz.rotation.y;
+  U.ossos.base.getWorldPosition(_ua); U.ossos.pescoco.getWorldPosition(_ub);
+  const cima = _uc.subVectors(_ub, _ua); const comp = cima.length() || 0.4; cima.normalize();
+  const frente = _ud.set(Math.sin(yaw), 0, Math.cos(yaw)); frente.addScaledVector(cima, -frente.dot(cima)).normalize();
+  const lado = _ux.crossVectors(cima, frente).normalize();
+  _um.makeBasis(lado, cima, frente);
+  U.colete.quaternion.setFromRotationMatrix(_um);
+  U.colete.position.copy(_ua).addScaledVector(cima, comp * 0.45);
+  U.colete.scale.set(0.115 * alt, comp * 1.25, 0.08 * alt);
+  // boné/capacete: no alto da cabeça
+  U.ossos.cabeca.getWorldPosition(_ua);
+  if (U.ossos.topo) U.ossos.topo.getWorldPosition(_ub); else _ub.copy(_ua).addScaledVector(cima, 0.13 * alt);
+  U.chapeu.position.copy(_ua).lerp(_ub, 0.62);
+  U.chapeu.quaternion.copy(U.colete.quaternion);
+  U.chapeu.scale.setScalar(0.068 * alt);
+}
+function atualizarUniformes() {
+  if (jogador.avatar) { vestir(jogador.avatar, jogador.carro || jogador.passageiro ? null : papelDe(jogador.perfil)); posicionarUniforme(jogador.avatar); }
+  for (const r of remotos.values()) { if (!r.av) continue; vestir(r.av, papelDe(r.meta)); posicionarUniforme(r.av); }
+}
+// nome com o símbolo do clã (escudo na cor do clã com as iniciais)
+function corDoClaNome(nome) { for (const c of clasCache.values()) if (c.nome === nome) return c.cor || '#c43b3b'; return '#c43b3b'; }
+function nomeComCla(nome, cla, cor) {
+  if (!cla) return textoSprite(nome, { escala: 0.8, cor });
+  const tam = 34, c = document.createElement('canvas'), g = c.getContext('2d');
+  g.font = `700 ${tam}px system-ui, sans-serif`;
+  const tw = Math.ceil(g.measureText(nome).width), esc = 46, w = tw + esc + 40, h = tam + 22;
+  c.width = w; c.height = h;
+  g.fillStyle = 'rgba(20,24,34,.78)'; g.beginPath(); g.roundRect(0, 0, w, h, h / 2); g.fill();
+  // escudo
+  const x0 = 10, y0 = 5, cc = corDoClaNome(cla);
+  g.beginPath(); g.moveTo(x0, y0); g.lineTo(x0 + esc - 8, y0); g.lineTo(x0 + esc - 8, y0 + 26); g.quadraticCurveTo(x0 + (esc - 8) / 2, h - 2, x0, y0 + 26); g.closePath();
+  g.fillStyle = cc; g.fill(); g.lineWidth = 3; g.strokeStyle = '#ffffff'; g.stroke();
+  g.fillStyle = '#ffffff'; g.font = '800 18px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(String(cla).replace(/[^A-Za-zÀ-ú0-9]/g, '').slice(0, 2).toUpperCase(), x0 + (esc - 8) / 2, y0 + 17);
+  g.font = `700 ${tam}px system-ui, sans-serif`; g.fillStyle = cor; g.textAlign = 'left'; g.fillText(nome, x0 + esc + 4, h / 2 + 1);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true }));
+  const k = 0.022 * 0.8; s.scale.set(w * k, h * k, 1); s.renderOrder = 5;
+  return s;
+}
+function trocarNome(av, antigo, nome, cla, cor) {
+  if (antigo) av.raiz.remove(antigo);
+  const s = nomeComCla(nome, cla, cor); s.position.y = alturaNome(av); av.raiz.add(s); return s;
+}
+let tempoNomes = 0;
+function atualizarNomesCla(dt) {
+  if ((tempoNomes -= dt) > 0) return; tempoNomes = 1;
+  const eu = jogador.claInfo?.nome || null;
+  if (jogador.avatar && jogador.etiqueta && jogador.etiquetaCla !== eu) { jogador.etiqueta = trocarNome(jogador.avatar, jogador.etiqueta, jogador.perfil.nome, eu, '#f2a33a'); jogador.etiquetaCla = eu; }
+  for (const r of remotos.values()) {
+    if (!r.av || !r.et) continue;
+    const cla = r.meta?.cla || null;
+    if (r.etCla !== cla) { r.et = trocarNome(r.av, r.et, r.meta.nome, cla, r.meta.cargo === 'admin' ? '#ff6b6b' : r.meta.cargo === 'moderador' ? '#7fb8ff' : '#ffffff'); r.etCla = cla; }
   }
 }

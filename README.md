@@ -249,6 +249,12 @@ No painel (página do jogador ou aba Denúncias), **👁️ Averiguar**: a câme
 
 Os presos não ficam mais na grade do lado de fora: vão para uma das 8 celas da **carceragem** (porta "🔒 Carceragem" dentro da delegacia e do posto da PRF) e só andam dentro da cela. Policiais e PRF em serviço (e o admin) entram e, na **guarita**, autorizam a visita de um jogador: ele recebe o convite e fica 3 minutos na área de visita, em frente às celas, para conversar (chat ou voz por perto).
 
+## Uniformes, símbolo do clã e materializar veículo (SQL 49)
+
+- Em serviço, cada corporação veste colete e boné/capacete: Polícia azul-escuro, PRF preto com faixa amarela, Bombeiros vermelho com faixa refletiva, Hospital branco com cruz vermelha, Exército verde.
+- Quem é de clã tem o escudo do clã (cor e iniciais) ao lado do nome.
+- ☰ › Veículos › **✨ Materializar (150)**: o carro ou veículo particular aparece do seu lado na hora. Carros também podem ficar estacionados nas ruas do horizonte.
+
 ## Controles no PC
 
 | Tecla | Ação |

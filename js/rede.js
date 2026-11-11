@@ -80,6 +80,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'assalto' }, ({ payload }) => eventos.assalto?.(payload));
   canal.on('broadcast', { event: 'algemaNpc' }, ({ payload }) => eventos.algemaNpc?.(payload));
   canal.on('broadcast', { event: 'bueiro' }, ({ payload }) => eventos.bueiro?.(payload));
+  canal.on('broadcast', { event: 'carroRua' }, ({ payload }) => eventos.carroRua?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
@@ -127,6 +128,7 @@ function traduzirRpc(m) {
     'muitas denuncias': 'Muitas denúncias em pouco tempo. Tente mais tarde.',
     'ele trabalha em empresa': 'Ele é funcionário de uma empresa particular. Ele precisa sair dela antes (um emprego por jogador).',
     'carreira invalida': 'Carreira inválida.',
+    'o carro foi destruido: espere': 'O carro foi destruído: espere ele voltar.',
     'so lixeiros': 'Só membros da sociedade.',
     'bueiro trancado': 'A tampa não abre.',
     'devagar': 'Calma, espere um pouco.',
@@ -332,6 +334,7 @@ function traduzirRpc(m) {
   if (espera) return `Aguarde ${espera[1]} s.`;
   return t[m] || m;
 }
+export const roubarCarroRua = () => rpc('roubar_carro_rua');
 export const conta = {
   excluir: () => rpc('excluir_minha_conta', { p_confirmacao: 'EXCLUIR' }),
   denunciar: (alvo, motivo, detalhes) => rpc('denunciar', { p_alvo: alvo, p_motivo: motivo, p_detalhes: detalhes || null }),
@@ -433,6 +436,7 @@ export const carros = {
   listar: () => sel(sb.from('carros').select('*').order('id')),
   comprar: (modelo, cor) => rpc('comprar_carro', { p_modelo: modelo, p_cor: cor }),
   estacionar: (id, x, z, ang) => rpc('estacionar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),
+  materializar: (id, x, z, ang) => rpc('materializar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),
   vender: (id) => rpc('vender_carro', { p_carro: id }),
   roubar: (id) => rpc('roubar_carro', { p_carro: id }),
   bloquear: (id) => rpc('bloquear_carro', { p_carro: id }),
@@ -484,6 +488,7 @@ export const veiculos = {
   sair: (id, x, z, ang) => rpc('sair_veiculo', { p_caminhao: id, p_x: x, p_z: z, p_ang: ang }),
   descarregar: (id, x, z) => rpc('descarregar_roubo', { p_caminhao: id, p_x: x, p_z: z }),
   chamar: (id, x, z) => rpc('chamar_veiculo', { p_caminhao: id, p_x: x, p_z: z }),
+  materializar: (id, x, z, ang) => rpc('materializar_veiculo', { p_caminhao: id, p_x: x, p_z: z, p_ang: ang }),
   recolher: (id) => rpc('recolher_veiculo', { p_caminhao: id }),
   bloquear: (id) => rpc('bloquear_veiculo', { p_caminhao: id }),
 };

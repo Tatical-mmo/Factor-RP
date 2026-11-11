@@ -354,12 +354,12 @@ async function telaBombeiros(c) {
 }
 
 // ---------------------------------------------------------------- meus veículos e táxi aéreo
-const BOTAO = { chamar: '📍 Chamar', recolher: '🅿️ Recolher', bloquear: '🔒 Bloquear', taxi: '🚐 Pedir carona' };
+const BOTAO = { chamar: '📍 Chamar', materializar: '✨ Materializar (150)', recolher: '🅿️ Recolher', bloquear: '🔒 Bloquear', taxi: '🚐 Pedir carona' };
 async function telaVeiculos(c) {
   const { carros, frota } = ctx.veiculos();
   const item = (v, tipo) => `<div class="linha item"><span class="nm"><b>${esc(v.nome)}</b><small>${esc(v.info)}</small></span>
     <span class="bts">${v.acoes.map((a) => `<button data-va="${a}" data-vt="${tipo}" data-vid="${v.id}" ${a === 'bloquear' ? 'class="perigo"' : ''}>${BOTAO[a]}</button>`).join('')}</span></div>`;
-  c.innerHTML = `<p class="dica"><b>Chamar</b>: o robô motorista traz o veículo pelas ruas até você. <b>Recolher</b>: leva de volta para a garagem (carros vão para a Concessionária).
+  c.innerHTML = `<p class="dica"><b>Chamar</b>: o robô motorista traz o veículo pelas ruas até você (grátis). <b>Materializar</b>: o veículo aparece do seu lado na hora, por 150 moedas. <b>Recolher</b>: leva de volta para a garagem (carros vão para a Concessionária).
       <b>Bloquear</b>: trava um veículo roubado; em 20 s o ladrão é jogado para fora e ele volta para a garagem. <b>Pedir carona</b>: o robô motorista (ou piloto, no helicóptero) busca você e leva aonde pedir.</p>
     <div class="sub">Carros (${carros.length})</div><div class="lista">${carros.length ? carros.map((v) => item(v, 'carro')).join('') : '<span class="vazio">Nenhum carro. Compre na Concessionária.</span>'}</div>
     <div class="sub">Veículos das empresas (${frota.length})</div><div class="lista">${frota.length ? frota.map((v) => item(v, 'frota')).join('') : '<span class="vazio">Nenhum veículo de empresa.</span>'}</div>`;
