@@ -60,6 +60,7 @@ function desenhar() {
   else if (aba === 'salarios') abaSalarios();
   else if (aba === 'tempo') abaTempo();
   else if (aba === 'denuncias') abaDenuncias();
+  else if (aba === 'carreiras') abaCarreiras();
 }
 
 // ------------------------------------------------------------ jogadores
@@ -208,6 +209,36 @@ async function abaSalarios() {
   });
 }
 // ------------------------------------------------------------ carreiras públicas (só o administrador)
+// aba própria: escolha o jogador (online ou pela busca) e defina emprego e patentes
+async function abaCarreiras(texto = '') {
+  const c = $('painelConteudo'), online = ctx.online();
+  c.innerHTML = `<p class="dica">Escolha um jogador para colocar em um emprego público (Polícia, PRF, Hospital, Bombeiros, Jornal, Exército) e promover em qualquer carreira.</p>
+    <input id="cBusca" placeholder="Buscar jogador pelo nome" value="${esc(texto)}">
+    <div class="sub">Online agora</div>
+    <div class="chips">${online.length ? online.map((o) => `<button class="chip" data-car="${o.id}">${esc(o.nome)}</button>`).join('') : '<span class="vazio">Ninguém além de você.</span>'}</div>
+    <div class="sub">Resultados</div><div id="cLista" class="lista">Carregando…</div>`;
+  const ligar = (raiz) => raiz.querySelectorAll('[data-car]').forEach((b) => { b.onclick = () => telaCarreiraJogador(b.dataset.car); });
+  ligar(c);
+  const lista = async (t) => {
+    const el = $('cLista'); if (!el) return;
+    try {
+      const l = (await rede.buscarJogadores(t)).filter((j) => j.cargo === 'jogador');
+      el.innerHTML = l.length ? l.map((j) => `<button class="linha" data-car="${j.id}"><b>${esc(j.nome)}</b></button>`).join('') : '<span class="vazio">Nenhum jogador encontrado.</span>';
+      ligar(el);
+    } catch (e) { el.textContent = e.message; }
+  };
+  const busca = $('cBusca'); busca.oninput = () => { clearTimeout(busca.t); busca.t = setTimeout(() => lista(busca.value.trim()), 350); };
+  lista(texto);
+}
+async function telaCarreiraJogador(id) {
+  const c = $('painelConteudo'); c.textContent = 'Carregando…';
+  let j; try { j = await rede.carregarPerfil(id); } catch (e) { c.textContent = e.message; return; }
+  if (!j) { c.textContent = 'Jogador não encontrado.'; return; }
+  c.innerHTML = `<button class="voltar" id="cVoltar">‹ Voltar</button><div class="sub">💼 ${esc(j.nome)}</div><div id="pCarreiras" class="dica">Carregando…</div>`;
+  $('cVoltar').onclick = () => abaCarreiras();
+  if (j.cargo !== 'jogador') { $('pCarreiras').textContent = 'Moderadores e o administrador não entram nas carreiras.'; return; }
+  blocoCarreiras(j);
+}
 const NOME_CARREIRA = { policia: '🚓 Polícia', prf: '🚔 PRF', medico: '✚ Hospital', bombeiro: '🚒 Bombeiros', jornalista: '📰 Jornal', exercito: '🎖️ Exército' };
 async function blocoCarreiras(j) {
   const c = $('pCarreiras'); if (!c) return;
