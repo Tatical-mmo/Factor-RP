@@ -249,7 +249,7 @@ async function blocoFicha(cmd) {
   h += lista.map((m) => `<div class="linha item"><span class="ic">${m.expulso ? '⛔' : m.sem_ordem > 0 ? '⚠️' : '🎖️'}</span><span class="nm"><b>${esc(m.jogador)}</b>
     <small>${m.expulso ? 'EXPULSO' : esc(m.patente || 'Recruta')} · ${m.mortes} morte${m.mortes === 1 ? '' : 's'}${m.sem_ordem ? ` (${m.sem_ordem} sem ordem)` : ''}${m.pesada ? ' · 💥 arma pesada liberada' : ''}</small>
     ${(m.ultimas || []).map((u) => `<small>${u.autorizada ? '✔' : '✖'} ${esc(u.vitima || '?')} · ${quando(u.quando)}</small>`).join('')}</span>
-    ${cmd ? `<span class="bts">${m.expulso ? `<button data-readmitir="${m.id}">Readmitir</button>` : `${m.pesada ? `<button data-pesada="${m.id}" data-h="0">Tirar arma pesada</button>` : `<button data-pesada="${m.id}" data-h="2">Arma pesada 2 h</button>`}<button class="perigo" data-expulsar="${m.id}">Expulsar</button>`}</span>` : ''}</div>`).join('');
+    ${cmd ? `<span class="bts">${m.expulso ? `<button data-readmitir="${m.id}">Readmitir</button>` : `${m.pesada ? `<button data-pesada="${m.id}" data-h="0">Tirar arma pesada</button>` : `<button data-pesada="${m.id}" data-h="2">Arma pesada 2 h</button>`}<button data-prisao="${m.id}" data-min="15">⛓️ Prisão 15 min</button><button data-prisao="${m.id}" data-min="0">Soltar</button><button class="perigo" data-expulsar="${m.id}">Expulsar</button>`}</span>` : ''}</div>`).join('');
   return h;
 }
 const PATENTES_EX = ['Recruta', 'Soldado', 'Cabo', '3º Sargento', '2º Sargento', '1º Sargento', 'Subtenente', 'Tenente', 'Capitão', 'Major', 'Tenente-Coronel', 'Coronel', 'General'];
@@ -263,6 +263,7 @@ async function blocoGeneral() {
   return h;
 }
 function ligarQuadroTrabalho(c) {
+  c.querySelectorAll('[data-prisao]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.prisao(b.dataset.prisao, Number(b.dataset.min)), Number(b.dataset.min) ? 'Militar mandado para a prisão militar (15 min).' : 'Militar solto da prisão militar.'); });
   c.querySelectorAll('[data-pesada]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.armaPesada(b.dataset.pesada, Number(b.dataset.h)), Number(b.dataset.h) ? 'Arma pesada autorizada por 2 h.' : 'Autorização retirada.'); });
   c.querySelectorAll('[data-expulsar]').forEach((b) => { b.onclick = () => confirmar(b, () => executar(() => rede.exercito.expulsar(b.dataset.expulsar, true), 'Militar expulso do Exército.')); });
   c.querySelectorAll('[data-readmitir]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.expulsar(b.dataset.readmitir, false), 'Expulsão retirada.'); });

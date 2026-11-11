@@ -81,6 +81,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'algemaNpc' }, ({ payload }) => eventos.algemaNpc?.(payload));
   canal.on('broadcast', { event: 'bueiro' }, ({ payload }) => eventos.bueiro?.(payload));
   canal.on('broadcast', { event: 'carroRua' }, ({ payload }) => eventos.carroRua?.(payload));
+  canal.on('broadcast', { event: 'reset' }, ({ payload }) => eventos.reset?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
@@ -129,6 +130,11 @@ function traduzirRpc(m) {
     'ele trabalha em empresa': 'Ele é funcionário de uma empresa particular. Ele precisa sair dela antes (um emprego por jogador).',
     'carreira invalida': 'Carreira inválida.',
     'o carro foi destruido: espere': 'O carro foi destruído: espere ele voltar.',
+    'so policia prf ou exercito': 'Só Polícia, PRF ou Exército em serviço prendem.',
+    'crimes de npc desligados': 'Os crimes de NPC estão desligados.',
+    'o ladrao ja fugiu': 'O ladrão já fugiu.',
+    'outro agente ja prendeu': 'Outro agente já prendeu esse ladrão.',
+    'so patente maior prende': 'Só uma patente maior pode mandar para a prisão militar.',
     'so lixeiros': 'Só membros da sociedade.',
     'bueiro trancado': 'A tampa não abre.',
     'devagar': 'Calma, espere um pouco.',
@@ -374,6 +380,12 @@ export const qg = {
   arrombar: (k) => rpc('cla_assalto_arrombar', { p_k: k }),
   entregar: () => rpc('cla_assalto_entregar'),
 };
+export const configJogo = {
+  async ler() { const { data, error } = await sb.from('config_jogo').select('*').eq('id', 1).maybeSingle(); if (error) throw error; return data; },
+  salvar: (policia, crimes, chance) => rpc('admin_config', { p_policia: policia, p_crimes: crimes, p_chance: chance }),
+  presos: async (desde) => (await sel(sb.from('bandidos_presos').select('ciclo').gte('ciclo', desde))) || [],
+  prenderBandido: (ciclo) => rpc('prender_bandido', { p_ciclo: ciclo }),
+};
 export const clima = {
   async ler() { const { data, error } = await sb.from('clima').select('*').eq('id', 1).maybeSingle(); if (error) throw error; return data; },
   agora: (tipo, minutos) => rpc('admin_clima_agora', { p_tipo: tipo, p_minutos: minutos }),
@@ -504,6 +516,7 @@ export const jornal = {
   apagar: (id) => rpc('apagar_materia', { p_id: id }),
 };
 export const exercito = {
+  prisao: (id, min) => rpc('prender_militar', { p_jogador: id, p_minutos: min }),
   procurados: () => sel(sb.from('perfis').select('id,nome,crimes,recompensa').gt('crimes', 0).eq('cargo', 'jogador')
     .gt('visto_em', new Date(Date.now() - 10 * 60000).toISOString()).order('crimes', { ascending: false }).limit(20)),
   cacadas: () => sel(sb.from('cacadas').select('*').gt('ate', new Date().toISOString())),

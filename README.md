@@ -255,6 +255,13 @@ Os presos não ficam mais na grade do lado de fora: vão para uma das 8 celas da
 - Quem é de clã tem o escudo do clã (cor e iniciais) ao lado do nome.
 - ☰ › Veículos › **✨ Materializar (150)**: o carro ou veículo particular aparece do seu lado na hora. Carros também podem ficar estacionados nas ruas do horizonte.
 
+## Expediente, cidade e prisão militar (SQL 50a e 50b)
+
+- **Veículo do expediente:** em serviço (Polícia, PRF, Bombeiros, Hospital, Exército) aparece o botão 🚓/🚒/🚑/🪖 na tela: o veículo da corporação surge do seu lado na hora, grátis.
+- **Painel › Cidade (admin):** quantos policiais robô na rua (0 a 20) e **crimes de NPC** (ligar/desligar e a chance a cada 2 minutos). O ladrão NPC assalta uma loja e foge por 3 minutos; Polícia, PRF e Exército recebem o alerta e prendem chegando perto (+300).
+- **Prisão militar:** na ficha militar, quem tem patente maior (ou o General Supremo) manda um militar para a prisão do quartel por 15 min ou solta.
+- **Reset do mapa:** mais completo (casas do esgoto, cofres de clã, assaltos, Lixeiros, residência oficial, seguranças) e mostra o que foi apagado; o jogo de todos recarrega em seguida.
+
 ## Controles no PC
 
 | Tecla | Ação |

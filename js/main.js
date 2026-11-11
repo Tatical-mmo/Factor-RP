@@ -955,6 +955,7 @@ function acaoContexto() {
   if (jogador.perfil.profissao === 'medico') { const fer = feridoProximo(2.8); if (fer) { socorrerFerido(fer); return; } }
   const fogo = servicos.fogoProximo(9); if (fogo && !jogador.carregando) { servicos.apagar(fogo); return; }
   { const a = algemadoParaSoltar(); if (a) { soltarAlgemado(a); return; } }
+  { const b = bandidoPerto(); if (b) { prenderBandido(b); return; } }
   if (bueiroPerto()) { acaoBueiro(); return; }
   { const q = portaQGPerto(); if (q) { if (meuQG(q)) entrarNoQG(q); else aviso('🏴 Só os membros do clã dono desta base entram no QG.', 3); return; } }
   { const k = conteinerPerto(); if (k !== null) { arrombarConteiner(k); return; } }
@@ -1625,6 +1626,8 @@ async function criarNPCs(excluir) {
 }
 function atualizarNPCs(dt) {
   for (const n of npcs) {
+    if (n.ordem !== undefined) { const off = n.ordem >= configJogo.policia_robo; if (off !== !!n.fora) { n.fora = off; n.av.raiz.visible = !off; if (off) { n.perseguindo = false; n.cerco = null; } } if (off) continue; }
+    if (n.bandido && banditoAtivo(n)) { atualizarBandido(n, dt); continue; }
     if (n.algemado) { npcAlgemado(n, dt); continue; }
     if (n.conversa) { conversando(n, dt); continue; }
     if (n.animConversa) { n.animConversa = false; n.av.tocar('walk', { velocidade: 0.85 }); }
@@ -2041,6 +2044,8 @@ async function iniciarJogo(perfil) {
     climaAgora: () => clima.atual(), climaConfig: () => clima.config(),
     online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta.nome })),
     averiguar: (id, nome) => iniciarAveriguar(id, nome),
+    resetFeito: () => { conexao?.enviar('reset', {}); setTimeout(() => location.reload(), 2500); },
+    configMudou: () => { tempoConfig = 0; },
     posicaoDe: (id) => { const r = remotos.get(id); return r?.av?.raiz.visible ? r.av.raiz.position : (r?.alvo || null); },
     minhaPosicao: () => jogador.pos,
     teleportar,
@@ -2107,7 +2112,7 @@ function conectarMultiplayer(perfil) {
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
     tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1),
     explosao: (e) => receberExplosao(e),
-    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m),
+    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), reset: () => { aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m),
     meta: () => metaPresenca(),
   });
@@ -2424,6 +2429,7 @@ function descansar() {
 }
 function limitarInterior(p) {
   const i = interiores.get(jogador.dentroCasa); if (!i) return;
+  if (i.celasMil && presoMilitar()) { const b = caixaCelaMilitar(); p.x = THREE.MathUtils.clamp(p.x, b.x0, b.x1); p.z = THREE.MathUtils.clamp(p.z, b.z0, b.z1); return; }
   if (i.celas && jogador.pena > 0) { const b = caixaCela(); p.x = THREE.MathUtils.clamp(p.x, b.x0, b.x1); p.z = THREE.MathUtils.clamp(p.z, b.z0, b.z1); return; }   // preso: só dentro da cela
   const sala = i.sala || SALA;
   p.x = THREE.MathUtils.clamp(p.x, i.base.x - sala.w / 2 + 0.5, i.base.x + sala.w / 2 - 0.5);
@@ -3963,7 +3969,7 @@ function atualizarProcurados(dt) {
   }
 }
 function iniciarCerco(x, z) {
-  const n = npcs.find((k) => k.policia && k.perseguindo) || npcs.find((k) => k.policia); if (!n) return;
+  const n = npcs.find((k) => k.policia && !k.fora && k.perseguindo) || npcs.find((k) => k.policia && !k.fora); if (!n) return;
   n.cerco = { x, z, ate: agoraServidor() + 1920000 };
   rede.recompensas.cercar(x, z).then((ate) => { if (ate) n.cerco.ate = Date.parse(ate); }).catch(() => {});
   aviso('🚓 Você se escondeu, mas a polícia robô vai ficar esperando na porta (até 1 ciclo).', 4);
@@ -4119,7 +4125,8 @@ async function usarRemedio() {
 
 // ================================================================= POLÍCIA (etapa 6)
 // 12 policiais robôs a pé, cada um dando a volta numa quadra diferente (centro e bairros)
-const QUADRAS_POLICIA = [[1, 1], [2, 2], [0, 0], [3, 3], [0, 3], [3, 0], [-1, 1], [4, 2], [1, -1], [2, 4], [-1, 3], [4, 0]];
+const QUADRAS_POLICIA = [[1, 1], [2, 2], [0, 0], [3, 3], [0, 3], [3, 0], [-1, 1], [4, 2], [1, -1], [2, 4], [-1, 3], [4, 0],
+  [-2, -2], [5, 5], [-3, 4], [6, 1], [2, -3], [-4, 0], [7, 3], [3, 6]];   // as 8 últimas só aparecem se o admin aumentar
 // soldados NPC do quartel: pelotão marchando em volta do pátio, sentinelas no portão e uma patrulha na mata
 const soldados = [];
 async function criarSoldadosNPC() {
@@ -4304,7 +4311,7 @@ async function criarPoliciaNPC() {
       const av = await criarAvatar('robos', SKIN_POLICIA);
       scene.add(av.raiz); av.tocar('walk', { velocidade: 0.85 });
       const et = textoSprite('Polícia', { escala: 0.6, fundo: 'rgba(30,70,160,.92)' }); et.position.y = 2.2; av.raiz.add(et);
-      const n = { id: k + 1, policia: true, av, rota, laco: laco(rota), vel: 1.5, fase: k * 41, vida: 100, caido: 0, hostil: 0, tiro: 0 };
+      const n = { id: k < 12 ? k + 1 : 21 + (k - 12), policia: true, ordem: k, av, rota, laco: laco(rota), vel: 1.5, fase: k * 41, vida: 100, caido: 0, hostil: 0, tiro: 0 };
       npcs.push(n); const p = patrulha(n); av.raiz.position.set(p.x, 0.18, p.z);
     } catch { /* sem policiais NPC */ }
   }
@@ -4823,6 +4830,7 @@ function teleportar(x, z) {
   if (jogador.carro) sairCarro();
   if (jogador.trem) { ferrovia.ocultarTeto(jogador.trem.li, jogador.trem.k, false); jogador.trem = null; }
   if (jogador.pena > 0 && cadeia) { const c = posCela(); x = c.x; z = c.z; jogador.dentroCasa = 'carceragem'; jogador.saidaSala = { x: cadeia.x + 4.5, z: cadeia.z }; }
+  else if (presoMilitar()) { const c = posCelaMilitar(); x = c.x; z = c.z; jogador.dentroCasa = 'prisaomilitar'; jogador.saidaSala = { x: mundo.QUARTEL.portao.x - 2, z: mundo.QUARTEL.portao.z }; }
   if (x < 1500) jogador.dentroCasa = null;     // interiores ficam em x >= 2000
   jogador.pos.set(x, alturaChao(x, z), z);
   resolverColisao(jogador.pos, jogador.raio);
@@ -5154,6 +5162,7 @@ function contexto() {
   if (jogador.assalto) return [`assaltando… ${Math.ceil(jogador.assalto.t)} s (não se afaste)`, 'Assalto'];
   if (jogador.arrombando) return [`arrombando o contêiner… ${Math.ceil(jogador.arrombando.t)} s (não se afaste)`, 'Arrombar'];
   { const a = algemadoParaSoltar(); if (a) return [`tirar as algemas de ${a.nome}`, 'Soltar']; }
+  { const b = bandidoPerto(); if (b) return ['PRENDER o ladrão (+300)', 'Prender']; }
   { const bu = contextoBueiro(); if (bu) return bu; }
   { const q = portaQGPerto(); if (q) return meuQG(q) ? ['entrar no QG do clã', 'QG'] : ['QG do clã (só membros do clã dono da base)', 'QG']; }
   { const k = conteinerPerto(); if (k !== null) return ['ARROMBAR o contêiner do cargueiro (crime)', 'Arrombar']; }
@@ -5233,7 +5242,7 @@ function quadro() {
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
-  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt);
+  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura();
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   atualizarUniformes();
   enviarEstado(dt);
@@ -6713,4 +6722,142 @@ function atualizarNomesCla(dt) {
     const cla = r.meta?.cla || null;
     if (r.etCla !== cla) { r.et = trocarNome(r.av, r.et, r.meta.nome, cla, r.meta.cargo === 'admin' ? '#ff6b6b' : r.meta.cargo === 'moderador' ? '#7fb8ff' : '#ffffff'); r.etCla = cla; }
   }
+}
+
+// ================================================================= configurações do admin (polícia robô e crimes de NPC)
+let configJogo = { policia_robo: 12, crimes_npc: false, chance_crime: 30 }, tempoConfig = 0;
+function atualizarConfigJogo(dt) {
+  if ((tempoConfig -= dt) > 0) return; tempoConfig = 30;
+  rede.configJogo.ler().then((c) => { if (c) configJogo = c; }).catch(() => {});
+  rede.configJogo.presos(cicloCrime() - 3).then((l) => { for (const x of l) presosNpc.add(x.ciclo); }).catch(() => {});
+}
+// ---------------------------------------------------------------- ladrões NPC: a cada 2 minutos, com a chance definida, um pedestre
+// assalta uma loja e foge pelas ruas por 3 minutos. Todos os aparelhos sorteiam igual (pelo número do ciclo).
+const CICLO_CRIME = 120, FUGA = 180, presosNpc = new Set();
+let ultimoAlertaCrime = -1;
+const cicloCrime = () => Math.floor(agoraServidor() / 1000 / CICLO_CRIME);
+function sorte(n, k) { let h = (n * 2654435761 + k * 40503) >>> 0; h = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0; h ^= h >>> 13; return (h >>> 0) / 4294967296; }
+function crimeDoCiclo(ciclo) {
+  if (!configJogo.crimes_npc || !pontos.lojas?.length) return null;
+  if (sorte(ciclo, 1) * 100 >= configJogo.chance_crime) return null;
+  const civis = npcs.filter((n) => n.civil); if (!civis.length) return null;
+  const loja = pontos.lojas[Math.floor(sorte(ciclo, 2) * pontos.lojas.length)], destino = pontos.lojas[Math.floor(sorte(ciclo, 3) * pontos.lojas.length)];
+  return { ciclo, n: civis[Math.floor(sorte(ciclo, 4) * civis.length)], loja, rota: servicos.rotaRuas(loja, destino) };
+}
+function banditoAtivo(n) {
+  const b = n.bandido, t = agoraServidor() / 1000 - b.ciclo * CICLO_CRIME;
+  if (t < 0 || t > FUGA || presosNpc.has(b.ciclo)) { soltarBandido(n); return false; }
+  return true;
+}
+function soltarBandido(n) {
+  if (!n.bandido) return;
+  if (n.bandido.placa) n.av.raiz.remove(n.bandido.placa);
+  n.bandido = null; n.av.tocar('walk', { velocidade: 0.85 });
+}
+function atualizarBandidos() {
+  const ciclo = cicloCrime();
+  for (const c of [ciclo, ciclo - 1]) {
+    if (presosNpc.has(c)) continue;
+    const cr = crimeDoCiclo(c); if (!cr || cr.n.bandido || cr.n.algemado) continue;
+    if (agoraServidor() / 1000 - c * CICLO_CRIME > FUGA) continue;
+    const placa = textoSprite('🦹 LADRÃO', { escala: 0.6, fundo: 'rgba(170,30,30,.95)' }); placa.position.y = 2.6; cr.n.av.raiz.add(placa);
+    cr.n.bandido = { ciclo: c, rota: cr.rota, placa, loja: cr.loja }; cr.n.av.tocar('run', { fade: 0.2 });
+    if (ultimoAlertaCrime !== c && papelDe(jogador.perfil) && ['policia', 'prf', 'exercito'].includes(papelDe(jogador.perfil))) {
+      ultimoAlertaCrime = c; aviso('🚨 Assalto numa loja! O ladrão está fugindo pelas ruas: prenda ele (+300).', 5);
+      rastrear({ nome: '🦹 Ladrão em fuga', x: cr.loja.x, z: cr.loja.z });
+    }
+  }
+}
+function atualizarBandido(n, dt) {
+  const b = n.bandido, t = agoraServidor() / 1000 - b.ciclo * CICLO_CRIME, p = servicos.pontoNaRota(b.rota, Math.min(b.rota.total, t * 4.2));
+  const raiz = n.av.raiz, ang = Math.atan2(p.x - raiz.position.x, p.z - raiz.position.z);
+  raiz.position.set(p.x, alturaChao(p.x, p.z), p.z);
+  if (t * 4.2 < b.rota.total) raiz.rotation.y = suavizarAngulo(raiz.rotation.y, ang, dt * 8);
+  if (rastreio?.nome === '🦹 Ladrão em fuga') { rastreio.x = p.x; rastreio.z = p.z; }
+  n.av.mixer.update(dt);
+}
+function bandidoPerto() {
+  const pap = papelDe(jogador.perfil);
+  if (!(['policia', 'prf', 'exercito'].includes(pap) || jogador.perfil?.cargo === 'admin') || jogador.carro) return null;
+  return npcs.find((n) => n.bandido && Math.hypot(n.av.raiz.position.x - jogador.pos.x, n.av.raiz.position.z - jogador.pos.z) < 2.6) || null;
+}
+async function prenderBandido(n) {
+  const c = n.bandido.ciclo;
+  try {
+    const v = await rede.configJogo.prenderBandido(c);
+    presosNpc.add(c); soltarBandido(n); algemarNpc(npcs.indexOf(n), true, jogador.perfil.id, false);
+    if (rastreio?.nome === '🦹 Ladrão em fuga') rastrear(null);
+    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 2, fade: 0.1 });
+    aviso(`🚔 Ladrão preso! +${v}`, 3);
+  } catch (e) { presosNpc.add(c); soltarBandido(n); aviso(e.message, 3); }
+}
+
+// ================================================================= viatura do expediente: quem está em serviço pede o veículo a qualquer hora
+const VEICULO_SERVICO = { policia: 'viatura', prf: 'viatura', bombeiro: 'bombeiros', medico: 'ambulancia', exercito: 'militar' };
+let viaturaPedida = 0;
+function desenharBotaoViatura() {
+  let b = $('btViatura');
+  const pap = papelDe(jogador.perfil), pode = !!pap && !!jogador.avatar && !jogador.carro && !jogador.passageiro && !jogador.trem && !jogador.dentroCasa && !jogador.algemado && !(jogador.pena > 0) && !presoMilitar();
+  if (!b) {
+    b = document.createElement('button'); b.id = 'btViatura';
+    b.style.cssText = 'position:fixed;left:12px;bottom:270px;z-index:30;padding:10px 12px;border-radius:14px;border:2px solid rgba(255,255,255,.5);background:rgba(30,70,160,.88);color:#fff;font:800 13px system-ui;pointer-events:auto';
+    b.onclick = () => pedirViatura(); document.body.appendChild(b);
+  }
+  b.style.display = pode ? 'block' : 'none';
+  if (pode) b.textContent = { policia: '🚓 Viatura', prf: '🚔 Viatura PRF', bombeiro: '🚒 Caminhão', medico: '🚑 Ambulância', exercito: '🪖 Jipe' }[pap];
+}
+function pedirViatura() {
+  const pap = papelDe(jogador.perfil), modelo = VEICULO_SERVICO[pap]; if (!modelo) return;
+  if (performance.now() - viaturaPedida < 8000) { aviso('Espere um pouco para pedir de novo.'); return; }
+  viaturaPedida = performance.now();
+  const p = pertoDeMim(), ang = jogador.yaw;
+  if (modelo === 'militar') {
+    if (meuMilitar) scene.remove(meuMilitar.mesh);
+    const m = civico.modeloCarro('militar', '#ffffff'); m.position.set(p.x, alturaChao(p.x, p.z), p.z); m.rotation.y = ang; scene.add(m);
+    meuMilitar = { modelo: 'militar', mesh: m };
+    entrarServico({ exercito: { meu: true, mesh: m, modelo: 'militar' }, modelo: 'militar' });
+  } else if (modelo === 'viatura') {
+    if (minhaViatura) scene.remove(minhaViatura);
+    minhaViatura = civico.modeloCarro('viatura', pap === 'prf' ? '#1d2b4f' : '#ffffff'); minhaViatura.position.set(p.x, alturaChao(p.x, p.z), p.z); minhaViatura.rotation.y = ang; scene.add(minhaViatura);
+    entrarServico({ base: { veiculo: minhaViatura }, modelo: 'viatura' });
+  } else {
+    const base = modelo === 'ambulancia' ? civico.HOSPITAL : civico.BOMBEIROS; if (!base?.veiculo) return;
+    base.veiculo.position.set(p.x, alturaChao(p.x, p.z), p.z); base.veiculo.rotation.y = ang; base.veiculo.visible = true;
+    entrarServico({ base, modelo });
+  }
+  aviso('🚨 Veículo do expediente na mão. Bom trabalho!', 2.5);
+}
+let minhaViatura = null;
+
+// ================================================================= prisão militar (no quartel): militar que matou inocente ou cometeu crime
+const presoMilitar = () => { const a = jogador.perfil?.prisao_militar_ate; return !!a && Date.parse(a) > agoraServidor(); };
+function salaPrisaoMilitar() {
+  return montarSala('prisaomilitar', 3000, 2500, 18, 12, { piso: '#4d5240', parede: '#7b8064', luz: '#e8f0d0' }, (i) => {
+    const { caixa, placa, g } = i;
+    i.celasMil = true;
+    const barra = new THREE.CylinderGeometry(0.045, 0.045, 2.7, 6), ferro = i.mat('#2c3024', 0.5, 0.6), grades = new THREE.InstancedMesh(barra, ferro, 4 * 14); let n = 0; const m4 = new THREE.Matrix4();
+    for (let k = 0; k < 4; k++) {
+      const x = -6 + k * 4;
+      caixa(0.15, 2.8, 5, '#6b705a', x - 2, 1.4, -3.5); caixa(1.0, 0.45, 2.0, '#4b5d33', x - 1, 0.23, -4.8);
+      for (let b = 0; b < 14; b++) { m4.makeTranslation(x - 1.8 + b * 0.28, 1.35, -1); grades.setMatrixAt(n++, m4); }
+      placa(`Cela militar ${k + 1}`, x, -1, 3.1);
+    }
+    caixa(0.15, 2.8, 5, '#6b705a', 8, 1.4, -3.5); g.add(grades);
+    i.obst.push([-9, 9, -6, -0.8]);
+    placa('⛓️ Prisão militar', 0, 3, 3.2);
+  });
+}
+function celaMilitarIdx() { let h = 0; for (const ch of String(jogador.perfil?.id || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % 4; }
+function posCelaMilitar() { const i = salaPrisaoMilitar(); return { x: i.base.x - 6 + celaMilitarIdx() * 4, z: i.base.z - 3.5 }; }
+function caixaCelaMilitar() { const i = salaPrisaoMilitar(), x = i.base.x - 6 + celaMilitarIdx() * 4; return { x0: x - 1.7, x1: x + 1.7, z0: i.base.z - 5.6, z1: i.base.z - 1.4 }; }
+SALAS.prisaomilitar = {
+  contexto: () => (presoMilitar() ? [`prisão militar: ${formatarTempo(Math.max(0, (Date.parse(jogador.perfil.prisao_militar_ate) - agoraServidor()) / 1000))}`, ''] : naPorta() ? ['sair da prisão militar', 'Sair'] : ['', '']),
+  acao: () => { if (!presoMilitar() && naPorta()) sairSala(); },
+};
+let tempoPrisaoMil = 0;
+function atualizarPrisaoMilitar(dt) {
+  if ((tempoPrisaoMil -= dt) > 0) return; tempoPrisaoMil = 1;
+  if (presoMilitar()) {
+    if (jogador.dentroCasa !== 'prisaomilitar') { if (jogador.carro) sairCarro(); if (jogador.armado) alternarArmaForcado(false); const c = posCelaMilitar(); teleportar(c.x, c.z); aviso('⛓️ Você está na prisão militar.', 3); }
+  } else if (jogador.dentroCasa === 'prisaomilitar' && jogador.saidaSala) { const s = jogador.saidaSala; teleportar(s.x, s.z); aviso('🎖️ Você saiu da prisão militar.', 3); }
 }

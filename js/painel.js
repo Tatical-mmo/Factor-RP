@@ -61,6 +61,7 @@ function desenhar() {
   else if (aba === 'tempo') abaTempo();
   else if (aba === 'denuncias') abaDenuncias();
   else if (aba === 'carreiras') abaCarreiras();
+  else if (aba === 'cidade') abaCidade();
 }
 
 // ------------------------------------------------------------ jogadores
@@ -210,6 +211,25 @@ async function abaSalarios() {
     };
   });
 }
+// ------------------------------------------------------------ cidade: polícia robô e crimes de NPC (só o administrador)
+async function abaCidade() {
+  const c = $('painelConteudo'); c.textContent = 'Carregando…';
+  let cf; try { cf = await rede.configJogo.ler(); } catch (e) { c.textContent = e.message; return; }
+  cf = cf || { policia_robo: 12, crimes_npc: false, chance_crime: 30 };
+  c.innerHTML = `<div class="sub">🚓 Polícia robô na rua</div>
+    <p class="dica">Quantos policiais robô patrulham a metrópole (0 a 20). Os agentes robô da PRF continuam iguais.</p>
+    <div class="botoes"><input id="cPol" type="range" min="0" max="20" value="${cf.policia_robo}" style="flex:1"><b id="cPolN" style="min-width:32px;text-align:center">${cf.policia_robo}</b></div>
+    <div class="sub">🦹 Crimes de NPC</div>
+    <p class="dica">Ligado, a cada 2 minutos pode acontecer um assalto de NPC numa loja (com a chance abaixo). O ladrão foge pelas ruas por até 3 minutos; Polícia, PRF e Exército em serviço recebem o alerta e prendem chegando perto (+300).</p>
+    <div class="botoes"><label><input type="checkbox" id="cCrimes" ${cf.crimes_npc ? 'checked' : ''}> Ligado</label></div>
+    <div class="botoes"><span style="flex:1">Chance de ocorrência por ciclo</span><input id="cChance" type="range" min="0" max="100" step="5" value="${cf.chance_crime}" style="flex:1"><b id="cChanceN" style="min-width:44px;text-align:center">${cf.chance_crime}%</b></div>
+    <div class="botoes"><button id="cSalvar">Salvar</button></div>`;
+  $('cPol').oninput = () => { $('cPolN').textContent = $('cPol').value; };
+  $('cChance').oninput = () => { $('cChanceN').textContent = $('cChance').value + '%'; };
+  $('cSalvar').onclick = async () => {
+    try { await rede.configJogo.salvar(Number($('cPol').value), $('cCrimes').checked, Number($('cChance').value)); ctx.configMudou?.(); msg('Configuração salva. Vale para todos em alguns segundos.'); } catch (e) { msg(e.message, false); }
+  };
+}
 // ------------------------------------------------------------ carreiras públicas (só o administrador)
 // aba própria: escolha o jogador (online ou pela busca) e defina emprego e patentes
 async function abaCarreiras(texto = '') {
@@ -335,7 +355,7 @@ function abaEu() {
   const bf = $('pEvFechar'); if (bf) bf.onclick = () => executar(() => rede.personagens.liberarEvento(evSel(), 0), 'Vitrine fechada.');
   const br = $('pReset'); if (br) br.onclick = () => {
     const partes = [...c.querySelectorAll('[data-reset]')].filter((x) => x.checked).map((x) => x.dataset.reset);
-    if (confirmarDuplo('pReset', '🧹 Resetar o mapa')) executar(() => rede.painel.resetarMundo(partes, $('pResetConf').value.trim()), 'Mapa resetado. Todos foram avisados.');
+    if (confirmarDuplo('pReset', '🧹 Resetar o mapa')) rede.painel.resetarMundo(partes, $('pResetConf').value.trim()).then((r) => { msg(`Mapa resetado: ${r || 'feito'}. O jogo de todos vai recarregar.`); ctx.resetFeito?.(); }).catch((e) => msg(e.message, false));
   };
 }
 // todos com crime ou recompensa (inclusive você e a equipe); um toque perdoa tudo
