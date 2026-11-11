@@ -110,6 +110,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.localClippingEnabled = true;   // corte do teto do trem quando você está dentro
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#a9c8de');

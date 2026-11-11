@@ -315,11 +315,31 @@ export function atualizar(t) {
     }
   });
 }
+// Quem está dentro continua vendo o trem novo: o modelo 3D é cortado acima da cabeça (sem teto) e por dentro
+// aparecem só o piso, os bancos e as barras do modelo antigo.
+const CORTE = new THREE.Plane(new THREE.Vector3(0, -1, 0), TRILHO + PISO + 2.0);
+const INTERIOR = new Set(['piso', 'assento', 'metal', 'escuro']);
+function materiaisCortados(ext) {
+  if (ext.userData.cortes) return ext.userData.cortes;
+  const cache = new Map(), lista = [];
+  const cortar = (m) => { if (!cache.has(m)) { const c = m.clone(); c.clippingPlanes = [CORTE]; c.clipShadows = true; c.side = THREE.DoubleSide; cache.set(m, c); } return cache.get(m); };
+  ext.traverse((o) => { if (o.isMesh) lista.push([o, o.material, Array.isArray(o.material) ? o.material.map(cortar) : cortar(o.material)]); });
+  ext.userData.cortes = lista; return lista;
+}
 export function ocultarTeto(li, k, oculto) {
   const tr = linhas[li]?.trens[k]; if (!tr || tr.tetoOculto === oculto) return;
   tr.tetoOculto = oculto;
-  for (const c of tr.carros) if (c.ext) { c.ext.visible = !oculto; c.g.visible = oculto; }
-  for (const c of tr.carros) if (c.tipo === 'vagao') c.g.traverse((o) => { if (o.userData.parte === 'teto' || o.userData.parte === 'luz') o.visible = !oculto; });
+  for (const c of tr.carros) {
+    if (!c.ext) {   // sem o modelo 3D: só tira o teto do modelo antigo
+      if (c.tipo === 'vagao') c.g.traverse((o) => { if (o.userData.parte === 'teto' || o.userData.parte === 'luz') o.visible = !oculto; });
+      continue;
+    }
+    c.ext.visible = true;
+    if (c.tipo !== 'vagao') { c.g.visible = false; continue; }
+    for (const [o, orig, cortado] of materiaisCortados(c.ext)) o.material = oculto ? cortado : orig;
+    c.g.visible = oculto; c.g.scale.x = oculto ? 0.86 : 1;
+    for (const o of c.g.children) o.visible = !oculto || INTERIOR.has(o.userData.parte);
+  }
 }
 // posição de uma vaga (em pé dentro do vagão)
 export function vaga(li, k, v) {
