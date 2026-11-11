@@ -792,11 +792,13 @@ function colidirLista(lista, p, raio) {
 }
 function resolverMoveis(p, raio) {
   // caminhão em movimento
-  if (caminhaoMovel) {
+  if (caminhaoMovel?.obj.visible) {
     const dx = p.x - caminhaoMovel.obj.position.x, dz = p.z - caminhaoMovel.obj.position.z, r = raio + 2.3, d2 = dx * dx + dz * dz;
     if (d2 < r * r && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = caminhaoMovel.obj.position.x + dx / d * r; p.z = caminhaoMovel.obj.position.z + dz / d * r; }
   }
   for (const c of caminhoes.values()) {
+    // só veículo que está aparecendo no mapa e no chão (os escondidos ficavam parados no centro, em x 0 z 0, como um bloqueio invisível)
+    if (!c.obj.visible || c.obj.position.y > alturaChao(c.obj.position.x, c.obj.position.z) + 2) continue;
     const q = c.obj.position, dx = p.x - q.x, dz = p.z - q.z, rr = raio + 2.2, d2 = dx * dx + dz * dz;
     if (d2 < rr * rr && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = q.x + dx / d * rr; p.z = q.z + dz / d * rr; }
   }
@@ -1138,7 +1140,7 @@ function sincronizarCarros(lista) {
     v.mesh.visible = !outros.has(d.id);
     v.mesh.position.set(d.x, alturaChao(d.x, d.z), d.z); v.mesh.rotation.y = d.ang;
   }
-  colisoresCarros = lista.filter((d) => jogador.carro?.id !== d.id && !outros.has(d.id)).map((d) => ({ tipo: 'circ', x: d.x, z: d.z, r: 1.4 }));
+  colisoresCarros = lista.filter((d) => jogador.carro?.id !== d.id && !outros.has(d.id) && carrosMundo.get(d.id)?.mesh.visible).map((d) => ({ tipo: 'circ', x: d.x, z: d.z, r: 1.4 }));
 }
 let colisoresCarros = [];
 function meuCarroProximo() {
