@@ -1922,6 +1922,12 @@ async function iniciarJogo(perfil) {
   montarAgencias();
   civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n] });
   civico.montarPrefeitura(); civico.montarConcessionaria();
+  { // degraus da entrada da prefeitura: o personagem sobe neles em vez de afundar
+    const P = civico.PREFEITURA;
+    mundo.addPiso({ x0: P.x - 15, x1: P.x + 15, z0: P.z + 11.4, z1: P.z + 13.7, h: 0.48 });
+    mundo.addPiso({ x0: P.x - 15, x1: P.x + 15, z0: P.z + 11.2, z1: P.z + 12.8, h: 0.78 });
+    mundo.addPiso({ x0: P.x - 15, x1: P.x + 15, z0: P.z + 10.9, z1: P.z + 11.9, h: 1.08 });
+  }
   civico.montarBanco(); civico.montarHospital(); civico.montarBombeiros(); civico.montarCemiterio(); civico.montarQuartelExercito();
   balcao(CONTRABANDISTA.x, CONTRABANDISTA.z, '#5a2d2d', 'Contrabandista', 'Arma militar · só clãs');
   for (const b of BANCAS) balcao(b.x, b.z, '#c0392b', 'Banca de Jornal', 'Notícias da cidade');
