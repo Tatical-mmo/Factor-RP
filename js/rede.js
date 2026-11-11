@@ -80,6 +80,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'assalto' }, ({ payload }) => eventos.assalto?.(payload));
   canal.on('broadcast', { event: 'algemaNpc' }, ({ payload }) => eventos.algemaNpc?.(payload));
   canal.on('broadcast', { event: 'bueiro' }, ({ payload }) => eventos.bueiro?.(payload));
+  canal.on('broadcast', { event: 'carroRua' }, ({ payload }) => eventos.carroRua?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
@@ -125,6 +126,8 @@ function traduzirRpc(m) {
     'confirmacao invalida': 'Digite EXCLUIR para confirmar.',
     'o administrador nao pode excluir a conta': 'O administrador não pode excluir a própria conta.',
     'muitas denuncias': 'Muitas denúncias em pouco tempo. Tente mais tarde.',
+    'ele trabalha em empresa': 'Ele é funcionário de uma empresa particular. Ele precisa sair dela antes (um emprego por jogador).',
+    'carreira invalida': 'Carreira inválida.',
     'so lixeiros': 'Só membros da sociedade.',
     'bueiro trancado': 'A tampa não abre.',
     'devagar': 'Calma, espere um pouco.',
@@ -330,6 +333,7 @@ function traduzirRpc(m) {
   if (espera) return `Aguarde ${espera[1]} s.`;
   return t[m] || m;
 }
+export const roubarCarroRua = () => rpc('roubar_carro_rua');
 export const conta = {
   excluir: () => rpc('excluir_minha_conta', { p_confirmacao: 'EXCLUIR' }),
   denunciar: (alvo, motivo, detalhes) => rpc('denunciar', { p_alvo: alvo, p_motivo: motivo, p_detalhes: detalhes || null }),
@@ -389,6 +393,9 @@ export const painel = {
   sortearBueiro: () => rpc('admin_sortear_bueiro'),
   denuncias: () => rpc('admin_denuncias'),
   resolverDenuncia: (id) => rpc('admin_resolver_denuncia', { p_id: id }),
+  carreiras: (id) => rpc('admin_carreiras', { p_jogador: id }),
+  promover: (id, carreira, nivel) => rpc('admin_promover', { p_jogador: id, p_carreira: carreira, p_nivel: nivel }),
+  definirEmprego: (id, emprego) => rpc('admin_definir_emprego', { p_jogador: id, p_emprego: emprego }),
   banir: (alvo, motivo) => rpc('admin_banir', { alvo, motivo }),
   desbanir: (alvo) => rpc('admin_desbanir', { alvo }),
   algemar: (alvo, ligado) => rpc('admin_algemar', { alvo, ligado }),

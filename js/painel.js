@@ -14,7 +14,7 @@ const PODERES = [
 ];
 const ACOES = {
   perdoar: 'perdoou',
-  moedas: 'mudou as moedas de', banir: 'baniu', desbanir: 'desbaniu', algemar: 'algemou', soltar_algemas: 'tirou as algemas de',
+  moedas: 'mudou as moedas de', emprego: 'mudou o emprego de', banir: 'baniu', desbanir: 'desbaniu', algemar: 'algemou', soltar_algemas: 'tirou as algemas de',
   prender: 'prendeu', soltar: 'soltou da cadeia', teleporte: 'teleportou', cargo: 'mudou o cargo de',
   prefeito_nomeado: 'nomeou como prefeito', prefeito_afastado: 'afastou o prefeito', eleicao_convocada: 'convocou eleição extraordinária', salario: 'mudou um salário',  presente_personagem: 'deu um personagem para', evento_personagens: 'mexeu na vitrine do evento', patente: 'mudou a patente de', reset_mapa: 'resetou o mapa',
 };
@@ -140,6 +140,7 @@ async function abrirJogador(id) {
   if (eu.cargo === 'admin' && !j.banido) {
     h += `<div class="sub">Presentear personagem de evento</div><div class="botoes"><select id="pPresSel">${PERSONAGENS_EVENTO.map((x) => `<option value="${x.id}">${esc(x.nome)}</option>`).join('')}</select><button id="pPresente">🎁 Presentear</button></div>`;
     h += `<div class="sub">Prefeitura</div><div class="botoes">${ctx.prefeito?.() === j.id ? '<small>🏛️ É o prefeito atual.</small>' : '<button id="pPrefeito">🏛️ Nomear prefeito</button>'}</div>`;
+    if (j.cargo === 'jogador') h += '<div class="sub">💼 Emprego público e patentes</div><div id="pCarreiras" class="dica">Carregando…</div>';
   }
   if (eu.cargo === 'admin' && !souEu && j.cargo !== 'admin') {
     const pod = j.poderes || {};
@@ -151,6 +152,7 @@ async function abrirJogador(id) {
     }
   }
   c.innerHTML = h;
+  if ($('pCarreiras')) blocoCarreiras(j);
 
   const on = (idb, fn) => { const b = $(idb); if (b) b.onclick = fn; };
   on('pVoltar', () => { selecionado = null; listaJogadores(); });
@@ -204,6 +206,21 @@ async function abaSalarios() {
       executar(() => (id.startsWith('mod:') ? rede.painel.salarioModerador(id.slice(4), v) : rede.painel.definirSalario(id, v)), 'Salário salvo.');
     };
   });
+}
+// ------------------------------------------------------------ carreiras públicas (só o administrador)
+const NOME_CARREIRA = { policia: '🚓 Polícia', prf: '🚔 PRF', medico: '✚ Hospital', bombeiro: '🚒 Bombeiros', jornalista: '📰 Jornal', exercito: '🎖️ Exército' };
+async function blocoCarreiras(j) {
+  const c = $('pCarreiras'); if (!c) return;
+  let d; try { d = await rede.painel.carreiras(j.id); } catch (e) { c.textContent = e.message; return; }
+  c.innerHTML = `<p class="dica">Coloque ${esc(j.nome)} em qualquer emprego público e promova em qualquer carreira (a patente fica guardada mesmo fora do serviço). Empresas particulares ficam de fora.${d.empresa ? ' <b>Ele é funcionário de uma empresa particular: precisa sair dela para ter emprego público.</b>' : ''}</p>
+    <div class="botoes"><select id="pEmprego"><option value="nenhum">Sem emprego público</option>${Object.entries(NOME_CARREIRA).map(([k, t]) => `<option value="${k}" ${d.emprego === k ? 'selected' : ''}>${t}</option>`).join('')}</select><button id="pEmpregoOk">Definir emprego</button></div>
+    ${d.carreiras.map((k) => `<div class="botoes"><span style="flex:1"><b>${NOME_CARREIRA[k.carreira]}</b>${d.emprego === k.carreira ? ' · <i class="tag on">emprego atual</i>' : ''}</span>
+      <select data-car="${k.carreira}">${k.cargos.map((g) => `<option value="${g.nivel}" ${g.nivel === k.nivel ? 'selected' : ''}>${esc(g.nome)}</option>`).join('')}</select><button data-promover="${k.carreira}">Promover</button></div>`).join('')}`;
+  $('pEmpregoOk').onclick = async () => { const e = $('pEmprego').value; try { await rede.painel.definirEmprego(j.id, e); msg(e === 'nenhum' ? `${j.nome} saiu do emprego público.` : `${j.nome} agora trabalha em ${NOME_CARREIRA[e]}.`); blocoCarreiras(j); } catch (er) { msg(er.message, false); } };
+  c.querySelectorAll('[data-promover]').forEach((b) => { b.onclick = async () => {
+    const k = b.dataset.promover, n = Number(c.querySelector(`[data-car="${k}"]`).value);
+    try { const nome = await rede.painel.promover(j.id, k, n); msg(`${j.nome} agora é ${nome} (${NOME_CARREIRA[k]}).`); blocoCarreiras(j); } catch (er) { msg(er.message, false); }
+  }; });
 }
 // ------------------------------------------------------------ denúncias dos jogadores
 const MOTIVO_TXT = { ofensa: 'Ofensa', assedio: 'Assédio/ameaça', trapaca: 'Trapaça', nome: 'Nome impróprio', voz: 'Chat de voz', outro: 'Outro' };

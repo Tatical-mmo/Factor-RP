@@ -101,7 +101,27 @@ export function limitar(p) {
     const a = Math.abs(THREE.MathUtils.clamp(Math.abs(p.z), CIDADE_Z.min, s > 0 ? CIDADE_Z.maxSul : CIDADE_Z.max));
     p.z = s * a; return;
   }
-  p.x = THREE.MathUtils.clamp(p.x, -LIM, LIM); p.z = THREE.MathUtils.clamp(p.z, -LIM, LIM);
+  if (Math.abs(p.x) <= LIM && Math.abs(p.z) <= LIM) return;
+  if (ruaHorizonte(p.x, p.z)) return;
+  // fora: volta para o ponto válido mais perto (borda da metrópole ou a rua do horizonte mais próxima)
+  const HL = FIM_HORIZONTE - 3, m = RW / 2 - 0.7, cands = [[THREE.MathUtils.clamp(p.x, -LIM, LIM), THREE.MathUtils.clamp(p.z, -LIM, LIM)]];
+  const iX = Math.round((p.x - ruaC(0)) / PASSO), iZ = Math.round((p.z - ruaC(0)) / PASSO);
+  for (const i of [iX - 1, iX, iX + 1]) { const c = ruaC(i); cands.push([THREE.MathUtils.clamp(p.x, c - m, c + m), THREE.MathUtils.clamp(p.z, -HL, HL)]); }
+  for (const j of [iZ - 1, iZ, iZ + 1]) { const c = ruaC(j); cands.push([THREE.MathUtils.clamp(p.x, -HL, HL), THREE.MathUtils.clamp(p.z, c - m, c + m)]); }
+  let melhor = cands[0], md = Infinity;
+  for (const [x, z] of cands) {
+    if (!((Math.abs(x) <= LIM && Math.abs(z) <= LIM) || ruaHorizonte(x, z))) continue;
+    const d = Math.hypot(x - p.x, z - p.z); if (d < md) { md = d; melhor = [x, z]; }
+  }
+  p.x = melhor[0]; p.z = melhor[1];
+}
+// está numa rua do horizonte de prédios? (fora da ferrovia)
+function ruaHorizonte(x, z) {
+  const HL = FIM_HORIZONTE - 3, m = RW / 2 - 0.6;
+  if (Math.abs(x) > HL || Math.abs(z) > HL) return false;
+  if (Math.abs(z) > BORDA - 3 && Math.abs(x) < CORREDOR) return false;
+  const iX = Math.round((x - ruaC(0)) / PASSO), iZ = Math.round((z - ruaC(0)) / PASSO);
+  return Math.abs(x - ruaC(iX)) < m + 0.01 || Math.abs(z - ruaC(iZ)) < m + 0.01;
 }
 
 // ---------------------------------------------------------------- materiais
@@ -431,6 +451,15 @@ function gerarMetropole() {
 }
 
 function gerarHorizonte() {
+  // ruas do horizonte: a metrópole continua por entre os prédios altos até o fim do mapa (sem cruzar a ferrovia)
+  const H = FIM_HORIZONTE - 2;
+  for (let i = SI + 1; i <= SA; i++) {
+    const c = ruaC(i); if (Math.abs(c) > H) continue;
+    if (Math.abs(c) <= BORDA) { if (Math.abs(c) >= CORREDOR) for (const s of [-1, 1]) rua(c, s * (BORDA + H) / 2, RW, H - BORDA); }
+    else rua(c, 0, RW, 2 * H);
+    if (Math.abs(c) <= BORDA) for (const s of [-1, 1]) rua(s * (BORDA + H) / 2, c, H - BORDA, RW);
+    else for (const [a, b] of [[-H, -CORREDOR], [CORREDOR, H]]) rua((a + b) / 2, c, b - a, RW);
+  }
   for (let i = SI; i <= SA; i++) for (let j = SI; j <= SA; j++) {
     if (i >= MI && i <= MA && j >= MI && j <= MA) continue;
     if (i === 1 || i === 2) continue;                               // corredor da ferrovia
@@ -841,7 +870,7 @@ function montarMobiliario() {
     _q.setFromAxisAngle(_e.set(0, 1, 0), rot); _m.compose(_v.set(x, 0.02, z), _q, _e.set(1, 1, 1));
     ic.setMatrixAt(k, _m); iv.setMatrixAt(k, _m); ir.setMatrixAt(k, _m); ic.setColorAt(k, _c.set(carros[k].cor));
     const vert = Math.abs(Math.sin(rot)) < 0.5;
-    addCol({ tipo: 'caixa', x0: x - (vert ? 0.95 : 2.15), x1: x + (vert ? 0.95 : 2.15), z0: z - (vert ? 2.15 : 0.95), z1: z + (vert ? 2.15 : 0.95) });
+    carros[k].col = { tipo: 'caixa', x0: x - (vert ? 0.95 : 2.15), x1: x + (vert ? 0.95 : 2.15), z0: z - (vert ? 2.15 : 0.95), z1: z + (vert ? 2.15 : 0.95) }; addCol(carros[k].col);
   });
   for (const m of [ic, iv, ir]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
   const MAX = window.matchMedia?.('(pointer: coarse)').matches ? 8 : 16;
@@ -891,10 +920,26 @@ export function arvoresPerto(px, pz, dt) {
   if (mP) A.pinho.instanceMatrix.needsUpdate = true;
 }
 // troca as caixinhas perto do jogador pelos modelos 3D (chamado algumas vezes por segundo)
+// carros estacionados na rua podem ser roubados: some do lugar e volta sozinho depois (o jogo controla o tempo)
+export function carroRuaPerto(x, z, r = 3.2) {
+  const E = estacionados; if (!E) return null;
+  let melhor = null, md = r;
+  E.carros.forEach((c, k) => { if (c.fora) return; const d = Math.hypot(c.x - x, c.z - z); if (d < md) { md = d; melhor = k; } });
+  return melhor;
+}
+export const carroRua = (k) => estacionados?.carros[k] || null;
+export function tirarCarroRua(k, fora) {
+  const E = estacionados, c = E?.carros[k]; if (!c || !!c.fora === !!fora) return;
+  c.fora = !!fora;
+  if (c.col) { if (fora) { c.colOrig = { x0: c.col.x0, x1: c.col.x1, z0: c.col.z0, z1: c.col.z1 }; Object.assign(c.col, { x0: 1e7, x1: 1e7, z0: 1e7, z1: 1e7 }); } else if (c.colOrig) Object.assign(c.col, c.colOrig); }
+  _q.setFromAxisAngle(_e.set(0, 1, 0), c.rot); _m.compose(_v.set(c.x, 0.02, c.z), _q, fora || c.perto ? _e.set(0, 0, 0) : _e.set(1, 1, 1));
+  for (const m of E.caixas) { m.setMatrixAt(k, _m); m.instanceMatrix.needsUpdate = true; }
+  E.t = 0;
+}
 export function carrosPerto(px, pz, dt) {
   const E = estacionados; if (!E || !E.glb.some(Boolean)) return;
   if ((E.t -= dt) > 0) return; E.t = 0.4;
-  const perto = E.carros.map((c, k) => [Math.hypot(c.x - px, c.z - pz), k]).filter(([d]) => d < 70).sort((a, b) => a[0] - b[0]).slice(0, E.max * 2);
+  const perto = E.carros.map((c, k) => [c.fora ? 1e9 : Math.hypot(c.x - px, c.z - pz), k]).filter(([d]) => d < 70).sort((a, b) => a[0] - b[0]).slice(0, E.max * 2);
   const conta = E.glb.map(() => 0), novo = new Set();
   for (const [, k] of perto) {
     const c = E.carros[k], im = E.glb[c.tipo]; if (!im || conta[c.tipo] >= E.max) continue;
@@ -907,7 +952,7 @@ export function carrosPerto(px, pz, dt) {
   let mudou = false;
   E.carros.forEach((c, k) => {
     const p = novo.has(k); if (p === c.perto) return; c.perto = p; mudou = true;
-    _q.setFromAxisAngle(_e.set(0, 1, 0), c.rot); _m.compose(_v.set(c.x, 0.02, c.z), _q, p ? _e.set(0, 0, 0) : _e.set(1, 1, 1));
+    _q.setFromAxisAngle(_e.set(0, 1, 0), c.rot); _m.compose(_v.set(c.x, 0.02, c.z), _q, p || c.fora ? _e.set(0, 0, 0) : _e.set(1, 1, 1));
     for (const m of E.caixas) m.setMatrixAt(k, _m);
   });
   if (mudou) for (const m of E.caixas) m.instanceMatrix.needsUpdate = true;

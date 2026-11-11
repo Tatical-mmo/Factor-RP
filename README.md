@@ -236,6 +236,11 @@ Prefeitura (gabinete, urna, outdoors, sala de imprensa), quartel dos bombeiros (
 - Painel da equipe › **Denúncias**: denúncias abertas, quantas vezes o jogador foi denunciado, abrir o jogador e marcar como resolvida.
 - `privacidade.html`: política de privacidade.
 
+## Ruas do horizonte e carros de rua (SQL 48)
+
+- A metrópole não acaba mais num muro invisível: dá para andar e dirigir pelas ruas entre os prédios altos do horizonte até o fim do mapa (a ferrovia continua só de trem).
+- Os **carros estacionados nas ruas** podem ser roubados (2,5 s arrombando, é crime). Largado, o carro fica onde parou e volta sozinho para a vaga depois de **5 minutos parado**. Outro jogador pode roubar o carro largado.
+
 ## Controles no PC
 
 | Tecla | Ação |

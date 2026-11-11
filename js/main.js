@@ -982,6 +982,7 @@ function acaoContexto() {
   if (perto(civico.PREFEITURA.prf, 3.2)) { entrarPublico('prf', () => salaDelegacia('prf', 1000, 'Posto da PRF', '#2b4fa8'), civico.PREFEITURA.prf, '🚔 Posto da PRF: balcão, procurados e estande de tiro.'); return; }
   if (perto(civico.CONCESSIONARIA.balcao, 3.2)) { abrirConcessionaria(); return; }
   const carro = meuCarroProximo(); if (carro && !jogador.carregando) { entrarCarro(carro); return; }
+  { const cr = carroRuaProximo(); if (cr !== null && !jogador.carregando) { roubarCarroRua(cr); return; } }
   const alheio = carroAlheioProximo(); if (alheio && !jogador.carregando) { if (jogador.perfil.policial || jogador.perfil.prf) recuperarCarro(alheio); else arrombarCarro(alheio); return; }
   if (taxi?.modo === 'roubo' && taxi.fase === 'esperando' && Math.hypot(taxi.c.obj.position.x - jogador.pos.x, taxi.c.obj.position.z - jogador.pos.z) < 8) { embarcarTaxi(); return; }
   if (armaPdPerto()) { pegarArmaPd(); return; }
@@ -1186,6 +1187,7 @@ function sairCarro() {
     aviso(c.sequestrado ? 'Você largou o veículo roubado. Parado por 5 min, ele volta para o dono.' : 'O robô motorista levou o veículo de volta para a garagem.', 3.5);
     return;
   }
+  if (c.rua !== undefined) { largarCarroRua(c); return; }
   jogador.carro = null; modoVolante(false);
   c.mesh.position.copy(jogador.pos); c.mesh.rotation.y = jogador.yaw;
   const v = carrosMundo.get(c.id); if (v) { v.d = { ...v.d, x: jogador.pos.x, z: jogador.pos.z, ang: jogador.yaw }; }
@@ -2114,7 +2116,7 @@ function conectarMultiplayer(perfil) {
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
     tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1),
     explosao: (e) => receberExplosao(e),
-    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), bueiro: (m) => receberBueiro(m),
+    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m),
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m),
     meta: () => metaPresenca(),
   });
@@ -5142,6 +5144,7 @@ function contexto() {
   if (perto(civico.PREFEITURA.prf, 3.2)) return ['entrar no posto da PRF', 'PRF'];
   if (perto(civico.CONCESSIONARIA.balcao, 3.2)) return ['comprar carro', 'Carros'];
   if (meuCarroProximo() && !jogador.carregando) return [meuCarroProximo().d.ladrao ? 'dirigir o carro roubado' : 'dirigir o seu carro', 'Dirigir'];
+  { const cr = carroRuaProximo(); if (cr !== null && !jogador.carregando) return ['arrombar o carro estacionado (crime)', 'Arrombar']; }
   { const ca = carroAlheioProximo(); if (ca && !jogador.carregando) return jogador.perfil?.policial || jogador.perfil?.prf ? ['devolver o carro roubado ao dono (+300)', 'Recuperar'] : ['arrombar o carro e sair dirigindo (crime)', 'Arrombar']; }
   if (taxi?.modo === 'roubo' && taxi.fase === 'esperando' && Math.hypot(taxi.c.obj.position.x - jogador.pos.x, taxi.c.obj.position.z - jogador.pos.z) < 8) return ['RENDER MOTORISTA: ele leva a carga para o seu território ou casa', 'Render'];
   if (armaPdPerto()) return ['pegar a ARMA DOURADA (2 balas)', 'Pegar'];
@@ -5237,7 +5240,7 @@ function quadro() {
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
-  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt);
+  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua();
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
@@ -6342,3 +6345,76 @@ function conviteEstudio(g) {
     } },
     { rotulo: 'Agora não', fn: () => responder('estudioNao') }]);
 }
+
+// ================================================================= carros estacionados na rua: dá para roubar
+// Arrombar leva 2,5 s e é crime. O carro some da vaga (para todos) e anda com quem roubou. Largado, fica onde parou;
+// depois de 5 minutos parado ele volta sozinho para a vaga de origem. Outro jogador pode roubar o largado de novo.
+const MODELO_RUA = ['popular', 'suv', 'esportivo'];
+const largadosRua = new Map();   // k -> { mesh, x, z, ate }
+let roubandoRua = false;
+function carroRuaProximo() {
+  if (jogador.carro || jogador.trem || jogador.dentroCasa || jogador.passageiro) return null;
+  let melhor = null, md = 3.2;
+  for (const [k, l] of largadosRua) { const d = Math.hypot(l.x - jogador.pos.x, l.z - jogador.pos.z); if (d < md) { md = d; melhor = k; } }
+  if (melhor !== null) return melhor;
+  return mundo.carroRuaPerto(jogador.pos.x, jogador.pos.z, 3.2);
+}
+async function roubarCarroRua(k) {
+  if (roubandoRua || jogador.trava > 0) return;
+  if (jogador.perfil?.policial || jogador.perfil?.prf) { aviso('Policial em serviço não rouba carro.'); return; }
+  const c = mundo.carroRua(k), l = largadosRua.get(k); if (!c) return;
+  roubandoRua = true;
+  const px = l ? l.x : c.x, pz = l ? l.z : c.z, rot = l ? l.r : c.rot;
+  virarPara(px, pz); jogador.alvo = null;
+  jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 0.7, fade: 0.1 }); jogador.trava = 2.5;
+  aviso('Arrombando o carro…', 2.5);
+  await new Promise((r) => setTimeout(r, 2500));
+  try {
+    if (jogador.morto || Math.hypot(px - jogador.pos.x, pz - jogador.pos.z) > 4) throw new Error('Você se afastou do carro.');
+    await rede.roubarCarroRua();
+    const modelo = MODELO_RUA[c.tipo] || 'popular';
+    if (l) { scene.remove(l.mesh); largadosRua.delete(k); }
+    roubadosRua.delete(k);
+    mundo.tirarCarroRua(k, true);
+    const mesh = civico.modeloCarro(modelo, c.cor); mesh.position.set(px, alturaChao(px, pz), pz); mesh.rotation.y = rot; scene.add(mesh);
+    conexao?.enviar('carroRua', { k, tipo: 'roubado' });
+    entrarCarro({ d: { id: 'rua' + k, modelo, cor: c.cor }, mesh });
+    jogador.carro.rua = k; jogador.carro.salvar = 1e9;
+    aviso('🚗 Carro roubado! Você está procurado. Largado, ele volta para a vaga depois de 5 min.', 4);
+  } catch (e) { aviso(e.message, 3); }
+  finally { roubandoRua = false; }
+}
+function largarCarroRua(c) {
+  jogador.carro = null; modoVolante(false);
+  const x = jogador.pos.x, z = jogador.pos.z, r = jogador.yaw;
+  c.mesh.position.set(x, alturaChao(x, z), z); c.mesh.rotation.y = r;
+  largadosRua.set(c.rua, { mesh: c.mesh, x, z, r, ate: agoraServidor() + 300000 });
+  conexao?.enviar('carroRua', { k: c.rua, tipo: 'largado', x, z, r, ate: agoraServidor() + 300000 });
+  const lx = Math.cos(r) * 1.8, lz = -Math.sin(r) * 1.8;
+  jogador.pos.x += lx; jogador.pos.z += lz; resolverColisao(jogador.pos, jogador.raio);
+  jogador.avatar.raiz.visible = true;
+  aviso('Carro largado. Parado por 5 min, ele volta para a vaga de origem.', 3);
+}
+function receberCarroRua(m) {
+  const c = mundo.carroRua(m.k); if (!c) return;
+  const l = largadosRua.get(m.k); if (l) { scene.remove(l.mesh); largadosRua.delete(m.k); }
+  if (m.tipo === 'roubado') { mundo.tirarCarroRua(m.k, true); roubadosRua.set(m.k, agoraServidor()); return; }
+  if (m.tipo === 'largado') {
+    mundo.tirarCarroRua(m.k, true);
+    const mesh = civico.modeloCarro(MODELO_RUA[c.tipo] || 'popular', c.cor); mesh.position.set(m.x, alturaChao(m.x, m.z), m.z); mesh.rotation.y = m.r; scene.add(mesh);
+    largadosRua.set(m.k, { mesh, x: m.x, z: m.z, r: m.r, ate: m.ate || agoraServidor() + 300000 });
+  }
+}
+let tempoCarrosRua = 0;
+function atualizarCarrosRua() {
+  if ((tempoCarrosRua -= 1) > 0) return; tempoCarrosRua = 60;   // confere mais ou menos a cada segundo
+  const agora = agoraServidor();
+  for (const [k, l] of largadosRua) if (agora > l.ate) { scene.remove(l.mesh); largadosRua.delete(k); mundo.tirarCarroRua(k, false); }
+  // roubado por outro jogador que saiu do jogo dirigindo: volta para a vaga 5 min depois de sumir
+  for (const [k, visto] of roubadosRua) {
+    if (largadosRua.has(k) || jogador.carro?.rua === k) { roubadosRua.delete(k); continue; }
+    if ([...remotos.values()].some((r) => String(r.alvo?.cv || '').startsWith(`rua${k}|`))) roubadosRua.set(k, agora);
+    else if (agora - visto > 300000) { roubadosRua.delete(k); mundo.tirarCarroRua(k, false); }
+  }
+}
+const roubadosRua = new Map();   // k -> última vez que alguém foi visto dirigindo
