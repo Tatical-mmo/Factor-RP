@@ -123,7 +123,7 @@ async function abrirJogador(id) {
       ${!souEu ? '<button id="pTrazer">Trazer até mim</button>' : ''}</div>`;
   }
   if (pode('moedas') && (eu.cargo === 'admin' || !souEu)) {
-    h += `<div class="sub">Moedas</div><div class="botoes"><input id="pValor" type="number" min="1" placeholder="Quantidade" inputmode="numeric">
+    h += `<div class="sub">Moedas</div><div class="botoes"><input id="pValor" type="number" min="1" max="2147483647" placeholder="Quantidade" inputmode="numeric">
       <button id="pDar">Dar</button><button id="pTirar">Tirar</button></div>`;
   }
   if (!souEu && !equipe) {
@@ -155,7 +155,7 @@ async function abrirJogador(id) {
   on('pVoltar', () => { selecionado = null; listaJogadores(); });
   on('pIr', () => { const p = ctx.posicaoDe(j.id); if (p) { ctx.teleportar(p.x + 1.2, p.z + 1.2); msg('Você foi até ' + j.nome + '.'); } else msg('Posição ainda desconhecida.', false); });
   on('pTrazer', () => { const p = ctx.minhaPosicao(); executar(() => rede.painel.teleporte(j.id, p.x + 1.2, p.z), `${j.nome} foi trazido até você.`); });
-  const valor = () => Math.floor(Number($('pValor').value));
+  const valor = () => Math.min(2147483647, Math.floor(Number($('pValor').value)));   // limite do saldo (2,1 bilhões)
   on('pDar', () => { const v = valor(); if (v > 0) executar(() => rede.painel.moedas(j.id, v), `${v} moedas para ${j.nome}.`); else msg('Digite uma quantidade.', false); });
   on('pTirar', () => { const v = valor(); if (v > 0) executar(() => rede.painel.moedas(j.id, -v), `${v} moedas retiradas de ${j.nome}.`); else msg('Digite uma quantidade.', false); });
   on('pAlgemar', () => executar(() => rede.painel.algemar(j.id, !j.algemado), j.algemado ? 'Algemas retiradas.' : `${j.nome} foi algemado.`));
