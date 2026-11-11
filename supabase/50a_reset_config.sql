@@ -33,6 +33,22 @@ begin
 end $$;
 revoke all on function public.zerar_colunas(text, text[], text) from public, anon, authenticated;
 
+-- personagem antigo/removido de algum jogador não pode travar o reset
+create or replace function public.validar_personagem() returns trigger
+language plpgsql as $$
+begin
+  if current_setting('fator.reset', true) = 'on' then return new; end if;
+  if new.personagem not in (
+    'Autumn_Traveler','Bandaged_Trailblazer','Bandit_Brave','Curly_Wanderer','Desert_Scout_Ava',
+    'Desert_Warden','Dustbound_Scout','Dustveil_Scout','Friendly_Village_Blacksmith','Grimbeard_the_Ironclad',
+    'Hooded_Paw_Guardian','Mustached_Explorer','Patchwork_Scout','Shadow_Scout','The_Frightened_Escapee',
+    'Urban_Explorer','Urban_Wanderer'
+  ) and not exists (select 1 from public.personagens_evento where id = new.personagem) and new.cargo = 'jogador' then
+    raise exception 'personagem invalido';
+  end if;
+  return new;
+end $$;
+
 create or replace function public.admin_resetar_mundo(p_partes text[], p_confirma text) returns text
 language plpgsql security definer set search_path = public as $$
 declare pf prefeitura%rowtype; n integer; res text[] := '{}';   -- partes que não existirem no banco são puladas
@@ -40,46 +56,62 @@ begin
   if (select cargo from perfis where id = auth.uid()) is distinct from 'admin' then raise exception 'so o administrador'; end if;
   if p_confirma is distinct from 'RESETAR' then raise exception 'digite RESETAR para confirmar'; end if;
   if p_partes is null or cardinality(p_partes) = 0 then raise exception 'escolha o que resetar'; end if;
+  perform set_config('fator.reset', 'on', true);   -- personagem inválido de algum jogador não barra o reset
   if 'moradia' = any(p_partes) then
-    perform se_existe('bau', 'delete from bau');
-    delete from casas where tipo = 'unidade';
-    n := zerar_colunas('casas', array['dono = null', 'inquilino = null', 'pago_ate = null', 'aluguel = null', 'a_venda = false', 'modelo = null', 'nivel = 1'], 'tipo <> ''oficial''');
-    res := res || format('%s casas liberadas', n);
-    perform se_existe('casas_esgoto', 'update casas_esgoto set dono = null, desde = null where dono is not null');
+    begin   -- cada parte separada: se uma falhar, as outras continuam e o admin vê o motivo
+      perform se_existe('bau', 'delete from bau');
+      delete from casas where tipo = 'unidade';
+      n := zerar_colunas('casas', array['dono = null', 'inquilino = null', 'pago_ate = null', 'aluguel = null', 'a_venda = false', 'modelo = null', 'nivel = 1'], 'tipo <> ''oficial''');
+      res := res || format('%s casas liberadas', n);
+      perform se_existe('casas_esgoto', 'update casas_esgoto set dono = null, desde = null where dono is not null');
+    exception when others then res := res || format('⚠️ moradia falhou: %s', sqlerrm);
+    end;
   end if;
   if 'empresas' = any(p_partes) then
-    delete from empresas; get diagnostics n = row_count; res := res || format('%s empresas apagadas', n);
-    delete from membros;
-    perform se_existe('missoes', 'delete from missoes'); perform se_existe('ofertas', 'delete from ofertas');
-    perform se_existe('negocios', 'delete from negocios'); perform se_existe('lojas_assaltadas', 'delete from lojas_assaltadas');
-    n := se_existe('carros', 'delete from carros where modelo <> ''presidencial'''); res := res || format('%s carros apagados', n);
+    begin   -- cada parte separada: se uma falhar, as outras continuam e o admin vê o motivo
+      delete from empresas; get diagnostics n = row_count; res := res || format('%s empresas apagadas', n);
+      delete from membros;
+      perform se_existe('missoes', 'delete from missoes'); perform se_existe('ofertas', 'delete from ofertas');
+      perform se_existe('negocios', 'delete from negocios'); perform se_existe('lojas_assaltadas', 'delete from lojas_assaltadas');
+      n := se_existe('carros', 'delete from carros where modelo <> ''presidencial'''); res := res || format('%s carros apagados', n);
+    exception when others then res := res || format('⚠️ empresas falhou: %s', sqlerrm);
+    end;
   end if;
   if 'clas' = any(p_partes) then
-    perform se_existe('favores', 'delete from favores'); perform se_existe('assaltos_navio', 'delete from assaltos_navio');
-    delete from clas; get diagnostics n = row_count; res := res || format('%s clãs apagados', n);
-    perform zerar_colunas('territorios', array['dono_cla = null', 'captura_cla = null', 'captura_inicio = null', 'capturado_em = null']);
+    begin   -- cada parte separada: se uma falhar, as outras continuam e o admin vê o motivo
+      perform se_existe('favores', 'delete from favores'); perform se_existe('assaltos_navio', 'delete from assaltos_navio');
+      delete from clas; get diagnostics n = row_count; res := res || format('%s clãs apagados', n);
+      perform zerar_colunas('territorios', array['dono_cla = null', 'captura_cla = null', 'captura_inicio = null', 'capturado_em = null']);
+    exception when others then res := res || format('⚠️ clas falhou: %s', sqlerrm);
+    end;
   end if;
   if 'jogadores' = any(p_partes) then
-    n := zerar_colunas('perfis', array['moedas = 500', 'crimes = 0', 'pena_seg = 0', 'pena_marca = null', 'algemado = false',
-      'algemado_por = null', 'fianca = 0', 'fome = 100', 'policial = false', 'prf = false', 'eleitoral = false', 'profissao = null',
-      'profissao_desde = null', 'matancas = 0', 'recompensa = 0', 'cerco_ate = null', 'pos_x = 0', 'pos_z = 27', 'turno_em = null',
-      'pd_morte = null', 'pd_por = null', 'arma_militar = false', 'lixeiro = false', 'lixeiro_missao = null',
-      'prisao_militar_ate = null', 'cativeiro = null', 'cativeiro_ate = null', 'cativeiro_cla = null']);
-    res := res || format('%s jogadores zerados', n);
-    perform se_existe('inventario', 'delete from inventario'); perform se_existe('carreiras', 'delete from carreiras'); perform se_existe('contas_banco', 'delete from contas_banco');
-    perform se_existe('metas', 'delete from metas'); perform se_existe('encomendas', 'delete from encomendas'); perform se_existe('personagens_comprados', 'delete from personagens_comprados');
-    perform se_existe('agressoes', 'delete from agressoes'); perform se_existe('cacadas', 'delete from cacadas');
+    begin   -- cada parte separada: se uma falhar, as outras continuam e o admin vê o motivo
+      n := zerar_colunas('perfis', array['moedas = 500', 'crimes = 0', 'pena_seg = 0', 'pena_marca = null', 'algemado = false',
+        'algemado_por = null', 'fianca = 0', 'fome = 100', 'policial = false', 'prf = false', 'eleitoral = false', 'profissao = null',
+        'profissao_desde = null', 'matancas = 0', 'recompensa = 0', 'cerco_ate = null', 'pos_x = 0', 'pos_z = 27', 'turno_em = null',
+        'pd_morte = null', 'pd_por = null', 'arma_militar = false', 'lixeiro = false', 'lixeiro_missao = null',
+        'prisao_militar_ate = null', 'cativeiro = null', 'cativeiro_ate = null', 'cativeiro_cla = null']);
+      res := res || format('%s jogadores zerados', n);
+      perform se_existe('inventario', 'delete from inventario'); perform se_existe('carreiras', 'delete from carreiras'); perform se_existe('contas_banco', 'delete from contas_banco');
+      perform se_existe('metas', 'delete from metas'); perform se_existe('encomendas', 'delete from encomendas'); perform se_existe('personagens_comprados', 'delete from personagens_comprados');
+      perform se_existe('agressoes', 'delete from agressoes'); perform se_existe('cacadas', 'delete from cacadas');
+    exception when others then res := res || format('⚠️ jogadores falhou: %s', sqlerrm);
+    end;
   end if;
   if 'prefeitura' = any(p_partes) then
-    select * into pf from prefeitura where id = 1;
-    if pf.prefeito is not null and to_regprocedure('public.deixar_cargo(uuid)') is not null then perform deixar_cargo(pf.prefeito); end if;
-    perform zerar_colunas('prefeitura', array['prefeito = null', 'posse = null', 'vaga_ciclo = ciclo_atual()', 'salario_ciclo = -1',
-      'cofre = 0', 'motivo = ''mapa resetado''', 'eleicao_ate = null', 'seguranca1 = null', 'seguranca2 = null'], 'id = 1');
-    perform zerar_colunas('casas', array['dono = null', 'inquilino = null'], 'tipo = ''oficial''');
-    perform se_existe('votos', 'delete from votos'); perform se_existe('candidatos', 'delete from candidatos'); perform se_existe('noticias', 'delete from noticias');
-    perform se_existe('ocorrencias', 'delete from ocorrencias'); perform se_existe('assaltos', 'delete from assaltos'); perform se_existe('incendios', 'delete from incendios');
-    perform se_existe('outdoors', 'update outdoors set anunciante = null, titulo = null, texto = null, tipo = null, ate = null');
-    res := res || 'prefeitura zerada'::text;
+    begin   -- cada parte separada: se uma falhar, as outras continuam e o admin vê o motivo
+      select * into pf from prefeitura where id = 1;
+      if pf.prefeito is not null and to_regprocedure('public.deixar_cargo(uuid)') is not null then perform deixar_cargo(pf.prefeito); end if;
+      perform zerar_colunas('prefeitura', array['prefeito = null', 'posse = null', 'vaga_ciclo = ciclo_atual()', 'salario_ciclo = -1',
+        'cofre = 0', 'motivo = ''mapa resetado''', 'eleicao_ate = null', 'seguranca1 = null', 'seguranca2 = null'], 'id = 1');
+      perform zerar_colunas('casas', array['dono = null', 'inquilino = null'], 'tipo = ''oficial''');
+      perform se_existe('votos', 'delete from votos'); perform se_existe('candidatos', 'delete from candidatos'); perform se_existe('noticias', 'delete from noticias');
+      perform se_existe('ocorrencias', 'delete from ocorrencias'); perform se_existe('assaltos', 'delete from assaltos'); perform se_existe('incendios', 'delete from incendios');
+      perform se_existe('outdoors', 'update outdoors set anunciante = null, titulo = null, texto = null, tipo = null, ate = null');
+      res := res || 'prefeitura zerada'::text;
+    exception when others then res := res || format('⚠️ prefeitura falhou: %s', sqlerrm);
+    end;
   end if;
   perform registrar(null, 'reset_mapa', jsonb_build_object('partes', p_partes, 'resultado', res));
   perform avisar_todos('🧹 O mapa foi resetado pela administração. Bom começo a todos!');

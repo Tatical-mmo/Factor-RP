@@ -355,7 +355,10 @@ function abaEu() {
   const bf = $('pEvFechar'); if (bf) bf.onclick = () => executar(() => rede.personagens.liberarEvento(evSel(), 0), 'Vitrine fechada.');
   const br = $('pReset'); if (br) br.onclick = () => {
     const partes = [...c.querySelectorAll('[data-reset]')].filter((x) => x.checked).map((x) => x.dataset.reset);
-    if (confirmarDuplo('pReset', '🧹 Resetar o mapa')) rede.painel.resetarMundo(partes, $('pResetConf').value.trim()).then((r) => { msg(`Mapa resetado: ${r || 'feito'}. O jogo de todos vai recarregar.`); ctx.resetFeito?.(); }).catch((e) => msg(e.message, false));
+    if (confirmarDuplo('pReset', '🧹 Resetar o mapa')) rede.painel.resetarMundo(partes, $('pResetConf').value.trim()).then((r) => {
+      if (String(r).includes('⚠️')) { msg(`Reset incompleto: ${r}. Mande um print desta mensagem.`, false); return; }   // não recarrega: o admin precisa ler o motivo
+      msg(`Mapa resetado: ${r || 'feito'}. O jogo de todos vai recarregar.`); ctx.resetFeito?.();
+    }).catch((e) => msg(e.message, false));
   };
 }
 // todos com crime ou recompensa (inclusive você e a equipe); um toque perdoa tudo
