@@ -78,6 +78,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'gesto' }, ({ payload }) => eventos.gesto?.(payload));
   canal.on('broadcast', { event: 'clima' }, ({ payload }) => eventos.clima?.(payload));
   canal.on('broadcast', { event: 'assalto' }, ({ payload }) => eventos.assalto?.(payload));
+  canal.on('broadcast', { event: 'algemaNpc' }, ({ payload }) => eventos.algemaNpc?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
@@ -120,6 +121,11 @@ function traduzirRpc(m) {
     'cedo demais': 'Calma! Espere alguns segundos depois de começar o assalto.',
     'conteiner ja aberto': 'Esse contêiner já foi arrombado.',
     'sem carga': 'Você não tem carga do cargueiro.',
+    'ja esta algemado': 'Esse jogador já está algemado (ou preso).',
+    'alguem precisa cortar por voce': 'Outra pessoa precisa cortar as suas algemas.',
+    'voce esta algemado': 'Você está algemado.',
+    'jogador nao esta algemado': 'Esse jogador não está algemado.',
+    'so o prefeito': 'Só o prefeito pode fazer isso.',
     'voce nao pode banir esse jogador': 'Você não pode banir esse jogador.',
     'voce nao pode desbanir esse jogador': 'Você não pode desbanir esse jogador.',
     'voce nao pode algemar esse jogador': 'Você não pode algemar esse jogador.',
@@ -310,6 +316,13 @@ function traduzirRpc(m) {
   if (espera) return `Aguarde ${espera[1]} s.`;
   return t[m] || m;
 }
+export const algemas = {
+  algemar: (alvo) => rpc('algemar', { p_alvo: alvo }),
+  soltar: (alvo) => rpc('soltar_algemas', { p_alvo: alvo }),
+  cortar: (alvo) => rpc('cortar_algemas', { p_alvo: alvo }),
+  comprarAlicate: () => rpc('comprar_alicate'),
+  seguranca: (slot, nome) => rpc('prefeito_seguranca', { p_slot: slot, p_nome: nome }),
+};
 export const qg = {
   cofre: () => rpc('cla_cofre'),
   guardar: (item, qtd) => rpc('cla_guardar', { p_item: item, p_qtd: qtd }),
@@ -350,7 +363,7 @@ export const painel = {
 };
 export const cumprirPena = () => rpc('cumprir_pena');
 export const prefeitura = {
-  estado: async () => (await sel(sb.from('prefeitura').select('*, prefeito_perfil:perfis!prefeitura_prefeito_fkey(nome)').eq('id', 1).maybeSingle())),
+  estado: async () => (await sel(sb.from('prefeitura').select('*, prefeito_perfil:perfis!prefeitura_prefeito_fkey(nome), seg1:perfis!prefeitura_seguranca1_fkey(nome), seg2:perfis!prefeitura_seguranca2_fkey(nome)').eq('id', 1).maybeSingle())),
   campanha: () => rpc('mandato_em_campanha'),
   candidatos: (m) => sel(sb.from('candidatos').select('*, perfil:perfis!candidatos_jogador_fkey(nome)').eq('mandato', m).order('votos', { ascending: false })),
   meuVoto: async (m) => (await sel(sb.from('votos').select('candidato').eq('mandato', m).maybeSingle()))?.candidato || null,

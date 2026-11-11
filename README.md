@@ -200,6 +200,15 @@ O clã dono da Base Leste ou Oeste entra no **QG** pela porta marcada "🏴 QG d
 - **Enfermaria:** cura a vida.
 - **Refúgio:** procurado que fica 1 minuto no QG faz a polícia perder o rastro (e tem 2 minutos de folga ao sair).
 
+## Algemas (SQL 42)
+
+- **Quem algema:** Polícia, PRF, Exército, o prefeito, até 2 seguranças nomeados pelo prefeito (Prefeitura › Governo), moderadores e o administrador. Botão 🔗 (no PC, tecla **G**) perto do jogador ou de um pedestre. A equipe não pode ser algemada.
+- **Algemado:** não ataca nem age, e perto de quem algemou não consegue andar. Algemas aparecem acima da cabeça.
+- **Segurar:** quem algemou toca em 🔗 Segurar e o algemado vai junto (até dentro do carro). 🔗 Largar solta.
+- **Fuga:** se quem algemou morrer ou ficar longe (30 m), o algemado consegue andar, ainda algemado.
+- **Tirar as algemas:** quem algemou, moderadores e administrador (botão de ação, "Soltar"). Ou qualquer jogador com um **alicate de corte** (2.500 no contrabandista, não é crime; gasta 1 alicate).
+- Pedestres algemados ficam parados, seguem quem segura e são soltos sozinhos depois de 5 minutos.
+
 ## Controles no PC
 
 | Tecla | Ação |
@@ -214,6 +223,7 @@ O clã dono da Base Leste ou Oeste entra no **QG** pela porta marcada "🏴 QG d
 | Z / X | girar a câmera |
 | Roda do mouse | zoom |
 | V (segurar) | falar no chat de voz |
+| G | algemar, segurar, largar ou cortar algemas |
 
 No celular: joystick à esquerda (empurrar até o fim corre), botões à direita, toque no chão para andar até o ponto e pinça para zoom.
 

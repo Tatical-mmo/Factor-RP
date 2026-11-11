@@ -62,6 +62,9 @@ function telaPrefeito(c, pf) {
     <p class="dica">O prefeito governa por 20 ciclos de dia e noite e recebe <b>9.500 por ciclo em que joga</b>. Ele mora na residência oficial (porta lateral), usa o carro presidencial e define o salário da polícia. Pode renunciar quando quiser.</p>
     ${souPrefeito ? `<div class="sub">Governo</div>
       <div class="botoes"><input id="gSal" type="number" min="50" max="250" value="${pf.salario_policia}" inputmode="numeric"><button id="gSalOk">Definir salário da polícia</button></div>
+      <div class="sub">Seguranças (podem algemar)</div>
+      <p class="dica">Até 2 jogadores de confiança. Eles usam algemas como a polícia. Deixe o nome vazio para tirar.</p>
+      ${[1, 2].map((k) => `<div class="botoes"><input id="gSeg${k}" placeholder="Nome do jogador" value="${esc(pf['seg' + k]?.nome || '')}"><button data-seg="${k}">Salvar ${k}º segurança</button></div>`).join('')}
       <div class="sub" style="color:#ff8a80">Favores a clãs (crime eleitoral)</div>
       <p class="aviso-item">⚠️ Isto é ilegal. A PRF investiga a prefeitura e, se achar prova, você perde o mandato e vira procurado.</p>
       <div class="form linha-form"><select id="gCla">${clas.map((k) => `<option value="${k.id}">${esc(k.nome)}</option>`).join('')}</select>
@@ -70,6 +73,7 @@ function telaPrefeito(c, pf) {
       <div class="botoes" style="margin-top:12px"><button id="gRenuncia" class="perigo">Renunciar ao mandato</button></div>` : ''}`;
   const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
   on('gSalOk', () => executar(() => rede.prefeitura.salarioPolicia(Math.floor(Number($('gSal').value))), 'Salário da polícia atualizado.'));
+  c.querySelectorAll('[data-seg]').forEach((b) => { b.onclick = () => { const k = Number(b.dataset.seg), nome = $('gSeg' + k).value.trim(); executar(() => rede.algemas.seguranca(k, nome), nome ? `${nome} agora é seu segurança.` : 'Segurança removido.'); }; });
   on('gVerbaOk', () => { const b = $('gVerbaOk'); confirmar(b, () => executar(() => rede.prefeitura.verba(Number($('gCla').value), Math.floor(Number($('gVerba').value))), 'Verba repassada... discretamente.')); });
   on('gTerrOk', () => { const b = $('gTerrOk'); confirmar(b, () => executar(() => rede.prefeitura.territorio($('gTerr').value, Number($('gCla').value)), 'Território entregue ao clã.')); });
   on('gRenuncia', () => { const b = $('gRenuncia'); confirmar(b, () => executar(() => rede.prefeitura.renunciar(), 'Você renunciou. A prefeitura está vaga.')); });

@@ -831,6 +831,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'x') girarCamera(1);
   if (k === 'm') abrirJanela('mochila');
   if (k === 'v') { voz.falar(true); desenharBotaoVoz(); }
+  if (k === 'g') acaoAlgema();
 });
 window.addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); teclas.delete(k); if (k === 'v') { voz.falar(false); desenharBotaoVoz(); } });
 window.addEventListener('blur', () => teclas.clear());
@@ -899,7 +900,7 @@ function configurarJoystick() {
     document.addEventListener('visibilitychange', solta);
     b.addEventListener('pointerup', solta); b.addEventListener('pointercancel', solta); b.addEventListener('lostpointercapture', solta);
   }
-  toque('btAcao', acaoContexto); toque('btSoco', socar); toque('btArma', alternarArma);
+  toque('btAcao', acaoContexto); toque('btSoco', socar); toque('btArma', alternarArma); toque('btAlgema', acaoAlgema);
   toque('btTiro', () => atirar(null)); toque('btGiraE', () => girarCamera(-1)); toque('btGiraD', () => girarCamera(1));
 }
 
@@ -961,6 +962,7 @@ function acaoContexto() {
   if (jogador.perfil.prf) { const alvo = eleitoralProximo(2.4); if (alvo) { prenderEleitoral(alvo); return; } }
   if (jogador.perfil.profissao === 'medico') { const fer = feridoProximo(2.8); if (fer) { socorrerFerido(fer); return; } }
   const fogo = servicos.fogoProximo(9); if (fogo && !jogador.carregando) { servicos.apagar(fogo); return; }
+  { const a = algemadoParaSoltar(); if (a) { soltarAlgemado(a); return; } }
   { const q = portaQGPerto(); if (q) { if (meuQG(q)) entrarNoQG(q); else aviso('🏴 Só os membros do clã dono desta base entram no QG.', 3); return; } }
   { const k = conteinerPerto(); if (k !== null) { arrombarConteiner(k); return; } }
   if (perto(civico.BANCO.balcao, 3.2)) { abrirServico('banco'); return; }
@@ -1086,11 +1088,12 @@ async function atenderOcorrencia(o) {
 }
 
 // ---------------------------------------------------------------- prefeitura, outdoors e carros
-let prefeitoAtual = null, tempoPrefeitura = 3, tempoCarros = 2;
+let prefeitoAtual = null, segurancas = [], tempoPrefeitura = 3, tempoCarros = 2;
 async function carregarPrefeitura() {
   const [pf, outs] = await Promise.all([rede.prefeitura.estado(), rede.prefeitura.outdoors()]);
   const antes = prefeitoAtual;
   prefeitoAtual = pf?.prefeito || null;
+  segurancas = [pf?.seguranca1, pf?.seguranca2].filter(Boolean);
   if (antes !== prefeitoAtual) conexao?.rastrear(metaPresenca());
   civico.atualizarOutdoors(outs);
   atualizarGoverno();
@@ -1626,6 +1629,7 @@ async function criarNPCs(excluir) {
 }
 function atualizarNPCs(dt) {
   for (const n of npcs) {
+    if (n.algemado) { npcAlgemado(n, dt); continue; }
     if (n.conversa) { conversando(n, dt); continue; }
     if (n.animConversa) { n.animConversa = false; n.av.tocar('walk', { velocidade: 0.85 }); }
     if (n.policia) {
@@ -1936,7 +1940,7 @@ async function iniciarJogo(perfil) {
   scene.add(av.raiz);
   jogador.etiqueta = textoSprite(nome, { escala: 0.8, cor: '#f2a33a' }); jogador.etiqueta.position.y = alturaNome(av); av.raiz.add(jogador.etiqueta);
   av.tocar('idle');
-  jogador.algemado = !!perfil.algemado; mostrarAlgemas(jogador.algemado);
+  jogador.algemado = !!perfil.algemado; jogador.algemadoPor = perfil.algemado_por || null; mostrarAlgemas(jogador.algemado);
 
   // Contratante (robô NPC na praça)
   const robo = await roboP;
@@ -2099,7 +2103,7 @@ function conectarMultiplayer(perfil) {
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
     tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1),
     explosao: (e) => receberExplosao(e),
-    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a),
+    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m),
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m),
     meta: () => metaPresenca(),
   });
@@ -2151,7 +2155,7 @@ function atualizarRemotos(dt) {
       }
     }
     if (r.carro && civico.CARROS[r.carroModelo]?.voa) { const ro = rotorDe(r.carro); if (ro) ro.rotation.y += dt * (r.carro.position.y > alturaChao(r.carro.position.x, r.carro.position.z) + 1 ? 28 : 12); }
-    if (a.pg) { raiz.position.set(a.x, a.y, a.z); raiz.visible = false; r.av.mixer.update(dt); continue; }   // passageiro de outro jogador
+    if (a.pg) { raiz.position.set(a.x, a.y, a.z); raiz.visible = false; if (r.algemas) r.algemas.visible = false; r.av.mixer.update(dt); continue; }   // passageiro de outro jogador
     if (a.vc) {   // dirigindo um veículo de empresa: o veículo segue a posição dele
       pilotos.set(Number(a.vc), { x: a.x, y: a.y, z: a.z, r: a.r, t: performance.now() });
       raiz.position.set(a.x, a.y, a.z); raiz.visible = false; r.av.mixer.update(dt); continue;
@@ -2185,7 +2189,7 @@ function atualizarRemotos(dt) {
     if (r.caixa) posicionarCaixa(r.av, r.caixa, raiz.rotation.y);
     if (a.al && !r.algemas) { r.algemas = clonar('algemas'); r.algemas.scale.setScalar(1.4); scene.add(r.algemas); }
     if (!a.al && r.algemas) { scene.remove(r.algemas); r.algemas = null; }
-    if (r.algemas) posicionarAlgemas(r.av, r.algemas, raiz.rotation.y);
+    if (r.algemas) { r.algemas.visible = true; posicionarAlgemas(r.av, r.algemas); }
   }
 }
 
@@ -2195,9 +2199,9 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || 0, cs: codigoEsquadra(), mh: j.aperto ? 1 : 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || 0, cs: codigoEsquadra(), mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0 };
   const u = ultimoEnvio;
-  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs || u.mh !== est.mh;
+  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs || u.mh !== est.mh || u.ap !== est.ap || u.sg !== est.sg;
   if (!mudou && tempoKeepAlive > 0) return;
   conexao.enviar('pos', est); ultimoEnvio = est; tempoKeepAlive = 3;
 }
@@ -4160,14 +4164,15 @@ function usarArsenal() {
 // contrabandista no Morro da Serra: vende a arma militar para membros de clã (é ilegal: +1 crime)
 const CONTRABANDISTA = { x: -150, z: -1236 };
 const BANCAS = [{ x: -22, z: -936 }, { x: -22, z: 936 }];
-let confirmaContrabando = 0;
 async function falarContrabandista() {
-  if (jogador.perfil?.arma_militar) { aviso('Contrabandista: "Você já tem a minha melhor peça. Some daqui."', 3); return; }
-  if (!jogador.claInfo) { aviso('Contrabandista: "Só negocio com gente de clã."', 3); return; }
-  if (performance.now() > confirmaContrabando) { confirmaContrabando = performance.now() + 4000; aviso('Contrabandista: "Arma militar, 60.000. Mais dano, mais rápida. Toque de novo para fechar."', 4); return; }
-  confirmaContrabando = 0;
-  try { await rede.exercito.comprarArmaMilitar(); aviso('🔫 Você comprou a ARMA MILITAR. Ela substitui a arma básica (fora do expediente). Você virou procurado.', 4.5); }
-  catch (e) { aviso(e.message, 3); }
+  const opcoes = [{ rotulo: '✂️ Alicate de corte: 2.500 (corta algemas; não é crime)', fn: async () => {
+    try { const n = await rede.algemas.comprarAlicate(); temAlicate = true; aviso(`✂️ Alicate comprado (você tem ${n}). Use perto de um algemado: botão 🔗 Cortar.`, 4); recarregarInventario(); } catch (e) { aviso(e.message, 3); }
+  } }];
+  if (!jogador.perfil?.arma_militar) opcoes.unshift({ rotulo: '🔫 Arma militar: 60.000 (só para clãs; é crime)', fn: async () => {
+    if (!jogador.claInfo) { aviso('Contrabandista: "Arma só negocio com gente de clã."', 3); return; }
+    try { await rede.exercito.comprarArmaMilitar(); aviso('🔫 Você comprou a ARMA MILITAR. Ela substitui a arma básica (fora do expediente). Você virou procurado.', 4.5); } catch (e) { aviso(e.message, 3); }
+  } });
+  escolher('Contrabandista', '"Fala baixo. O que vai ser?"', opcoes);
 }
 const esquadra = { jipes: [], soldados: [], pronto: false, criando: false };
 async function montarEsquadra() {
@@ -4875,8 +4880,10 @@ function aplicarPerfil(novo) {
   if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome || novo.crimes !== antigo.crimes || novo.policial !== antigo.policial || novo.prf !== antigo.prf || novo.eleitoral !== antigo.eleitoral || novo.profissao !== antigo.profissao || novo.recompensa !== antigo.recompensa) {
     conexao?.rastrear(metaPresenca());
   }
+  jogador.algemadoPor = novo.algemado_por || null;
   if (novo.algemado !== antigo.algemado) {
     jogador.algemado = novo.algemado; mostrarAlgemas(novo.algemado);
+    if (!novo.algemado) { jogador.levadoPor = null; jogador.avatar.raiz.visible = true; }
     if (novo.algemado) {
       if (jogador.armado) alternarArmaForcado(false);
       aviso('Você foi algemado.');
@@ -4929,7 +4936,7 @@ function atualizarJogador(dt) {
   if (teclas.has('d') || teclas.has('arrowright')) ix += 1;
   if (teclas.has('a') || teclas.has('arrowleft')) ix -= 1;
   if (joy.ativo) { ix = joy.x; iy = joy.y; }
-  if (j.algemado || j.morto) { ix = 0; iy = 0; j.alvo = null; }
+  if (j.morto || (j.algemado && algemadoPreso(dt))) { ix = 0; iy = 0; j.alvo = null; }
   const dir = new THREE.Vector3().addScaledVector(direita, ix).addScaledVector(frente, iy);
   let forca = Math.min(1, dir.length());
   if (forca > 0.01) { dir.normalize(); j.alvo = null; }
@@ -4988,13 +4995,13 @@ function atualizarJogador(dt) {
 
   // caixa entre as mãos
   if (j.carregando) posicionarCaixa(av, j.carregando, j.yaw);
-  if (j.algemas) posicionarAlgemas(av, j.algemas, j.yaw);
+  if (j.algemas) { j.algemas.visible = av.raiz.visible; posicionarAlgemas(av, j.algemas); }
 }
 
-function posicionarAlgemas(av, obj, yaw) {
-  tmpA.setFromMatrixPosition(av.maoD.matrixWorld); tmpB.setFromMatrixPosition(av.maoE.matrixWorld);
-  obj.position.copy(tmpA.add(tmpB).multiplyScalar(0.5)); obj.position.y -= 0.02;
-  obj.rotation.set(0, yaw + Math.PI / 2, 0);
+// algemas acima da cabeça (acima do nome), girando devagar: mostra que o jogador está algemado
+function posicionarAlgemas(av, obj) {
+  obj.position.copy(av.raiz.position); obj.position.y += alturaNome(av) + 0.55;
+  obj.rotation.set(0.35, performance.now() / 700, 0);
 }
 function mostrarAlgemas(ligado) {
   if (ligado && !jogador.algemas) { jogador.algemas = clonar('algemas'); jogador.algemas.scale.setScalar(1.4); scene.add(jogador.algemas); }
@@ -5049,7 +5056,9 @@ function atualizarHUD(dt) {
   tempoMapa -= dt;
   if (tempoMapa <= 0) { tempoMapa = 0.1; desenharMapa(); $('rua').textContent = `${nomeDaRua(jogador.pos.x, jogador.pos.z) || '—'} · ${textoHora()}`; }
   const [dica, botao] = contexto();
-  const el = $('dica'); el.textContent = dica ? `E: ${dica}` : ''; el.classList.toggle('oculto', !dica || TOQUE);
+  const alg = contextoAlgema();
+  const el = $('dica'); el.textContent = [dica ? `E: ${dica}` : '', alg ? `G: ${alg[0]}` : ''].filter(Boolean).join('  ·  '); el.classList.toggle('oculto', !(dica || alg) || TOQUE);
+  { const b = $('btAlgema'); if (b) { b.classList.toggle('oculto', !alg); if (alg) b.textContent = '🔗 ' + alg[1]; } }
   if (TOQUE) { $('btAcao').textContent = botao || 'Pegar'; $('btAcao').classList.toggle('ativo', !!dica); }
   atualizarFome(dt);
   const bl = $('bloqueio');
@@ -5106,7 +5115,7 @@ function contexto() {
   if (perto(civico.BOMBEIROS.balcao, 3.2)) return ['quartel dos bombeiros', 'Bombeiros'];
   if (perto(civico.EXERCITO.arsenal, 3.2)) return [jogador.armaPesada ? 'guardar a arma pesada' : 'arsenal: pegar a arma pesada (com autorização)', 'Arsenal'];
   if (BANCAS.some((b) => perto(b, 3.2))) return ['banca de jornal: ler as notícias', 'Jornal'];
-  if (perto(CONTRABANDISTA, 3.2)) return [jogador.perfil?.arma_militar ? 'contrabandista (você já tem a arma militar)' : 'contrabandista: arma militar por 60.000 (só clãs, é crime)', 'Negociar'];
+  if (perto(CONTRABANDISTA, 3.2)) return ['contrabandista: arma militar e alicate de corte', 'Negociar'];
   if (perto(civico.EXERCITO.balcao, 3.2)) return [jogador.perfil?.profissao === 'exercito' ? 'comando do Exército: ordens e caçadas' : 'comando do Exército: alistar-se', 'Comando'];
   if (jogador.perfil?.profissao === 'jornalista' && reportagemProxima()) return [`reportar: ${reportagemProxima().titulo} (+200)`, 'Reportar'];
   if (perto(civico.PREFEITURA.jornal, 3.2)) return ['Jornal da Cidade: virar jornalista e ler as notícias', 'Jornal'];
@@ -5129,6 +5138,7 @@ function contexto() {
   if (ocorrenciaProxima()) return ['atender a ocorrência (+300)', 'Atender'];
   if (jogador.assalto) return [`assaltando… ${Math.ceil(jogador.assalto.t)} s (não se afaste)`, 'Assalto'];
   if (jogador.arrombando) return [`arrombando o contêiner… ${Math.ceil(jogador.arrombando.t)} s (não se afaste)`, 'Arrombar'];
+  { const a = algemadoParaSoltar(); if (a) return [`tirar as algemas de ${a.nome}`, 'Soltar']; }
   { const q = portaQGPerto(); if (q) return meuQG(q) ? ['entrar no QG do clã', 'QG'] : ['QG do clã (só membros do clã dono da base)', 'QG']; }
   { const k = conteinerPerto(); if (k !== null) return ['ARROMBAR o contêiner do cargueiro (crime)', 'Arrombar']; }
   { const cv = conviteAperto(); if (cv && !jogador.armado && !jogador.carregando) return [`🤝 apertar a mão de ${remotos.get(cv.de)?.meta?.nome || 'alguém'}`, 'Apertar']; }
@@ -5206,7 +5216,7 @@ function quadro() {
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
-  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt);
+  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
@@ -5578,3 +5588,159 @@ function avisoAssalto(a) {
   }
 }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+// ================================================================= algemas
+// Algemam: Polícia, PRF, Exército, prefeito, os 2 seguranças do prefeito, moderadores e administrador (botão 🔗 / tecla G).
+// O algemado fica passivo: não ataca nem age; perto de quem algemou não consegue andar. Quem algemou pode "Segurar" e
+// levar junto (até dentro do carro). Se quem algemou morrer ou ficar longe, o algemado foge, ainda algemado.
+// Tiram as algemas: quem algemou, moderadores e administrador (botão de ação). Com alicate de corte, qualquer um liberta.
+// Os pedestres (NPC) também podem ser algemados.
+let temAlicate = false, tempoAlicate = 0;
+const souEquipe = () => ['admin', 'moderador'].includes(jogador.perfil?.cargo);
+function podeAlgemar() {
+  const p = jogador.perfil; if (!p) return false;
+  return souEquipe() || p.policial || p.prf || p.profissao === 'exercito' || prefeitoAtual === p.id || segurancas.includes(p.id);
+}
+function remotoAPe(r) { return r.av?.raiz.visible && r.alvo && !r.carro && !r.alvo.pg; }
+// o que o botão 🔗 faria agora (o mais perto)
+function alvoAlgema() {
+  const j = jogador; if (!j.avatar || !j.perfil || j.morto || j.algemado || j.pena > 0) return null;
+  if (j.segurando) return { acao: 'largar', nome: j.segurando.nome };
+  if (j.carro || j.trem || j.dentroCasa || j.passageiro) return null;
+  const eu = j.perfil.id, pode = podeAlgemar();
+  let melhor = null, md = 2.4;
+  for (const [id, r] of remotos) {
+    if (!remotoAPe(r)) continue;
+    const d = Math.hypot(r.av.raiz.position.x - j.pos.x, r.av.raiz.position.z - j.pos.z); if (d >= md) continue;
+    const a = r.alvo, nome = r.meta?.nome || 'jogador';
+    if (a.al && a.ap === eu) { md = d; melhor = { acao: 'segurar', id, nome }; }
+    else if (a.al && temAlicate) { md = d; melhor = { acao: 'cortar', id, nome }; }
+    else if (!a.al && pode && (r.meta?.cargo || 'jogador') === 'jogador') { md = d; melhor = { acao: 'algemar', id, nome }; }
+  }
+  npcs.forEach((n, i) => {
+    if (!n.civil || !n.av?.raiz.visible) return;
+    const d = Math.hypot(n.av.raiz.position.x - j.pos.x, n.av.raiz.position.z - j.pos.z); if (d >= md) return;
+    if (n.algemado && n.algemadoPor === eu) { md = d; melhor = { acao: 'segurar', npc: i, nome: 'o pedestre' }; }
+    else if (!n.algemado && pode) { md = d; melhor = { acao: 'algemar', npc: i, nome: 'o pedestre' }; }
+  });
+  return melhor;
+}
+const TEXTO_ALGEMA = { largar: ['largar', 'Largar'], segurar: ['segurar e levar', 'Segurar'], cortar: ['cortar as algemas (alicate) de', 'Cortar'], algemar: ['algemar', 'Algemar'] };
+function contextoAlgema() { const a = alvoAlgema(); if (!a) return null; const [t, b] = TEXTO_ALGEMA[a.acao]; return [`🔗 ${t} ${a.nome}`, b]; }
+async function acaoAlgema() {
+  const a = alvoAlgema(); if (!a) return;
+  const j = jogador;
+  if (a.acao === 'largar') { j.segurando = null; aviso(`Você largou ${a.nome}.`); return; }
+  if (a.acao === 'segurar') { j.segurando = a.npc !== undefined ? { npc: a.npc, nome: a.nome } : { id: a.id, nome: a.nome }; aviso(`🔗 Você está segurando ${a.nome}: ele vai junto com você (até no carro). Toque em Largar para soltar.`, 4); return; }
+  if (a.npc !== undefined) { algemarNpc(a.npc, true); return; }
+  try {
+    if (a.acao === 'algemar') { await rede.algemas.algemar(a.id); aviso(`🔗 ${a.nome} foi algemado. Toque em Segurar para levar.`, 3.5); }
+    else { await rede.algemas.cortar(a.id); temAlicate = false; tempoAlicate = 0; aviso(`✂️ Você cortou as algemas de ${a.nome}. Ele está livre.`, 3.5); }
+    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 2, fade: 0.1 }); jogador.trava = 0.6;
+  } catch (e) { aviso(e.message, 3); }
+}
+// tirar as algemas (botão de ação): quem algemou ou a equipe
+function algemadoParaSoltar() {
+  const j = jogador; if (!j.perfil || j.algemado || j.carro || j.dentroCasa) return null;
+  const eu = j.perfil.id, equipe = souEquipe();
+  for (const [id, r] of remotos) {
+    if (!remotoAPe(r) || !r.alvo.al || !(r.alvo.ap === eu || equipe)) continue;
+    if (Math.hypot(r.av.raiz.position.x - j.pos.x, r.av.raiz.position.z - j.pos.z) < 2.4) return { id, nome: r.meta?.nome || 'jogador' };
+  }
+  for (let i = 0; i < npcs.length; i++) {
+    const n = npcs[i]; if (!n.algemado || !(n.algemadoPor === eu || equipe)) continue;
+    if (Math.hypot(n.av.raiz.position.x - j.pos.x, n.av.raiz.position.z - j.pos.z) < 2.4) return { npc: i, nome: 'o pedestre' };
+  }
+  return null;
+}
+async function soltarAlgemado(a) {
+  if (a.npc !== undefined) { algemarNpc(a.npc, false); return; }
+  try { await rede.algemas.soltar(a.id); if (jogador.segurando?.id === a.id) jogador.segurando = null; aviso(`Você tirou as algemas de ${a.nome}.`); }
+  catch (e) { aviso(e.message, 3); }
+}
+// eu algemado: parado perto de quem algemou, seguindo quando ele me segura, fugindo se ele morreu ou está longe
+function algemadoPreso(dt) {
+  const j = jogador, r = j.algemadoPor ? remotos.get(j.algemadoPor) : null, a = r?.alvo;
+  const vivo = !!(r && a && a.a !== 'death' && !r.meta?.ferido);
+  if (vivo && a.sg === j.perfil.id) {
+    if (a.cv || a.vc) { j.levadoPor = j.algemadoPor; j.pos.set(a.x, a.y, a.z); j.avatar.raiz.visible = false; return true; }   // dentro do carro dele
+    if (j.levadoPor) { j.levadoPor = null; j.avatar.raiz.visible = true; }
+    const tx = a.x - Math.sin(a.r) * 1.1, tz = a.z - Math.cos(a.r) * 1.1, dd = Math.hypot(tx - j.pos.x, tz - j.pos.z);
+    if (dd > 8) j.pos.set(tx, j.pos.y, tz);
+    else if (dd > 0.15) { const v = Math.min(dd, dt * Math.max(2.4, dd * 3)); j.pos.x += (tx - j.pos.x) / dd * v; j.pos.z += (tz - j.pos.z) / dd * v; }
+    j.yaw = Math.atan2(a.x - j.pos.x, a.z - j.pos.z);
+    return true;
+  }
+  if (j.levadoPor) { j.levadoPor = null; j.avatar.raiz.visible = true; }
+  return vivo && Math.hypot(a.x - j.pos.x, a.z - j.pos.z) < 30;
+}
+function atualizarAlgemas(dt) {
+  const j = jogador, s = j.segurando;
+  if (s) {
+    if (j.morto || j.algemado) j.segurando = null;
+    else if (s.npc !== undefined) { if (!npcs[s.npc]?.algemado) j.segurando = null; }
+    else {
+      const r = remotos.get(s.id), a = r?.alvo;
+      if (!a || !a.al || a.ap !== j.perfil.id || Math.hypot(a.x - j.pos.x, a.z - j.pos.z) > 40) { j.segurando = null; aviso(`Você não está mais segurando ${s.nome}.`); }
+    }
+  }
+  // tenho alicate? (só confere quando há algum algemado por perto)
+  tempoAlicate -= dt;
+  if (tempoAlicate <= 0) {
+    tempoAlicate = 12;
+    const algemadoPerto = [...remotos.values()].some((r) => r.alvo?.al && r.av && Math.hypot(r.av.raiz.position.x - j.pos.x, r.av.raiz.position.z - j.pos.z) < 15);
+    if (algemadoPerto && j.perfil) rede.carregarInventario(j.perfil.id).then((inv) => { temAlicate = (inv.alicate || 0) > 0; }).catch(() => {});
+  }
+}
+// pedestres algemados: param, seguem quem segura e são soltos sozinhos depois de 5 min
+function algemarNpc(i, ligar, de = jogador.perfil?.id, avisar = true) {
+  const n = npcs[i]; if (!n) return;
+  if (ligar) {
+    n.algemado = true; n.algemadoPor = de; n.ateAlgema = performance.now() + 300000;
+    if (!n.algemas) { n.algemas = clonar('algemas'); n.algemas.scale.setScalar(1.4); scene.add(n.algemas); }
+    n.av.tocar('idle', { fade: 0.2 });
+    if (de === jogador.perfil?.id && avisar) aviso('🔗 Pedestre algemado. Toque em Segurar para levar.', 3);
+  } else {
+    n.algemado = false; n.algemadoPor = null;
+    if (n.algemas) { scene.remove(n.algemas); n.algemas = null; }
+    n.av.tocar('walk', { velocidade: 0.85 });
+    if (jogador.segurando?.npc === i) jogador.segurando = null;
+    if (avisar && de === jogador.perfil?.id) aviso('Você tirou as algemas do pedestre.');
+  }
+  if (de === jogador.perfil?.id) conexao?.enviar('algemaNpc', { i, on: ligar ? 1 : 0, por: de });
+}
+function receberAlgemaNpc(m) { if (npcs[m.i]) algemarNpc(m.i, !!m.on, m.por, false); }
+function npcAlgemado(n, dt) {
+  const i = npcs.indexOf(n), p = n.av.raiz.position;
+  if (performance.now() > n.ateAlgema) { algemarNpc(i, false, n.algemadoPor, false); return; }
+  let alvo = null;
+  if (n.algemadoPor === jogador.perfil?.id && jogador.segurando?.npc === i) alvo = { x: jogador.pos.x, z: jogador.pos.z, r: jogador.yaw };
+  else { const a = remotos.get(n.algemadoPor)?.alvo; if (a && a.sg === 'n' + i) alvo = { x: a.x, z: a.z, r: a.r }; }
+  let anda = false;
+  if (alvo) {
+    const tx = alvo.x - Math.sin(alvo.r) * 1.1, tz = alvo.z - Math.cos(alvo.r) * 1.1, d = Math.hypot(tx - p.x, tz - p.z);
+    if (d > 10) p.set(tx, p.y, tz);
+    else if (d > 0.2) { const v = Math.min(d, dt * Math.max(2.4, d * 3)); p.x += (tx - p.x) / d * v; p.z += (tz - p.z) / d * v; anda = true; }
+    p.y = alturaChao(p.x, p.z);
+    n.av.raiz.rotation.y = suavizarAngulo(n.av.raiz.rotation.y, Math.atan2(alvo.x - p.x, alvo.z - p.z), dt * 8);
+  }
+  if (anda !== !!n.andandoAlgemado) { n.andandoAlgemado = anda; n.av.tocar(anda ? 'walk' : 'idle', { fade: 0.2 }); }
+  n.av.mixer.update(dt);
+  n.av.raiz.updateMatrixWorld(true);
+  if (n.algemas) posicionarAlgemas(n.av, n.algemas);
+}
+
+// ---------------------------------------------------------------- janela de escolha simples (contrabandista)
+function escolher(titulo, texto, opcoes) {
+  let el = $('escolhaJanela');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'escolhaJanela'; el.className = 'modal oculto';
+    el.innerHTML = '<div class="topo"><b id="escolhaTitulo"></b><button id="escolhaFechar" aria-label="Fechar">✕</button></div><div id="escolhaConteudo" class="conteudo"></div>';
+    document.body.appendChild(el); $('escolhaFechar').onclick = () => el.classList.add('oculto');
+  }
+  $('escolhaTitulo').textContent = titulo;
+  const c = $('escolhaConteudo');
+  c.innerHTML = `<p class="dica">${texto}</p>${opcoes.map((o, k) => `<div class="botoes"><button data-op="${k}" style="flex:1;text-align:left">${o.rotulo}</button></div>`).join('')}`;
+  c.querySelectorAll('[data-op]').forEach((b) => { b.onclick = () => { el.classList.add('oculto'); opcoes[Number(b.dataset.op)].fn(); }; });
+  el.classList.remove('oculto');
+}
