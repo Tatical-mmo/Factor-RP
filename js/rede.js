@@ -80,7 +80,6 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'assalto' }, ({ payload }) => eventos.assalto?.(payload));
   canal.on('broadcast', { event: 'algemaNpc' }, ({ payload }) => eventos.algemaNpc?.(payload));
   canal.on('broadcast', { event: 'bueiro' }, ({ payload }) => eventos.bueiro?.(payload));
-  canal.on('broadcast', { event: 'carroRua' }, ({ payload }) => eventos.carroRua?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
@@ -333,7 +332,6 @@ function traduzirRpc(m) {
   if (espera) return `Aguarde ${espera[1]} s.`;
   return t[m] || m;
 }
-export const roubarCarroRua = () => rpc('roubar_carro_rua');
 export const conta = {
   excluir: () => rpc('excluir_minha_conta', { p_confirmacao: 'EXCLUIR' }),
   denunciar: (alvo, motivo, detalhes) => rpc('denunciar', { p_alvo: alvo, p_motivo: motivo, p_detalhes: detalhes || null }),
