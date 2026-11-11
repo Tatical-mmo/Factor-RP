@@ -74,6 +74,8 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'atropelo' }, ({ payload }) => eventos.atropelo?.(payload));
   canal.on('broadcast', { event: 'chat' }, ({ payload }) => eventos.chat?.(payload));
   canal.on('broadcast', { event: 'explosao' }, ({ payload }) => eventos.explosao?.(payload));
+  canal.on('broadcast', { event: 'voz' }, ({ payload }) => eventos.voz?.(payload));
+  canal.on('broadcast', { event: 'gesto' }, ({ payload }) => eventos.gesto?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });

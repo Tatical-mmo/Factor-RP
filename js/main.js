@@ -21,6 +21,7 @@ import * as civico from './civico.js';
 import { iniciarGoverno, abrirPrefeitura, abrirConcessionaria, abrirServico, atualizarGoverno } from './governo.js';
 import * as servicos from './servicos.js';
 import * as sons from './sons.js';
+import * as voz from './voz.js';
 import { nivelTexto } from './empresa.js';
 import { iniciarPainel, atualizarBotao } from './painel.js';
 
@@ -818,8 +819,9 @@ window.addEventListener('keydown', (e) => {
   if (k === 'z') girarCamera(-1);
   if (k === 'x') girarCamera(1);
   if (k === 'm') abrirJanela('mochila');
+  if (k === 'v') { voz.falar(true); desenharBotaoVoz(); }
 });
-window.addEventListener('keyup', (e) => teclas.delete(e.key.toLowerCase()));
+window.addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); teclas.delete(k); if (k === 'v') { voz.falar(false); desenharBotaoVoz(); } });
 window.addEventListener('blur', () => teclas.clear());
 window.addEventListener('wheel', (e) => { zoom = THREE.MathUtils.clamp(zoom * (e.deltaY > 0 ? 1.1 : 0.9), 12, 70); ajustarCamera(); }, { passive: true });
 
@@ -929,6 +931,7 @@ function acaoContexto() {
     return;
   }
   if (jogador.trava > 0 || !livre()) return;
+  if (conviteAperto() && !jogador.armado && !jogador.carregando) { aceitarAperto(); return; }
   if (jogador.carregando?.userData.pedido) { acaoCaixaPedido(); return; }
   if (jogador.carregando?.userData.encomenda && !jogador.trem && !ferrovia.plataformaEm(jogador.pos.x, jogador.pos.z)) { acaoEncomenda(); return; }
   if (jogador.dentroCasa) {
@@ -990,7 +993,8 @@ function acaoContexto() {
   if (lt) { abrirCompra(lt.lote); return; }
   const casa = casaProxima(3.2);
   if (casa) { acaoCasa(casa); return; }
-  if (pontoProximo(pontos.sucata, 4)) { if (jogador.armado) { aviso('Guarde a arma para trabalhar.'); return; } coletar(); }
+  if (pontoProximo(pontos.sucata, 4)) { if (jogador.armado) { aviso('Guarde a arma para trabalhar.'); return; } coletar(); return; }
+  const pp = pessoaProxima(); if (pp && !jogador.armado) pedirAperto(pp);
 }
 
 // ---------------------------------------------------------------- crime 2.0: assaltos, alarmes e ocorrências
@@ -2075,11 +2079,18 @@ function conectarMultiplayer(perfil) {
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
     tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1),
     explosao: (e) => receberExplosao(e),
+    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g),
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
   window.addEventListener('pagehide', salvarAgora);
+  voz.iniciar({
+    eu: () => (jogador.perfil ? { id: jogador.perfil.id, x: jogador.pos.x, z: jogador.pos.z, cla: jogador.claInfo?.nome || null } : null),
+    outros: () => [...remotos.entries()].map(([id, r]) => ({ id, x: r.alvo?.x ?? 0, z: r.alvo?.z ?? 0, cla: r.meta?.cla || null })).filter((o) => remotos.get(o.id)?.alvo),
+    enviar: (ev, m) => conexao?.enviar(ev, m), aviso,
+  });
+  desenharBotaoVoz();
 }
 
 async function adicionarRemoto(id, meta) {
@@ -2150,6 +2161,7 @@ function atualizarRemotos(dt) {
     if (a.cx && !r.caixa) r.caixa = criarCaixa(tipoDoCodigo(a.cx));
     r.av.mixer.update(dt);
     raiz.updateMatrixWorld(true);
+    if (a.mh) posarAperto(r.av);
     if (r.caixa) posicionarCaixa(r.av, r.caixa, raiz.rotation.y);
     if (a.al && !r.algemas) { r.algemas = clonar('algemas'); r.algemas.scale.setScalar(1.4); scene.add(r.algemas); }
     if (!a.al && r.algemas) { scene.remove(r.algemas); r.algemas = null; }
@@ -2163,9 +2175,9 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || 0, cs: codigoEsquadra() };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || 0, cs: codigoEsquadra(), mh: j.aperto ? 1 : 0 };
   const u = ultimoEnvio;
-  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs;
+  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs || u.mh !== est.mh;
   if (!mudou && tempoKeepAlive > 0) return;
   conexao.enviar('pos', est); ultimoEnvio = est; tempoKeepAlive = 3;
 }
@@ -4914,6 +4926,7 @@ function atualizarJogador(dt) {
   av.raiz.rotation.y = j.yaw;
   av.mixer.update(dt);
   av.raiz.updateMatrixWorld(true);
+  if (j.aperto) posarAperto(av);
 
   // caixa entre as mãos
   if (j.carregando) posicionarCaixa(av, j.carregando, j.yaw);
@@ -5058,6 +5071,7 @@ function contexto() {
   if (pertoContratante()) return ['ver missões do Contratante', 'Falar'];
   if (ocorrenciaProxima()) return ['atender a ocorrência (+300)', 'Atender'];
   if (jogador.assalto) return [`assaltando… ${Math.ceil(jogador.assalto.t)} s (não se afaste)`, 'Assalto'];
+  { const cv = conviteAperto(); if (cv && !jogador.armado && !jogador.carregando) return [`🤝 apertar a mão de ${remotos.get(cv.de)?.meta?.nome || 'alguém'}`, 'Apertar']; }
   if (pontoProximo(pontos.lojas, 3.2)) return jogador.armado && !jogador.perfil?.policial && !jogador.perfil?.prf ? ['ASSALTAR a loja (crime!)', 'Assaltar'] : ['abrir a loja', 'Loja'];
   if (jogador.carregando) {
     if (pontoProximo(pontos.docas, 3.4)) return jogador.carregando.userData.tipo ? ['entregar a caixa', 'Entregar'] : ['caixa vazia: embale na bancada', 'Soltar'];
@@ -5083,6 +5097,7 @@ function contexto() {
     return [`comprar ${u.rotulo || 'esta casa'} (${num(u.preco)})`, 'Comprar'];
   }
   if (caminhaoProximo(3.4)) return ['F: atacar o caminhão e roubar a carga', ''];
+  { const pp = pessoaProxima(); if (pp) return [jogador.aperto ? '🤝 apertando a mão…' : `🤝 oferecer um aperto de mão a ${pp.r.meta?.nome || 'jogador'}`, 'Mão']; }
   return ['', ''];
 }
 
@@ -5129,6 +5144,7 @@ function quadro() {
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
+  voz.atualizar(dt); atualizarAperto(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
@@ -5138,4 +5154,114 @@ function quadro() {
   mundo.atualizarOclusao(dt, jogador.pos, offsetCamera(anguloCamSuave));
   atualizarHUD(dt);
   renderer.render(scene, camAtiva);
+}
+
+// ---------------------------------------------------------------- aperto de mão
+// Um oferece (botão de ação perto de outro jogador), o outro aceita em até 10 s. Os dois se viram,
+// estendem o braço direito e balançam a mão por 2,5 s. Os outros jogadores veem pelo campo "mh".
+let convitesAperto = new Map(), meuPedidoAperto = 0;
+function pessoaProxima(raio = 2.2) {
+  if (jogador.carro || jogador.passageiro || jogador.trem || jogador.dentroCasa) return null;
+  let melhor = null, md = raio;
+  for (const [id, r] of remotos) {
+    if (!r.av?.raiz.visible || r.carro || r.alvo?.pg || r.alvo?.al) continue;
+    const d = Math.hypot(r.av.raiz.position.x - jogador.pos.x, r.av.raiz.position.z - jogador.pos.z);
+    if (d < md) { md = d; melhor = { id, r }; }
+  }
+  return melhor;
+}
+function conviteAperto() {
+  const agora = performance.now();
+  for (const [de, t] of convitesAperto) {
+    const r = remotos.get(de);
+    if (agora - t > 10000 || !r?.av) { convitesAperto.delete(de); continue; }
+    if (Math.hypot(r.av.raiz.position.x - jogador.pos.x, r.av.raiz.position.z - jogador.pos.z) < 3.2) return { de };
+  }
+  return null;
+}
+function pedirAperto(pp) {
+  if (jogador.aperto) return;
+  if (performance.now() - meuPedidoAperto < 3000) { aviso('Esperando a outra pessoa aceitar…'); return; }
+  meuPedidoAperto = performance.now();
+  conexao?.enviar('gesto', { de: jogador.perfil.id, para: pp.id, tipo: 'convite' });
+  aviso(`🤝 Você estendeu a mão para ${pp.r.meta?.nome || 'o jogador'}. Esperando ele aceitar…`, 3);
+  virarPara(pp.r.av.raiz.position.x, pp.r.av.raiz.position.z);
+}
+function aceitarAperto() {
+  const cv = conviteAperto(); if (!cv) return;
+  convitesAperto.delete(cv.de);
+  conexao?.enviar('gesto', { de: jogador.perfil.id, para: cv.de, tipo: 'aceito' });
+  comecarAperto(cv.de);
+}
+function receberGesto(g) {
+  if (!jogador.perfil || g.para !== jogador.perfil.id) return;
+  const nome = remotos.get(g.de)?.meta?.nome || 'Alguém';
+  if (g.tipo === 'convite') { convitesAperto.set(g.de, performance.now()); aviso(`🤝 ${nome} quer apertar a sua mão. Toque em "Apertar".`, 4); }
+  else if (g.tipo === 'aceito' && performance.now() - meuPedidoAperto < 12000) { meuPedidoAperto = 0; comecarAperto(g.de); }
+}
+function comecarAperto(id) {
+  const r = remotos.get(id); if (!r?.av || !jogador.avatar) return;
+  if (jogador.armado) alternarArma();
+  jogador.aperto = { id, t: 2.5 }; jogador.trava = 2.5; jogador.alvo = null;
+  virarPara(r.av.raiz.position.x, r.av.raiz.position.z);
+  jogador.avatar.tocar('idle', { fade: 0.2 });
+  aviso(`🤝 Você apertou a mão de ${r.meta?.nome || 'jogador'}.`, 2.5);
+}
+function atualizarAperto(dt) {
+  const a = jogador.aperto; if (!a) return;
+  a.t -= dt;
+  const r = remotos.get(a.id);
+  if (r?.av) {   // chega bem perto, de frente
+    const p = r.av.raiz.position, d = Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z);
+    virarPara(p.x, p.z);
+    if (d > 1.15) { const k = Math.min(1, dt * 3) * (d - 1.05) / d; jogador.pos.x += (p.x - jogador.pos.x) * k; jogador.pos.z += (p.z - jogador.pos.z) * k; }
+  }
+  if (a.t <= 0 || !r) jogador.aperto = null;
+}
+// gira um osso (no espaço do mundo) para que ele aponte para "dir"
+const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qc = new THREE.Quaternion(), _va = new THREE.Vector3(), _vb = new THREE.Vector3(), _vc = new THREE.Vector3(), _vd = new THREE.Vector3();
+function apontarOsso(osso, filho, dir) {
+  if (!osso?.parent || !filho) return;
+  osso.updateWorldMatrix(true, true);
+  osso.getWorldPosition(_va); filho.getWorldPosition(_vb);
+  _vc.subVectors(_vb, _va); if (_vc.lengthSq() < 1e-8) return; _vc.normalize();
+  _qa.setFromUnitVectors(_vc, dir);
+  osso.getWorldQuaternion(_qb).premultiply(_qa);
+  osso.parent.getWorldQuaternion(_qc).invert();
+  osso.quaternion.copy(_qc.multiply(_qb));
+  osso.updateWorldMatrix(false, true);
+}
+const ossosAperto = new WeakMap();
+function posarAperto(av) {
+  if (!ossosAperto.has(av)) {
+    const m = av.modelo, o = (n) => m.getObjectByName('mixamorig' + n);
+    ossosAperto.set(av, { braco: o('RightArm'), ante: o('RightForeArm'), mao: o('RightHand') });
+  }
+  const b = ossosAperto.get(av); if (!b.braco || !b.ante || !b.mao) return;
+  const yaw = av.raiz.rotation.y, t = performance.now() / 1000, balanco = Math.sin(t * 13) * 0.12;
+  const fx = Math.sin(yaw), fz = Math.cos(yaw);
+  // braço: para a frente e para baixo, um pouco para dentro; antebraço quase reto para a frente, balançando
+  _vd.set(fx * 0.55 - fz * -0.12, -0.8, fz * 0.55 + fx * -0.12).normalize(); apontarOsso(b.braco, b.ante, _vd.clone());
+  _vd.set(fx, -0.12 + balanco, fz).normalize(); apontarOsso(b.ante, b.mao, _vd.clone());
+}
+
+// ---------------------------------------------------------------- botão de voz
+function desenharBotaoVoz() {
+  const m = voz.modoAtual(), bt = $('btVoz'), pt = $('btFalar');
+  if (bt) bt.innerHTML = `${m === 'off' ? '🔇' : '🎙️'}<span>Voz: ${m === 'off' ? 'desligada' : m === 'perto' ? 'quem está perto' : 'clã'}</span>`;
+  if (pt) { pt.classList.toggle('oculto', m === 'off'); pt.classList.toggle('falando', voz.estaFalando()); pt.textContent = voz.estaFalando() ? '🔴' : '🎙️'; }
+}
+{
+  const bt = $('btVoz'), pt = $('btFalar');
+  if (bt) bt.onclick = async () => {
+    const m = await voz.alternar(); desenharBotaoVoz();
+    if (m === 'cla' && !jogador.claInfo?.nome) aviso('🎙️ Voz do clã: você não está em um clã. Ninguém vai ouvir.', 4);
+    else aviso({ off: '🔇 Voz desligada.', perto: '🎙️ Voz: quem está perto (40 m). Segure 🎙️ (ou V) para falar.', cla: '🎙️ Voz do clã: só os membros online ouvem. Segure 🎙️ (ou V) para falar.' }[m], 4);
+  };
+  if (pt) {
+    const on = (e) => { e.preventDefault(); voz.falar(true); desenharBotaoVoz(); };
+    const off = (e) => { e.preventDefault(); voz.falar(false); desenharBotaoVoz(); };
+    pt.addEventListener('pointerdown', on); pt.addEventListener('pointerup', off); pt.addEventListener('pointercancel', off); pt.addEventListener('pointerleave', off);
+    pt.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
 }

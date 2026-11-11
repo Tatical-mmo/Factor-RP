@@ -174,6 +174,11 @@ O botão **🛡 Painel** aparece só para o administrador e os moderadores. Toda
 
 Regras: algemas e prisão não funcionam na equipe, o admin não pode ser banido, moderadores só agem sobre jogadores e só com os poderes que o admin marcou, e o salário do moderador cai uma vez a cada 24 horas, ao entrar no jogo.
 
+## Chat de voz e aperto de mão
+
+- **Voz (grátis):** no menu ☰, botão 🎙️ **Voz** troca entre *desligada → quem está perto (40 m) → clã*. O áudio vai direto de um jogador para o outro (WebRTC); o Supabase só passa o "aperto de mão" da conexão. Para falar, segure o botão 🎙️ redondo na tela (no PC, segure **V**). Perto, o volume cai com a distância; no clã, todos os membros online ouvem, em qualquer lugar. Até 8 pessoas por vez. O navegador pede permissão do microfone na primeira vez. Em algumas redes móveis muito fechadas a conexão direta pode não abrir (sem servidor pago de retransmissão).
+- **Aperto de mão:** chegue perto de outro jogador, sem arma, e toque em **Mão**. Ele recebe o convite e toca em **Apertar** (10 s). Os dois se viram, estendem o braço direito e balançam a mão; quem está em volta vê.
+
 ## Controles no PC
 
 | Tecla | Ação |
@@ -187,6 +192,7 @@ Regras: algemas e prisão não funcionam na equipe, o admin não pode ser banido
 | Clique (armado) | atirar |
 | Z / X | girar a câmera |
 | Roda do mouse | zoom |
+| V (segurar) | falar no chat de voz |
 
 No celular: joystick à esquerda (empurrar até o fim corre), botões à direita, toque no chão para andar até o ponto e pinça para zoom.
 
