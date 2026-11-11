@@ -6899,18 +6899,24 @@ const ESCONDERIJOS = [
 ];
 const cativo = () => { const p = jogador.perfil; return !!(p?.cativeiro && p.cativeiro_ate && Date.parse(p.cativeiro_ate) > agoraServidor()); };
 function montarEsconderijos() {
-  const terra = new THREE.MeshStandardMaterial({ color: '#7a5c3a', roughness: 1 }), madeira = new THREE.MeshStandardMaterial({ color: '#5a3f26', roughness: 0.9 });
+  const terra = new THREE.MeshStandardMaterial({ color: '#7a5c3a', roughness: 1, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), madeira = new THREE.MeshStandardMaterial({ color: '#5a3f26', roughness: 0.9 });
   const ferro = new THREE.MeshStandardMaterial({ color: '#2e2f33', roughness: 0.5, metalness: 0.6 }), lona = new THREE.MeshStandardMaterial({ color: '#4d5a3a', roughness: 0.9, side: THREE.DoubleSide });
   for (const e of ESCONDERIJOS) {
     mundo.abrirTrilha([...e.trilha, [e.x, e.z]], 3.2);
-    // trilha de terra
-    for (let i = 0; i < e.trilha.length - 1; i++) {
-      const [ax, az] = e.trilha[i], [bx, bz] = e.trilha[i + 1], len = Math.hypot(bx - ax, bz - az);
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6, len + 1.5), terra); m.rotation.x = -Math.PI / 2; m.rotation.z = -Math.atan2(bx - ax, bz - az);
-      m.position.set((ax + bx) / 2, alturaChao((ax + bx) / 2, (az + bz) / 2) + 0.025, (az + bz) / 2); m.receiveShadow = true; scene.add(m);
+    // trilha de terra: uma faixa contínua e curva que começa na grama, logo depois do fim do asfalto
+    const pts = e.trilha.map(([x, z], i) => new THREE.Vector3(i === 0 ? x + Math.sign(x) * 1.2 : x, 0, z));
+    const curva = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), n = Math.ceil(curva.getLength() / 1.2);
+    const pos = [], idx = [], L = 1.35;
+    for (let k = 0; k <= n; k++) {
+      const p = curva.getPointAt(k / n), t = curva.getTangentAt(k / n), nx = -t.z, nz = t.x;
+      const larg = L * (k === 0 ? 0.85 : 1) * (0.92 + 0.08 * Math.sin(k * 1.7));   // bordas levemente irregulares
+      for (const lado of [-1, 1]) { const x = p.x + nx * larg * lado, z = p.z + nz * larg * lado; pos.push(x, alturaChao(x, z) + 0.05, z); }
+      if (k < n) { const a = k * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
     }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+    const faixa = new THREE.Mesh(geo, terra); faixa.receiveShadow = true; faixa.renderOrder = 1; scene.add(faixa);
     const y = alturaChao(e.x, e.z);
-    const clar = new THREE.Mesh(new THREE.CircleGeometry(7, 20), terra); clar.rotation.x = -Math.PI / 2; clar.position.set(e.x, y + 0.02, e.z); clar.receiveShadow = true; scene.add(clar);
+    const clar = new THREE.Mesh(new THREE.CircleGeometry(7, 20), terra); clar.rotation.x = -Math.PI / 2; clar.position.set(e.x, y + 0.05, e.z); clar.receiveShadow = true; scene.add(clar);
     // jaula
     const g = new THREE.Group(); g.position.set(e.x, y, e.z); scene.add(g);
     const barra = new THREE.CylinderGeometry(0.05, 0.05, 2.4, 6);

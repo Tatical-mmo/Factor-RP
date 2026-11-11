@@ -5,6 +5,34 @@
 --     de 2 minutos). Polícia, PRF e Exército em serviço prendem o ladrão NPC (+300).
 -- Rode depois do 49.
 
+-- executa um comando só se a tabela existir (bancos que pularam alguma etapa não quebram o reset)
+create or replace function public.se_existe(p_tabela text, p_sql text) returns integer
+language plpgsql security definer set search_path = public as $$
+declare n integer := 0;
+begin
+  if to_regclass('public.' || p_tabela) is null then return 0; end if;
+  execute p_sql; get diagnostics n = row_count; return n;
+end $$;
+revoke all on function public.se_existe(text, text) from public, anon, authenticated;
+
+-- atualiza só as colunas que existem na tabela (bancos que pularam alguma etapa não quebram o reset)
+create or replace function public.zerar_colunas(p_tabela text, p_pares text[], p_filtro text default 'true') returns integer
+language plpgsql security definer set search_path = public as $$
+declare sets text[] := '{}'; par text; col text; n integer := 0;
+begin
+  if to_regclass('public.' || p_tabela) is null then return 0; end if;
+  foreach par in array p_pares loop
+    col := trim(split_part(par, '=', 1));
+    if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = p_tabela and column_name = col) then
+      sets := sets || par;
+    end if;
+  end loop;
+  if cardinality(sets) = 0 then return 0; end if;
+  execute format('update public.%I set %s where %s', p_tabela, array_to_string(sets, ', '), p_filtro);
+  get diagnostics n = row_count; return n;
+end $$;
+revoke all on function public.zerar_colunas(text, text[], text) from public, anon, authenticated;
+
 create or replace function public.admin_resetar_mundo(p_partes text[], p_confirma text) returns text
 language plpgsql security definer set search_path = public as $$
 declare pf prefeitura%rowtype; n integer; res text[] := '{}';   -- partes que não existirem no banco são puladas
@@ -13,44 +41,44 @@ begin
   if p_confirma is distinct from 'RESETAR' then raise exception 'digite RESETAR para confirmar'; end if;
   if p_partes is null or cardinality(p_partes) = 0 then raise exception 'escolha o que resetar'; end if;
   if 'moradia' = any(p_partes) then
-    if to_regclass('public.bau') is not null then delete from bau; end if;
+    perform se_existe('bau', 'delete from bau');
     delete from casas where tipo = 'unidade';
-    update casas set dono = null, inquilino = null, pago_ate = null, aluguel = null, a_venda = false, modelo = null, nivel = 1 where tipo <> 'oficial';
-    get diagnostics n = row_count; res := res || format('%s casas liberadas', n);
-    if to_regclass('public.casas_esgoto') is not null then update casas_esgoto set dono = null, desde = null where dono is not null; end if;
+    n := zerar_colunas('casas', array['dono = null', 'inquilino = null', 'pago_ate = null', 'aluguel = null', 'a_venda = false', 'modelo = null', 'nivel = 1'], 'tipo <> ''oficial''');
+    res := res || format('%s casas liberadas', n);
+    perform se_existe('casas_esgoto', 'update casas_esgoto set dono = null, desde = null where dono is not null');
   end if;
   if 'empresas' = any(p_partes) then
     delete from empresas; get diagnostics n = row_count; res := res || format('%s empresas apagadas', n);
     delete from membros;
-    if to_regclass('public.missoes') is not null then delete from missoes; end if;
-    if to_regclass('public.ofertas') is not null then delete from ofertas; end if;
-    if to_regclass('public.negocios') is not null then delete from negocios; end if;
-    if to_regclass('public.lojas_assaltadas') is not null then delete from lojas_assaltadas; end if;
-    delete from carros where modelo <> 'presidencial'; get diagnostics n = row_count; res := res || format('%s carros apagados', n);
+    perform se_existe('missoes', 'delete from missoes'); perform se_existe('ofertas', 'delete from ofertas');
+    perform se_existe('negocios', 'delete from negocios'); perform se_existe('lojas_assaltadas', 'delete from lojas_assaltadas');
+    n := se_existe('carros', 'delete from carros where modelo <> ''presidencial'''); res := res || format('%s carros apagados', n);
   end if;
   if 'clas' = any(p_partes) then
-    if to_regclass('public.favores') is not null then delete from favores; end if;
-    if to_regclass('public.assaltos_navio') is not null then delete from assaltos_navio; end if;
+    perform se_existe('favores', 'delete from favores'); perform se_existe('assaltos_navio', 'delete from assaltos_navio');
     delete from clas; get diagnostics n = row_count; res := res || format('%s clãs apagados', n);
-    update territorios set dono_cla = null, captura_cla = null, captura_inicio = null, capturado_em = null;
+    perform zerar_colunas('territorios', array['dono_cla = null', 'captura_cla = null', 'captura_inicio = null', 'capturado_em = null']);
   end if;
   if 'jogadores' = any(p_partes) then
-    update perfis set moedas = 500, crimes = 0, pena_seg = 0, pena_marca = null, algemado = false, fianca = 0, fome = 100,
-      policial = false, prf = false, eleitoral = false, profissao = null, profissao_desde = null, matancas = 0, recompensa = 0,
-      cerco_ate = null, pos_x = 0, pos_z = 27, turno_em = null, pd_morte = null, pd_por = null, arma_militar = false,
-      lixeiro = false, lixeiro_missao = null, prisao_militar_ate = null;
-    get diagnostics n = row_count; res := res || format('%s jogadores zerados', n);
-    delete from inventario; delete from carreiras; delete from contas_banco; delete from metas; delete from encomendas;
-    delete from personagens_comprados; delete from agressoes; delete from cacadas;
+    n := zerar_colunas('perfis', array['moedas = 500', 'crimes = 0', 'pena_seg = 0', 'pena_marca = null', 'algemado = false',
+      'algemado_por = null', 'fianca = 0', 'fome = 100', 'policial = false', 'prf = false', 'eleitoral = false', 'profissao = null',
+      'profissao_desde = null', 'matancas = 0', 'recompensa = 0', 'cerco_ate = null', 'pos_x = 0', 'pos_z = 27', 'turno_em = null',
+      'pd_morte = null', 'pd_por = null', 'arma_militar = false', 'lixeiro = false', 'lixeiro_missao = null',
+      'prisao_militar_ate = null', 'cativeiro = null', 'cativeiro_ate = null', 'cativeiro_cla = null']);
+    res := res || format('%s jogadores zerados', n);
+    perform se_existe('inventario', 'delete from inventario'); perform se_existe('carreiras', 'delete from carreiras'); perform se_existe('contas_banco', 'delete from contas_banco');
+    perform se_existe('metas', 'delete from metas'); perform se_existe('encomendas', 'delete from encomendas'); perform se_existe('personagens_comprados', 'delete from personagens_comprados');
+    perform se_existe('agressoes', 'delete from agressoes'); perform se_existe('cacadas', 'delete from cacadas');
   end if;
   if 'prefeitura' = any(p_partes) then
     select * into pf from prefeitura where id = 1;
-    perform deixar_cargo(pf.prefeito);
-    update prefeitura set prefeito = null, posse = null, vaga_ciclo = ciclo_atual(), salario_ciclo = -1, cofre = 0, motivo = 'mapa resetado', eleicao_ate = null,
-      seguranca1 = null, seguranca2 = null where id = 1;
-    update casas set dono = null, inquilino = null where tipo = 'oficial';
-    delete from votos; delete from candidatos; delete from noticias; delete from ocorrencias; delete from assaltos; delete from incendios;
-    update outdoors set anunciante = null, titulo = null, texto = null, tipo = null, ate = null;
+    if pf.prefeito is not null and to_regprocedure('public.deixar_cargo(uuid)') is not null then perform deixar_cargo(pf.prefeito); end if;
+    perform zerar_colunas('prefeitura', array['prefeito = null', 'posse = null', 'vaga_ciclo = ciclo_atual()', 'salario_ciclo = -1',
+      'cofre = 0', 'motivo = ''mapa resetado''', 'eleicao_ate = null', 'seguranca1 = null', 'seguranca2 = null'], 'id = 1');
+    perform zerar_colunas('casas', array['dono = null', 'inquilino = null'], 'tipo = ''oficial''');
+    perform se_existe('votos', 'delete from votos'); perform se_existe('candidatos', 'delete from candidatos'); perform se_existe('noticias', 'delete from noticias');
+    perform se_existe('ocorrencias', 'delete from ocorrencias'); perform se_existe('assaltos', 'delete from assaltos'); perform se_existe('incendios', 'delete from incendios');
+    perform se_existe('outdoors', 'update outdoors set anunciante = null, titulo = null, texto = null, tipo = null, ate = null');
     res := res || 'prefeitura zerada'::text;
   end if;
   perform registrar(null, 'reset_mapa', jsonb_build_object('partes', p_partes, 'resultado', res));
@@ -76,7 +104,12 @@ begin
   grant select on public.config_jogo to anon, authenticated;
 end $$;
 -- policiais robô extras (ids 21 a 28) para quando o admin aumentar
-insert into public.robos_policia (id, tipo) select g, 'pe' from generate_series(21, 28) g on conflict (id) do nothing;
+do $$
+begin
+  if to_regclass('public.robos_policia') is not null then   -- só existe se o 31b foi rodado
+    insert into public.robos_policia (id, tipo) select g, 'pe' from generate_series(21, 28) g on conflict (id) do nothing;
+  end if;
+end $$;
 
 create or replace function public.admin_config(p_policia integer, p_crimes boolean, p_chance integer) returns void
 language plpgsql security definer set search_path = public as $$
