@@ -5259,9 +5259,10 @@ function desenharBotaoVoz() {
     else aviso({ off: '🔇 Voz desligada.', perto: '🎙️ Voz: quem está perto (40 m). Segure 🎙️ (ou V) para falar.', cla: '🎙️ Voz do clã: só os membros online ouvem. Segure 🎙️ (ou V) para falar.' }[m], 4);
   };
   if (pt) {
-    const on = (e) => { e.preventDefault(); voz.falar(true); desenharBotaoVoz(); };
-    const off = (e) => { e.preventDefault(); voz.falar(false); desenharBotaoVoz(); };
-    pt.addEventListener('pointerdown', on); pt.addEventListener('pointerup', off); pt.addEventListener('pointercancel', off); pt.addEventListener('pointerleave', off);
+    const on = (e) => { e.preventDefault(); e.stopPropagation(); try { pt.setPointerCapture(e.pointerId); } catch { /* sem captura */ } jogador.alvo = null; voz.falar(true); desenharBotaoVoz(); };
+    const off = (e) => { e.preventDefault(); e.stopPropagation(); voz.falar(false); desenharBotaoVoz(); };
+    pt.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+    pt.addEventListener('pointerdown', on); pt.addEventListener('pointerup', off); pt.addEventListener('pointercancel', off); pt.addEventListener('lostpointercapture', off);
     pt.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 }
