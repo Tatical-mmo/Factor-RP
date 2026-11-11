@@ -214,7 +214,7 @@ async function abaSalarios() {
 // ------------------------------------------------------------ cidade: polícia robô e crimes de NPC (só o administrador)
 async function abaCidade() {
   const c = $('painelConteudo'); c.textContent = 'Carregando…';
-  let cf; try { cf = await rede.configJogo.ler(); } catch (e) { c.textContent = e.message; return; }
+  let cf; try { cf = await rede.configJogo.ler(); } catch (e) { c.innerHTML = `<p class="dica">Não foi possível abrir as configurações da cidade.${/config_jogo|schema cache|does not exist/i.test(e.message || '') ? ' <b>Rode o 50a_reset_config.sql no SQL Editor do Supabase</b> e abra esta aba de novo.' : ''}</p><small>${esc(e.message || String(e))}</small>`; return; }
   cf = cf || { policia_robo: 12, crimes_npc: false, chance_crime: 30 };
   c.innerHTML = `<div class="sub">🚓 Polícia robô na rua</div>
     <p class="dica">Quantos policiais robô patrulham a metrópole (0 a 20). Os agentes robô da PRF continuam iguais.</p>
@@ -227,7 +227,7 @@ async function abaCidade() {
   $('cPol').oninput = () => { $('cPolN').textContent = $('cPol').value; };
   $('cChance').oninput = () => { $('cChanceN').textContent = $('cChance').value + '%'; };
   $('cSalvar').onclick = async () => {
-    try { await rede.configJogo.salvar(Number($('cPol').value), $('cCrimes').checked, Number($('cChance').value)); ctx.configMudou?.(); msg('Configuração salva. Vale para todos em alguns segundos.'); } catch (e) { msg(e.message, false); }
+    try { await rede.configJogo.salvar(Number($('cPol').value), $('cCrimes').checked, Number($('cChance').value)); ctx.configMudou?.(); msg('Configuração salva. Vale para todos em alguns segundos.'); } catch (e) { msg(/admin_config|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 50a_reset_config.sql no SQL Editor do Supabase.' : e.message, false); }
   };
 }
 // ------------------------------------------------------------ carreiras públicas (só o administrador)

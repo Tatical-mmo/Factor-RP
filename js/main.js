@@ -4836,6 +4836,10 @@ function montarLocais() {
   LOCAIS.push({ nome: 'Quartel do Exército', x: mundo.QUARTEL.portao.x - 4, z: mundo.QUARTEL.portao.z });
   LOCAIS.push({ nome: 'Estande de tiro', x: 153, z: 1096 });
   for (const l of ferrovia.linhas) for (const lado of ['centro', 'destino']) { const p = l.plataformas[lado]; LOCAIS.push({ nome: p.nome, x: 0, z: p.zSaida }); }
+  for (const e of ESCONDERIJOS) LOCAIS.push({ nome: `⛺ ${e.nome}`, x: e.x + 3.5, z: e.z + 3.5 });
+  for (const [id, p] of Object.entries(PORTAS_QG)) LOCAIS.push({ nome: `🏴 QG do clã (${id === 'leste' ? 'Leste' : 'Oeste'})`, x: p.x + (p.x > 0 ? -2 : 2), z: p.z });
+  LOCAIS.push({ nome: '🚢 Píer do cargueiro', x: 48, z: 1112 });
+  LOCAIS.push({ nome: 'Prefeitura', x: civico.PREFEITURA.porta.x, z: civico.PREFEITURA.porta.z + 3 });
 }
 
 function teleportar(x, z) {
