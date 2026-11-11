@@ -1,5 +1,6 @@
 // Janela da prefeitura (prefeito, eleição, outdoors, PRF) e da concessionária. Tudo é conferido no banco.
 import * as rede from './rede.js';
+import { cartao, carregarImagens } from './jornal.js';
 import { CARROS, CORES_CARRO } from './civico.js';
 
 const $ = (id) => document.getElementById(id);
@@ -378,20 +379,21 @@ async function telaJornal(c) {
   const quando = (t) => { const m = Math.round((Date.now() - Date.parse(t)) / 60000); return m < 0 ? `agendada para ${new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : m < 1 ? 'agora' : m < 60 ? `há ${m} min` : m < 1440 ? `há ${Math.floor(m / 60)} h` : `há ${Math.floor(m / 1440)} d`; };
   const local = (t) => { const d = new Date(t); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
   c.innerHTML = `${redator ? `<div class="sub">✍️ Redação</div>
-      <p class="dica">Escreva uma matéria (aparece no Jornal, na faixa do alto da tela e nos telões da cidade). Deixe a data vazia para publicar agora ou agende. Jornalistas podem editar ou apagar qualquer matéria.</p>
+      <p class="dica">Escreva uma matéria (aparece no Jornal, na faixa do alto da tela e nos telões da cidade). Para foto, retrato de personagem, selo e destaque, use a <b>mesa de edição na redação</b>. Jornalistas podem editar ou apagar qualquer matéria.</p>
       <div class="lista"><input id="mtTitulo" maxlength="90" placeholder="Título"><textarea id="mtTexto" maxlength="600" rows="4" placeholder="Texto (até 600 letras)"></textarea>
       <input id="mtImagem" placeholder="Link de uma imagem (https://…, opcional)"><label class="dica">Publicar em: <input id="mtQuando" type="datetime-local"></label>
       <div class="botoes"><button id="mtSalvar">📰 Publicar</button><button id="mtLimpar">Limpar</button></div><input id="mtId" type="hidden"></div>` : ''}
+    <div class="botoes"><button id="mtRedacao">🏢 Ir à redação (escritório e estúdio de fotos)</button>${redator ? '<button id="mtFoto">📷 Tirar foto agora</button>' : ''}</div>
     <div class="sub">📰 Matérias</div>
-    <div class="lista">${materias.length ? materias.map((m) => `<div class="linha item materia"><span class="nm"><b>${esc(m.titulo)}</b>
-      ${m.imagem ? `<img src="${esc(m.imagem)}" alt="" loading="lazy" style="max-width:100%;border-radius:8px;margin:4px 0" onerror="this.remove()">` : ''}
-      ${m.texto ? `<span style="white-space:pre-wrap;font-size:13px">${esc(m.texto)}</span>` : ''}
-      <small>por ${esc(m.autor_nome)} · ${quando(m.publicar_em)}${m.editada_em ? ` · editada por ${esc(m.editor_nome || '')}` : ''}</small></span>
-      ${redator ? `<span class="bts"><button data-editar="${m.id}">Editar</button><button class="perigo" data-apagar="${m.id}">Apagar</button></span>` : ''}</div>`).join('') : '<span class="vazio">Nenhuma matéria ainda.</span>'}</div>
+    <div class="lista" id="mtLista">${materias.length ? materias.map((m) => `<div class="materia">${cartao(m)}<small style="opacity:.6">${quando(m.publicar_em)}${m.editada_em ? ` · editada por ${esc(m.editor_nome || '')}` : ''}</small>
+      ${redator ? `<div class="botoes"><button data-editar="${m.id}">Editar texto</button><button class="perigo" data-apagar="${m.id}">Apagar</button></div>` : ''}</div>`).join('') : '<span class="vazio">Nenhuma matéria ainda.</span>'}</div>
     <div class="sub">🚨 Reportagens da rua</div>
     <div class="lista">${lista.length ? lista.map((n) => `<div class="linha item"><span class="nm"><b>${esc(n.titulo)}</b><small>por ${esc(n.autor_nome)} · ${quando(n.criada_em)}</small></span></div>`).join('') : '<span class="vazio">Nenhuma notícia ainda.</span>'}</div>
     ${carreira}${telaProfissao(c, 'jornalista', 'Jornalista', 'Jornalistas em serviço vão até os acontecimentos da cidade (incêndio, ocorrência policial ou alguém ferido) e tocam em <b>Reportar</b>. A manchete sai no jornal para todos e a reportagem vale <b>200</b>. Cada acontecimento só rende uma reportagem: chegue primeiro! Na Redação, escrevem matérias para o Jornal e os telões.')}`;
   ligarProfissao('jornalista');
+  carregarImagens($('mtLista'), materias);
+  $('mtRedacao').onclick = () => { fechar(); ctx.irRedacao(); };
+  if ($('mtFoto')) $('mtFoto').onclick = () => { fechar(); ctx.tirarFoto(); };
   if (!redator) return;
   const pegar = (id) => materias.find((m) => String(m.id) === String(id));
   c.querySelectorAll('[data-editar]').forEach((b) => { b.onclick = () => { const m = pegar(b.dataset.editar); $('mtId').value = m.id; $('mtTitulo').value = m.titulo; $('mtTexto').value = m.texto || ''; $('mtImagem').value = m.imagem || ''; $('mtQuando').value = local(m.publicar_em); $('mtSalvar').textContent = '💾 Salvar edição'; $('mtTitulo').scrollIntoView({ block: 'center' }); }; });

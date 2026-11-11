@@ -209,6 +209,26 @@ O clã dono da Base Leste ou Oeste entra no **QG** pela porta marcada "🏴 QG d
 - **Tirar as algemas:** quem algemou, moderadores e administrador (botão de ação, "Soltar"). Ou qualquer jogador com um **alicate de corte** (2.500 no contrabandista, não é crime; gasta 1 alicate).
 - Pedestres algemados ficam parados, seguem quem segura e são soltos sozinhos depois de 5 minutos.
 
+## Um emprego por jogador (SQL 43)
+
+Polícia em serviço, PRF, Hospital, Bombeiros, Jornal, Exército e funcionário de empresa: só um por vez. Ser dono de empresa não conta. A equipe não tem essa regra. Cada jogador só fica em um clã.
+
+## Jornal: redação, fotos e telões (SQL 43)
+
+- Jornal (☰) › **Ir à redação**: escritório com **mesa de edição** (editor completo: foto, retrato de personagem, selo URGENTE/EXCLUSIVO…, cor de destaque, manchete grande, agendar), **estúdio de fotos** (quem fica na marca amarela é fotografado pelo jornalista) e mural.
+- Jornal › **Tirar foto agora**: fotografa a cena do jogo (fica na galeria do aparelho, até 6 fotos).
+- **Tocar num telão ou outdoor** amplia na tela; ✕ (ou tocar fora) fecha.
+
+## Lixeiros: a sociedade do esgoto (SQL 44a)
+
+- 16 bueiros pela cidade; um deles (secreto) aceita novos membros por 5.000. Membros descem e sobem por qualquer bueiro.
+- No esgoto: **adicional de insalubridade** por minuto (valor na aba Salários do admin), **coleta de lixo** (+120), **contrabando** até um bueiro sorteado (+1.500; se a polícia estiver a 25 m na saída, perde e vira procurado), **ouvir os túneis** (procurados e assaltos; denúncia anônima à polícia +400), **resgate**: o lixeiro abre o bueiro para um procurado e o leva para sair longe (+800). A polícia não entra no esgoto.
+- **Casas subterrâneas**: 8 casas, 8.000, não evoluem (cama para descansar; vender devolve 4.000).
+
+## Interiores
+
+Prefeitura (gabinete, urna, outdoors, sala de imprensa), quartel dos bombeiros (balcão, incêndios, vestiário, mastro, enfermaria), delegacia e posto da PRF (balcão, quadro de procurados, celas e **estande de tiro interno** só para a corporação) e empresas (dono e funcionários entram pelo portão; o interior cresce nos níveis 5, 10 e 15: mesa do dono, relógio de ponto, estoque, copa, sala de reuniões, linha de produção e sala VIP).
+
 ## Controles no PC
 
 | Tecla | Ação |

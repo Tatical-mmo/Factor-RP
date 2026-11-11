@@ -79,6 +79,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'clima' }, ({ payload }) => eventos.clima?.(payload));
   canal.on('broadcast', { event: 'assalto' }, ({ payload }) => eventos.assalto?.(payload));
   canal.on('broadcast', { event: 'algemaNpc' }, ({ payload }) => eventos.algemaNpc?.(payload));
+  canal.on('broadcast', { event: 'bueiro' }, ({ payload }) => eventos.bueiro?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
@@ -121,6 +122,16 @@ function traduzirRpc(m) {
     'cedo demais': 'Calma! Espere alguns segundos depois de começar o assalto.',
     'conteiner ja aberto': 'Esse contêiner já foi arrombado.',
     'sem carga': 'Você não tem carga do cargueiro.',
+    'so lixeiros': 'Só membros da sociedade.',
+    'bueiro trancado': 'A tampa não abre.',
+    'devagar': 'Calma, espere um pouco.',
+    'sem pacote': 'Você não está levando nenhum pacote.',
+    'bueiro errado': 'Não é este o bueiro da entrega.',
+    'aguarde para outra denuncia': 'Espere 5 minutos para outra denúncia.',
+    'voce ja tem casa no esgoto': 'Você já tem uma casa no esgoto.',
+    'casa ocupada': 'Essa casa já tem dono.',
+    'voce nao tem casa no esgoto': 'Você não tem casa no esgoto.',
+    'voce ja tem um emprego': 'Você já tem um emprego. Saia do atual antes (cada jogador só pode ter um).',
     'ja esta algemado': 'Esse jogador já está algemado (ou preso).',
     'alguem precisa cortar por voce': 'Outra pessoa precisa cortar as suas algemas.',
     'voce esta algemado': 'Você está algemado.',
@@ -316,6 +327,21 @@ function traduzirRpc(m) {
   if (espera) return `Aguarde ${espera[1]} s.`;
   return t[m] || m;
 }
+export const lixeiros = {
+  secreto: (k) => rpc('bueiro_secreto', { p_bueiro: k }),
+  entrar: (k) => rpc('lixeiro_entrar', { p_bueiro: k }),
+  sair: () => rpc('lixeiro_sair'),
+  insalubridade: () => rpc('lixeiro_insalubridade'),
+  coletar: () => rpc('lixeiro_coletar'),
+  contrabando: () => rpc('lixeiro_contrabando'),
+  entregar: (k, visto) => rpc('lixeiro_entregar', { p_bueiro: k, p_visto: !!visto }),
+  informacoes: () => rpc('lixeiro_informacoes'),
+  denunciar: (alvo) => rpc('lixeiro_denunciar', { p_alvo: alvo }),
+  resgate: (id) => rpc('lixeiro_resgate', { p_convidado: id }),
+  casas: () => sel(sb.from('casas_esgoto').select('id,dono,dono_perfil:perfis!casas_esgoto_dono_fkey(nome)').order('id')),
+  comprarCasa: (id) => rpc('comprar_casa_esgoto', { p_id: id }),
+  venderCasa: () => rpc('vender_casa_esgoto'),
+};
 export const algemas = {
   algemar: (alvo) => rpc('algemar', { p_alvo: alvo }),
   soltar: (alvo) => rpc('soltar_algemas', { p_alvo: alvo }),
@@ -446,7 +472,10 @@ export const veiculos = {
 export const jornal = {
   publicar: (tipo, ref, titulo, x, z) => rpc('publicar_noticia', { p_tipo: tipo, p_ref: ref, p_titulo: titulo, p_x: x, p_z: z }),
   ultimas: () => sel(sb.from('noticias').select('*').order('id', { ascending: false }).limit(12)),
-  materias: () => sel(sb.from('materias').select('*').order('publicar_em', { ascending: false }).limit(20)),
+  materias: () => sel(sb.from('materias').select('id,autor_nome,titulo,texto,imagem,publicar_em,criada_em,editada_em,editor_nome,personagem,selo,cor,destaque,tem_foto').order('publicar_em', { ascending: false }).limit(20)),
+  foto: (id) => rpc('foto_materia', { p_id: id }),
+  salvar2: (id, titulo, texto, imagem, quando, foto, personagem, selo, cor, destaque) => rpc('salvar_materia2', { p_id: id || null, p_titulo: titulo, p_texto: texto, p_imagem: imagem || null, p_publicar_em: quando || null,
+    p_foto: foto, p_personagem: personagem || null, p_selo: selo || null, p_cor: cor || null, p_destaque: !!destaque }),
   redacao: () => rpc('materias_redacao'),
   salvar: (id, titulo, texto, imagem, quando) => rpc('salvar_materia', { p_id: id || null, p_titulo: titulo, p_texto: texto, p_imagem: imagem || null, p_publicar_em: quando || null }),
   apagar: (id) => rpc('apagar_materia', { p_id: id }),

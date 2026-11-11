@@ -117,7 +117,7 @@ export function montarQuartelExercito() {
   // ---- veículos expostos
   EXERCITO.veiculos = EXERCITO.vagas.map((v) => ({ ...v, mesh: veiculoDeServico(v.modelo, v) })).filter((v) => v.mesh);
 }
-function alvoTextura() {
+export function alvoTextura() {
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
   [['#f4f1e8', 64], ['#d62828', 52], ['#f4f1e8', 40], ['#d62828', 28], ['#f4f1e8', 16], ['#d62828', 7]].forEach(([cor, r]) => { g.fillStyle = cor; g.beginPath(); g.arc(64, 64, r, 0, Math.PI * 2); g.fill(); });
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
@@ -464,4 +464,5 @@ export function procuradosNosOutdoors(lista) {
   }
   for (const [id, v] of outdoors) if (v.o) pintarOutdoor(id, v);
 }
+export function placasOutdoors() { return [...outdoors.values()].map((v) => ({ mesh: v.placa, o: v.o, canvas: v.placa.material.map?.image })); }
 export function brilhoOutdoors(noite) { for (const v of outdoors.values()) v.placa.material.emissiveIntensity = 0.15 + noite * 0.6; }
