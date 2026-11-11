@@ -84,7 +84,7 @@ export function altura(x, z) {
 }
 // mantém o jogador nas áreas andáveis (a ferrovia só se cruza de trem)
 // partes do porto por onde se anda no mar: píer, rampa de embarque e convés do navio
-export const AREAS_NAVIO = [{ x0: 43.6, x1: 52.4, z0: 1100, z1: 1182 }, { x0: 52, x1: 60, z0: 1149.5, z1: 1153.5 }, { x0: 59.6, x1: 72.4, z0: 1130, z1: 1190 }];
+export const AREAS_NAVIO = [{ x0: 43.6, x1: 52.4, z0: 1100, z1: 1182 }, { x0: 52, x1: 60, z0: 1149.5, z1: 1153.5 }, { x0: 59.4, x1: 72.6, z0: 1131, z1: 1189 }];
 export function limitar(p) {
   if (p.x > 1500) return;                                   // interiores das casas
   if (p.z > CIDADE_Z.maxSul && p.z < 1200 && p.x > 30 && p.x < 80) {   // píer, rampa e convés do cargueiro
@@ -668,6 +668,11 @@ function montarChaos() {
   extras.push({ x0: -1100, x1: 1100, z0: 1113, z1: 1900, cor: '#3e7ea6' });
   const cais = new THREE.Mesh(new THREE.BoxGeometry(200, 0.8, 1.2), MAT.concreto); cais.position.set(0, 0.2, 1113); ctx.scene.add(cais);
   const pier = new THREE.Mesh(new THREE.BoxGeometry(10, 0.5, 70), MAT.concreto); pier.position.set(48, 0.25, 1148); pier.receiveShadow = true; ctx.scene.add(pier);
+  const navio = ctx.modelo?.('navio');
+  if (navio) {   // cargueiro em 3D: convés a 4 m (o casco fica 1,1 m dentro d'água)
+    const n = navio.clone(); n.position.set(66, -1.1, 1160); n.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); ctx.scene.add(n);
+    return;
+  }
   const casco = new THREE.Mesh(new THREE.BoxGeometry(14, 5, 62), new THREE.MeshStandardMaterial({ color: '#7d2a24', roughness: 0.6 })); casco.position.set(66, 1.5, 1160); casco.castShadow = true; ctx.scene.add(casco);
   const ponte = new THREE.Mesh(new THREE.BoxGeometry(11, 6, 10), new THREE.MeshStandardMaterial({ color: '#efefea', roughness: 0.5 })); ponte.position.set(66, 7, 1182); ponte.castShadow = true; ctx.scene.add(ponte);
   const conts = ['#c43b3b', '#3b6fd2', '#2f9e5b', '#c98a1c', '#8a3bc4', '#3b9ec4'];

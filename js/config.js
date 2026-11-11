@@ -45,7 +45,7 @@ export const MODELOS = [
   'caminhao', 'caminhao_danificado', 'viatura', 'van_policia', 'caixa', 'arma_paintball', 'algemas',
   'bancada', 'base_cla', 'loja', 'delegacia', 'transportadora', 'casa', 'empresa', 'arvore', 'poste',
   'van', 'helicoptero', 'carro_popular', 'carro_suv', 'carro_esportivo', 'carro_presidencial', 'robo_motorista', 'ambulancia', 'caminhao_bombeiros',
-  'exercito_jipe', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero_executivo', 'trem', 'arvore_comum', 'arvore_pinheiro', 'arvore_palmeira',
+  'exercito_jipe', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero_executivo', 'trem', 'navio', 'arvore_comum', 'arvore_pinheiro', 'arvore_palmeira',
   'tanque', 'arma_policia', 'arma_prf', 'arma_exercito', 'arma_militar', 'arma_grande_porte',
 ];
 

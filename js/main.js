@@ -5495,29 +5495,23 @@ async function desenharCofreQG() {
 
 // ---------------------------------------------------------------- assalto ao cargueiro (Porto Sul)
 // 6 contêineres no convés, entre as pilhas e a ponte de comando. Sobe pelo píer e pela rampa.
-const CONTEINERES = [[61.6, 1162], [61.6, 1167], [61.6, 1172], [70.4, 1162], [70.4, 1167], [70.4, 1172]];
+// pontos de arrombar nos corredores laterais do convés, ao lado das pilhas de contêineres do navio
+const CONTEINERES = [[60.1, 1145], [60.1, 1157], [60.1, 1169], [71.9, 1145], [71.9, 1157], [71.9, 1169]];
 const conteineres = [];
 function montarCargueiro() {
   mundo.addPiso({ x0: 43, x1: 53, z0: 1108, z1: 1183, h: 0.5 });
-  mundo.addPiso({ x0: 59, x1: 73, z0: 1129, z1: 1191, h: 4.0 });
-  mundo.addPiso({ x0: 52, x1: 60, z0: 1149.5, z1: 1153.5, h: 4, rampa: { eixo: 'x', de: 53, ate: 59.6, h0: 0.5, h1: 4.0 } });
+  mundo.addPiso({ x0: 59, x1: 73, z0: 1130, z1: 1190, h: 4.0 });
+  mundo.addPiso({ x0: 52, x1: 60, z0: 1149.5, z1: 1153.5, h: 4, rampa: { eixo: 'x', de: 53, ate: 59.4, h0: 0.5, h1: 4.0 } });
   // rampa de embarque com corrimão
-  const rampa = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(6.6, 3.5), 0.15, 3.6), new THREE.MeshStandardMaterial({ color: '#8a8f96', roughness: 0.6, metalness: 0.5 }));
-  rampa.position.set(56.3, 2.2, 1151.5); rampa.rotation.z = Math.atan2(3.5, 6.6); rampa.receiveShadow = true; rampa.castShadow = true; scene.add(rampa);
-  for (const dz of [-1.8, 1.8]) { const c = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(6.6, 3.5), 0.08, 0.08), new THREE.MeshStandardMaterial({ color: '#d8b13a' })); c.position.set(56.3, 3.2, 1151.5 + dz); c.rotation.z = rampa.rotation.z; scene.add(c); }
-  // grade em volta do convés
-  const grade = new THREE.MeshStandardMaterial({ color: '#e8e8e2', roughness: 0.6 });
-  for (const x of [59.2, 72.8]) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.9, 62), grade); r.position.set(x, 4.45, 1160); scene.add(r); }
-  // as pilhas de contêineres e a ponte de comando não se atravessam
-  colisores.push({ tipo: 'caixa', x0: 61.3, x1: 70.7, z0: 1136.8, z1: 1157.2 }, { tipo: 'caixa', x0: 60.5, x1: 71.5, z0: 1177, z1: 1187 });
-  const cores = ['#c43b3b', '#2f9e5b', '#3b6fd2', '#c98a1c', '#8a3bc4', '#3b9ec4'];
+  const rampa = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(6.4, 3.5), 0.15, 3.6), new THREE.MeshStandardMaterial({ color: '#8a8f96', roughness: 0.6, metalness: 0.5 }));
+  rampa.position.set(56.2, 2.2, 1151.5); rampa.rotation.z = Math.atan2(3.5, 6.4); rampa.receiveShadow = true; rampa.castShadow = true; scene.add(rampa);
+  for (const dz of [-1.8, 1.8]) { const c = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(6.4, 3.5), 0.08, 0.08), new THREE.MeshStandardMaterial({ color: '#d8b13a' })); c.position.set(56.2, 3.2, 1151.5 + dz); c.rotation.z = rampa.rotation.z; scene.add(c); }
+  // as pilhas de contêineres e a ponte de comando não se atravessam: anda-se pelos corredores dos lados
+  colisores.push({ tipo: 'caixa', x0: 60.7, x1: 71.3, z0: 1137, z1: 1176 }, { tipo: 'caixa', x0: 60.2, x1: 71.8, z0: 1176, z1: 1189 });
   CONTEINERES.forEach(([x, z], k) => {
-    const g = new THREE.Group(); g.position.set(x, 4.0, z); scene.add(g);
-    const corpo = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.6, 4.2), new THREE.MeshStandardMaterial({ color: cores[k], roughness: 0.7 })); corpo.position.y = 1.3; corpo.castShadow = true; corpo.receiveShadow = true; g.add(corpo);
-    const porta = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.4, 3.9), new THREE.MeshStandardMaterial({ color: '#2a2a2a', roughness: 0.6, metalness: 0.4 })); porta.position.set(x < 66 ? 1.32 : -1.32, 1.3, 0); g.add(porta);
-    const marca = textoSprite('💰 Contêiner', { escala: 0.6, fundo: 'rgba(160,20,20,.9)' }); marca.position.y = 3.6; marca.visible = false; g.add(marca);
-    colisores.push({ tipo: 'caixa', x0: x - 1.4, x1: x + 1.4, z0: z - 2.2, z1: z + 2.2 });
-    conteineres.push({ k, x, z, g, porta, marca, ponto: { x: x < 66 ? x + 2.2 : x - 2.2, z } });
+    const marca = textoSprite('💰 Contêiner', { escala: 0.6, fundo: 'rgba(160,20,20,.9)' }); marca.position.set(x < 66 ? x + 1.2 : x - 1.2, 7.2, z); marca.visible = false; scene.add(marca);
+    const feito = textoSprite('✔ Arrombado', { escala: 0.5, fundo: 'rgba(40,40,40,.85)' }); feito.position.copy(marca.position); feito.visible = false; scene.add(feito);
+    conteineres.push({ k, x, z, marca, feito, ponto: { x, z } });
   });
 }
 async function carregarAssalto() {
@@ -5530,20 +5524,20 @@ function desenharConteineres() {
   const meu = assaltoNavio && jogador.cla && assaltoNavio.cla === jogador.cla;
   for (const c of conteineres) {
     const aberto = !!assaltoNavio?.abertos?.includes(c.k);
-    c.porta.visible = !aberto;
     c.marca.visible = !!meu && !aberto;
+    c.feito.visible = !!assaltoNavio && aberto;
   }
 }
 function conteinerPerto() {
   if (!assaltoNavio || !jogador.cla || assaltoNavio.cla !== jogador.cla || jogador.carro || jogador.pos.y < 3) return null;
-  for (const c of conteineres) if (!assaltoNavio.abertos?.includes(c.k) && Math.hypot(c.ponto.x - jogador.pos.x, c.ponto.z - jogador.pos.z) < 2.2) return c.k;
+  for (const c of conteineres) if (!assaltoNavio.abertos?.includes(c.k) && Math.hypot(c.ponto.x - jogador.pos.x, c.ponto.z - jogador.pos.z) < 2.6) return c.k;
   return null;
 }
 function arrombarConteiner(k) {
   if (jogador.arrombando) return;
   const c = conteineres[k];
   jogador.arrombando = { k, t: 12, x: c.ponto.x, z: c.ponto.z, aviso: 0 };
-  virarPara(c.x, c.z); jogador.alvo = null;
+  virarPara(66, c.z); jogador.alvo = null;
   conexao?.enviar('assalto', { tipo: 'arrombando', cla: assaltoNavio?.cla_nome });
   aviso('🔧 Arrombando o contêiner… não se afaste (12 s).', 3);
 }
