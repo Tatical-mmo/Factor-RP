@@ -59,6 +59,7 @@ function desenhar() {
   else if (aba === 'historico') abaHistorico();
   else if (aba === 'salarios') abaSalarios();
   else if (aba === 'tempo') abaTempo();
+  else if (aba === 'denuncias') abaDenuncias();
 }
 
 // ------------------------------------------------------------ jogadores
@@ -203,6 +204,18 @@ async function abaSalarios() {
       executar(() => (id.startsWith('mod:') ? rede.painel.salarioModerador(id.slice(4), v) : rede.painel.definirSalario(id, v)), 'Salário salvo.');
     };
   });
+}
+// ------------------------------------------------------------ denúncias dos jogadores
+const MOTIVO_TXT = { ofensa: 'Ofensa', assedio: 'Assédio/ameaça', trapaca: 'Trapaça', nome: 'Nome impróprio', voz: 'Chat de voz', outro: 'Outro' };
+async function abaDenuncias() {
+  const c = $('painelConteudo'); c.textContent = 'Carregando…';
+  let l; try { l = await rede.painel.denuncias(); } catch (e) { c.textContent = e.message; return; }
+  c.innerHTML = `<p class="dica">Denúncias abertas feitas pelos jogadores. Abra o jogador para agir (banir, prender, algemar…) e marque como resolvida.</p>
+    ${l.length ? l.map((d) => `<div class="linha item" style="flex-direction:column;align-items:stretch"><span><b>${esc(d.alvo_nome)}</b> · ${MOTIVO_TXT[d.motivo] || d.motivo}${d.vezes > 1 ? ` · <i class="tag ruim">${d.vezes} denúncias</i>` : ''}</span>
+      ${d.detalhes ? `<small style="white-space:pre-wrap">${esc(d.detalhes)}</small>` : ''}<small>por ${esc(d.autor_nome)} · ${new Date(d.criada_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small>
+      <div class="botoes"><button data-abrir="${d.alvo}">Abrir jogador</button><button data-resolver="${d.id}">Resolvida ✓</button></div></div>`).join('') : '<p class="vazio">Nenhuma denúncia aberta. 🎉</p>'}`;
+  c.querySelectorAll('[data-abrir]').forEach((b) => { b.onclick = () => { aba = 'jogadores'; selecionado = b.dataset.abrir; desenhar(); }; });
+  c.querySelectorAll('[data-resolver]').forEach((b) => { b.onclick = async () => { try { await rede.painel.resolverDenuncia(Number(b.dataset.resolver)); msg('Denúncia resolvida.'); abaDenuncias(); } catch (e) { msg(e.message, false); } }; });
 }
 // ------------------------------------------------------------ tempo (chuva, tempestade, neve)
 function abaTempo() {

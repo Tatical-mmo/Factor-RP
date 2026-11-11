@@ -2003,12 +2003,16 @@ async function iniciarJogo(perfil) {
     meusCarros: () => [...carrosMundo.values()].map((v) => v.d).filter((d) => d.dono === jogador.perfil.id),
     veiculos: meusVeiculos, acaoVeiculo, amigosMudaram: () => carregarAmigos(), jornalMudou: () => { tempoJornal = 0.3; tempoTelao = 0; },
     irRedacao: () => entrarRedacao(), tirarFoto: () => tirarFotoRua(),
+    online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta?.nome || '?' })), bloqueado: (id) => bloqueados.has(id),
+    bloqueiosMudaram: () => carregarBloqueios(), sairDaConta: async () => { await rede.sair(); location.reload(); },
     rastrear: (a) => rastrear(a), portaoEmpresa: (id) => portaoDaEmpresa(id),
     locaisTrabalho: () => ({ policia: pontos.delegacia, prf: civico.PREFEITURA.prf, medico: civico.HOSPITAL.balcao, bombeiro: civico.BOMBEIROS.balcao,
       jornalista: civico.PREFEITURA.jornal, exercito: mundo.QUARTEL.portao, agencia: civico.BANCO.empregos }), destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); }, pontoMudou: () => servicos.recomecarPonto(),
   });
   $('btVeiculos').onclick = () => abrirServico('veiculos');
   $('btAmigos').onclick = () => abrirServico('amigos');
+  $('btConta').onclick = () => { abrirServico('conta'); $('menuBar').classList.remove('aberto'); };
+  carregarBloqueios();
   $('btTrabalho').onclick = () => abrirServico('trabalho');
   $('btJornal').onclick = () => { abrirServico('jornal'); $('menuBar').classList.remove('aberto'); };
   $('btMenu').onclick = () => $('menuBar').classList.toggle('aberto');
@@ -2118,8 +2122,8 @@ function conectarMultiplayer(perfil) {
   window.addEventListener('pagehide', salvarAgora);
   voz.iniciar({
     eu: () => (jogador.perfil ? { id: jogador.perfil.id, x: jogador.pos.x, z: jogador.pos.z, cla: jogador.claInfo?.nome || null } : null),
-    outros: () => [...remotos.entries()].map(([id, r]) => ({ id, x: r.alvo?.x ?? 0, z: r.alvo?.z ?? 0, cla: r.meta?.cla || null })).filter((o) => remotos.get(o.id)?.alvo),
-    enviar: (ev, m) => conexao?.enviar(ev, m), aviso,
+    outros: () => [...remotos.entries()].map(([id, r]) => ({ id, x: r.alvo?.x ?? 0, z: r.alvo?.z ?? 0, cla: r.meta?.cla || null })).filter((o) => remotos.get(o.id)?.alvo && !bloqueados.has(o.id)),
+    enviar: (ev, m) => conexao?.enviar(ev, m), aviso, bloqueado: (id) => bloqueados.has(id),
   });
   desenharBotaoVoz();
 }
@@ -3708,6 +3712,7 @@ function iniciarChat() {
 function receberChat(m) {
   if (!m || typeof m.texto !== 'string' || !m.de) return;
   if (m.privado && !amigosIds.has(m.de)) return;      // modo privado: só os amigos veem
+  if (bloqueados.has(m.de)) return;                   // bloqueado: some do meu chat
   mostrarChat({ ...m, texto: m.texto.slice(0, 120), nome: String(m.nome || '?').slice(0, 24) }, false);
 }
 function mostrarChat(m, meu) {
@@ -6300,3 +6305,7 @@ function atualizarEsteiras(dt) {
   if (!String(jogador.dentroCasa).startsWith('empresa:')) return;
   for (const c of esteiras) { c.m.position.x += dt * 1.2; if (c.m.position.x > c.x1) c.m.position.x = c.x0; }
 }
+
+// ---------------------------------------------------------------- bloqueios (o bloqueado some do meu chat e da minha voz)
+const bloqueados = new Set();
+async function carregarBloqueios() { try { const l = await rede.conta.bloqueios(); bloqueados.clear(); for (const b of l || []) bloqueados.add(b.alvo); } catch { /* tenta depois */ } }

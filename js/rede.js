@@ -122,6 +122,9 @@ function traduzirRpc(m) {
     'cedo demais': 'Calma! Espere alguns segundos depois de começar o assalto.',
     'conteiner ja aberto': 'Esse contêiner já foi arrombado.',
     'sem carga': 'Você não tem carga do cargueiro.',
+    'confirmacao invalida': 'Digite EXCLUIR para confirmar.',
+    'o administrador nao pode excluir a conta': 'O administrador não pode excluir a própria conta.',
+    'muitas denuncias': 'Muitas denúncias em pouco tempo. Tente mais tarde.',
     'so lixeiros': 'Só membros da sociedade.',
     'bueiro trancado': 'A tampa não abre.',
     'devagar': 'Calma, espere um pouco.',
@@ -327,6 +330,12 @@ function traduzirRpc(m) {
   if (espera) return `Aguarde ${espera[1]} s.`;
   return t[m] || m;
 }
+export const conta = {
+  excluir: () => rpc('excluir_minha_conta', { p_confirmacao: 'EXCLUIR' }),
+  denunciar: (alvo, motivo, detalhes) => rpc('denunciar', { p_alvo: alvo, p_motivo: motivo, p_detalhes: detalhes || null }),
+  bloquear: (alvo, sim) => rpc('bloquear', { p_alvo: alvo, p_sim: !!sim }),
+  bloqueios: () => sel(sb.from('bloqueios').select('alvo,em,perfil:perfis!bloqueios_alvo_fkey(nome)')),
+};
 export const lixeiros = {
   secreto: (k) => rpc('bueiro_secreto', { p_bueiro: k }),
   entrar: (k) => rpc('lixeiro_entrar', { p_bueiro: k }),
@@ -378,6 +387,8 @@ export const painel = {
   moedas: (alvo, valor) => rpc('admin_moedas', { alvo, valor }),
   bueiroSecreto: () => rpc('admin_bueiro_secreto'),
   sortearBueiro: () => rpc('admin_sortear_bueiro'),
+  denuncias: () => rpc('admin_denuncias'),
+  resolverDenuncia: (id) => rpc('admin_resolver_denuncia', { p_id: id }),
   banir: (alvo, motivo) => rpc('admin_banir', { alvo, motivo }),
   desbanir: (alvo) => rpc('admin_desbanir', { alvo }),
   algemar: (alvo, ligado) => rpc('admin_algemar', { alvo, ligado }),

@@ -159,6 +159,7 @@ const SERVICOS = {
   veiculos: ['Meus veículos', telaVeiculos],
   jornal: ['📰 Jornal da Cidade', telaJornal],
   amigos: ['👥 Amigos', telaAmigos],
+  conta: ['⚙️ Conta e segurança', telaConta],
   trabalho: ['💼 Seu trabalho', telaTrabalho],
   taxi: ['Carona: para onde?', telaTaxi],
 };
@@ -414,10 +415,44 @@ async function telaAmigos(c) {
       <span class="bts"><button data-aceitar="${a.id}">Aceitar</button><button data-recusar="${a.id}">Recusar</button></span></div>`).join('')}</div>` : ''}
     <div class="sub">Amigos (${amigos.length})</div>
     <div class="lista">${amigos.length ? amigos.map((a) => `<div class="linha item"><span class="nm"><b>${esc(a.nome)}</b></span><span class="bts"><button data-desfazer="${a.id}">Remover</button></span></div>`).join('') : '<span class="vazio">Nenhum amigo ainda.</span>'}</div>
+    <div class="sub">Jogadores online</div>
+    <p class="dica">Alguém ofendendo, assediando ou trapaceando? <b>Denuncie</b> (a equipe recebe) ou <b>bloqueie</b> (some do seu chat e da sua voz).</p>
+    <div class="lista">${ctx.online().length ? ctx.online().map((o) => `<div class="linha item"><span class="nm"><b>${esc(o.nome)}</b>${ctx.bloqueado(o.id) ? '<small>bloqueado</small>' : ''}</span>
+      <span class="bts"><button data-denunciar="${o.id}" data-nome="${esc(o.nome)}">Denunciar</button><button data-bloq="${o.id}" data-sim="${ctx.bloqueado(o.id) ? 0 : 1}">${ctx.bloqueado(o.id) ? 'Desbloquear' : 'Bloquear'}</button></span></div>`).join('') : '<span class="vazio">Ninguém online além de você.</span>'}</div>
+    <div id="amDenuncia"></div>
     ${enviados.length ? `<div class="sub">Esperando resposta</div><div class="lista">${enviados.map((a) => `<div class="linha item"><span class="nm"><b>${esc(a.nome)}</b><small>pedido enviado</small></span><span class="bts"><button data-desfazer="${a.id}">Cancelar</button></span></div>`).join('')}</div>` : ''}`;
   const depois = (txt) => (r) => { ctx.amigosMudaram?.(); return typeof txt === 'function' ? txt(r) : txt; };
   $('amPedir').onclick = () => { const n = $('amNome').value.trim(); if (n) executar(() => rede.amigos.pedir(n), depois((r) => (r === 'aceita' ? `Agora você e ${n} são amigos!` : `Pedido enviado para ${n}.`))); };
   c.querySelectorAll('[data-aceitar]').forEach((b) => { b.onclick = () => executar(() => rede.amigos.responder(b.dataset.aceitar, true), depois('Amizade aceita!')); });
   c.querySelectorAll('[data-recusar]').forEach((b) => { b.onclick = () => executar(() => rede.amigos.responder(b.dataset.recusar, false), depois('Pedido recusado.')); });
   c.querySelectorAll('[data-desfazer]').forEach((b) => { b.onclick = () => executar(() => rede.amigos.desfazer(b.dataset.desfazer), depois('Removido.')); });
+  ligarDenunciaBloqueio(c);
+}
+const MOTIVOS = [['ofensa', 'Ofensa ou xingamento'], ['assedio', 'Assédio ou ameaça'], ['trapaca', 'Trapaça ou bug abusado'], ['nome', 'Nome impróprio'], ['voz', 'Abuso no chat de voz'], ['outro', 'Outro']];
+function ligarDenunciaBloqueio(c) {
+  c.querySelectorAll('[data-bloq]').forEach((b) => { b.onclick = () => executar(() => rede.conta.bloquear(b.dataset.bloq, b.dataset.sim === '1').then(() => ctx.bloqueiosMudaram()), b.dataset.sim === '1' ? 'Bloqueado: ele some do seu chat e da sua voz.' : 'Desbloqueado.'); });
+  c.querySelectorAll('[data-denunciar]').forEach((b) => { b.onclick = () => {
+    const f = $('amDenuncia'); if (!f) return;
+    f.innerHTML = `<div class="sub">Denunciar ${b.dataset.nome}</div><div class="lista"><select id="dnMotivo">${MOTIVOS.map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select>
+      <textarea id="dnTexto" maxlength="400" rows="3" placeholder="O que aconteceu? (opcional)"></textarea><div class="botoes"><button id="dnEnviar">Enviar denúncia</button><button id="dnCancelar">Cancelar</button></div></div>`;
+    f.scrollIntoView({ block: 'center' });
+    $('dnCancelar').onclick = () => { f.innerHTML = ''; };
+    $('dnEnviar').onclick = () => executar(() => rede.conta.denunciar(b.dataset.denunciar, $('dnMotivo').value, $('dnTexto').value), 'Denúncia enviada. A equipe vai analisar. Obrigado!');
+  }; });
+}
+async function telaConta(c) {
+  const eu = ctx.perfil(), bl = (await rede.conta.bloqueios().catch(() => [])) || [];
+  c.innerHTML = `<div class="sub">Sua conta</div><p class="dica">Jogador: <b>${esc(eu.nome)}</b></p>
+    <div class="botoes"><a href="privacidade.html" target="_blank" rel="noopener"><button>📄 Política de privacidade</button></a></div>
+    <div class="sub">Bloqueados (${bl.length})</div>
+    <div class="lista">${bl.length ? bl.map((x) => `<div class="linha item"><span class="nm"><b>${esc(x.perfil?.nome || '?')}</b></span><span class="bts"><button data-bloq="${x.alvo}" data-sim="0">Desbloquear</button></span></div>`).join('') : '<span class="vazio">Ninguém bloqueado.</span>'}</div>
+    <div class="sub" style="color:#ff8a80">Excluir minha conta</div>
+    ${eu.cargo === 'admin' ? '<p class="dica">O administrador não pode excluir a própria conta.</p>' : `<p class="aviso-item">⚠️ Apaga para sempre o seu login e tudo do jogo: moedas, casas, carros, empresas, personagens e progresso. Não dá para desfazer.</p>
+    <div class="botoes"><input id="exConf" placeholder="Digite EXCLUIR"><button id="exOk" class="perigo">Excluir minha conta</button></div>`}`;
+  ligarDenunciaBloqueio(c);
+  const ok = $('exOk');
+  if (ok) ok.onclick = async () => {
+    if ($('exConf').value.trim().toUpperCase() !== 'EXCLUIR') { msg('Digite EXCLUIR para confirmar.', false); return; }
+    try { await rede.conta.excluir(); msg('Conta excluída. Até mais!'); setTimeout(() => ctx.sairDaConta(), 1500); } catch (e) { msg(e.message, false); }
+  };
 }

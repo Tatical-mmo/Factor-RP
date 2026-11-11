@@ -107,6 +107,7 @@ async function chamar(id) {
 export async function receber(m) {
   const eu = ctx?.eu(); if (!eu || m.para !== eu.id) return;
   if (m.tipo === 'fim') { fechar(m.de); return; }
+  if (ctx.bloqueado?.(m.de)) { ctx.enviar('voz', { de: eu.id, para: m.de, tipo: 'fim' }); return; }
   if (modo === 'off' || (m.modo && m.modo !== modo)) { ctx.enviar('voz', { de: eu.id, para: m.de, tipo: 'fim' }); return; }
   try {
     if (m.tipo === 'oferta') {

@@ -229,6 +229,13 @@ Polícia em serviço, PRF, Hospital, Bombeiros, Jornal, Exército e funcionário
 
 Prefeitura (gabinete, urna, outdoors, sala de imprensa), quartel dos bombeiros (balcão, incêndios, vestiário, mastro, enfermaria), delegacia e posto da PRF (balcão, quadro de procurados, celas e **estande de tiro interno** só para a corporação) e empresas (dono e funcionários entram pelo portão; o interior cresce nos níveis 5, 10 e 15: mesa do dono, relógio de ponto, estoque, copa, sala de reuniões, linha de produção e sala VIP).
 
+## Conta, denúncias e bloqueios (SQL 46)
+
+- ☰ › **Conta**: política de privacidade, lista de bloqueados e **excluir minha conta** (digite EXCLUIR). Também pela página `conta.html` (login + exclusão) — útil para lojas de apps.
+- ☰ › **Amigos** › Jogadores online: **Denunciar** (motivo + detalhes) ou **Bloquear** (some do seu chat e da sua voz).
+- Painel da equipe › **Denúncias**: denúncias abertas, quantas vezes o jogador foi denunciado, abrir o jogador e marcar como resolvida.
+- `privacidade.html`: política de privacidade.
+
 ## Controles no PC
 
 | Tecla | Ação |

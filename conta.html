@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fator RP · Excluir conta</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:480px;margin:0 auto;padding:20px;background:#141925;color:#e8edf5}input,button{width:100%;box-sizing:border-box;padding:12px;margin:6px 0;border-radius:10px;border:1px solid #33405a;background:#1d2433;color:#fff;font-size:16px}button{background:#2d3650;font-weight:700}button.perigo{background:#8a2525}.msg{min-height:22px;margin-top:8px}.erro{color:#ff8a80}.ok{color:#8fe388}a{color:#7fb8ff}</style>
+<script type="importmap">{ "imports": { "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm" } }</script></head>
+<body>
+<h1>Excluir conta do Fator RP</h1>
+<p>Isto apaga <b>para sempre</b> o seu login e tudo do jogo: moedas, casas, carros, empresas, personagens e progresso.</p>
+<div id="passo1">
+  <input id="email" type="email" placeholder="E-mail da conta" autocomplete="email">
+  <input id="senha" type="password" placeholder="Senha" autocomplete="current-password">
+  <button id="entrar">Entrar</button>
+</div>
+<div id="passo2" style="display:none">
+  <p>Conta: <b id="quem"></b></p>
+  <input id="conf" placeholder="Digite EXCLUIR para confirmar">
+  <button id="excluir" class="perigo">Excluir minha conta para sempre</button>
+</div>
+<div id="msg" class="msg"></div>
+<p><a href="privacidade.html">Política de privacidade</a> · <a href="./">Voltar ao jogo</a></p>
+<script type="module">
+import { sb, entrar, sair, conta } from './js/rede.js';
+const $ = (id) => document.getElementById(id);
+const msg = (t, ok = false) => { $('msg').textContent = t; $('msg').className = 'msg ' + (ok ? 'ok' : 'erro'); };
+async function mostrar() {
+  const { data } = await sb.auth.getSession();
+  if (!data.session) return;
+  $('passo1').style.display = 'none'; $('passo2').style.display = 'block'; $('quem').textContent = data.session.user.email;
+}
+$('entrar').onclick = async () => { try { await entrar($('email').value.trim(), $('senha').value); msg(''); mostrar(); } catch (e) { msg(e.message); } };
+$('excluir').onclick = async () => {
+  if ($('conf').value.trim().toUpperCase() !== 'EXCLUIR') { msg('Digite EXCLUIR para confirmar.'); return; }
+  try { await conta.excluir(); await sair().catch(() => {}); $('passo2').style.display = 'none'; msg('Sua conta foi excluída. Obrigado por ter jogado.', true); } catch (e) { msg(e.message); }
+};
+mostrar();
+</script>
+</body></html>
