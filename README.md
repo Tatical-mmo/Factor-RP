@@ -262,6 +262,13 @@ Os presos não ficam mais na grade do lado de fora: vão para uma das 8 celas da
 - **Prisão militar:** na ficha militar, quem tem patente maior (ou o General Supremo) manda um militar para a prisão do quartel por 15 min ou solta.
 - **Reset do mapa:** mais completo (casas do esgoto, cofres de clã, assaltos, Lixeiros, residência oficial, seguranças) e mostra o que foi apagado; o jogo de todos recarrega em seguida.
 
+## Esconderijos dos clãs e armas nas cadeias (SQL 51)
+
+- 4 **esconderijos** na mata (2 em Vila Serra, 2 em Porto Sul), cada um com jaula, barraca e fogueira, ligados à cidade por uma **trilha de terra**.
+- Membro de clã perto de um jogador **ferido** toca em **Sequestrar** e escolhe o esconderijo (crime +2). O refém vai para a jaula, não age nem atira, por até 15 min.
+- Qualquer jogador que achar o esconderijo toca em **Libertar** (+200 se não for do clã sequestrador). Quem chegar pode atirar nos sequestradores.
+- Nas cadeias (carceragem da Polícia/PRF e prisão militar) **visitantes e presos não usam armas nem brigam**.
+
 ## Controles no PC
 
 | Tecla | Ação |

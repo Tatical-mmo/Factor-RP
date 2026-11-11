@@ -135,6 +135,11 @@ function traduzirRpc(m) {
     'o ladrao ja fugiu': 'O ladrão já fugiu.',
     'outro agente ja prendeu': 'Outro agente já prendeu esse ladrão.',
     'so patente maior prende': 'Só uma patente maior pode mandar para a prisão militar.',
+    'so membros de cla': 'Só membros de clã fazem isso.',
+    'esconderijo invalido': 'Esconderijo inválido.',
+    'ele e do seu cla': 'Ele é do seu clã.',
+    'ele ja esta preso': 'Ele já está preso.',
+    'ele nao esta preso': 'Ele não está mais preso.',
     'so lixeiros': 'Só membros da sociedade.',
     'bueiro trancado': 'A tampa não abre.',
     'devagar': 'Calma, espere um pouco.',
@@ -341,6 +346,10 @@ function traduzirRpc(m) {
   return t[m] || m;
 }
 export const roubarCarroRua = () => rpc('roubar_carro_rua');
+export const cativeiro = {
+  capturar: (alvo, local) => rpc('capturar_refem', { p_alvo: alvo, p_local: local }),
+  libertar: (alvo) => rpc('libertar_refem', { p_alvo: alvo }),
+};
 export const conta = {
   excluir: () => rpc('excluir_minha_conta', { p_confirmacao: 'EXCLUIR' }),
   denunciar: (alvo, motivo, detalhes) => rpc('denunciar', { p_alvo: alvo, p_motivo: motivo, p_detalhes: detalhes || null }),

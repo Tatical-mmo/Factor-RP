@@ -914,6 +914,7 @@ function livre() {
   if (jogador.trem) { aviso('Você está no trem.'); return false; }
   if (jogador.carro) { aviso('Saia do carro primeiro.'); return false; }
   if (jogador.algemado) { aviso('Você está algemado.'); return false; }
+  if (cativo()) { aviso('Você é refém: espere alguém te libertar.'); return false; }
   if (jogador.pena > 0) { aviso('Você está preso.'); return false; }
   return true;
 }
@@ -956,6 +957,8 @@ function acaoContexto() {
   const fogo = servicos.fogoProximo(9); if (fogo && !jogador.carregando) { servicos.apagar(fogo); return; }
   { const a = algemadoParaSoltar(); if (a) { soltarAlgemado(a); return; } }
   { const b = bandidoPerto(); if (b) { prenderBandido(b); return; } }
+  { const r = refemPerto(); if (r) { libertarRefem(r); return; } }
+  { const f = feridoParaSequestro(); if (f) { sequestrar(f); return; } }
   if (bueiroPerto()) { acaoBueiro(); return; }
   { const q = portaQGPerto(); if (q) { if (meuQG(q)) entrarNoQG(q); else aviso('🏴 Só os membros do clã dono desta base entram no QG.', 3); return; } }
   { const k = conteinerPerto(); if (k !== null) { arrombarConteiner(k); return; } }
@@ -1418,6 +1421,7 @@ function pegarOuSoltar(caixa) {
 
 function socar() {
   if (jogador.trava > 0 || jogador.carregando || !livre()) return;
+  if (armasProibidas()) { aviso('🚫 Aqui não é permitido brigar nem usar armas.'); return; }
   jogador.alvo = null;
   jogador.soco = (jogador.soco + 1) % 2;
   jogador.avatar.tocar(jogador.soco ? 'punch_right' : 'punch_left', { umaVez: true, velocidade: 1.7, fade: 0.08 });
@@ -1427,6 +1431,7 @@ function socar() {
 
 function alternarArma() {
   if (jogador.trava > 0) return;
+  if (!jogador.armado && armasProibidas()) { aviso('🚫 Armas não são permitidas aqui.'); return; }
   if (!jogador.armado && !livre()) return;
   if (jogador.carregando) { aviso('Solte a caixa antes de sacar a arma.'); return; }
   jogador.armado = !jogador.armado;
@@ -1481,6 +1486,7 @@ const CORES_TINTA = ['#ff3e6c', '#35d07f', '#3ea8ff', '#ffd23e', '#b05cff', '#ff
 function atirar(alvo) {
   if (jogador.carro?.servico === 'tanque') { atirarTanque(); return; }
   if (!jogador.armado || jogador.trava > 0 || jogador.recarga > 0 || !livre()) return;
+  if (armasProibidas()) { aviso('🚫 Armas não são permitidas aqui.'); return; }
   const A = ARMAS[jogador.armaTipo || 'basica'];
   jogador.alvo = null;
   if (alvo) jogador.yaw = Math.atan2(alvo.x - jogador.pos.x, alvo.z - jogador.pos.z);
@@ -1910,7 +1916,7 @@ async function iniciarJogo(perfil) {
   ferrovia.montar({ scene, textoSprite, modelo: (n) => modelos[n] });
   clima.iniciar({ scene, alturaChao, naRua, mudou: (t) => { if (jogador.avatar) aviso(t === 'limpo' ? '☀️ O tempo abriu.' : { chuva: '🌧️ Começou a chover.', tempestade: '⛈️ Tempestade chegando! Fique atento aos raios.', neve: '❄️ Começou a nevar.' }[t], 3.5); } });
   carregarClima();
-  montarCargueiro(); montarBueiros();
+  montarCargueiro(); montarBueiros(); montarEsconderijos();
   mundo.finalizar();
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
@@ -2089,7 +2095,7 @@ function conectarMultiplayer(perfil) {
           const alvo = r.alvo; removerRemoto(id); adicionarRemoto(id, meta).then(() => { const n = remotos.get(id); if (n && alvo && !n.alvo) n.alvo = alvo; });
         } else if (!r) adicionarRemoto(id, meta);
         else {
-          const chave = (m) => [m.crimes, m.policial, m.cla, m.prf, m.eleitoral, m.prefeito, m.profissao, m.ferido, m.recompensa, m.patente].join('|');
+          const chave = (m) => [m.crimes, m.policial, m.cla, m.prf, m.eleitoral, m.prefeito, m.profissao, m.ferido, m.recompensa, m.patente, m.ref].join('|');
           if (chave(r.meta) !== chave(meta)) {
             r.meta = meta; etiquetaStatus(r);
             if (meta.ferido && r.av) {
@@ -2843,7 +2849,7 @@ const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfi
 function metaPresenca() {
   const p = jogador.perfil;
   return { nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
-    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null };
+    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0 };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
 function etiquetaStatus(r) {
@@ -4830,6 +4836,7 @@ function teleportar(x, z) {
   if (jogador.carro) sairCarro();
   if (jogador.trem) { ferrovia.ocultarTeto(jogador.trem.li, jogador.trem.k, false); jogador.trem = null; }
   if (jogador.pena > 0 && cadeia) { const c = posCela(); x = c.x; z = c.z; jogador.dentroCasa = 'carceragem'; jogador.saidaSala = { x: cadeia.x + 4.5, z: cadeia.z }; }
+  else if (cativo()) { const c = ESCONDERIJOS[jogador.perfil.cativeiro - 1]; x = c.x; z = c.z; }
   else if (presoMilitar()) { const c = posCelaMilitar(); x = c.x; z = c.z; jogador.dentroCasa = 'prisaomilitar'; jogador.saidaSala = { x: mundo.QUARTEL.portao.x - 2, z: mundo.QUARTEL.portao.z }; }
   if (x < 1500) jogador.dentroCasa = null;     // interiores ficam em x >= 2000
   jogador.pos.set(x, alturaChao(x, z), z);
@@ -5087,6 +5094,8 @@ function atualizarHUD(dt) {
   if (jogador.perfil?.banido) { /* mensagem já exibida */ }
   else if (jogador.pena > 0) { bl.textContent = `Preso: ${formatarTempo(jogador.pena)}`; bl.classList.remove('oculto'); }
   else if (jogador.algemado) { bl.textContent = 'Algemado'; bl.classList.remove('oculto'); }
+  else if (cativo()) { bl.textContent = `Refém: ${formatarTempo(Math.max(0, (Date.parse(jogador.perfil.cativeiro_ate) - agoraServidor()) / 1000))}`; bl.classList.remove('oculto'); }
+  else if (presoMilitar()) { bl.textContent = `Prisão militar: ${formatarTempo(Math.max(0, (Date.parse(jogador.perfil.prisao_militar_ate) - agoraServidor()) / 1000))}`; bl.classList.remove('oculto'); }
   else bl.classList.add('oculto');
   if (avisoTimer > 0) { avisoTimer -= dt; if (avisoTimer <= 0) $('aviso').style.opacity = 0; }
   atualizarPlacas();
@@ -5163,6 +5172,8 @@ function contexto() {
   if (jogador.arrombando) return [`arrombando o contêiner… ${Math.ceil(jogador.arrombando.t)} s (não se afaste)`, 'Arrombar'];
   { const a = algemadoParaSoltar(); if (a) return [`tirar as algemas de ${a.nome}`, 'Soltar']; }
   { const b = bandidoPerto(); if (b) return ['PRENDER o ladrão (+300)', 'Prender']; }
+  { const r = refemPerto(); if (r) return [`libertar ${r.r.meta?.nome || 'o refém'} (+200)`, 'Libertar']; }
+  { const f = feridoParaSequestro(); if (f) return [`sequestrar ${f.r.meta?.nome || 'o ferido'} e levar ao esconderijo (crime)`, 'Sequestrar']; }
   { const bu = contextoBueiro(); if (bu) return bu; }
   { const q = portaQGPerto(); if (q) return meuQG(q) ? ['entrar no QG do clã', 'QG'] : ['QG do clã (só membros do clã dono da base)', 'QG']; }
   { const k = conteinerPerto(); if (k !== null) return ['ARROMBAR o contêiner do cargueiro (crime)', 'Arrombar']; }
@@ -5242,7 +5253,7 @@ function quadro() {
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
-  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura();
+  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   atualizarUniformes();
   enviarEstado(dt);
@@ -6860,4 +6871,92 @@ function atualizarPrisaoMilitar(dt) {
   if (presoMilitar()) {
     if (jogador.dentroCasa !== 'prisaomilitar') { if (jogador.carro) sairCarro(); if (jogador.armado) alternarArmaForcado(false); const c = posCelaMilitar(); teleportar(c.x, c.z); aviso('⛓️ Você está na prisão militar.', 3); }
   } else if (jogador.dentroCasa === 'prisaomilitar' && jogador.saidaSala) { const s = jogador.saidaSala; teleportar(s.x, s.z); aviso('🎖️ Você saiu da prisão militar.', 3); }
+}
+
+// ================================================================= armas proibidas nas cadeias (polícia, PRF e prisão militar) e para reféns
+function armasProibidas() {
+  const d = jogador.dentroCasa;
+  return (d === 'carceragem' && !daPolicia()) || (d === 'prisaomilitar' && !militar()) || presoMilitar() || cativo() || jogador.pena > 0;
+}
+// ================================================================= esconderijos dos clãs na mata (cativeiro)
+// 4 esconderijos com jaula, ligados à cidade por uma trilha de terra. Clã leva um jogador ferido para lá (crime).
+// O refém fica na jaula, sem agir nem atirar, até alguém libertar ou passar 15 min. Quem achar pode atirar nos sequestradores.
+const ESCONDERIJOS = [
+  { nome: 'Mata Oeste da Vila Serra', x: -205, z: -1010, trilha: [[-86, -999], [-140, -1003], [-205, -1010]] },
+  { nome: 'Mata Leste da Vila Serra', x: 205, z: -1070, trilha: [[86, -1053], [150, -1062], [205, -1070]] },
+  { nome: 'Mata Oeste do Porto Sul', x: -210, z: 1000, trilha: [[-86, 999], [-150, 1000], [-210, 1000]] },
+  { nome: 'Mata do Porto Sul (fundos)', x: -235, z: 1075, trilha: [[-86, 1053], [-160, 1064], [-235, 1075]] },
+];
+const cativo = () => { const p = jogador.perfil; return !!(p?.cativeiro && p.cativeiro_ate && Date.parse(p.cativeiro_ate) > agoraServidor()); };
+function montarEsconderijos() {
+  const terra = new THREE.MeshStandardMaterial({ color: '#7a5c3a', roughness: 1 }), madeira = new THREE.MeshStandardMaterial({ color: '#5a3f26', roughness: 0.9 });
+  const ferro = new THREE.MeshStandardMaterial({ color: '#2e2f33', roughness: 0.5, metalness: 0.6 }), lona = new THREE.MeshStandardMaterial({ color: '#4d5a3a', roughness: 0.9, side: THREE.DoubleSide });
+  for (const e of ESCONDERIJOS) {
+    mundo.abrirTrilha([...e.trilha, [e.x, e.z]], 3.2);
+    // trilha de terra
+    for (let i = 0; i < e.trilha.length - 1; i++) {
+      const [ax, az] = e.trilha[i], [bx, bz] = e.trilha[i + 1], len = Math.hypot(bx - ax, bz - az);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6, len + 1.5), terra); m.rotation.x = -Math.PI / 2; m.rotation.z = -Math.atan2(bx - ax, bz - az);
+      m.position.set((ax + bx) / 2, alturaChao((ax + bx) / 2, (az + bz) / 2) + 0.025, (az + bz) / 2); m.receiveShadow = true; scene.add(m);
+    }
+    const y = alturaChao(e.x, e.z);
+    const clar = new THREE.Mesh(new THREE.CircleGeometry(7, 20), terra); clar.rotation.x = -Math.PI / 2; clar.position.set(e.x, y + 0.02, e.z); clar.receiveShadow = true; scene.add(clar);
+    // jaula
+    const g = new THREE.Group(); g.position.set(e.x, y, e.z); scene.add(g);
+    const barra = new THREE.CylinderGeometry(0.05, 0.05, 2.4, 6);
+    for (let k = 0; k < 22; k++) { const a = k / 22 * Math.PI * 2, b = new THREE.Mesh(barra, ferro); b.position.set(Math.cos(a) * 1.9, 1.2, Math.sin(a) * 1.9); b.castShadow = true; g.add(b); }
+    const tampa = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 0.12, 22), madeira); tampa.position.y = 2.45; g.add(tampa);
+    // barraca dos sequestradores
+    const barraca = new THREE.Mesh(new THREE.ConeGeometry(2.2, 2.4, 4), lona); barraca.position.set(4.2, 1.2, 0); barraca.rotation.y = Math.PI / 4; barraca.castShadow = true; g.add(barraca);
+    const caixote = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.9), madeira); caixote.position.set(-3.6, 0.35, 1.5); g.add(caixote);
+    const fog = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.25, 8), new THREE.MeshStandardMaterial({ color: '#3a2a1a', emissive: '#ff6a1a', emissiveIntensity: 0.5 })); fog.position.set(-2.6, 0.12, -2.6); g.add(fog);
+    const pl = textoSprite('⛺ Esconderijo', { escala: 0.6, fundo: 'rgba(60,45,25,.9)' }); pl.position.set(0, 3.3, 0); g.add(pl);
+    colisores.push({ tipo: 'circ', x: e.x + 4.2, z: e.z, r: 1.6 });
+  }
+}
+function feridoParaSequestro() {
+  if (!jogador.cla || jogador.carro || jogador.dentroCasa || cativo()) return null;
+  const f = feridoProximo(2.6); if (!f || f.r.meta?.ref) return null;
+  if (f.r.meta?.cla && f.r.meta.cla === jogador.claInfo?.nome) return null;
+  if (jogador.perfil?.profissao === 'medico') return null;   // médico socorre
+  return f;
+}
+function sequestrar(f) {
+  escolher(`⛓️ Sequestrar ${esc(f.r.meta?.nome || 'o ferido')}`, 'Para qual esconderijo da mata? É crime (+2). Ele fica na jaula até alguém libertar ou por 15 minutos.', ESCONDERIJOS.map((e, k) => ({
+    rotulo: `⛺ ${e.nome}`,
+    fn: async () => { try { await rede.cativeiro.capturar(f.id, k + 1); aviso(`⛓️ ${f.r.meta?.nome || 'O refém'} foi levado para o esconderijo: ${e.nome}.`, 4); rastrear({ nome: `⛺ ${e.nome}`, x: e.x, z: e.z }); } catch (er) { aviso(er.message, 3); } },
+  })));
+}
+function refemPerto() {
+  if (jogador.carro || jogador.dentroCasa || cativo()) return null;
+  for (const [id, r] of remotos) {
+    const k = r.meta?.ref; if (!k || !r.av?.raiz.visible) continue;
+    if (Math.hypot(r.av.raiz.position.x - jogador.pos.x, r.av.raiz.position.z - jogador.pos.z) < 2.8) return { id, r };
+  }
+  return null;
+}
+async function libertarRefem(a) {
+  try { const v = await rede.cativeiro.libertar(a.id); aviso(`🔓 Você libertou ${a.r.meta?.nome || 'o refém'}!${v ? ` +${v}` : ''}`, 3.5); jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 2, fade: 0.1 }); }
+  catch (e) { aviso(e.message, 3); }
+}
+let eraCativo = false;
+function atualizarCativeiro(dt) {
+  const c = cativo();
+  if (c && jogador.armado) alternarArmaForcado(false);
+  if (armasProibidas() && jogador.armado && !c) alternarArmaForcado(false);
+  if (c) {
+    const e = ESCONDERIJOS[jogador.perfil.cativeiro - 1];
+    if (!eraCativo) {
+      eraCativo = true;
+      if (jogador.morto) levantar(30);
+      if (jogador.carro) sairCarro();
+      teleportar(e.x, e.z); conexao?.rastrear(metaPresenca());
+      aviso(`⛓️ Você é REFÉM no esconderijo "${e.nome}". Espere alguém te libertar (ou 15 min).`, 5);
+    }
+    const dx = jogador.pos.x - e.x, dz = jogador.pos.z - e.z, d = Math.hypot(dx, dz);   // fica dentro da jaula
+    if (d > 1.5) { jogador.pos.x = e.x + dx / d * 1.5; jogador.pos.z = e.z + dz / d * 1.5; }
+  } else if (eraCativo) {
+    eraCativo = false; conexao?.rastrear(metaPresenca());
+    aviso('🔓 Você está livre! Saia da mata pela trilha.', 4);
+  }
 }

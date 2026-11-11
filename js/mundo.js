@@ -334,7 +334,18 @@ function casa(x, z, w, d, andares, rot, y = 0.18) {
   Object.assign(edificios[i], { tipo: 'casa', rot, telha: escolher(CORES_TELHA) });
   return i;
 }
-export function arvore(x, z, s = 1, colide = true) { arvores.push([x, z, s]); if (colide) addCol({ tipo: 'circ', x, z, r: 0.5 * s }); }
+export function arvore(x, z, s = 1, colide = true) { const c = colide ? { tipo: 'circ', x, z, r: 0.5 * s } : null; arvores.push([x, z, s, c]); if (c) addCol(c); }
+// abre uma trilha na mata: tira as árvores (e a colisão delas) a menos de "larg" metros dos segmentos [[x,z],[x,z],...]
+export function abrirTrilha(pts, larg = 3) {
+  const perto = (x, z) => { for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)); if (Math.hypot(x - (ax + dx * t), z - (az + dz * t)) < larg) return true; } return false; };
+  for (let k = arvores.length - 1; k >= 0; k--) {
+    const [x, z, , c] = arvores[k];
+    if (!perto(x, z)) continue;
+    if (c) Object.assign(c, { x: 1e7, z: 1e7, r: 0 });
+    arvores.splice(k, 1);
+  }
+}
 function rua(x, z, w, d) { ruas.push([x, z, w, d, d > w]); }
 
 // um quarteirão de 44 m: calçada e o que tem em cima
