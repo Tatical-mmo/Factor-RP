@@ -227,11 +227,22 @@ function abaTempo() {
   $('tSalvar').onclick = () => depois(() => rede.clima.auto($('tAuto').checked, Math.floor(Number($('tChuva').value) || 0), Math.floor(Number($('tTemp').value) || 0), Math.floor(Number($('tNeve').value) || 0)), 'Programação salva.');
 }
 // ------------------------------------------------------------ eu
+async function blocoBueiro() {
+  const c = $('pBueiro'); if (!c) return;
+  let k; try { k = await rede.painel.bueiroSecreto(); } catch (e) { c.textContent = e.message; return; }
+  const b = ctx.bueiro(k);
+  c.innerHTML = `A entrada para novos membros é o <b>${esc(b?.nome || `Bueiro nº ${k + 1}`)}</b>. Só você vê isto.
+    <div class="botoes"><button id="pBuIr">📍 Ir até ele</button><button id="pBuMapa">🗺️ Marcar no mapa</button><button id="pBuSortear">🎲 Sortear outro</button></div>`;
+  $('pBuIr').onclick = () => { if (b) { ctx.irPara(b.x + 1.5, b.z); fechar(); } };
+  $('pBuMapa').onclick = () => { if (b) { ctx.marcar({ nome: `🐀 ${b.nome}`, x: b.x, z: b.z }); msg('Marcado no mapa.'); } };
+  $('pBuSortear').onclick = async () => { try { const n = await rede.painel.sortearBueiro(); msg(`Agora a entrada é o ${ctx.bueiro(n)?.nome || n + 1}.`); blocoBueiro(); } catch (e) { msg(e.message, false); } };
+}
 function abaEu() {
   const c = $('painelConteudo'); const eu = ctx.perfil();
   let h = '';
   if (pode('imortal')) h += `<div class="sub">Modo imortal</div><div class="botoes"><button id="pImortal" class="${eu.imortal ? 'ativo' : ''}">${eu.imortal ? 'Imortal: ligado' : 'Imortal: desligado'}</button></div>`;
   if (eu.cargo === 'admin') h += '<div class="sub">Evento: arma dourada</div><p class="dica">Esconde a arma dourada (2 balas) exatamente onde você está. Quem achar pega; depois dos 2 tiros ela some.</p><div class="botoes"><button id="pArmaPd">✨ Esconder a arma dourada aqui</button></div>';
+  if (eu.cargo === 'admin') h += '<div class="sub">🐀 Bueiro secreto dos Lixeiros</div><div id="pBueiro" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') h += '<div class="sub">⚖️ Perdoar crimes</div><div id="pPerdao" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') h += '<div class="sub">Prefeitura</div><div id="pPref" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') {
@@ -249,6 +260,7 @@ function abaEu() {
   h += `<div class="sub">Skin (grátis para a equipe)</div><div class="skins">${[...ROBOS.map((id) => ({ id, nome: id === 'Rusty_Scout_Bot' ? 'Robô Batedor' : 'Robô Sentinela' })), ...PERSONAGENS, ...(eu.cargo === 'admin' ? PERSONAGENS_EVENTO : [])]
     .map((p) => `<button class="skin ${p.id === eu.personagem ? 'sel' : ''}" data-skin="${p.id}"><img src="assets/miniaturas/${p.id}.webp" alt=""><span>${esc(p.nome)}</span></button>`).join('')}</div>`;
   c.innerHTML = h;
+  if ($('pBueiro')) blocoBueiro();
   const apd = $('pArmaPd'); if (apd) apd.onclick = () => executar(() => ctx.esconderArmaPd(), 'Arma dourada escondida aqui. Todos foram avisados do evento.');
   const b = $('pImortal'); if (b) b.onclick = () => executar(() => rede.painel.imortal(!eu.imortal), eu.imortal ? 'Modo imortal desligado.' : 'Modo imortal ligado.');
   c.querySelectorAll('[data-local]').forEach((x) => { x.onclick = () => { const l = ctx.locais()[x.dataset.local]; ctx.teleportar(l.x, l.z); msg('Teleportado: ' + l.nome); }; });

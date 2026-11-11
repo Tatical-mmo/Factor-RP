@@ -2049,6 +2049,7 @@ async function iniciarJogo(perfil) {
     teleportar,
     esconderArmaPd: () => rede.pd.esconder(jogador.pos.x, jogador.pos.z),
     locais: () => LOCAIS,
+    bueiro: (k) => BUEIROS[k], irPara: (x, z) => { jogador.dentroCasa = null; teleportar(x, z); }, marcar: (a) => rastrear(a),
   });
   if (perfil.cargo === 'moderador') rede.receberSalario().then((v) => { if (v > 0) aviso(`Salário de moderador: +${v} moedas`); }).catch(() => {});
   if (jogador.pena > 0) aviso(`Você está preso. Faltam ${formatarTempo(jogador.pena)}.`, 4);
