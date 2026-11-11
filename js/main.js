@@ -22,6 +22,7 @@ import { iniciarGoverno, abrirPrefeitura, abrirConcessionaria, abrirServico, atu
 import * as servicos from './servicos.js';
 import * as sons from './sons.js';
 import * as voz from './voz.js';
+import * as clima from './clima.js';
 import { nivelTexto } from './empresa.js';
 import { iniciarPainel, atualizarBotao } from './painel.js';
 
@@ -1135,6 +1136,7 @@ function entrarCarro(v) {
   modoVolante(true);
   if (jogador.armado) alternarArma();
   jogador.carro = { id: v.d.id, modelo: v.d.modelo, cor: v.d.cor, vel: 0, mesh: v.mesh, salvar: 20, voa: !!civico.CARROS[v.d.modelo]?.voa, alt: 0, raio: v.d.modelo === 'helicoptero' ? 2.2 : undefined };
+  if (!jogador.carro.voa) sons.tocar('carro_partida', { vol: 0.6 });
   jogador.pos.set(v.mesh.position.x, v.mesh.position.y, v.mesh.position.z); jogador.yaw = v.mesh.rotation.y; jogador.alvo = null;
   jogador.avatar.raiz.visible = false;
   aviso(`${civico.CARROS[v.d.modelo]?.nome || 'Carro'}: use o controle para dirigir. Toque em Sair para estacionar.`, 3.5);
@@ -1332,7 +1334,7 @@ function seguirTrem() {
   const t = jogador.trem, est = ferrovia.estadoDe(t.li, t.k);
   if (est?.parado === t.destino) { desembarcar(t.destino); return false; }
   const w = ferrovia.vaga(t.li, t.k, t.v);
-  if (!w) { jogador.trem = null; return false; }
+  if (!w) { ferrovia.ocultarTeto(jogador.trem.li, jogador.trem.k, false); jogador.trem = null; return false; }
   jogador.pos.set(w.x, w.y, w.z); jogador.yaw = w.yaw;
   return true;
 }
@@ -1890,6 +1892,8 @@ async function iniciarJogo(perfil) {
   sedes.iniciar({ scene, texturaCanvas });
   mundo.montar({ scene, texturaCanvas, ruido, textoSprite, modelo: (n) => modelos[n] });
   ferrovia.montar({ scene, textoSprite, modelo: (n) => modelos[n] });
+  clima.iniciar({ scene, alturaChao, naRua, mudou: (t) => { if (jogador.avatar) aviso(t === 'limpo' ? '☀️ O tempo abriu.' : { chuva: '🌧️ Começou a chover.', tempestade: '⛈️ Tempestade chegando! Fique atento aos raios.', neve: '❄️ Começou a nevar.' }[t], 3.5); } });
+  carregarClima();
   mundo.finalizar();
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
@@ -2013,6 +2017,8 @@ async function iniciarJogo(perfil) {
     perfil: () => jogador.perfil,
     prefeito: () => prefeitoAtual,
     prefeitoMudou: () => carregarPrefeitura().catch(() => {}),
+    climaMudou: async () => { await carregarClima(); conexao?.enviar('clima', {}); },
+    climaAgora: () => clima.atual(), climaConfig: () => clima.config(),
     online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta.nome })),
     posicaoDe: (id) => { const r = remotos.get(id); return r?.av?.raiz.visible ? r.av.raiz.position : (r?.alvo || null); },
     minhaPosicao: () => jogador.pos,
@@ -2079,7 +2085,7 @@ function conectarMultiplayer(perfil) {
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
     tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1),
     explosao: (e) => receberExplosao(e),
-    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g),
+    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(),
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m),
     meta: () => metaPresenca(),
   });
@@ -3560,7 +3566,43 @@ function atualizarSons() {
     sons.continuo('trem_andando', 0.4 * sons.perto(dm, 55));
     if (dm < 70 && t > tempoBuzina) { tempoBuzina = t + 40; sons.tocar('buzina_trem', { vol: 0.5, dist: dm, raio: 120 }); }
   }
+  somMotores(dist);
+  somAmbiente();
   sons.atualizar();
+}
+// motor de cada tipo de veículo: o meu (tom sobe com a velocidade), dos outros jogadores e das empresas por perto
+const SOM_MOTOR = { popular: 'carro_geral', suv: 'carro_geral', viatura: 'carro_geral', presidencial: 'carro_geral', ambulancia: 'carro_geral',
+  esportivo: 'carro_esportivo', militar: 'motor_jipe', exercito_caminhao: 'caminhao_andando', bombeiros: 'caminhao_andando', tanque: 'caminhao_andando',
+  caminhao: 'caminhao_andando', van: 'van' };
+function somMotores(dist) {
+  const c = jogador.carro;
+  if (c && !c.voa) {
+    const mod = c.caminhao ? (c.tipo || 'caminhao') : (c.servico || c.modelo), nome = SOM_MOTOR[mod];
+    if (nome) {
+      const max = c.max || civico.CARROS[c.modelo]?.vel || 11, k = THREE.MathUtils.clamp(Math.abs(c.vel || 0) / max, 0, 1);
+      const base = mod === 'tanque' ? 0.65 : nome === 'carro_esportivo' ? 0.8 : 0.85;
+      sons.continuo(nome, 0.22 + 0.33 * k, base + (nome === 'carro_esportivo' ? 0.5 : 0.55) * k);
+    }
+  }
+  for (const r of remotos.values()) {
+    if (!r.carro || civico.CARROS[r.carroModelo]?.voa || !andando(r.carro)) continue;
+    const nome = SOM_MOTOR[r.carroModelo]; if (nome) sons.continuo(nome, 0.4 * sons.perto(dist(r.carro), 45));
+  }
+  for (const v of caminhoes.values()) {
+    if (v.d.tipo === 'helicoptero' || !v.obj?.visible || jogador.carro?.caminhao === v.d.id || !andando(v.obj)) continue;
+    sons.continuo(v.d.tipo === 'van' ? 'van' : 'caminhao_andando', 0.35 * sons.perto(dist(v.obj), 45));
+  }
+}
+// cidade grande ao fundo e passarinhos nas cidades menores, nas praças e na mata (somem com chuva)
+const PRACAS = [[mundo.quadC(-4), mundo.quadC(-4)], [mundo.quadC(7), mundo.quadC(7)]];
+function somAmbiente() {
+  const p = jogador.pos, tempo = clima.fatorTempo(), dentro = jogador.dentroCasa ? 0.35 : 1;
+  const metro = Math.abs(p.x) < mundo.LIM + 30 && Math.abs(p.z) < mundo.LIM + 30;
+  const praca = Math.min(...PRACAS.map(([x, z]) => Math.hypot(p.x - x, p.z - z)), contratante ? Math.hypot(p.x - contratante.x, p.z - contratante.z) : Infinity);
+  const noite = horaAtual < 5.5 || horaAtual > 19.5;
+  sons.continuo('cidade_ambiente', (metro ? 0.32 * (1 - 0.5 * sons.perto(praca, 40)) : 0) * (1 - 0.6 * tempo) * dentro);
+  const passaros = metro ? 0.45 * sons.perto(praca, 45) : Math.abs(p.z) > 860 ? 0.4 : 0;
+  sons.continuo('passaros', passaros * (noite ? 0.15 : 1) * (1 - tempo) * dentro);
 }
 
 // ---------------------------------------------------------------- NPCs se encontram e conversam
@@ -5122,6 +5164,8 @@ function quadro() {
   const dt = Math.min(relogio.getDelta(), 0.05);
   ferrovia.atualizar(agoraServidor() / 1000);
   atualizarCeu(agoraServidor() / 1000);
+  clima.atualizar(dt, agoraServidor() / 1000, CICLO_DIA, { x: jogador.pos.x, y: jogador.pos.y - 2, z: jogador.pos.z, dentro: !!jogador.dentroCasa }, { sol, hemi, cena: scene });
+  tempoClima -= dt; if (tempoClima <= 0) { tempoClima = 30; carregarClima(); }
   mundo.atualizar(dt);
   mundo.carrosPerto(jogador.pos.x, jogador.pos.z, dt);
   mundo.arvoresPerto(jogador.pos.x, jogador.pos.z, dt);
@@ -5265,4 +5309,18 @@ function desenharBotaoVoz() {
     pt.addEventListener('pointerdown', on); pt.addEventListener('pointerup', off); pt.addEventListener('pointercancel', off); pt.addEventListener('lostpointercapture', off);
     pt.addEventListener('contextmenu', (e) => e.preventDefault());
   }
+}
+
+// ---------------------------------------------------------------- tempo (chuva, tempestade e neve)
+let tempoClima = 30;
+async function carregarClima() { try { const c = await rede.clima.ler(); if (c) clima.definirConfig(c); } catch { /* tenta de novo depois */ } }
+// ruas da metrópole e das duas cidades menores (onde aparecem as poças)
+const LIM_METRO = mundo.LIM + 4;
+const RUAS_PERTO = (() => { const r = []; for (let i = -6; i <= 10; i++) r.push(ruaC(i)); return r; })();
+function naRua(x, z) {
+  const m = RW / 2 + 0.5;
+  if (Math.abs(x) < LIM_METRO && Math.abs(z) < LIM_METRO) return RUAS_PERTO.some((c) => Math.abs(z - c) < m || Math.abs(x - c) < m);
+  const az = Math.abs(z);
+  if (az > 928 && az < 1115 && Math.abs(x) < 90) return [945, 999, 1053, 1107].some((c) => Math.abs(az - c) < m) || [-81, -27, 27, 81].some((c) => Math.abs(x - c) < m) || (az > 928 && az < 940);
+  return false;
 }

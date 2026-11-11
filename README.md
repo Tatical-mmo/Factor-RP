@@ -179,6 +179,18 @@ Regras: algemas e prisão não funcionam na equipe, o admin não pode ser banido
 - **Voz (grátis):** no menu ☰, botão 🎙️ **Voz** troca entre *desligada → quem está perto (40 m) → clã*. O áudio vai direto de um jogador para o outro (WebRTC); o Supabase só passa o "aperto de mão" da conexão. Para falar, segure o botão 🎙️ redondo na tela (no PC, segure **V**). Perto, o volume cai com a distância; no clã, todos os membros online ouvem, em qualquer lugar. Até 8 pessoas por vez. O navegador pede permissão do microfone na primeira vez. Em algumas redes móveis muito fechadas a conexão direta pode não abrir (sem servidor pago de retransmissão).
 - **Aperto de mão:** chegue perto de outro jogador, sem arma, e toque em **Mão**. Ele recebe o convite e toca em **Apertar** (10 s). Os dois se viram, estendem o braço direito e balançam a mão; quem está em volta vê.
 
+## Tempo: chuva, tempestade e neve (SQL 40)
+
+- **Chuva:** escurece um pouco, cai chuva fraca e aparecem poças nas ruas.
+- **Tempestade:** mais escuro, chuva mais forte e relâmpagos que clareiam o mapa logo antes de cada trovão.
+- **Neve:** flocos caindo e montinhos de neve espalhados pelo chão, com som de nevasca.
+- Poças e neve somem 3 s depois que o tempo abre. Todo mundo vê o mesmo tempo.
+- **Admin › Painel › Tempo:** muda o tempo na hora (por 5 min a 4 h) ou liga o automático com as chances de chuva, tempestade e neve; a cada ciclo de 32 min o jogo sorteia.
+
+## Sons
+
+Motores por veículo (carros comuns, esportivo, jipe, caminhões, vans; o tom sobe com a velocidade), partida ao entrar no carro, barulho da cidade grande e passarinhos nas cidades menores, nas praças e na mata. Os sons longos só baixam quando vão tocar.
+
 ## Controles no PC
 
 | Tecla | Ação |

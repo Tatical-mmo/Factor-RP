@@ -58,6 +58,7 @@ function desenhar() {
   else if (aba === 'equipe') abaEquipe();
   else if (aba === 'historico') abaHistorico();
   else if (aba === 'salarios') abaSalarios();
+  else if (aba === 'tempo') abaTempo();
 }
 
 // ------------------------------------------------------------ jogadores
@@ -202,6 +203,28 @@ async function abaSalarios() {
       executar(() => (id.startsWith('mod:') ? rede.painel.salarioModerador(id.slice(4), v) : rede.painel.definirSalario(id, v)), 'Salário salvo.');
     };
   });
+}
+// ------------------------------------------------------------ tempo (chuva, tempestade, neve)
+function abaTempo() {
+  const c = $('painelConteudo'), cf = ctx.climaConfig(), agora = ctx.climaAgora();
+  const nomes = { limpo: '☀️ Limpo', chuva: '🌧️ Chuva', tempestade: '⛈️ Tempestade', neve: '❄️ Neve' };
+  const manual = cf.manual && cf.manual_ate && Date.parse(cf.manual_ate) > Date.now();
+  c.innerHTML = `<p class="dica">Agora: <b>${nomes[agora] || agora}</b>${manual ? ` (escolhido por você até ${new Date(cf.manual_ate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})` : cf.auto ? ' (automático)' : ''}.</p>
+    <div class="sub">Mudar agora</div>
+    <div class="botoes"><select id="tMin">${[[5, '5 min'], [10, '10 min'], [20, '20 min'], [32, '1 ciclo (32 min)'], [60, '1 h'], [120, '2 h'], [240, '4 h']].map(([m, t]) => `<option value="${m}" ${m === 10 ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div class="botoes">${Object.entries(nomes).map(([k, t]) => `<button data-tempo="${k}">${t}</button>`).join('')}</div>
+    ${manual ? '<div class="botoes"><button id="tVoltar">↩ Voltar ao automático agora</button></div>' : ''}
+    <div class="sub">Automático a cada ciclo</div>
+    <p class="dica">A cada ciclo do dia (32 min) o jogo sorteia o tempo com estas chances. Quando cai chuva, tempestade ou neve, dura de 8 a 13 minutos dentro do ciclo. A soma não pode passar de 100%.</p>
+    <div class="botoes"><label><input type="checkbox" id="tAuto" ${cf.auto ? 'checked' : ''}> Ligado</label></div>
+    <div class="botoes"><span style="flex:1">🌧️ Chuva %</span><input type="number" id="tChuva" min="0" max="100" value="${cf.chance_chuva}" style="max-width:80px"></div>
+    <div class="botoes"><span style="flex:1">⛈️ Tempestade %</span><input type="number" id="tTemp" min="0" max="100" value="${cf.chance_tempestade}" style="max-width:80px"></div>
+    <div class="botoes"><span style="flex:1">❄️ Neve %</span><input type="number" id="tNeve" min="0" max="100" value="${cf.chance_neve}" style="max-width:80px"></div>
+    <div class="botoes"><button id="tSalvar">Salvar automático</button></div>`;
+  const depois = async (fn, ok) => { try { await fn(); await ctx.climaMudou(); msg(ok); setTimeout(abaTempo, 300); } catch (e) { msg(e.message, false); } };
+  c.querySelectorAll('[data-tempo]').forEach((b) => { b.onclick = () => depois(() => rede.clima.agora(b.dataset.tempo, Number($('tMin').value)), `Tempo: ${nomes[b.dataset.tempo]}. Muda em alguns segundos para todos.`); });
+  const v = $('tVoltar'); if (v) v.onclick = () => depois(() => rede.clima.agora(null, 0), 'Voltou ao automático.');
+  $('tSalvar').onclick = () => depois(() => rede.clima.auto($('tAuto').checked, Math.floor(Number($('tChuva').value) || 0), Math.floor(Number($('tTemp').value) || 0), Math.floor(Number($('tNeve').value) || 0)), 'Programação salva.');
 }
 // ------------------------------------------------------------ eu
 function abaEu() {

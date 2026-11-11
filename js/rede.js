@@ -76,6 +76,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'explosao' }, ({ payload }) => eventos.explosao?.(payload));
   canal.on('broadcast', { event: 'voz' }, ({ payload }) => eventos.voz?.(payload));
   canal.on('broadcast', { event: 'gesto' }, ({ payload }) => eventos.gesto?.(payload));
+  canal.on('broadcast', { event: 'clima' }, ({ payload }) => eventos.clima?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
@@ -110,6 +111,7 @@ async function rpc(nome, args = {}) {
 function traduzirRpc(m) {
   const t = {
     'sem permissao': 'Você não tem esse poder.',
+    'chances invalidas': 'As chances somadas não podem passar de 100%.',
     'voce nao pode banir esse jogador': 'Você não pode banir esse jogador.',
     'voce nao pode desbanir esse jogador': 'Você não pode desbanir esse jogador.',
     'voce nao pode algemar esse jogador': 'Você não pode algemar esse jogador.',
@@ -300,6 +302,12 @@ function traduzirRpc(m) {
   if (espera) return `Aguarde ${espera[1]} s.`;
   return t[m] || m;
 }
+export const clima = {
+  async ler() { const { data, error } = await sb.from('clima').select('*').eq('id', 1).maybeSingle(); if (error) throw error; return data; },
+  agora: (tipo, minutos) => rpc('admin_clima_agora', { p_tipo: tipo, p_minutos: minutos }),
+  auto: (auto, chuva, tempestade, neve) => rpc('admin_clima_auto', { p_auto: auto, p_chuva: chuva, p_tempestade: tempestade, p_neve: neve }),
+};
+
 export const painel = {
   nomearPrefeito: (id) => rpc('admin_nomear_prefeito', { p_jogador: id }),
   afastarPrefeito: () => rpc('admin_afastar_prefeito'),
