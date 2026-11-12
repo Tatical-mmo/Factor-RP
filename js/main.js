@@ -193,20 +193,30 @@ const alvoCam = new THREE.Vector3();
 const ultimaPosCam = {};
 let modoCam = (() => { try { return localStorage.getItem('fator_cam') || 'iso'; } catch { return 'iso'; } })();
 if (modoCam === 'perto') modoCam = 'atras';
-const camAtiva = camera;
+// câmeras 3D (☰ › Câmera): "livre" gira em volta do personagem em perspectiva; "p1" é a visão em primeira pessoa
+const camP = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 700);
+let camAtiva = camera;
+const olhar = { yaw: 0, pitch: -0.05, dist: 14, incl: 0.42, veic: 0, arrastou: 0 };
+const modo3D = () => modoCam === 'livre' || modoCam === 'p1';
+camera.layers.enable(1); sol.shadow.camera.layers.enable(1);   // camada 1 = o seu próprio personagem (some na primeira pessoa)
 function ajustarCamera() {
   const a = window.innerWidth / window.innerHeight;
   camera.left = -zoom * a / 2; camera.right = zoom * a / 2; camera.top = zoom / 2; camera.bottom = -zoom / 2;
   camera.updateProjectionMatrix();
+  camP.aspect = a; camP.updateProjectionMatrix();
 }
 // pás do rotor dos helicópteros 3D (nó "rotor" dentro do modelo)
 const rotores = new WeakMap();
 function rotorDe(o) { if (!rotores.has(o)) rotores.set(o, o.getObjectByName('rotor') || null); return rotores.get(o); }
 function trocarCamera() {
-  modoCam = modoCam === 'atras' ? 'iso' : 'atras';
-  try { localStorage.setItem('fator_cam', modoCam); } catch { /* sem armazenamento */ }
-  if (modoCam === 'iso') { anguloCam = Math.round(anguloCamSuave); camAtras = false; }
-  aviso(modoCam === 'atras' ? '🎥 Câmera atrás do personagem (igual ao carro): ela gira e acompanha para onde você anda.' : '🎥 Câmera de cima (padrão).', 3);
+  const opc = [['iso', '🗺️ De cima (padrão)', 'Câmera de cima (padrão).'], ['atras', '🎥 De cima, atrás do personagem', 'Câmera de cima que gira e acompanha para onde você anda.'],
+    ['livre', '🌆 3D livre', 'Visão 3D: arraste na tela para girar e inclinar; pinça (ou rodinha) aproxima.'], ['p1', '👁️ Primeira pessoa', 'Primeira pessoa: arraste na tela para olhar; o joystick anda para onde você olha. Armado, o tiro vai na mira do centro.']];
+  escolher('🎥 Câmera', 'Escolha como ver o jogo (fica salvo).', opc.map(([m, r, t]) => ({ rotulo: `${m === modoCam ? '✅ ' : ''}${r}`, fn: () => {
+    if (modo3D() !== (m === 'livre' || m === 'p1')) olhar.yaw = Math.PI / 4 + anguloCamSuave * Math.PI / 2 + Math.PI;   // começa olhando para o mesmo lado da câmera de cima
+    modoCam = m; try { localStorage.setItem('fator_cam', modoCam); } catch { /* sem armazenamento */ }
+    if (modoCam === 'iso') { anguloCam = Math.round(anguloCamSuave); camAtras = false; }
+    olhar.pitch = m === 'p1' ? -0.05 : olhar.pitch; aviso(`🎥 ${t}`, 3.5);
+  } })));
 }
 window.addEventListener('resize', () => { visual.redimensionar(); ajustarCamera(); });
 ajustarCamera();
@@ -856,7 +866,7 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); teclas.delete(k); if (k === 'v') { voz.falar(false); desenharBotaoVoz(); } });
 window.addEventListener('blur', () => teclas.clear());
-window.addEventListener('wheel', (e) => { zoom = THREE.MathUtils.clamp(zoom * (e.deltaY > 0 ? 1.1 : 0.9), 12, 70); ajustarCamera(); }, { passive: true });
+window.addEventListener('wheel', (e) => { if (modoCam === 'livre') { olhar.dist = THREE.MathUtils.clamp(olhar.dist * (e.deltaY > 0 ? 1.1 : 0.9), 4, 60); return; } zoom = THREE.MathUtils.clamp(zoom * (e.deltaY > 0 ? 1.1 : 0.9), 12, 70); ajustarCamera(); }, { passive: true });
 
 // toque / clique no mundo
 const raycaster = new THREE.Raycaster();
@@ -876,10 +886,19 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!ponteiros.has(e.pointerId)) return;
-  ponteiros.set(e.pointerId, { ...ponteiros.get(e.pointerId), x: e.clientX, y: e.clientY });
+  const ant = ponteiros.get(e.pointerId);
+  if (modo3D() && ponteiros.size === 1) {   // câmera 3D: arrastar gira (para os lados) e inclina (para cima e para baixo)
+    const dx = e.clientX - ant.x, dy = e.clientY - ant.y; ant.mov = (ant.mov || 0) + Math.abs(dx) + Math.abs(dy);
+    const k = e.pointerType === 'mouse' ? 0.006 : 0.0085;
+    if (jogador.carro && modoCam === 'p1') olhar.veic -= dx * k; else olhar.yaw -= dx * k;
+    if (modoCam === 'p1') olhar.pitch = THREE.MathUtils.clamp(olhar.pitch - dy * k, -1.25, 1.1); else olhar.incl = THREE.MathUtils.clamp(olhar.incl + dy * k, 0.05, 1.35);
+    olhar.arrastou = 1.5;
+  }
+  ponteiros.set(e.pointerId, { ...ant, x: e.clientX, y: e.clientY });
   if (pinca && ponteiros.size === 2) {
     const [a, b] = [...ponteiros.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
-    zoom = THREE.MathUtils.clamp(pinca.z * pinca.d / Math.max(d, 1), 12, 70); ajustarCamera();
+    if (modoCam === 'livre') { pinca.dist ??= olhar.dist; olhar.dist = THREE.MathUtils.clamp(pinca.dist * pinca.d / Math.max(d, 1), 4, 60); }
+    else zoom = THREE.MathUtils.clamp(pinca.z * pinca.d / Math.max(d, 1), 12, 70); ajustarCamera();
   }
 });
 function soltarPonteiro(e) {
@@ -887,6 +906,8 @@ function soltarPonteiro(e) {
   if (pinca) { if (ponteiros.size === 0) pinca = null; return; }
   if (!p || !jogador.avatar || e.type === 'pointercancel') return;
   if (performance.now() - p.t > 450) return;      // segurou: não é toque
+  if (modo3D() && (p.mov || 0) > 10) return;      // arrastou para olhar: não é toque
+  if (modoCam === 'p1' && !(jogador.armado && e.pointerType === 'mouse')) return;   // primeira pessoa: anda pelo joystick / teclado
   if (!(jogador.armado && e.pointerType === 'mouse') && tocouPainel(e.clientX, e.clientY)) return;   // telão ou outdoor: amplia
   const alvo = pontoNoChao(e.clientX, e.clientY); if (!alvo) return;
   if (jogador.armado && e.pointerType === 'mouse') atirar(alvo);
@@ -931,7 +952,7 @@ function configurarJoystick() {
   toque('btTiro', () => atirar(null)); toque('btGiraE', () => girarCamera(-1)); toque('btGiraD', () => girarCamera(1));
 }
 
-function girarCamera(s) { anguloCam += s; }
+function girarCamera(s) { if (modo3D()) { olhar.yaw -= s * Math.PI / 4; return; } anguloCam += s; }
 
 // ================================================================= AÇÕES
 let avisoTimer = 0;
@@ -1554,7 +1575,8 @@ function atirar(alvo) {
   if (armasProibidas()) { aviso('🚫 Armas não são permitidas aqui.'); return; }
   const A = ARMAS[jogador.armaTipo || 'basica'];
   jogador.alvo = null;
-  if (alvo) jogador.yaw = Math.atan2(alvo.x - jogador.pos.x, alvo.z - jogador.pos.z);
+  if (modoCam === 'p1' && !jogador.carro) jogador.yaw = olhar.yaw;
+  else if (alvo) jogador.yaw = Math.atan2(alvo.x - jogador.pos.x, alvo.z - jogador.pos.z);
   jogador.avatar.raiz.rotation.y = jogador.yaw;
   jogador.avatar.raiz.updateMatrixWorld(true);
   const boca = jogador.arma.localToWorld(new THREE.Vector3(...(modelos[A.modelo] ? A.boca : ARMAS.basica.boca)));
@@ -1563,6 +1585,7 @@ function atirar(alvo) {
   const cor = dourada ? '#ffd23e' : A.cor || CORES_TINTA[Math.floor(Math.random() * CORES_TINTA.length)];
   const vyMira = dourada ? null : miraNoAlvo(boca, dir, A.vel);
   const v = dir.multiplyScalar(dourada ? 34 : A.vel).add(new THREE.Vector3(0, vyMira ?? (dourada ? 0.6 : 1.2 * 24 / A.vel), 0));
+  if (modoCam === 'p1' && vyMira == null) v.y += Math.tan(THREE.MathUtils.clamp(olhar.pitch, -0.6, 0.6)) * (dourada ? 34 : A.vel);   // mira para cima / para baixo
   criarBola(boca, v, cor, true, dourada ? 1 : A.bola || 1);
   const critico = Math.random() < bonusTreino('tiro');   // treino de tiro: chance de acerto crítico (dano dobrado)
   bolas[bolas.length - 1].dano = Math.round(A.dano * (critico ? 2 : 1) * fatorForca()); bolas[bolas.length - 1].critico = critico;
@@ -5098,7 +5121,7 @@ function atualizarJogador(dt) {
 
   // direção de entrada relativa à câmera
   const off = offsetCamera(anguloCamSuave);
-  const frente = new THREE.Vector3(-off.x, 0, -off.z).normalize();
+  const frente = modo3D() ? new THREE.Vector3(Math.sin(olhar.yaw), 0, Math.cos(olhar.yaw)) : new THREE.Vector3(-off.x, 0, -off.z).normalize();
   const direita = new THREE.Vector3(-frente.z, 0, frente.x);
   let ix = 0, iy = 0;
   if (teclas.has('w') || teclas.has('arrowup')) iy += 1;
@@ -5190,7 +5213,59 @@ function posicionarCaixa(av, caixa, yaw) {
   caixa.rotation.set(0, yaw, 0);
 }
 
+// olho do motorista / piloto: um ponto à frente e no alto do veículo (medido uma vez pela caixa do modelo)
+function olhoDoVeiculo(mesh) {
+  if (!mesh.userData.olho) {
+    const r = mesh.rotation.clone(), p = mesh.position.clone(); mesh.rotation.set(0, 0, 0); mesh.position.set(0, 0, 0); mesh.updateMatrixWorld(true);
+    const b = new THREE.Box3().setFromObject(mesh); mesh.rotation.copy(r); mesh.position.copy(p); mesh.updateMatrixWorld(true);
+    const h = b.max.y - b.min.y, L = b.max.z - b.min.z;
+    mesh.userData.olho = new THREE.Vector3((b.min.x + b.max.x) / 2, b.min.y + h * (L > 14 ? 0.62 : 0.78), (b.min.z + b.max.z) / 2 + L * (L > 14 ? 0.36 : 0.18));
+  }
+  return mesh.localToWorld(mesh.userData.olho.clone());
+}
+function veiculoDoJogador() {
+  if (jogador.carro?.mesh) return jogador.carro.mesh;
+  if (jogador.onibus) return onibusNpc.find((b) => b.ativo && b.L === jogador.onibus.L && b.m === jogador.onibus.m)?.mesh || null;
+  if (jogador.voo) return npcAvioes[0]?.mesh || null;
+  if (jogador.passageiro) return jogador.passageiro.c?.obj || null;
+  return null;
+}
+const _dirOlhar = new THREE.Vector3();
+function atualizarCamera3D(dt) {
+  camAtiva = camP;
+  const av = jogador.avatar;
+  if (av && (atualizarCamera3D.t = (atualizarCamera3D.t || 0) - dt) <= 0) { atualizarCamera3D.t = 0.5; av.raiz.traverse((o) => o.layers.set(1)); }   // inclui arma, chapéu e etiqueta que entram depois
+  if (modoCam === 'p1') camP.layers.disable(1); else camP.layers.enable(1);
+  olhar.arrastou = Math.max(0, olhar.arrastou - dt);
+  const v = veiculoDoJogador();
+  if (modoCam === 'p1') {
+    let olho, yaw = olhar.yaw;
+    if (v) {   // dentro do veículo: olha para a frente dele (dá para virar a cabeça arrastando; volta sozinho)
+      olho = olhoDoVeiculo(v); if (olhar.arrastou <= 0) olhar.veic *= Math.max(0, 1 - dt * 2);
+      yaw = v.rotation.y + olhar.veic; olhar.yaw = yaw;
+    } else olho = new THREE.Vector3(jogador.pos.x, (jogador.pos.y || 0) + 1.62, jogador.pos.z).addScaledVector(_dirOlhar.set(Math.sin(yaw), 0, Math.cos(yaw)), 0.18);
+    camP.position.copy(olho);
+    _dirOlhar.set(Math.sin(yaw) * Math.cos(olhar.pitch), Math.sin(olhar.pitch), Math.cos(yaw) * Math.cos(olhar.pitch));
+    camP.lookAt(olho.clone().add(_dirOlhar));
+    if (!v && !jogador.alvo && Math.hypot(joy.x, joy.y) < 0.05) jogador.yaw = yaw;   // parado, o corpo vira para onde você olha
+  } else {
+    const f = foco(), alvo = new THREE.Vector3(f.x, (f.y || 0) + (jogador.pos.y || 0) + 1.4, f.z);
+    if (v && olhar.arrastou <= 0) olhar.yaw += Math.atan2(Math.sin(v.rotation.y - olhar.yaw), Math.cos(v.rotation.y - olhar.yaw)) * Math.min(1, dt * 1.5);   // dirigindo: fica atrás do veículo
+    const dist = v ? Math.max(olhar.dist, 12) : olhar.dist;
+    camP.position.set(alvo.x - Math.sin(olhar.yaw) * Math.cos(olhar.incl) * dist, alvo.y + Math.sin(olhar.incl) * dist, alvo.z - Math.cos(olhar.yaw) * Math.cos(olhar.incl) * dist);
+    const chao = alturaChao(camP.position.x, camP.position.z) + 0.6; if (camP.position.y < chao) camP.position.y = chao;
+    camP.lookAt(alvo);
+  }
+  if (tremor > 0) { tremor -= dt; camP.position.x += (Math.random() - 0.5) * tremor; camP.position.y += (Math.random() - 0.5) * tremor; }
+  const c = camP.position; alvoCam.set(c.x + Math.sin(olhar.yaw) * 25, 0, c.z + Math.cos(olhar.yaw) * 25);
+  sol.position.copy(alvoCam).addScaledVector(SOL_DIR, 80); sol.target.position.copy(alvoCam);
+  for (const p of predios) if (p.opac < 0.99) { p.opac = 1; for (const m of p.mats) { m.transparent = false; m.opacity = 1; m.depthWrite = true; } }
+  const mira1 = $('mira1p'); if (mira1) mira1.classList.toggle('oculto', modoCam !== 'p1' || !!v);
+}
 function atualizarCamera(dt) {
+  if (modo3D()) { atualizarCamera3D(dt); return; }
+  camAtiva = camera;
+  if ($('mira1p')) $('mira1p').classList.add('oculto');
   // dirigindo, a câmera gira para ficar atrás do veículo: a frente dele aponta sempre para cima da tela
   const dirigindo = jogador.carro && !jogador.carro.taxi;
   // câmera "atrás": a pé, faz o mesmo que dirigindo, girando aos poucos para ficar atrás de quem anda
@@ -5415,7 +5490,7 @@ function quadro() {
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
   atualizarBolas(dt);
   atualizarCamera(dt);
-  mundo.atualizarOclusao(dt, averiguando ? foco() : jogador.pos, offsetCamera(anguloCamSuave));
+  mundo.atualizarOclusao(dt, averiguando ? foco() : jogador.pos, modo3D() ? new THREE.Vector3(0, 1, 0) : offsetCamera(anguloCamSuave));
   atualizarHUD(dt);
   // chuva molha o chão (asfalto escuro e brilhante); o visual ajusta brilho e cor pela noite e pela chuva
   const tc = clima.atual(), alvoMolhado = tc === 'chuva' || tc === 'tempestade' ? clima.fatorTempo() : 0;
@@ -5995,7 +6070,7 @@ function salaRedacao() {
     const marca = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.5, 24), new THREE.MeshBasicMaterial({ color: '#ffd23e' })); marca.rotation.x = -Math.PI / 2; marca.position.set(5, 0.03, -4.4); i.g.add(marca);
     i.pontos.estudio = { x: i.base.x + 5, z: i.base.z - 4.4 };
     placa('📸 Estúdio de fotos', 5, -4.4, 3.4);
-    camEstudio = new THREE.PerspectiveCamera(42, 1.6, 0.1, 60); camEstudio.position.set(i.base.x + 5, 1.55, i.base.z + 0.4); camEstudio.lookAt(i.base.x + 5, 1.1, i.base.z - 4.6);
+    camEstudio = new THREE.PerspectiveCamera(42, 1.6, 0.1, 60); camEstudio.layers.enable(1); camEstudio.position.set(i.base.x + 5, 1.55, i.base.z + 0.4); camEstudio.lookAt(i.base.x + 5, 1.1, i.base.z - 4.6);
     // mural
     caixa(3.2, 1.8, 0.06, '#2b3442', -6, 2, -5.8); placa('Mural de matérias', -6, -5.5, 3.2); i.pontos.mural = { x: i.base.x - 6, z: i.base.z - 4.6 };
     for (let k = 0; k < 3; k++) caixa(0.5, 1.9, 0.7, '#3a4a66', 7.6, 0.95, 3 + k * 0.8);   // armários da imprensa

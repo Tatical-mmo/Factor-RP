@@ -674,3 +674,13 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - 🚦 Os semáforos em 3D agora estão em todos os cruzamentos da Metrópole (610 no total) e das cidades. Os hidrantes estão em todos os quarteirões (484 no total). Para não pesar no celular, só as cópias mais perto aparecem (até 56 de cada tipo), e elas trocam conforme você anda.
 - 🌳 As árvores 3D perto do jogador agora usam os modelos novos (árvore e pinheiro); as de longe continuam leves.
 - Sem SQL nesta versão.
+
+## Versão 12/11 (w) · câmera 3D e primeira pessoa
+- 🎥 ☰ › Câmera agora tem 4 opções (a escolha fica salva):
+  - De cima (padrão).
+  - De cima, atrás do personagem.
+  - 🌆 3D livre: câmera em perspectiva em volta do personagem. Arraste para girar e inclinar; pinça ou rodinha aproxima. Dirigindo, ela fica atrás do veículo.
+  - 👁️ Primeira pessoa: visão dos olhos do personagem, com mira no centro. Arraste para olhar; o joystick anda para onde você olha; o tiro vai na mira (inclusive para cima e para baixo). Em carro, ônibus, caminhão, avião ou helicóptero, a visão é do banco do motorista ou do piloto; arrastando vira a cabeça, que volta para a frente sozinha.
+- Nas câmeras 3D os prédios não são mais cortados, e os botões ⟲ ⟳ giram 45°.
+- 🏭 Os galpões de Porto Sul que invadiam as ruas agora ficam dentro do quarteirão.
+- Sem SQL nesta versão.

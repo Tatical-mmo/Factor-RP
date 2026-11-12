@@ -396,7 +396,7 @@ function quadra(bx, bz, estilo, faixa = [2, 6], y = 0.18) {
     return;
   }
   if (estilo === 'galpoes') {
-    for (const s of [-1, 1]) predio(bx, bz + s * L / 1.05, meio - 2, L * 0.85, entre(6.5, 9), { y, cor: escolher(['#b9c2c9', '#9fb0bf', '#c9b79c', '#a7a39b']), loja: false });
+    for (const s of [-1, 1]) predio(bx, bz + s * L / 2, meio - 2, L * 0.85, entre(6.5, 9), { y, cor: escolher(['#b9c2c9', '#9fb0bf', '#c9b79c', '#a7a39b']), loja: false });   // dentro do quarteirão (antes invadiam a rua)
     return;
   }
   // 'predios': quatro lotes encostados na calçada
