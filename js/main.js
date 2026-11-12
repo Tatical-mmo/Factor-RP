@@ -1282,9 +1282,19 @@ function dirigir(dt) {
   else if (freio) c.vel = c.vel > 0.3 ? Math.max(0, c.vel - 11 * dt) : c.voa ? 0 : Math.max(-Math.min(4, max * 0.35), c.vel - 3 * dt);   // helicóptero não tem ré
   else c.vel = c.vel > 0 ? Math.max(0, c.vel - 3 * dt) : Math.min(0, c.vel + 3 * dt);
   // volante com resposta gradual; vira menos quando está rápido (não roda no lugar)
-  c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * 7);
-  const vAbs = Math.abs(c.vel), giro = 1.5 * Math.min(1, vAbs / 2.5) / (1 + vAbs / 12);
-  jogador.yaw -= c.volante * giro * dt * Math.sign(c.vel || 1);
+  if (c.voa) {   // helicóptero: gira no próprio eixo, como antes
+    c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * 7);
+    const vAbs = Math.abs(c.vel), giro = 1.5 * Math.min(1, vAbs / 2.5) / (1 + vAbs / 12);
+    jogador.yaw -= c.volante * giro * dt * Math.sign(c.vel || 1);
+  } else {
+    // carro de verdade (modelo de bicicleta): o volante gira aos poucos e volta ao centro sozinho; a curva depende da
+    // distância entre os eixos e da velocidade (rápido, o volante "pesa" e a curva fica mais aberta). Sem curva seca.
+    c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * (volante ? 2.6 : 4.5));
+    const tc = tipoCabine(), eixo = tc === 'onibus' ? 6.2 : tc === 'caminhao' ? 4.8 : 2.7, vAbs = Math.abs(c.vel);
+    const maxEsterco = (tc === 'carro' ? 0.58 : 0.8) / (1 + vAbs / 10);
+    const giro = vAbs / eixo * Math.tan(c.volante * maxEsterco);
+    jogador.yaw -= giro * dt * Math.sign(c.vel || 1);
+  }
   if (c.servico) civico.atualizarSirenes(performance.now() / 1000, c.mesh);
   if (!c.assentado) { resolverColisao(jogador.pos, c.raio || 1.3); c.assentado = true; }
   const antes = { x: jogador.pos.x, z: jogador.pos.z };
@@ -5235,13 +5245,13 @@ function olhoDoVeiculo(mesh, tipo) {
     const r = mesh.rotation.clone(), p = mesh.position.clone(); mesh.rotation.set(0, 0, 0); mesh.position.set(0, 0, 0); mesh.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(mesh), h = b.max.y - b.min.y, L = b.max.z - b.min.z, cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2;
     const zo = { carro: cz + L * 0.04, onibus: b.max.z - 1.4, caminhao: b.max.z - 1.1, aviao: b.max.z - L * 0.14, heli: b.max.z - L * 0.24 }[tipo];
-    _rcOlho.set(new THREE.Vector3(cx + (tipo === 'carro' || tipo === 'caminhao' || tipo === 'onibus' ? -0.35 : 0), b.max.y + 5, zo), new THREE.Vector3(0, -1, 0));
+    _rcOlho.set(new THREE.Vector3(cx + (tipo === 'carro' || tipo === 'caminhao' || tipo === 'onibus' ? 0.35 : 0), b.max.y + 5, zo), new THREE.Vector3(0, -1, 0));
     _rcOlho.camera = camP;
     const luz = (o) => { for (let x = o; x; x = x.parent) if (x.name === 'luzes' || x.name === 'giroflex' || x.name === 'rotor') return true; return false; };
     const hit = _rcOlho.intersectObject(mesh, true).find((i) => i.object.isMesh && !i.object.isSprite && !luz(i.object)), topo = hit ? hit.point.y : b.min.y + h * 0.8;
     const y = { carro: topo - 0.28, onibus: topo - 0.75, caminhao: topo - 0.45, aviao: topo + 0.35, heli: topo + 0.15 }[tipo];
     mesh.rotation.copy(r); mesh.position.copy(p); mesh.updateMatrixWorld(true);
-    mesh.userData.olho = new THREE.Vector3(tipo === 'onibus' || tipo === 'caminhao' || tipo === 'carro' ? cx - Math.min(0.45, (b.max.x - b.min.x) * 0.2) : cx, y, zo); mesh.userData.olhoTipo = tipo;
+    mesh.userData.olho = new THREE.Vector3(tipo === 'onibus' || tipo === 'caminhao' || tipo === 'carro' ? cx + Math.min(0.45, (b.max.x - b.min.x) * 0.2) : cx, y, zo); mesh.userData.olhoTipo = tipo;   // motorista à esquerda (modelo olha para +Z: esquerda = +X)
   }
   return mesh.localToWorld(mesh.userData.olho.clone());
 }
@@ -5300,13 +5310,17 @@ function atualizarCamera3D(dt) {
     if (v) {   // dentro do veículo: olha para a frente dele (dá para virar a cabeça arrastando; volta sozinho)
       const tc = tipoCabine(); olho = olhoDoVeiculo(v, tc); if (olhar.arrastou <= 0) olhar.veic *= Math.max(0, 1 - dt * 2);
       for (const [k, g] of Object.entries(cabines)) g.visible = k === tc; cabine(tc).visible = Math.abs(olhar.veic) < 1.2;
-      yaw = v.rotation.y + olhar.veic; olhar.yaw = yaw;
+      // a visão acompanha o veículo com suavidade e olha um pouco para dentro da curva (onde você vai passar)
+      const alvoYaw = v.rotation.y - (jogador.carro?.volante || 0) * 0.22 + olhar.veic;
+      olhar.yawVeic = olhar.yawVeic === undefined ? alvoYaw : olhar.yawVeic + Math.atan2(Math.sin(alvoYaw - olhar.yawVeic), Math.cos(alvoYaw - olhar.yawVeic)) * Math.min(1, dt * 6);
+      yaw = olhar.yawVeic; olhar.yaw = yaw;
     } else {   // a pé: olho na cabeça do personagem, um pouco à frente do rosto (aparecem as mãos e os braços)
-      for (const g of Object.values(cabines)) g.visible = false;
+      for (const g of Object.values(cabines)) g.visible = false; olhar.yawVeic = undefined;
       const cab = cabecaDe(av); olho = cab ? cab.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 0.07, 0)) : new THREE.Vector3(jogador.pos.x, (jogador.pos.y || 0) + 1.62, jogador.pos.z);
       olho.addScaledVector(_dirOlhar.set(Math.sin(yaw), 0, Math.cos(yaw)), 0.24);
     }
     camP.position.copy(olho);
+    { const fov = v ? 78 : 68; if (Math.abs(camP.fov - fov) > 0.5) { camP.fov += (fov - camP.fov) * Math.min(1, dt * 4); camP.updateProjectionMatrix(); } }
     _dirOlhar.set(Math.sin(yaw) * Math.cos(olhar.pitch), Math.sin(olhar.pitch), Math.cos(yaw) * Math.cos(olhar.pitch));
     camP.lookAt(olho.clone().add(_dirOlhar));
     if (!v && !jogador.alvo && Math.hypot(joy.x, joy.y) < 0.05) jogador.yaw = yaw;   // parado, o corpo vira para onde você olha

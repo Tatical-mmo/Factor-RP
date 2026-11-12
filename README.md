@@ -721,3 +721,8 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - ✈️ O terminal de passageiros do Aeroporto da Metrópole tem a fachada 3D de vidro. Ao entrar, a fachada some e aparece o salão (balcão, atendente, cadeiras e painel de voos).
 - 🛩️ O hangar dos pilotos é o modelo 3D, com o portão fechado virado para o pátio dos aviões.
 - Sem SQL nesta versão.
+
+## Versão 13/11 (c) · direção mais suave
+- 🚗 Carros, caminhões e ônibus fazem curva como veículo de verdade. O volante gira aos poucos e volta ao centro sozinho. O raio da curva depende do tamanho do veículo (o ônibus abre mais) e da velocidade: rápido, a curva fica mais aberta. Acabaram as curvas secas e o giro no próprio eixo. O helicóptero continua igual.
+- 👁️ Primeira pessoa no veículo: o olho fica no banco do motorista, do lado esquerdo (antes estava no do passageiro). A visão acompanha o veículo com suavidade, olha um pouco para dentro da curva e fica mais aberta (campo de visão maior).
+- Sem SQL nesta versão.
