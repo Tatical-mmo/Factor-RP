@@ -755,7 +755,7 @@ const jogador = {
 function resolverColisao(p, raio) {
   colidirLista(colisores, p, raio);
   mundo.colidir(p, raio, colidirLista);
-  colidirLista(colisoresCarros, p, raio);
+  colidirCarros(p, raio);
   if (!jogador.trem) ferrovia.empurrar(p, raio);
   resolverMoveis(p, raio);
   mundo.limitar(p);
@@ -778,20 +778,34 @@ function colidirLista(lista, p, raio) {
     }
   }
 }
+// só bate no que está de fato aparecendo: na cena, visível (ele e todos os pais) e perto do chão
+function aparece(o) {
+  if (!o) return false;
+  let x = o; for (let k = 0; x && k < 40; k++) { if (!x.visible) return false; if (x === scene) return true; x = x.parent; }
+  return false;   // tirado da cena, mas ainda guardado em alguma lista: não pode virar parede invisível
+}
+function colidirCarros(p, raio) {
+  for (const v of carrosMundo.values()) {
+    const m = v.mesh; if (jogador.carro?.mesh === m || v.chamada || !aparece(m)) continue;
+    const q = m.position; if (q.y > alturaChao(q.x, q.z) + 2) continue;
+    const dx = p.x - q.x, dz = p.z - q.z, r = raio + 1.4, d2 = dx * dx + dz * dz;
+    if (d2 < r * r && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = q.x + dx / d * r; p.z = q.z + dz / d * r; }
+  }
+}
 function resolverMoveis(p, raio) {
   // caminhão em movimento
-  if (caminhaoMovel?.obj.visible) {
+  if (aparece(caminhaoMovel?.obj)) {
     const dx = p.x - caminhaoMovel.obj.position.x, dz = p.z - caminhaoMovel.obj.position.z, r = raio + 2.3, d2 = dx * dx + dz * dz;
     if (d2 < r * r && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = caminhaoMovel.obj.position.x + dx / d * r; p.z = caminhaoMovel.obj.position.z + dz / d * r; }
   }
   for (const c of caminhoes.values()) {
     // só veículo que está aparecendo no mapa e no chão (os escondidos ficavam parados no centro, em x 0 z 0, como um bloqueio invisível)
-    if (!c.obj.visible || c.obj.position.y > alturaChao(c.obj.position.x, c.obj.position.z) + 2) continue;
+    if (jogador.carro?.mesh === c.obj || !aparece(c.obj) || c.obj.position.y > alturaChao(c.obj.position.x, c.obj.position.z) + 2) continue;
     const q = c.obj.position, dx = p.x - q.x, dz = p.z - q.z, rr = raio + 2.2, d2 = dx * dx + dz * dz;
     if (d2 < rr * rr && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = q.x + dx / d * rr; p.z = q.z + dz / d * rr; }
   }
   for (const r of remotos.values()) {
-    if (!r.av?.raiz.visible) continue;
+    if (!aparece(r.av?.raiz)) continue;
     const q = r.av.raiz.position, dx = p.x - q.x, dz = p.z - q.z, rr = raio * 2, d2 = dx * dx + dz * dz;
     if (d2 < rr * rr && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = q.x + dx / d * rr; p.z = q.z + dz / d * rr; }
   }
@@ -1132,9 +1146,7 @@ function sincronizarCarros(lista) {
     v.mesh.visible = !outros.has(d.id);
     v.mesh.position.set(d.x, alturaChao(d.x, d.z), d.z); v.mesh.rotation.y = d.ang;
   }
-  colisoresCarros = lista.filter((d) => jogador.carro?.id !== d.id && !outros.has(d.id) && carrosMundo.get(d.id)?.mesh.visible).map((d) => ({ tipo: 'circ', x: d.x, z: d.z, r: 1.4 }));
 }
-let colisoresCarros = [];
 function meuCarroProximo() {
   let melhor = null, dm = 3.4;
   for (const v of carrosMundo.values()) {
@@ -1190,7 +1202,6 @@ function sairCarro() {
   const lx = Math.cos(jogador.yaw) * 1.8, lz = -Math.sin(jogador.yaw) * 1.8;
   jogador.pos.x += lx; jogador.pos.z += lz; resolverColisao(jogador.pos, jogador.raio);
   jogador.avatar.raiz.visible = true;
-  colisoresCarros.push({ tipo: 'circ', x: c.mesh.position.x, z: c.mesh.position.z, r: 1.4 });
 }
 // desce de um veículo de empresa (sem avisar o banco)
 function sairCarroLocal() {
@@ -2004,7 +2015,7 @@ async function iniciarJogo(perfil) {
   });
   jornal.iniciarJornal({ perfil: () => jogador.perfil, mudou: () => { tempoJornal = 0.3; tempoTelao = 0; } });
   iniciarGoverno({
-    perfil: () => jogador.perfil, agora: agoraServidor, recarregar: () => { tempoPrefeitura = 0.3; tempoCarros = 0.5; tempoSocial = 0.5; },
+    perfil: () => jogador.perfil, vestiario: () => vestiario(), agora: agoraServidor, recarregar: () => { tempoPrefeitura = 0.3; tempoCarros = 0.5; tempoSocial = 0.5; },
     clas: () => [...clasCache.values()], territorios: () => [...territorios.values()].map((v) => v.d),
     minhasEmpresas: () => [...empresas.values()].filter((e) => e.dono === jogador.perfil.id),
     meusCarros: () => [...carrosMundo.values()].map((v) => v.d).filter((d) => d.dono === jogador.perfil.id),
@@ -2855,7 +2866,7 @@ const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfi
 function metaPresenca() {
   const p = jogador.perfil;
   return { nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
-    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0 };
+    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
 function etiquetaStatus(r) {
@@ -5849,6 +5860,8 @@ function salaRedacao() {
     camEstudio = new THREE.PerspectiveCamera(42, 1.6, 0.1, 60); camEstudio.position.set(i.base.x + 5, 1.55, i.base.z + 0.4); camEstudio.lookAt(i.base.x + 5, 1.1, i.base.z - 4.6);
     // mural
     caixa(3.2, 1.8, 0.06, '#2b3442', -6, 2, -5.8); placa('Mural de matérias', -6, -5.5, 3.2); i.pontos.mural = { x: i.base.x - 6, z: i.base.z - 4.6 };
+    for (let k = 0; k < 3; k++) caixa(0.5, 1.9, 0.7, '#3a4a66', 7.6, 0.95, 3 + k * 0.8);   // armários da imprensa
+    movel(i, 'vestiario', 7.6, 3.8, 0.5, 2.4, [-1, 0]); placa('👔 Vestiário', 7.6, 3.8, 2.6);
   });
 }
 function entrarRedacao() {
@@ -5860,6 +5873,7 @@ const redator = () => jogador.perfil?.profissao === 'jornalista' || jogador.perf
 SALAS.redacao = {
   contexto: () => {
     if (naPorta()) return ['sair da redação', 'Sair'];
+    if (pontoInterior('vestiario', 1.6)) return ['vestiário: vestir ou tirar a farda', 'Farda'];
     if (pontoInterior('mesa', 1.6)) return [redator() ? 'mesa de edição: editor completo do jornal' : 'mesa de edição (só jornalistas)', 'Editar'];
     if (pontoInterior('estudio', 2.6)) return [redator() ? 'estúdio: tirar foto de quem está na marca' : 'estúdio de fotos (fique na marca amarela)', redator() ? 'Foto' : 'Posar'];
     if (pontoInterior('mural', 1.8)) return ['ler o mural de matérias', 'Ler'];
@@ -5867,6 +5881,7 @@ SALAS.redacao = {
   },
   acao: () => {
     if (naPorta()) { sairSala(); return; }
+    if (pontoInterior('vestiario', 1.6)) { vestiario('Jornal'); return; }
     if (pontoInterior('mesa', 1.6)) { if (redator()) jornal.abrirEditor(); else aviso('Só jornalistas usam a mesa de edição.'); return; }
     if (pontoInterior('estudio', 2.6)) {
       if (redator()) escolher('📸 Estúdio', 'A câmera fixa fotografa quem está na marca amarela.', [{ rotulo: '📸 Tirar a foto agora', fn: () => fotoEstudio() }, { rotulo: '📨 Convidar alguém para o estúdio', fn: () => convidarEstudio() }]);
@@ -6150,6 +6165,8 @@ function salaDelegacia(chave, bz, titulo, cor) {
     for (const z of [-4, 0.5]) { for (let k = 0; k < 6; k++) caixa(0.08, 2.6, 0.08, '#777', 15.6, 1.3, z - 1.4 + k * 0.56, 0.7); caixa(2, 0.5, 1, '#5a5a5a', 17, 0.25, z); }
     placa('Celas', 17, -1.8, 3);
     estandeInterno(i, chave, -14, -2);
+    for (let k = 0; k < 4; k++) caixa(0.7, 1.9, 0.5, '#3d4652', -11.2 + k * 0.8, 0.95, 6.4);   // armários do vestiário
+    movel(i, 'vestiario', -10, 6.4, 3.2, 0.5, [0, -1]); placa('👔 Vestiário', -10, 6.4, 2.6);
     caixa(1.6, 2.4, 0.15, '#2b2f36', 4, 1.2, -6.8); i.pontos.celas = { x: i.base.x + 4, z: i.base.z - 5.8 }; placa('🔒 Carceragem', 4, -6.5, 2.9);
   });
 }
@@ -6160,7 +6177,7 @@ function salaBombeiros() {
     caixa(3.4, 1.1, 1, '#7a2e26', 5, 0.55, 1.5); movel(i, 'balcao', 5, 1.5, 3.4, 1); placa('Balcão dos bombeiros', 5, 1.5, 2.4);
     caixa(3, 1.8, 0.1, '#20262e', -2, 2, -6.7); movel(i, 'quadro', -2, -6.5, 3, 0.4); placa('Incêndios na cidade', -2, -6.5, 3.2);
     for (let k = 0; k < 5; k++) { caixa(0.6, 1.8, 0.5, '#b03a2e', -9 + k * 0.8, 0.9, -6.3); caixa(0.45, 0.45, 0.3, '#f1c40f', -9 + k * 0.8, 1.9, -6.2); }   // armários com capacetes
-    i.obst.push([-9.4, -5.4, -6.7, -5.9]); placa('Vestiário', -7.4, -6, 2.8);
+    i.obst.push([-9.4, -5.4, -6.7, -5.9]); placa('👔 Vestiário', -7.4, -6, 2.8); i.pontos.vestiario = { x: i.base.x - 7.4, z: i.base.z - 5 };
     const poste = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.6, 10), i.mat('#cfcfcf', 0.3, 0.9)); poste.position.set(-6, 1.8, 3); g.add(poste);
     i.pontos.poste = { x: i.base.x - 6, z: i.base.z + 3.8 }; placa('Mastro (descida rápida)', -6, 3, 3.1);
     caixa(2.2, 0.6, 1, '#e8ecef', 7, 0.3, -4); movel(i, 'maca', 7, -4, 2.2, 1); placa('Enfermaria', 7, -4, 1.8);
@@ -6186,6 +6203,7 @@ const servicoPolicia = () => (jogador.perfil?.policial ? 'sair do serviço polic
 SALAS.delegacia = {
   contexto: () => {
     if (naPorta()) return ['sair da delegacia', 'Sair'];
+    if (pontoInterior('vestiario', 1.6)) return ['vestiário: vestir ou tirar a farda', 'Farda'];
     if (pontoInterior('celas', 1.6)) return [daPolicia() ? 'entrar na carceragem (celas dos presos)' : 'carceragem (só policiais e PRF)', 'Celas'];
     if (pontoInterior('balcao', 1.8)) return [servicoPolicia(), 'Polícia'];
     if (pontoInterior('quadro', 1.8)) return ['quadro de procurados', 'Ver'];
@@ -6194,6 +6212,7 @@ SALAS.delegacia = {
   },
   acao: () => {
     if (naPorta()) { sairSala(); return; }
+    if (pontoInterior('vestiario', 1.6)) { vestiario('Polícia'); return; }
     if (pontoInterior('celas', 1.6)) { entrarCarceragem(); return; }
     if (pontoInterior('balcao', 1.8)) { alternarServico(); return; }
     if (pontoInterior('quadro', 1.8)) { quadroProcurados(); return; }
@@ -6203,6 +6222,7 @@ SALAS.delegacia = {
 SALAS.prf = {
   contexto: () => {
     if (naPorta()) return ['sair do posto da PRF', 'Sair'];
+    if (pontoInterior('vestiario', 1.6)) return ['vestiário: vestir ou tirar a farda', 'Farda'];
     if (pontoInterior('celas', 1.6)) return [daPolicia() ? 'entrar na carceragem (celas dos presos)' : 'carceragem (só policiais e PRF)', 'Celas'];
     if (pontoInterior('balcao', 1.8)) return ['posto da PRF: serviço e investigações', 'PRF'];
     if (pontoInterior('quadro', 1.8)) return ['quadro de procurados', 'Ver'];
@@ -6211,6 +6231,7 @@ SALAS.prf = {
   },
   acao: () => {
     if (naPorta()) { sairSala(); return; }
+    if (pontoInterior('vestiario', 1.6)) { vestiario('PRF'); return; }
     if (pontoInterior('celas', 1.6)) { entrarCarceragem(); return; }
     if (pontoInterior('balcao', 1.8)) { abrirPrefeitura('prf'); return; }
     if (pontoInterior('quadro', 1.8)) { quadroProcurados(); return; }
@@ -6220,6 +6241,7 @@ SALAS.prf = {
 SALAS.bombeiros = {
   contexto: () => {
     if (naPorta()) return ['sair do quartel dos bombeiros', 'Sair'];
+    if (pontoInterior('vestiario', 1.6)) return ['vestiário: vestir ou tirar a farda', 'Farda'];
     if (pontoInterior('balcao', 1.8)) return ['balcão: serviço dos bombeiros', 'Bombeiros'];
     if (pontoInterior('quadro', 1.8)) return [`incêndios na cidade (${servicos.listaIncendios().length})`, 'Ver'];
     if (pontoInterior('poste', 1.4)) return ['descer pelo mastro e sair para a rua', 'Descer'];
@@ -6240,6 +6262,7 @@ SALAS.bombeiros = {
 SALAS.prefeitura = {
   contexto: () => {
     if (naPorta()) return ['sair da prefeitura', 'Sair'];
+    if (pontoInterior('vestiario', 1.6)) { vestiario('Bombeiros'); return; }
     if (pontoInterior('gabinete', 1.8)) return ['gabinete do prefeito: governo e cofre', 'Gabinete'];
     if (pontoInterior('urna', 1.6)) return ['urna: candidatos e votação', 'Votar'];
     if (pontoInterior('outdoors', 1.8)) return ['outdoors da cidade: alugar propaganda', 'Outdoors'];
@@ -6656,7 +6679,9 @@ const UNIFORMES = {
   bombeiro: { cor: '#b3261e', texto: 'BOMBEIROS', letra: '#ffffff', faixa: '#e8e36a', chapeu: '#c9a227' },
   medico: { cor: '#f4f4f4', texto: '✚ RESGATE', letra: '#c0392b', faixa: '#c0392b', chapeu: '#f4f4f4' },
   exercito: { cor: '#4b5d33', texto: 'EXÉRCITO', letra: '#e8e3c8', faixa: null, chapeu: '#3c4a28' },
+  jornalista: { cor: '#1f4f8a', texto: 'IMPRENSA', letra: '#ffffff', faixa: '#ffffff', chapeu: '#1f4f8a' },
 };
+const NOME_FARDA = { policia: 'Polícia', prf: 'PRF', bombeiro: 'Bombeiros', medico: 'Resgate (Hospital)', exercito: 'Exército', jornalista: 'Imprensa' };
 function papelDe(m) { return m?.policial ? 'policia' : m?.prf ? 'prf' : UNIFORMES[m?.profissao] ? m.profissao : null; }
 const _texUni = new Map();
 function texturaUniforme(u) {
@@ -6673,9 +6698,11 @@ function vestir(av, papel) {
   if (av.uniforme?.papel === papel) return;
   if (av.uniforme) { scene.remove(av.uniforme.colete, av.uniforme.chapeu); av.uniforme = null; }
   if (!papel) return;
-  const u = UNIFORMES[papel], o = (n) => av.modelo.getObjectByName('mixamorig' + n);
-  const ossos = { base: o('Spine1') || o('Spine'), pescoco: o('Neck'), cabeca: o('Head'), topo: o('HeadTop_End') };
-  if (!ossos.base || !ossos.pescoco || !ossos.cabeca) return;
+  const u = UNIFORMES[papel], achados = {};
+  // cada modelo nomeia os ossos de um jeito (mixamorigSpine1, mixamorig:Spine1, Spine1...): procura pelo fim do nome
+  av.modelo.traverse((x) => { const n = (x.name || '').toLowerCase().replace(/[^a-z0-9_]/g, ''); for (const k of ['spine2', 'spine1', 'spine', 'neck', 'headtop_end', 'head']) if (!achados[k] && n.endsWith(k)) { achados[k] = x; break; } });
+  let ossos = { base: achados.spine1 || achados.spine || achados.spine2, pescoco: achados.neck, cabeca: achados.head, topo: achados.headtop_end };
+  if (!ossos.base || !ossos.pescoco || !ossos.cabeca) ossos = null;   // sem esqueleto conhecido: veste pela altura do corpo
   const colete = new THREE.Mesh(new THREE.CylinderGeometry(1, 0.94, 1, 14, 1, true), new THREE.MeshStandardMaterial({ map: texturaUniforme(u), roughness: 0.8, side: THREE.DoubleSide }));
   const chapeu = new THREE.Group();
   const copa = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1, 0.55, 14), new THREE.MeshStandardMaterial({ color: u.chapeu, roughness: 0.6, metalness: papel === 'bombeiro' ? 0.4 : 0 }));
@@ -6689,6 +6716,12 @@ function posicionarUniforme(av) {
   const U = av?.uniforme; if (!U) return;
   const vis = av.raiz.visible; U.colete.visible = U.chapeu.visible = vis; if (!vis) return;
   const alt = av.altura || 1.8, yaw = av.raiz.rotation.y;
+  if (!U.ossos) {
+    const r = av.raiz.position; U.colete.rotation.set(0, yaw, 0); U.chapeu.rotation.set(0, yaw, 0);
+    U.colete.position.set(r.x, r.y + alt * 0.62, r.z); U.colete.scale.set(0.115 * alt, alt * 0.26, 0.08 * alt);
+    U.chapeu.position.set(r.x, r.y + alt * 0.97, r.z); U.chapeu.scale.setScalar(0.068 * alt);
+    return;
+  }
   U.ossos.base.getWorldPosition(_ua); U.ossos.pescoco.getWorldPosition(_ub);
   const cima = _uc.subVectors(_ub, _ua); const comp = cima.length() || 0.4; cima.normalize();
   const frente = _ud.set(Math.sin(yaw), 0, Math.cos(yaw)); frente.addScaledVector(cima, -frente.dot(cima)).normalize();
@@ -6704,9 +6737,42 @@ function posicionarUniforme(av) {
   U.chapeu.quaternion.copy(U.colete.quaternion);
   U.chapeu.scale.setScalar(0.068 * alt);
 }
+// A farda: veste sozinha ao entrar no expediente e sai ao terminar. No vestiário do QG de cada trabalho dá para
+// vestir ou tirar quando quiser. A equipe (admin e moderadores) pode vestir qualquer uma.
+let papelVisto;
+function chaveFarda() { return 'fator_farda_' + (jogador.perfil?.id || ''); }
+function definirFarda(papel, silencioso) {
+  jogador.farda = papel || null;
+  try { if (papel) localStorage.setItem(chaveFarda(), papel); else localStorage.removeItem(chaveFarda()); } catch { /* sem armazenamento */ }
+  conexao?.rastrear(metaPresenca());
+  if (!silencioso) aviso(papel ? `👔 Farda vestida: ${NOME_FARDA[papel]}.` : '👕 Farda guardada no armário.', 2.5);
+}
+function seguirExpediente() {
+  if (!jogador.perfil) return;
+  const p = papelDe(jogador.perfil);
+  if (papelVisto === undefined) {   // ao abrir o jogo: volta com a farda que estava
+    papelVisto = p; let salva = null; try { salva = localStorage.getItem(chaveFarda()); } catch { /* nada */ }
+    jogador.farda = salva && UNIFORMES[salva] && (salva === p || souEquipe()) ? salva : p;
+    if (jogador.farda) conexao?.rastrear(metaPresenca());
+    return;
+  }
+  if (p === papelVisto) return;
+  papelVisto = p;
+  if (p) definirFarda(p);                                          // entrou no expediente: veste
+  else if (jogador.farda && !souEquipe()) definirFarda(null);       // saiu: guarda
+}
+function vestiario(trabalho) {
+  const p = papelDe(jogador.perfil), opcoes = [];
+  if (souEquipe()) for (const k of Object.keys(UNIFORMES)) opcoes.push({ rotulo: `${jogador.farda === k ? '✔️ ' : ''}${NOME_FARDA[k]}`, fn: () => definirFarda(k) });
+  else if (p) opcoes.push({ rotulo: jogador.farda === p ? `Tirar a farda (${NOME_FARDA[p]})` : `Vestir a farda: ${NOME_FARDA[p]}`, fn: () => definirFarda(jogador.farda === p ? null : p) });
+  else { aviso(`Só quem está no expediente ${trabalho ? `(${trabalho}) ` : ''}veste a farda. Entre em serviço primeiro.`, 3.5); return; }
+  if (souEquipe() && jogador.farda) opcoes.push({ rotulo: 'Tirar a farda', fn: () => definirFarda(null) });
+  escolher('👔 Vestiário', souEquipe() ? 'Equipe: escolha qualquer farda.' : 'Sua farda de trabalho:', opcoes);
+}
 function atualizarUniformes() {
-  if (jogador.avatar) { vestir(jogador.avatar, jogador.carro || jogador.passageiro ? null : papelDe(jogador.perfil)); posicionarUniforme(jogador.avatar); }
-  for (const r of remotos.values()) { if (!r.av) continue; vestir(r.av, papelDe(r.meta)); posicionarUniforme(r.av); }
+  seguirExpediente();
+  if (jogador.avatar) { vestir(jogador.avatar, jogador.carro || jogador.passageiro ? null : jogador.farda || null); posicionarUniforme(jogador.avatar); }
+  for (const r of remotos.values()) { if (!r.av) continue; vestir(r.av, r.meta && 'farda' in r.meta ? r.meta.farda : papelDe(r.meta)); posicionarUniforme(r.av); }
 }
 // nome com o símbolo do clã (escudo na cor do clã com as iniciais)
 function corDoClaNome(nome) { for (const c of clasCache.values()) if (c.nome === nome) return c.cor || '#c43b3b'; return '#c43b3b'; }

@@ -33,7 +33,11 @@ async function desenhar() {
   const c = $('governoConteudo'), abas = $('governoAbas'), rolagem = c.scrollTop;
   try {
     if (modo === 'concessionaria') { abas.innerHTML = ''; $('governoTitulo').textContent = 'Concessionária'; await telaCarros(c); return; }
-    if (SERVICOS[modo]) { abas.innerHTML = ''; $('governoTitulo').textContent = SERVICOS[modo][0]; await SERVICOS[modo][1](c); c.scrollTop = rolagem; return; }
+    if (SERVICOS[modo]) {
+      abas.innerHTML = ''; $('governoTitulo').textContent = SERVICOS[modo][0]; await SERVICOS[modo][1](c); c.scrollTop = rolagem;
+      c.querySelectorAll('[data-farda]').forEach((b) => { b.onclick = () => { fechar(); ctx.vestiario?.(); }; });   // vestiário do QG
+      return;
+    }
     $('governoTitulo').textContent = 'Prefeitura';
     abas.innerHTML = [['prefeito', 'Prefeito'], ['eleicao', 'Eleição'], ['outdoors', 'Outdoors'], ['prf', 'PRF']]
       .map(([k, t]) => `<button data-aba="${k}" class="${aba === k ? 'sel' : ''}">${t}</button>`).join('');
@@ -229,7 +233,7 @@ async function quadroTrabalho() {
 // Exército: veículos e, para Tenente para cima, as ordens de caçada aos procurados
 async function blocoExercito(car) {
   const cmd = ctx.perfil().cargo === 'admin' || (car?.nivel || 0) >= 8;
-  let h = `<div class="linha"><small>🚙 Jipe (3 passageiros), 🚚 caminhão (8) e 🚁 helicóptero (6, só Tenente para cima pilota) ficam no quartel, em Porto Sul. São ilimitados: chegue perto e toque em Dirigir. Militares embarcam como passageiros.</small></div>`;
+  let h = `<div class="botoes"><button data-farda="1">👔 Vestiário (farda)</button></div><div class="linha"><small>🚙 Jipe (3 passageiros), 🚚 caminhão (8) e 🚁 helicóptero (6, só Tenente para cima pilota) ficam no quartel, em Porto Sul. São ilimitados: chegue perto e toque em Dirigir. Militares embarcam como passageiros.</small></div>`;
   if (ctx.perfil().cargo === 'admin') h += await blocoGeneral();
   h += await blocoFicha(cmd);
   if (!cmd) return h + '<div class="linha"><small>A partir de Tenente você pode autorizar os soldados a caçar procurados.</small></div>';
@@ -326,7 +330,7 @@ function telaProfissao(c, prof, titulo, texto) {
   const eu = ctx.perfil(), nela = eu.profissao === prof;
   return `<p class="dica">${texto}</p>
     <div class="cartoes"><div><small>Situação</small><b>${nela ? 'Em serviço' : eu.profissao ? 'Em outro serviço' : 'Fora de serviço'}</b></div></div>
-    <div class="botoes">${nela ? `<button id="pSair">Sair do serviço</button>` : `<button id="pEntrar">Entrar em serviço: ${titulo}</button>`}</div>`;
+    <div class="botoes">${nela ? `<button id="pSair">Sair do serviço</button>` : `<button id="pEntrar">Entrar em serviço: ${titulo}</button>`}${nela || ['admin', 'moderador'].includes(eu.cargo) ? '<button data-farda="1">👔 Vestiário (farda)</button>' : ''}</div>`;
 }
 function ligarProfissao(prof) {
   const e = $('pEntrar'), s = $('pSair');

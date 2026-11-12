@@ -59,7 +59,7 @@ begin
   perform set_config('fator.reset', 'on', true);   -- personagem inválido de algum jogador não barra o reset
   if 'moradia' = any(p_partes) then
     begin   -- cada parte separada: se uma falhar, as outras continuam e o admin vê o motivo
-      perform se_existe('bau', 'delete from bau');
+      perform se_existe('bau', 'delete from bau where true');
       delete from casas where tipo = 'unidade';
       n := zerar_colunas('casas', array['dono = null', 'inquilino = null', 'pago_ate = null', 'aluguel = null', 'a_venda = false', 'modelo = null', 'nivel = 1'], 'tipo <> ''oficial''');
       res := res || format('%s casas liberadas', n);
@@ -69,18 +69,18 @@ begin
   end if;
   if 'empresas' = any(p_partes) then
     begin   -- cada parte separada: se uma falhar, as outras continuam e o admin vê o motivo
-      delete from empresas; get diagnostics n = row_count; res := res || format('%s empresas apagadas', n);
-      delete from membros;
-      perform se_existe('missoes', 'delete from missoes'); perform se_existe('ofertas', 'delete from ofertas');
-      perform se_existe('negocios', 'delete from negocios'); perform se_existe('lojas_assaltadas', 'delete from lojas_assaltadas');
+      delete from empresas where true; get diagnostics n = row_count; res := res || format('%s empresas apagadas', n);
+      delete from membros where true;
+      perform se_existe('missoes', 'delete from missoes where true'); perform se_existe('ofertas', 'delete from ofertas where true');
+      perform se_existe('negocios', 'delete from negocios where true'); perform se_existe('lojas_assaltadas', 'delete from lojas_assaltadas where true');
       n := se_existe('carros', 'delete from carros where modelo <> ''presidencial'''); res := res || format('%s carros apagados', n);
     exception when others then res := res || format('⚠️ empresas falhou: %s', sqlerrm);
     end;
   end if;
   if 'clas' = any(p_partes) then
     begin   -- cada parte separada: se uma falhar, as outras continuam e o admin vê o motivo
-      perform se_existe('favores', 'delete from favores'); perform se_existe('assaltos_navio', 'delete from assaltos_navio');
-      delete from clas; get diagnostics n = row_count; res := res || format('%s clãs apagados', n);
+      perform se_existe('favores', 'delete from favores where true'); perform se_existe('assaltos_navio', 'delete from assaltos_navio where true');
+      delete from clas where true; get diagnostics n = row_count; res := res || format('%s clãs apagados', n);
       perform zerar_colunas('territorios', array['dono_cla = null', 'captura_cla = null', 'captura_inicio = null', 'capturado_em = null']);
     exception when others then res := res || format('⚠️ clas falhou: %s', sqlerrm);
     end;
@@ -93,9 +93,9 @@ begin
         'pd_morte = null', 'pd_por = null', 'arma_militar = false', 'lixeiro = false', 'lixeiro_missao = null',
         'prisao_militar_ate = null', 'cativeiro = null', 'cativeiro_ate = null', 'cativeiro_cla = null']);
       res := res || format('%s jogadores zerados', n);
-      perform se_existe('inventario', 'delete from inventario'); perform se_existe('carreiras', 'delete from carreiras'); perform se_existe('contas_banco', 'delete from contas_banco');
-      perform se_existe('metas', 'delete from metas'); perform se_existe('encomendas', 'delete from encomendas'); perform se_existe('personagens_comprados', 'delete from personagens_comprados');
-      perform se_existe('agressoes', 'delete from agressoes'); perform se_existe('cacadas', 'delete from cacadas');
+      perform se_existe('inventario', 'delete from inventario where true'); perform se_existe('carreiras', 'delete from carreiras where true'); perform se_existe('contas_banco', 'delete from contas_banco where true');
+      perform se_existe('metas', 'delete from metas where true'); perform se_existe('encomendas', 'delete from encomendas where true'); perform se_existe('personagens_comprados', 'delete from personagens_comprados where true');
+      perform se_existe('agressoes', 'delete from agressoes where true'); perform se_existe('cacadas', 'delete from cacadas where true');
     exception when others then res := res || format('⚠️ jogadores falhou: %s', sqlerrm);
     end;
   end if;
@@ -106,9 +106,9 @@ begin
       perform zerar_colunas('prefeitura', array['prefeito = null', 'posse = null', 'vaga_ciclo = ciclo_atual()', 'salario_ciclo = -1',
         'cofre = 0', 'motivo = ''mapa resetado''', 'eleicao_ate = null', 'seguranca1 = null', 'seguranca2 = null'], 'id = 1');
       perform zerar_colunas('casas', array['dono = null', 'inquilino = null'], 'tipo = ''oficial''');
-      perform se_existe('votos', 'delete from votos'); perform se_existe('candidatos', 'delete from candidatos'); perform se_existe('noticias', 'delete from noticias');
-      perform se_existe('ocorrencias', 'delete from ocorrencias'); perform se_existe('assaltos', 'delete from assaltos'); perform se_existe('incendios', 'delete from incendios');
-      perform se_existe('outdoors', 'update outdoors set anunciante = null, titulo = null, texto = null, tipo = null, ate = null');
+      perform se_existe('votos', 'delete from votos where true'); perform se_existe('candidatos', 'delete from candidatos where true'); perform se_existe('noticias', 'delete from noticias where true');
+      perform se_existe('ocorrencias', 'delete from ocorrencias where true'); perform se_existe('assaltos', 'delete from assaltos where true'); perform se_existe('incendios', 'delete from incendios where true');
+      perform se_existe('outdoors', 'update outdoors set anunciante = null, titulo = null, texto = null, tipo = null, ate = null where true');
       res := res || 'prefeitura zerada'::text;
     exception when others then res := res || format('⚠️ prefeitura falhou: %s', sqlerrm);
     end;
