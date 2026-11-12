@@ -143,6 +143,7 @@ export const CARROS = {
   helicoptero_exercito: { nome: 'Helicóptero do Exército', preco: 0, vel: 26, voa: true },
   helicoptero: { nome: 'Helicóptero executivo', preco: 1500000, vel: 24, voa: true },
   tanque: { nome: 'Tanque do Exército', preco: 0, vel: 7 },
+  onibus: { nome: 'Ônibus', preco: 0, vel: 12 },
 };
 // quantos passageiros cada veículo leva (além do motorista); veículos do Exército só levam militares
 export const LUGARES = { tanque: 1, militar: 3, exercito_caminhao: 8, helicoptero_exercito: 6, helicoptero: 4, suv: 3, popular: 3, esportivo: 1, presidencial: 3 };
@@ -368,6 +369,7 @@ export function modeloCarro(modelo, cor) {
   const g = new THREE.Group();
   const pint = mat(cor, { roughness: 0.25, metalness: 0.55 }), vidro = mat('#1b2633', { roughness: 0.1, metalness: 0.6 }), pneu = mat('#161616', { roughness: 0.9 });
   const luz = mat('#fff6d0', { emissive: '#fff1c8', emissiveIntensity: 1.4 }), lanterna = mat('#c81e1e', { emissive: '#c81e1e', emissiveIntensity: 0.8 });
+  if (modelo === 'onibus') { const o = modeloOnibus(cor); cacheCarro.set(chave, o); return o.clone(); }
   if (!{ popular: 1, suv: 1, esportivo: 1, presidencial: 1 }[modelo]) modelo = 'suv';
   const dims = { popular: [1.7, 0.6, 3.9, 1.5, 0.55, 2.0, 0.34], suv: [1.95, 0.85, 4.6, 1.8, 0.75, 2.7, 0.42], esportivo: [1.95, 0.5, 4.5, 1.6, 0.42, 1.8, 0.36], presidencial: [2.0, 0.7, 6.4, 1.85, 0.62, 3.6, 0.4] }[modelo];
   const [w, h, l, cw, ch, cl, r] = dims;
@@ -388,6 +390,26 @@ export function modeloCarro(modelo, cor) {
   return g.clone();
 }
 
+// ônibus feito por código (até chegar o modelo 3D): 11 m, frente em +Z, letreiro da linha
+function modeloOnibus(cor) {
+  const g = new THREE.Group(), L = 11, W = 2.5, H = 2.9, r = 0.48;
+  const pint = mat('#f4f4f0', { roughness: 0.45, metalness: 0.2 }), faixa = mat(cor || '#1f6fd1', { roughness: 0.4 }), vidro = mat('#16202b', { roughness: 0.08, metalness: 0.6 }), pneu = mat('#151515', { roughness: 0.9 });
+  bloco(g, pint, W, H - 0.3, L, 0, r + 0.15 + (H - 0.3) / 2, 0);
+  bloco(g, faixa, W + 0.02, 0.32, L + 0.02, 0, r + 0.55, 0);
+  bloco(g, vidro, W + 0.03, 0.95, L - 2.2, 0, r + 1.75, -0.4);
+  bloco(g, vidro, W - 0.2, 1.15, 0.05, 0, r + 1.65, L / 2 + 0.01);
+  bloco(g, mat('#222'), W, 0.12, L, 0, r + H - 0.05, 0);
+  const c = document.createElement('canvas'); c.width = 256; c.height = 48; const x = c.getContext('2d');
+  x.fillStyle = '#111'; x.fillRect(0, 0, 256, 48); x.fillStyle = '#ffb21c'; x.font = 'bold 30px monospace'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('1 CIRCULAR', 128, 25);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const let_ = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.36), new THREE.MeshBasicMaterial({ map: t, toneMapped: false })); let_.position.set(0, r + H - 0.38, L / 2 + 0.03); g.add(let_);
+  const luz = mat('#fff6d0', { emissive: '#fff1c8', emissiveIntensity: 1.4 });
+  for (const sx of [-0.9, 0.9]) {
+    bloco(g, luz, 0.35, 0.16, 0.05, sx, r + 0.75, L / 2 + 0.02);
+    for (const sz of [-L / 2 + 1.8, L / 2 - 2.0]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.3, 14).rotateZ(Math.PI / 2), pneu); p.position.set(sx * 1.32, r, sz); p.castShadow = true; g.add(p); }
+  }
+  return g;
+}
 // outdoors: duas colunas e uma placa com o anúncio desenhado num canvas
 const outdoors = new Map();
 function texturaOutdoor(o) {

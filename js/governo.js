@@ -167,6 +167,7 @@ const SERVICOS = {
   conta: ['⚙️ Conta e segurança', telaConta],
   trabalho: ['💼 Seu trabalho', telaTrabalho],
   taxi: ['Carona: para onde?', telaTaxi],
+  onibus: ['🚌 Terminal de ônibus', telaOnibus],
 };
 
 async function telaBanco(c) {
@@ -197,6 +198,7 @@ const PUBLICOS = [
   { id: 'medico', nome: '✚ Hospital', inicio: 'Socorrista', req: 'ficha limpa', onde: 'Hospital', base: '30/min' },
   { id: 'bombeiro', nome: '🚒 Bombeiros', inicio: 'Recruta', req: 'ficha limpa', onde: 'Quartel dos Bombeiros', base: '30/min' },
   { id: 'jornalista', nome: '📰 Jornal da Cidade', inicio: 'Estagiário', req: 'ficha limpa', onde: 'Prefeitura (balcão do jornal)', base: '24/min' },
+  { id: 'motorista', nome: '🚌 Ônibus (motorista)', inicio: 'Motorista', req: 'ficha limpa', onde: 'Terminal de ônibus (Rua dos Clãs × Av. Central)', base: '18/min + 12 por passageiro' },
   { id: 'exercito', nome: '🎖️ Exército', inicio: 'Recruta', req: 'ficha limpa (a equipe também pode entrar)', onde: 'Quartel do Exército (Porto Sul)', base: '35/min' },
 ];
 const servicoAtual = (eu) => (eu.policial ? 'policia' : eu.prf ? 'prf' : eu.profissao || null);
@@ -339,6 +341,11 @@ function ligarProfissao(prof) {
   if (s) s.onclick = () => executar(() => rede.saude.sair(), 'Você saiu do serviço.');
 }
 
+async function telaOnibus(c) {
+  const carreira = await cartaoCarreira('motorista');
+  c.innerHTML = `${carreira}${telaProfissao(c, 'motorista', 'Motorista de ônibus', 'A <b>Linha 1 · Circular</b> roda pelo centro nos dois sentidos (Ida e Volta). Em serviço, toque em <b>Pegar ônibus</b> no terminal: você assume a próxima saída da tabela. Siga as paradas (🚏 no mapa), pare em cada uma para os passageiros, respeite os horários (nem adiantado, nem atrasado) e volte ao terminal. Cada passageiro vale <b>12</b> e a volta no horário dá <b>+150</b>. Quando não há motorista, ônibus do sistema fazem a linha.')}`;
+  ligarProfissao('motorista');
+}
 async function telaHospital(c) {
   const carreira = await cartaoCarreira('medico');
   c.innerHTML = `${carreira}<div class="sub">Tratamento</div>

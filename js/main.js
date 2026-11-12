@@ -771,7 +771,7 @@ const jogador = {
 function resolverColisao(p, raio) {
   colidirLista(colisores, p, raio);
   mundo.colidir(p, raio, colidirLista);
-  colidirCarros(p, raio);
+  colidirCarros(p, raio); colidirOnibus(p, raio);
   if (!jogador.trem) ferrovia.empurrar(p, raio);
   resolverMoveis(p, raio);
   mundo.limitar(p);
@@ -1000,6 +1000,7 @@ function acaoContexto() {
   if (perto(civico.BANCO.empregos, 3.2)) { abrirServico('empregos'); return; }
   if (perto(civico.HOSPITAL.balcao, 3.2)) { abrirServico('hospital'); return; }
   if (perto(civico.BOMBEIROS.balcao, 3.2)) { entrarPublico('bombeiros', salaBombeiros, civico.BOMBEIROS.balcao, '🚒 Quartel dos bombeiros: balcão, quadro de incêndios, vestiário e enfermaria.'); return; }
+  if (contextoOnibus()) { pegarOnibus(); return; }
   { const s = tropaPerto(); if (s) { iniciarTropa(s); return; } }
   if (perto(civico.EXERCITO.arsenal, 3.2)) { usarArsenal(); return; }
   if (perto(CONTRABANDISTA, 3.2)) { falarContrabandista(); return; }
@@ -2104,7 +2105,7 @@ async function iniciarJogo(perfil) {
     bloqueiosMudaram: () => carregarBloqueios(), sairDaConta: async () => { await rede.sair(); location.reload(); },
     rastrear: (a) => rastrear(a), portaoEmpresa: (id) => portaoDaEmpresa(id),
     locaisTrabalho: () => ({ policia: pontos.delegacia, prf: civico.PREFEITURA.prf, medico: civico.HOSPITAL.balcao, bombeiro: civico.BOMBEIROS.balcao,
-      jornalista: civico.PREFEITURA.jornal, exercito: mundo.QUARTEL.portao, agencia: civico.BANCO.empregos }), destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); }, pontoMudou: () => servicos.recomecarPonto(),
+      jornalista: civico.PREFEITURA.jornal, exercito: mundo.QUARTEL.portao, motorista: TERMINAL, agencia: civico.BANCO.empregos }), destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); }, pontoMudou: () => servicos.recomecarPonto(),
   });
   $('btVeiculos').onclick = () => abrirServico('veiculos');
   $('btAmigos').onclick = () => abrirServico('amigos');
@@ -2957,7 +2958,7 @@ const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfi
 function metaPresenca() {
   const p = jogador.perfil;
   return { nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
-    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null };
+    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, on: minhaVolta ? `${minhaVolta.sentido}.${minhaVolta.n}` : 0 };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
 function etiquetaStatus(r) {
@@ -5020,7 +5021,7 @@ function aplicarPerfil(novo) {
       base.veiculo.position.set(base.vaga.x, 0.18, base.vaga.z); base.veiculo.rotation.y = base.vaga.ang;
     }
   }
-  if (novo.profissao !== antigo.profissao) aviso(novo.profissao === 'medico' ? 'Plantão médico: socorra os feridos (✚) pela cidade. +250 por socorro.' : novo.profissao === 'bombeiro' ? 'Você está em serviço nos bombeiros. Apague os incêndios (🔥). +400 por fogo.' : novo.profissao === 'jornalista' ? 'Você é jornalista: vá até incêndios, ocorrências e feridos e toque em Reportar (+200).' : novo.profissao === 'exercito' ? 'Você entrou no Exército! Apresente-se no Quartel em Porto Sul. Cada minuto em serviço conta para a patente.' : 'Você saiu do serviço público.', 4);
+  if (novo.profissao !== antigo.profissao) aviso(novo.profissao === 'medico' ? 'Plantão médico: socorra os feridos (✚) pela cidade. +250 por socorro.' : novo.profissao === 'bombeiro' ? 'Você está em serviço nos bombeiros. Apague os incêndios (🔥). +400 por fogo.' : novo.profissao === 'jornalista' ? 'Você é jornalista: vá até incêndios, ocorrências e feridos e toque em Reportar (+200).' : novo.profissao === 'motorista' ? '🚌 Você é motorista de ônibus! Vá ao Terminal (Rua dos Clãs × Av. Central) e pegue a próxima saída.' : novo.profissao === 'exercito' ? 'Você entrou no Exército! Apresente-se no Quartel em Porto Sul. Cada minuto em serviço conta para a patente.' : 'Você saiu do serviço público.', 4);
   if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome || novo.crimes !== antigo.crimes || novo.policial !== antigo.policial || novo.prf !== antigo.prf || novo.eleitoral !== antigo.eleitoral || novo.profissao !== antigo.profissao || novo.recompensa !== antigo.recompensa) {
     conexao?.rastrear(metaPresenca());
   }
@@ -5262,6 +5263,7 @@ function contexto() {
   if (perto(civico.BANCO.empregos, 3.2)) return ['agência de empregos: vagas nas empresas', 'Vagas'];
   if (perto(civico.HOSPITAL.balcao, 3.2)) return ['hospital: tratamento e plantão médico', 'Hospital'];
   if (perto(civico.BOMBEIROS.balcao, 3.2)) return ['entrar no quartel dos bombeiros', 'Bombeiros'];
+  { const o = contextoOnibus(); if (o) return o; }
   if (tropaPerto()) return ['correr com a tropa (treino de corrida)', 'Correr'];
   if (perto(civico.EXERCITO.arsenal, 3.2)) return [jogador.armaPesada ? 'guardar a arma pesada' : 'arsenal: pegar a arma pesada (com autorização)', 'Arsenal'];
   if (BANCAS.some((b) => perto(b, 3.2))) return ['banca de jornal: ler as notícias', 'Jornal'];
@@ -5375,7 +5377,7 @@ function quadro() {
   atualizarRemotos(dt);
   voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
-  atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt);
+  atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt);
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
@@ -7258,6 +7260,173 @@ function atualizarNomesCla(dt) {
   }
 }
 
+// ================================================================= ônibus: Linha 1 · Circular (centro da Metrópole)
+// Os ônibus do sistema rodam pelo relógio do servidor (todos veem igual, sem rede): saídas a cada meia volta em cada
+// sentido, então nunca chegam juntos no mesmo sentido e se cruzam com os do sentido oposto. O motorista jogador assume
+// uma saída da tabela: o ônibus do sistema daquela saída some para todos e ele faz a volta, parando nas paradas no horário.
+const LINHA = (() => {
+  const P = [[-108, 0], [-108, -54], [108, -54], [108, 54], [-108, 54], [-108, 0]];   // centro das ruas, começa no terminal
+  const seg = []; let L = 0;
+  for (let i = 0; i < P.length - 1; i++) { const [ax, az] = P[i], [bx, bz] = P[i + 1], d = Math.hypot(bx - ax, bz - az); seg.push({ ax, az, dx: (bx - ax) / d, dz: (bz - az) / d, s0: L, d }); L += d; }
+  const NOMES = ['Terminal Central', 'Rua do Comércio', 'Praça do Comércio', 'Rua da Paz', 'Rua da Sucata', 'Mercado'];
+  const PARADAS = [0, 126, 198, 324, 450, 522].map((s, i) => ({ s, nome: NOMES[i] }));
+  return { seg, L, PARADAS, V: 9, ESPERA: 6, ESPERA_TERMINAL: 10 };
+})();
+// ponto da linha a s metros do terminal; volta = sentido contrário. Ônibus andam na faixa da direita
+function pontoLinha(s, volta, lado = 2.6) {
+  const L = LINHA.L; let u = ((s % L) + L) % L; if (volta) u = L - u;
+  let g = LINHA.seg[LINHA.seg.length - 1]; for (const x of LINHA.seg) if (u <= x.s0 + x.d) { g = x; break; }
+  const t = u - g.s0, dx = volta ? -g.dx : g.dx, dz = volta ? -g.dz : g.dz;
+  return { x: g.ax + g.dx * t + (-dz) * lado, z: g.az + g.dz * t + dx * lado, ang: Math.atan2(dx, dz) };
+}
+// tabela de horários de uma volta: chegada e saída de cada parada (segundos depois da saída do terminal)
+const TABELA = (() => {
+  const t = []; let agora = 0;
+  LINHA.PARADAS.forEach((p, i) => {
+    if (i > 0) { agora += (p.s - LINHA.PARADAS[i - 1].s) / LINHA.V + 2; }
+    const espera = i === 0 ? 0 : LINHA.ESPERA;
+    t.push({ chega: agora, sai: agora + espera }); agora += espera;
+  });
+  const fim = agora + (LINHA.L - LINHA.PARADAS[LINHA.PARADAS.length - 1].s) / LINHA.V + 2;
+  return { paradas: t, fim, volta: fim + LINHA.ESPERA_TERMINAL };
+})();
+const INTERVALO = TABELA.volta / 2;   // dois ônibus por sentido, meia volta de distância
+const FASE = { ida: 0, volta: INTERVALO / 2 };
+// onde está, em s (metros desde o terminal), um ônibus que saiu há e segundos
+function sNoTempo(e) {
+  const P = TABELA.paradas;
+  for (let i = 0; i < P.length; i++) {
+    if (e < P[i].chega) { const a = P[i - 1], d = LINHA.PARADAS[i].s - LINHA.PARADAS[i - 1].s, k = (e - a.sai) / (P[i].chega - a.sai); return LINHA.PARADAS[i - 1].s + d * THREE.MathUtils.smootherstep(k, 0, 1); }
+    if (e < P[i].sai) return LINHA.PARADAS[i].s;
+  }
+  const ult = P[P.length - 1], s0 = LINHA.PARADAS[LINHA.PARADAS.length - 1].s;
+  if (e < TABELA.fim) return s0 + (LINHA.L - s0) * THREE.MathUtils.smootherstep((e - ult.sai) / (TABELA.fim - ult.sai), 0, 1);
+  return LINHA.L;
+}
+const saidasOcupadas = new Set();   // 'ida.123' assumidas por motoristas jogadores (vindas da presença)
+const onibusNpc = { ida: [], volta: [] };
+let paradasMontadas = false, minhaVolta = null;
+function montarParadas() {
+  if (paradasMontadas) return; paradasMontadas = true;
+  const telhado = new THREE.MeshStandardMaterial({ color: '#2b5fa8', roughness: 0.5 }), poste = new THREE.MeshStandardMaterial({ color: '#555b63', roughness: 0.6, metalness: 0.4 });
+  const vidro = new THREE.MeshStandardMaterial({ color: '#9fc3e6', roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.35 });
+  for (const volta of [false, true]) for (const p of LINHA.PARADAS) {
+    const q = pontoLinha(volta ? LINHA.L - p.s : p.s, volta, 7.2), g = new THREE.Group();
+    const caixa = (w, h, d, m, x, y, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = true; g.add(o); };
+    caixa(3.2, 0.1, 1.5, telhado, 0, 2.5, 0); caixa(3.2, 2.2, 0.05, vidro, 0, 1.35, -0.7);
+    for (const sx of [-1.5, 1.5]) caixa(0.08, 2.5, 0.08, poste, sx, 1.25, -0.65);
+    caixa(2.6, 0.08, 0.45, poste, 0, 0.5, -0.45);
+    g.add(rotuloSimples(`🚏 ${p.nome}`, 3.2)); g.children[g.children.length - 1].position.set(0, 3.1, 0);
+    g.position.set(q.x, alturaChao(q.x, q.z), q.z); g.rotation.y = q.ang + Math.PI / 2; scene.add(g);
+    mundo.addCol({ tipo: 'circ', x: q.x, z: q.z, r: 0.6 });
+  }
+}
+function rotuloSimples(texto, larg) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 96; const x = c.getContext('2d');
+  x.fillStyle = 'rgba(20,40,80,.85)'; x.beginPath(); x.roundRect(4, 8, 504, 80, 30); x.fill();
+  x.fillStyle = '#fff'; x.font = 'bold 44px system-ui'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(texto, 256, 50);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false })); s.scale.set(larg, larg * 96 / 512, 1); return s;
+}
+function atualizarOnibus(dt) {
+  montarParadas();
+  saidasOcupadas.clear(); for (const r of remotos.values()) if (r.meta?.on) saidasOcupadas.add(r.meta.on);
+  const t = agoraServidor() / 1000;
+  for (const sentido of ['ida', 'volta']) {
+    const n0 = Math.floor((t - FASE[sentido]) / INTERVALO), lista = onibusNpc[sentido];
+    for (let k = 0; k < 2; k++) {   // as duas saídas que estão na rua agora
+      const n = n0 - k, e = t - FASE[sentido] - n * INTERVALO;
+      let b = lista[k]; if (!b) { b = { mesh: civico.modeloCarro('onibus', sentido === 'ida' ? '#1f6fd1' : '#d13a1f') }; scene.add(b.mesh); lista[k] = b; }
+      const assumida = saidasOcupadas.has(`${sentido}.${n}`) || (minhaVolta && minhaVolta.sentido === sentido && minhaVolta.n === n);
+      const dentro = e >= 0 && e < TABELA.volta;
+      b.mesh.visible = dentro && !assumida && !jogador.dentroCasa;
+      if (!b.mesh.visible) { b.ativo = false; continue; }
+      const q = pontoLinha(sNoTempo(e), sentido === 'volta'), q2 = pontoLinha(sNoTempo(e) + 3, sentido === 'volta');
+      b.mesh.position.set(q.x, alturaChao(q.x, q.z), q.z);
+      const alvo = Math.atan2(q2.x - q.x, q2.z - q.z); b.ang = b.ativo ? b.ang + Math.atan2(Math.sin(alvo - b.ang), Math.cos(alvo - b.ang)) * Math.min(1, dt * 4) : alvo;
+      b.mesh.rotation.y = b.ang; b.ativo = true;
+    }
+  }
+  if (minhaVolta) atualizarMinhaVolta(dt, t);
+}
+// ônibus do sistema empurram quem está no caminho (três círculos ao longo do comprimento)
+function colidirOnibus(p, raio) {
+  for (const l of [onibusNpc.ida, onibusNpc.volta]) for (const b of l) {
+    if (!b?.ativo) continue;
+    const fx = Math.sin(b.ang), fz = Math.cos(b.ang);
+    for (const o of [-3.6, 0, 3.6]) {
+      const cx = b.mesh.position.x + fx * o, cz = b.mesh.position.z + fz * o, dx = p.x - cx, dz = p.z - cz, r = raio + 1.5, d2 = dx * dx + dz * dz;
+      if (d2 < r * r && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = cx + dx / d * r; p.z = cz + dz / d * r; }
+    }
+  }
+}
+// ---- motorista jogador
+const TERMINAL = (() => { const q = pontoLinha(0, false, 7.2); return { x: q.x, z: q.z }; })();
+const ehMotorista = () => jogador.perfil?.profissao === 'motorista' || jogador.perfil?.cargo === 'admin';
+function proximaSaida(sentido) { const t = agoraServidor() / 1000; return Math.ceil((t - FASE[sentido]) / INTERVALO); }
+function pegarOnibus() {
+  if (!ehMotorista()) { abrirServico('onibus'); return; }
+  if (jogador.carro) { aviso('Desça do veículo primeiro.'); return; }
+  const t = agoraServidor() / 1000, falta = (s) => Math.round(FASE[s] + proximaSaida(s) * INTERVALO - t);
+  escolher('🚌 Linha 1 · Circular', 'Escolha o sentido. Você assume a próxima saída da tabela.', ['ida', 'volta'].map((s) => ({
+    rotulo: `${s === 'ida' ? '➡️ Ida' : '⬅️ Volta'} · sai em ${falta(s)} s`, fn: () => assumirSaida(s),
+  })).concat([{ rotulo: '📋 Ver o meu serviço', fn: () => abrirServico('onibus') }]));
+}
+function assumirSaida(sentido) {
+  const n = proximaSaida(sentido), q = pontoLinha(0, sentido === 'volta');
+  const mesh = civico.modeloCarro('onibus', sentido === 'ida' ? '#1f6fd1' : '#d13a1f'); mesh.position.set(q.x, alturaChao(q.x, q.z), q.z); mesh.rotation.y = q.ang; scene.add(mesh);
+  if (jogador.armado) alternarArma();
+  modoVolante(true);
+  jogador.carro = { id: 'o' + jogador.perfil.id.slice(0, 8), servico: 'onibus', modelo: 'onibus', cor: sentido === 'ida' ? '#1f6fd1' : '#d13a1f', vel: 0, mesh, salvar: 1e9, max: 12, raio: 1.9, alt: 0 };
+  jogador.pos.set(q.x, alturaChao(q.x, q.z), q.z); jogador.yaw = q.ang; jogador.alvo = null; jogador.avatar.raiz.visible = false;
+  minhaVolta = { sentido, n, mesh, prox: 1, passageiros: 0, atrasoMax: 0, parado: 0, saiu: false, saida: FASE[sentido] + n * INTERVALO };
+  conexao?.rastrear(metaPresenca());
+  guiarProxima();
+  aviso(`🚌 Saída ${sentido === 'ida' ? 'Ida' : 'Volta'} às ${new Date((minhaVolta.saida) * 1000 - (agoraServidor() - Date.now())).toLocaleTimeString('pt-BR', { minute: '2-digit', second: '2-digit' })}. Espere o horário e siga as paradas (🚏).`, 5);
+}
+function paradaFisica(i, sentido) { const p = LINHA.PARADAS[i % LINHA.PARADAS.length], s = sentido === 'volta' ? (LINHA.L - p.s) % LINHA.L : p.s; return { ...pontoLinha(s, sentido === 'volta'), nome: p.nome }; }
+function guiarProxima() {
+  const v = minhaVolta; if (!v) return;
+  const i = v.prox % LINHA.PARADAS.length, q = paradaFisica(i, v.sentido);
+  rastrear({ nome: `🚏 ${i === 0 ? 'Fim: ' : ''}${q.nome}`, x: q.x, z: q.z });
+}
+function atualizarMinhaVolta(dt, t) {
+  const v = minhaVolta;
+  if (!jogador.carro || jogador.carro.mesh !== v.mesh) { encerrarVolta('Você largou o ônibus: a volta foi cancelada.'); return; }
+  const e = t - v.saida;
+  if (!v.saiu) {   // no terminal, antes do horário
+    if (e < -2 && Math.abs(jogador.carro.vel) > 1) { jogador.carro.vel = 0; aviso(`⏱️ Ainda não: saída em ${Math.ceil(-e)} s.`, 1); }
+    if (e >= 0) { v.saiu = true; aviso('🚌 Horário! Pode sair.', 2); }
+    return;
+  }
+  const i = v.prox % LINHA.PARADAS.length, q = paradaFisica(i, v.sentido), fim = i === 0;
+  const chegaPrevisto = fim ? TABELA.fim : TABELA.paradas[i].chega, saiPrevisto = fim ? TABELA.fim : TABELA.paradas[i].sai;
+  const perto = Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z) < 9;
+  if (!perto || Math.abs(jogador.carro.vel) > 0.8) { v.parado = 0; return; }
+  v.parado += dt;
+  if (v.parado < 0.6) return;
+  if (!v.chegou) { v.chegou = true; v.atrasoMax = Math.max(v.atrasoMax, e - chegaPrevisto); const sobe = fim ? 0 : 1 + (Math.abs(Math.sin(v.n * 12.9898 + i * 78.233 + (v.sentido === 'volta' ? 3 : 0)) * 43758.5453) % 1) * 4 | 0; v.sobe = sobe; v.passageiros += sobe;
+    aviso(fim ? '🏁 Terminal! Fechando a volta…' : `🚏 ${q.nome}: ${sobe} passageiro(s) subindo. ${e < chegaPrevisto - 5 ? `Adiantado ${Math.round(chegaPrevisto - e)} s.` : e > chegaPrevisto + 15 ? `Atrasado ${Math.round(e - chegaPrevisto)} s.` : 'No horário!'}`, 3); }
+  if (fim) { pagarVolta(); return; }
+  if (v.parado < 3.5) return;                                      // tempo de embarque
+  if (e < saiPrevisto - 2) { if (!v.avisoEspera) { v.avisoEspera = true; aviso(`⏱️ Adiantado: espere ${Math.ceil(saiPrevisto - e)} s para seguir (o ônibus de trás não pode encostar).`, 2.5); } return; }
+  v.prox++; v.chegou = false; v.avisoEspera = false; v.parado = 0; guiarProxima();
+  aviso(`🚌 Próxima parada: ${paradaFisica(v.prox, v.sentido).nome}`, 2);
+}
+async function pagarVolta() {
+  const v = minhaVolta; if (!v || v.pagando) return; v.pagando = true;
+  const pontual = v.atrasoMax < 25;
+  try { const ganho = await rede.transporte.pagarOnibus(v.passageiros, pontual); aviso(`🏁 Volta completa! ${v.passageiros} passageiros${pontual ? ' · no horário (+150)' : ' · atrasou'} · +${ganho} moedas. Toque no terminal para a próxima saída.`, 5); }
+  catch (e) { aviso('Volta não paga: ' + (e.message || e), 4); }
+  encerrarVolta();
+}
+function encerrarVolta(msg) {
+  const v = minhaVolta; if (!v) return; minhaVolta = null;
+  if (jogador.carro?.mesh === v.mesh) { const c = jogador.carro; jogador.carro = null; modoVolante(false); jogador.avatar.raiz.visible = true; const lx = Math.cos(jogador.yaw) * 2.4, lz = -Math.sin(jogador.yaw) * 2.4; jogador.pos.x += lx; jogador.pos.z += lz; resolverColisao(jogador.pos, jogador.raio); c.mesh = null; }
+  scene.remove(v.mesh); rastrear(null); conexao?.rastrear(metaPresenca());
+  if (msg) aviso(msg, 3);
+}
+const contextoOnibus = () => (Math.hypot(TERMINAL.x - jogador.pos.x, TERMINAL.z - jogador.pos.z) < 3.5 && !jogador.carro ? [ehMotorista() ? 'terminal de ônibus: pegar a próxima saída' : 'terminal de ônibus (vagas para motorista)', 'Ônibus'] : null);
 // ================================================================= editor da farda (admin): ajusta olhando o próprio personagem
 let editorFarda = null;
 const CAMPOS_FARDA = {

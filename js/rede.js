@@ -764,3 +764,7 @@ export const membrosDoCla = (id) => sel(sb.from('membros_cla').select('jogador, 
 export async function meuClaId(id) { const d = await sel(sb.from('membros_cla').select('cla').eq('jogador', id).maybeSingle()); return d?.cla ?? null; }
 export const listarTerritorios = () => sel(sb.from('territorios').select('*').order('id'));
 export const listarCasas = () => sel(sb.from('casas').select('id, x, z, preco, dono, tipo, rotulo, modelo, pai, nivel, inquilino, aluguel, pago_ate, a_venda, dono_perfil:perfis!casas_dono_fkey(nome), inquilino_perfil:perfis!casas_inquilino_fkey(nome)').order('id'));
+
+export const transporte = {
+  pagarOnibus: (passageiros, pontual) => rpc('pagar_onibus', { p_passageiros: passageiros, p_pontual: pontual }),
+};
