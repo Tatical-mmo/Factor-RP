@@ -837,3 +837,24 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Ao parar na pista, ele devolve o controle.
 - Voo entre aeroportos paga igual ao manual. Na aula de voo, usar o piloto automático faz a aula não contar.
 - **Jipe:** o motorista agora senta no banco da frente (antes ficava no de trás). Até 3 passageiros aparecem sentados: um ao lado e dois atrás, com as mãos no colo.
+
+## Versão 13/11 · queda e revisão (20261113k)
+
+**Rode no Supabase, nesta ordem: `supabase/62a_aviacao_seguranca.sql` e depois `supabase/62b_mecanico.sql`.**
+
+- **Queda de avião ou helicóptero:**
+  - Caiu de baixo (até uns 10 m, ou só tocou errado no chão): sobrevive com −40 de vida.
+  - Caiu de mais alto (ou descendo muito rápido): morre. Os passageiros também, e se a queda for baixa eles levam −40.
+- **Explosão do tamanho da aeronave** (pequeno ×2, helicóptero ×2,5, médio ×3, grande ×4,5): o raio, o tremor, o som e o dano em quem está perto aumentam junto. No lugar fica uma carcaça queimada por 3 minutos.
+- **Foco de incêndio:** a queda abre um foco de incêndio de verdade (tabela `incendios`, tipo `queda`). Os bombeiros jogadores apagam e ganham +400; sem eles, os bombeiros NPC apagam em 3 minutos. Os jornalistas também podem reportar.
+- **Paraquedas:** custa 5.000 no balcão de qualquer aeroporto (junto com a passagem) e fica na mochila.
+  - Com ele, no avião ou helicóptero a mais de 8 m de altura, aparece o botão **🪂 EJETAR** (no PC, tecla **J**).
+  - O piloto desce devagar (dá para guiar com o joystick) e o paraquedas é gasto.
+  - A aeronave segue sem piloto, cai e explode sozinha.
+- **Revisão da frota:**
+  - Cada avião da frota da Metrópole conta os voos desde a última revisão (tabela `avioes_frota`), e a placa mostra "N/3 voos".
+  - Com 3 ou mais voos a placa fica vermelha ("revisão vencida"). Cada voo além do 3º tem 15% a mais de chance de o motor falhar no ar (15%, 30%, 45%… até 90%).
+  - Na falha, o motor para, o piloto automático desliga e o rádio chama Mayday: dá para planar até uma pista ou um campo aberto, ou ejetar.
+- **Revisão no avião:** perto do avião, o piloto escolhe entre pilotar ou chamar o mecânico NPC do hangar, que cobra 2.000 (pequeno), 4.000 (médio) ou 8.000 (grande); metade vai para a prefeitura.
+- **Profissão nova: mecânico de aviões.** Entra pelo mecânico NPC do hangar, sem requisito além da ficha limpa. Faz a revisão de graça para o piloto e ganha +300 por revisão. A carreira vai de Ajudante, Mecânico e Mecânico Chefe até Inspetor de Aeronaves.
+- O helicóptero segue só as regras de queda, sem revisão.

@@ -172,6 +172,7 @@ const SERVICOS = {
   torre: ['🗼 Torre de controle', telaTorre],
   fiscal: ['🧾 Fiscalização da Rodoviária', telaFiscal],
   lixo: ['♻️ Central de Reciclagem', telaLixo],
+  mecanico: ['🔧 Oficina do hangar', telaMecanico],
 };
 
 async function telaBanco(c) {
@@ -206,6 +207,7 @@ const PUBLICOS = [
   { id: 'piloto', nome: '✈️ Piloto de avião', inicio: 'Copiloto', req: 'ficha limpa e brevê (autoescola)', onde: 'Hangar do Aeroporto da Metrópole', base: '30/min + 250 a 600 por voo' },
   { id: 'gari', nome: '♻️ Coleta de lixo (gari)', inicio: 'Gari', req: 'ficha limpa e carteira C (autoescola)', onde: 'Central de Reciclagem (leste do centro)', base: '22/min + 15 por lixeira e 100 por descarga' },
   { id: 'fiscal', nome: '🧾 Fiscal da Rodoviária', inicio: 'Fiscal', req: 'ficha limpa', onde: 'Rodoviária (Fiscalização)', base: '20/min + 30 por atraso registrado' },
+  { id: 'mecanico', nome: '🔧 Mecânico de aviões', inicio: 'Ajudante', req: 'ficha limpa', onde: 'Hangar do Aeroporto da Metrópole (mecânico)', base: '+300 por revisão de avião' },
   { id: 'controlador', nome: '🗼 Controlador de voo', inicio: 'Controlador Trainee', req: 'ficha limpa', onde: 'Torre do Aeroporto da Metrópole', base: '26/min + 40 por autorização' },
   { id: 'exercito', nome: '🎖️ Exército', inicio: 'Recruta', req: 'ficha limpa (a equipe também pode entrar)', onde: 'Quartel do Exército (Porto Sul)', base: '35/min' },
 ];
@@ -368,6 +370,11 @@ async function telaLixo(c) {
   const carreira = await cartaoCarreira('gari');
   c.innerHTML = `${carreira}${telaProfissao(c, 'gari', 'Gari · coleta de lixo', 'Na <b>Central de Reciclagem</b> (leste do centro), escolha um dos 4 setores na garagem e pegue o caminhão de lixo. A faixa amarela leva às lixeiras cheias (com sacos em volta): pare do lado e espere os dois garis NPC descerem, levarem os sacos e subirem de novo. Cabem 14 lixeiras; depois volte à Central e pare na <b>Descarga</b>. Cada lixeira vale <b>15</b> e cada descarga <b>+100</b>. As lixeiras enchem de novo em 4 minutos. Em cada setor sem gari jogador, um caminhão do sistema faz a coleta com os seus garis NPC.')}`;
   ligarProfissao('gari');
+}
+async function telaMecanico(c) {
+  const carreira = await cartaoCarreira('mecanico');
+  c.innerHTML = `${carreira}${telaProfissao(c, 'mecanico', 'Mecânico de aviões', 'Os aviões da frota do <b>Aeroporto da Metrópole</b> precisam de revisão a cada <b>3 voos</b>; a placa em cima de cada um mostra quantos voos ele tem. Sem revisão, o motor pode falhar no ar. Chegue perto de um avião com voos e toque em <b>Revisar</b>: você ganha <b>+300</b> por revisão. Sem mecânico jogador, o mecânico NPC do hangar faz a revisão cobrando do piloto (2.000 / 4.000 / 8.000).')}`;
+  ligarProfissao('mecanico');
 }
 async function telaFiscal(c) {
   const carreira = await cartaoCarreira('fiscal');

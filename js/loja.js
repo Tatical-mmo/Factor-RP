@@ -19,6 +19,7 @@ export async function iniciarLoja(contexto) {
   try { precos = await rede.carregarPrecos(); } catch (e) { console.warn('preços', e); }
   await recarregarInventario();
 }
+export const qtdItem = (k) => inv?.[k] || 0;
 export async function recarregarInventario() {
   try { inv = await rede.carregarInventario(ctx.perfil().id); } catch { /* tenta depois */ }
   if (modo && digitandoJanela()) { pendenteJanela = true; return; }

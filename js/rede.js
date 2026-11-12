@@ -181,6 +181,10 @@ function traduzirRpc(m) {
     'nenhuma caixa embalada': 'Essa caixa não foi embalada por você.',
     'entrega rapida demais': 'Entrega rápida demais. Tente de novo em instantes.',
     'moedas insuficientes': 'Moedas insuficientes.',
+    'aviao ja revisado': 'Esse avião já está revisado.',
+    'so mecanicos': 'Só mecânicos fazem a revisão.',
+    'aviao invalido': 'Avião inválido.',
+    'espere um pouco': 'Espere um pouco.',
     'itens insuficientes': 'Você não tem itens suficientes.',
     'a loja nao vende esse item': 'A loja não vende esse item.',
     'a loja nao compra esse item': 'A loja não compra esse item.',
@@ -781,4 +785,13 @@ export const transporte = {
   tarifa: () => rpc('tarifa_onibus'),
   pagarFiscal: () => rpc('pagar_fiscal'),
   pagarColeta: (n) => rpc('pagar_coleta', { p_lixeiras: n }),
+};
+// aviação: paraquedas, foco de incêndio da queda e revisão da frota
+export const aviacao = {
+  comprarParaquedas: () => rpc('comprar_paraquedas'),
+  usarParaquedas: () => rpc('usar_paraquedas'),
+  incendioQueda: (x, z, nome) => rpc('incendio_queda', { p_x: x, p_z: z, p_nome: nome }),
+  frota: () => sel(sb.from('avioes_frota').select('*').order('id')),
+  voo: (aviao) => rpc('voo_frota', { p_aviao: aviao }),
+  revisar: (aviao, mecanico) => rpc('revisar_aviao', { p_aviao: aviao, p_mecanico: !!mecanico }),
 };

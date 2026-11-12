@@ -183,6 +183,7 @@
   /* Volante e pedais (aparecem ao entrar num veículo) */
   #volante { position:absolute; inset:0; pointer-events:none; display:none; }
   body.dirigindo #volante { display:block; }
+  #vEjetar { display:none; width:70px; height:70px; border-radius:50%; font-size:11px; background:rgba(200,40,40,.85); color:#fff; } body.ejetar #vEjetar { display:block; }
   #vPairar { display:none; width:78px; height:78px; border-radius:50%; font-size:12px; } body.voando #vPairar { display:block; } #vPairar.ativo { background:rgba(242,163,58,.85); color:#111; }
   body.dirigindo #joy, body.dirigindo #btSoco, body.dirigindo #btArma, body.dirigindo #btTiro { display:none; }
   body.dirigindo.tanque #btTiro { display:block; }
@@ -256,25 +257,25 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261113j",
-  "./js/mundo.js": "./js/mundo.js?v=20261113j",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261113j",
-  "./js/cla.js": "./js/cla.js?v=20261113j",
-  "./js/config.js": "./js/config.js?v=20261113j",
-  "./js/empresa.js": "./js/empresa.js?v=20261113j",
-  "./js/loja.js": "./js/loja.js?v=20261113j",
-  "./js/painel.js": "./js/painel.js?v=20261113j",
-  "./js/rede.js": "./js/rede.js?v=20261113j",
-  "./js/sedes.js": "./js/sedes.js?v=20261113j",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261113j",
-  "./js/civico.js": "./js/civico.js?v=20261113j",
-  "./js/governo.js": "./js/governo.js?v=20261113j",
-  "./js/servicos.js": "./js/servicos.js?v=20261113j",
-  "./js/sons.js": "./js/sons.js?v=20261113j",
-  "./js/voz.js": "./js/voz.js?v=20261113j",
-  "./js/clima.js": "./js/clima.js?v=20261113j",
-  "./js/jornal.js": "./js/jornal.js?v=20261113j",
-  "./js/visual.js": "./js/visual.js?v=20261113j"
+  "./js/main.js": "./js/main.js?v=20261113k",
+  "./js/mundo.js": "./js/mundo.js?v=20261113k",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261113k",
+  "./js/cla.js": "./js/cla.js?v=20261113k",
+  "./js/config.js": "./js/config.js?v=20261113k",
+  "./js/empresa.js": "./js/empresa.js?v=20261113k",
+  "./js/loja.js": "./js/loja.js?v=20261113k",
+  "./js/painel.js": "./js/painel.js?v=20261113k",
+  "./js/rede.js": "./js/rede.js?v=20261113k",
+  "./js/sedes.js": "./js/sedes.js?v=20261113k",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261113k",
+  "./js/civico.js": "./js/civico.js?v=20261113k",
+  "./js/governo.js": "./js/governo.js?v=20261113k",
+  "./js/servicos.js": "./js/servicos.js?v=20261113k",
+  "./js/sons.js": "./js/sons.js?v=20261113k",
+  "./js/voz.js": "./js/voz.js?v=20261113k",
+  "./js/clima.js": "./js/clima.js?v=20261113k",
+  "./js/jornal.js": "./js/jornal.js?v=20261113k",
+  "./js/visual.js": "./js/visual.js?v=20261113k"
 } }
 </script>
 </head>
@@ -419,12 +420,12 @@
   <div id="volante">
     <div id="manche"><span class="m-t">▲ DESCE</span><span class="m-b">▼ SOBE</span><span class="m-l">◀</span><span class="m-r">▶</span><i></i></div>
     <div id="setas"><button class="pd" id="vEsq">◀</button><button class="pd" id="vDir">▶</button></div>
-    <div id="pedais"><button class="pd" id="vPairar">🚁<br>PAIRAR</button><button class="pd" id="vFreio">FREIO<br>RÉ</button><button class="pd" id="vAcel">ACELERAR</button></div>
+    <div id="pedais"><button class="pd" id="vEjetar">🪂<br>EJETAR</button><button class="pd" id="vPairar">🚁<br>PAIRAR</button><button class="pd" id="vFreio">FREIO<br>RÉ</button><button class="pd" id="vAcel">ACELERAR</button></div>
   </div>
 </div>
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 13/11 · piloto automático</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 13/11 · queda e revisão</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {
