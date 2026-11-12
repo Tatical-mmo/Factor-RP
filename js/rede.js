@@ -459,6 +459,7 @@ export const carros = {
   listar: () => sel(sb.from('carros').select('*').order('id')),
   comprar: (modelo, cor) => rpc('comprar_carro', { p_modelo: modelo, p_cor: cor }),
   estacionar: (id, x, z, ang) => rpc('estacionar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),
+  acidente: (id) => rpc('acidente_carro', { p_carro: id }),
   materializar: (id, x, z, ang) => rpc('materializar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),
   vender: (id) => rpc('vender_carro', { p_carro: id }),
   roubar: (id) => rpc('roubar_carro', { p_carro: id }),

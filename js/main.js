@@ -913,6 +913,10 @@ function configurarJoystick() {
   base.addEventListener('pointerup', fim); base.addEventListener('pointercancel', fim);
   const toque = (id, fn) => $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
   // volante: setas e pedais (cada botão com o próprio dedo)
+  $('vPairar').onclick = (e) => {
+    e.stopPropagation(); const c = jogador.carro; if (!c?.voa) return;
+    c.pairar = !c.pairar; aviso(c.pairar ? '🚁 Pairando: o helicóptero fica parado no ar.' : '🚁 Pairar desligado: parado, ele desce para pousar.', 2.5);
+  };
   for (const [id, k] of [['vEsq', 'esq'], ['vDir', 'dir'], ['vAcel', 'acel'], ['vFreio', 'freio']]) {
     const b = $(id);
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch { /* sem captura */ } pedais[k] = true; b.dataset.dedo = e.pointerId; b.classList.add('ativo'); });
@@ -1174,7 +1178,9 @@ function meuCarroProximo() {
   }
   return melhor;
 }
-function modoVolante(sim) { if (!sim && document.body.classList.contains('tanque')) { document.body.classList.remove('tanque'); $('btTiro').classList.toggle('oculto', !jogador.armado || !TOQUE); } document.body.classList.toggle('dirigindo', sim); for (const k in pedais) pedais[k] = false; joy.ativo = false; joy.x = joy.y = 0; }
+let voandoUI = false;
+function modoVolante(sim) {
+  if (!sim && voandoUI) { voandoUI = false; document.body.classList.remove('voando'); } if (!sim && document.body.classList.contains('tanque')) { document.body.classList.remove('tanque'); $('btTiro').classList.toggle('oculto', !jogador.armado || !TOQUE); } document.body.classList.toggle('dirigindo', sim); for (const k in pedais) pedais[k] = false; joy.ativo = false; joy.x = joy.y = 0; }
 function entrarCarro(v) {
   if (jogador.carregando) { aviso('Largue a caixa antes de dirigir.'); return; }
   modoVolante(true);
@@ -1233,11 +1239,13 @@ function sairCarroLocal() {
 // direção arcade: o controle aponta para onde o carro deve ir (como andar a pé)
 function dirigir(dt) {
   const c = jogador.carro, max = c.max || civico.CARROS[c.modelo]?.vel || 15;
+  if (c.dano === undefined) c.dano = danoGuardado(c);
+  if (c.voa !== voandoUI) { voandoUI = !!c.voa; document.body.classList.toggle('voando', voandoUI); }
   const acel = pedais.acel || teclas.has('w') || teclas.has('arrowup'), freio = pedais.freio || teclas.has('s') || teclas.has('arrowdown');
   const volante = (pedais.dir || teclas.has('d') || teclas.has('arrowright') ? 1 : 0) - (pedais.esq || teclas.has('a') || teclas.has('arrowleft') ? 1 : 0);
   // aceleração suave; freio firme; parado, o freio vira ré (devagar)
   if (acel && !freio) c.vel = c.vel < 0 ? Math.min(0, c.vel + 10 * dt) : Math.min(max, c.vel + (c.vel < max * 0.5 ? 4.5 : 2.5) * dt);
-  else if (freio) c.vel = c.vel > 0.3 ? Math.max(0, c.vel - 11 * dt) : Math.max(-Math.min(4, max * 0.35), c.vel - 3 * dt);
+  else if (freio) c.vel = c.vel > 0.3 ? Math.max(0, c.vel - 11 * dt) : c.voa ? 0 : Math.max(-Math.min(4, max * 0.35), c.vel - 3 * dt);   // helicóptero não tem ré
   else c.vel = c.vel > 0 ? Math.max(0, c.vel - 3 * dt) : Math.min(0, c.vel + 3 * dt);
   // volante com resposta gradual; vira menos quando está rápido (não roda no lugar)
   c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * 7);
@@ -1250,13 +1258,30 @@ function dirigir(dt) {
   if (!c.voa) { colidirVeiculo(c, dt); resolverColisao(jogador.pos, c.raio || 1.3); }
   const andou = Math.hypot(jogador.pos.x - antes.x, jogador.pos.z - antes.z), esperado = Math.abs(c.vel) * dt;
   if (esperado > 0.01 && andou < esperado * 0.6) {          // bateu
-    if (Math.abs(c.vel) > 6 && performance.now() - (c.batida || 0) > 1200) { c.batida = performance.now(); aviso('💥 Batida!', 1.2); tremor = 0.35; }
+    if (Math.abs(c.vel) > 6 && performance.now() - (c.batida || 0) > 1200) {
+      c.batida = performance.now(); tremor = 0.35;
+      c.dano = Math.min(100, (c.dano || 0) + Math.min(45, Math.abs(c.vel) * 2.2));   // batida forte estraga mais
+      guardarDanoVeiculo(c);
+      if (c.dano >= 100) { acidenteVeiculo(c, '💥 Bateu demais: o veículo explodiu!'); return; }
+      aviso(`💥 Batida! Veículo ${Math.round(100 - c.dano)}%${c.dano >= 70 ? ' (pegando fogo, cuidado!)' : ''}`, 1.6);
+    }
     c.vel *= Math.abs(c.vel) > 6 ? 0.15 : 0.5;
   }
   const chao = alturaChao(jogador.pos.x, jogador.pos.z);
   if (c.voa) {   // helicóptero: sobe quando anda e pousa quando para (pode voar entre a metrópole e as cidades)
     jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x, -700, 700); jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z, -1200, 1200);
-    c.alt += ((Math.abs(c.vel) > 1 ? 22 : 0) - c.alt) * Math.min(1, dt * 1.2);
+    const altAntes = c.alt;
+    c.alt += ((Math.abs(c.vel) > 1 || c.pairar ? 22 : 0) - c.alt) * Math.min(1, dt * 1.2);   // pairando: fica no ar parado
+    if (c.alt > 6) c.voou = true;
+    if (c.voou && c.alt < altAntes && c.alt < 1.4) {   // pousando: o lugar precisa ser chão firme e livre
+      c.voou = false;
+      const t = jogador.pos.clone(); mundo.limitar(t);
+      const livre = jogador.pos.clone(); resolverColisao(livre, c.raio || 2.2);
+      if (Math.hypot(t.x - jogador.pos.x, t.z - jogador.pos.z) > 2 || Math.hypot(livre.x - jogador.pos.x, livre.z - jogador.pos.z) > 0.6) {
+        acidenteVeiculo(c, '💥 O helicóptero caiu e explodiu! Pouse só em chão livre (use Pairar para ficar no ar).'); return;
+      }
+    }
+    const bp = $('vPairar'); if (bp) bp.classList.toggle('ativo', !!c.pairar);
     jogador.pos.y = chao; c.mesh.position.set(jogador.pos.x, chao + c.alt, jogador.pos.z); c.mesh.rotation.y = jogador.yaw;
     const ro = c.mesh.userData.rotor || rotorDe(c.mesh); if (ro) { ro.visible = true; ro.rotation.y += dt * (c.alt > 1 || Math.abs(c.vel) > 0.5 ? 28 : 12); }
     jogador.avatar.raiz.position.copy(jogador.pos);
@@ -1575,6 +1600,28 @@ function acertoTanque(b) {
     if (Math.hypot(p.x - c.obj.position.x, p.z - c.obj.position.z) < 3 && p.y < c.obj.position.y + 3.5) { atacarCaminhao(c); explodir(c.obj.position); return true; }
   }
   return false;
+}
+// ---- acidentes: cada batida forte gasta o veículo; em 100% ele explode (no trem, explode na hora).
+// O carro do jogador some por 30 s e volta para o dono; quem estava dentro sai ferido.
+const danoVeiculos = new Map();   // dano dos carros nesta sessão (sair e entrar não conserta)
+function guardarDanoVeiculo(c) { danoVeiculos.set(c.rua !== undefined ? 'r' + c.rua : c.caminhao ? 'k' + c.caminhao : c.servico ? 's' + c.servico : c.id, c.dano); }
+function danoGuardado(c) { return danoVeiculos.get(c.rua !== undefined ? 'r' + c.rua : c.caminhao ? 'k' + c.caminhao : c.servico ? 's' + c.servico : c.id) || 0; }
+function acidenteVeiculo(c, msg) {
+  if (!c || c.explodiu) return; c.explodiu = true;
+  const p = c.mesh ? c.mesh.position.clone() : jogador.pos.clone();
+  const meu = c.rua === undefined && !c.caminhao && !c.servico && carrosMundo.has(c.id) ? c.id : null;
+  danoVeiculos.delete(meu ?? (c.rua !== undefined ? 'r' + c.rua : c.caminhao ? 'k' + c.caminhao : 's' + c.servico));
+  if (meu !== null) {
+    jogador.carro = null; modoVolante(false); jogador.avatar.raiz.visible = true;
+    const v = carrosMundo.get(meu); if (v) v.mesh.visible = false;
+    rede.carros.acidente(meu).catch(() => {});
+  } else { c.alt = 0; c.pairar = false; c.vel = 0; sairCarro(); if (jogador.carro === c) { jogador.carro = null; modoVolante(false); jogador.avatar.raiz.visible = true; } if (c.mesh && c.rua === undefined) c.mesh.visible = !c.servico; if (c.servico && c.mesh) scene.remove(c.mesh); }
+  jogador.pos.x += 2.2; jogador.pos.y = alturaChao(jogador.pos.x, jogador.pos.z); resolverColisao(jogador.pos, jogador.raio);
+  const e = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, z: Math.round(p.z * 10) / 10, cv: meu, de: jogador.perfil?.id };
+  efeitoExplosao(e.x, e.y, e.z); tremor = 0.8; conexao?.enviar('explosao', e);
+  for (const [id, r] of remotos) if (r.av?.raiz.visible && Math.hypot(e.x - r.av.raiz.position.x, e.z - r.av.raiz.position.z) < 4.5) aplicarDanoRemoto(id, 25);
+  jogador.ultimoAgressor = null; danoLocal(40);
+  aviso(msg + (meu !== null ? ' Ele volta para você em 30 s.' : ''), 4.5);
 }
 // explosão: efeito para todos; carro de jogador some por 30 s e volta para o dono; quem estava dentro é jogado para fora
 function explodir(pos, carro = null) {
@@ -4087,7 +4134,7 @@ function receberAtropelo(d) {
 function checarTrem() {
   const j = jogador;
   if (j.morto || j.trem || j.dentroCasa || j.passageiro || j.carro?.voa || !j.avatar || j.pena > 0 || j.perfil?.imortal) return;
-  if (ferrovia.atropela(j.pos, j.carro ? 1.2 : 0.35)) { j.vida = 0; j.ultimoAgressor = null; desenharFome(); aviso('🚆 Você foi atropelado pelo trem!', 4); morrerLocal(); }
+  if (ferrovia.atropela(j.pos, j.carro ? 1.2 : 0.35)) { if (j.carro) acidenteVeiculo(j.carro, '🚆💥 O trem acertou o veículo!'); j.vida = 0; j.ultimoAgressor = null; desenharFome(); aviso('🚆 Você foi atropelado pelo trem!', 4); morrerLocal(); }
 }
 function receberDano(d) {
   if (d.alvo !== jogador.perfil?.id || jogador.morto || !jogador.avatar) return;
