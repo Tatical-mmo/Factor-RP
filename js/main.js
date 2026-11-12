@@ -1906,7 +1906,7 @@ function atualizarRastreio(dt) {
   if (beacon) {
     beacon.position.set(passo.x, alturaChao(passo.x, passo.z), passo.z);
     beacon.children[0].material.opacity = 0.22 + Math.sin(performance.now() / 300) * 0.08;
-    beacon.visible = regiaoMapa(passo.x, passo.z) === regiaoMapa(jogador.pos.x, jogador.pos.z);
+    { const rl = (x, z) => { const r = regiaoMapa(x, z); return r === 3 ? 0 : r; }; beacon.visible = rl(passo.x, passo.z) === rl(jogador.pos.x, jogador.pos.z) || Math.hypot(passo.x - jogador.pos.x, passo.z - jogador.pos.z) < 400; }
   }
   atualizarRastreio.t = (atualizarRastreio.t || 0) - dt;
   if (atualizarRastreio.t <= 0) {
@@ -8040,10 +8040,11 @@ function abrirAutoescola() {
 async function iniciarAula(cat) {
   if (jogador.carro || aula) { aviso('Termine o que está fazendo primeiro.'); return; }
   try { await rede.autoescola.iniciar(cat); } catch (e) { aviso(e.message || 'Não deu para pagar a aula.', 3); return; }
-  if (cat === 'AV') {
+  if (cat === 'AV') {   // o instrutor leva você até o hangar e a aula começa já dentro do avião
     aula = { cat, inicio: performance.now(), voo: true };
-    rastrear({ nome: '🛩️ Hangar (aula de voo)', x: AERO.metro.hangar.x, z: AERO.metro.hangar.z });
-    aviso('🛩️ Aula de voo paga! Vá ao hangar do Aeroporto da Metrópole: decole e pouse numa pista sem cair (20 min).', 6);
+    const h = AERO.metro.hangar; jogador.pos.set(h.x, alturaChao(h.x, h.z), h.z); jogador.avatar.raiz.position.copy(jogador.pos);
+    aviso('🛩️ O instrutor levou você ao hangar do Aeroporto da Metrópole. Siga a faixa amarela até a cabeceira, decole e pouse numa pista.', 6);
+    setTimeout(() => { if (aula?.voo && !aula.veiculo && !jogador.carro) entrarAulaVoo(); }, 600);
     return;
   }
   const C = CATEGORIAS[cat], q0 = pontoCaminho(C.rota, 0), s = { x: q0.x, z: q0.z, yaw: q0.ang };
@@ -8593,7 +8594,7 @@ const FALAS = {
   livra: (cs, a) => [['torre', `${a.torreNome}: ${cs}, bem-vindo! Livre a pista e siga para o portão.`]],
 };
 // ---- voos do sistema: quadros-chave (posição, altura) montados a partir de pontos e velocidades
-function trechoQuadros(o, d, { espera = 35, saida = null, taxiIn = null, vaga = null, rota = null } = {}) {
+function trechoQuadros(o, d, { espera = 75, saida = null, taxiIn = null, vaga = null, rota = null } = {}) {
   const A = AERO[o], B = AERO[d], po = pista(A), pd = pista(B);
   const q = [{ t: 0, ...(vaga?.o || A.vaga), y: 0 }];
   const ult = () => q[q.length - 1];
@@ -8661,10 +8662,33 @@ const vooRegular = () => vooNpc(agoraServidor() / 1000, VOO_REGULAR, 0);
 // ---- passageiro do voo regular
 function balcaoPerto() { return AEROPORTOS.find((a) => Math.hypot(a.balcao.x - jogador.pos.x, a.balcao.z - jogador.pos.z) < 3.2) || null; }
 function portaoPerto() { return AEROPORTOS.find((a) => Math.hypot(a.portao.x - jogador.pos.x, a.portao.z - jogador.pos.z) < 7) || null; }
+// próximo embarque do voo regular de o para d (janela em que o avião fica parado no portão)
+function proximoEmbarque(o, d, seg) {
+  const tab = VOO_REGULAR, c0 = Math.floor(seg / tab.ciclo);
+  for (let c = c0; c <= c0 + 2; c++) for (const tr of tab.trechos) {
+    if (tr.o !== o || tr.d !== d) continue;
+    const ini = c * tab.ciclo + tr.ini, fim = ini + tr.q[1].t;
+    if (seg < fim) return { ini, fim };
+  }
+  return null;
+}
+let painelPassagem = false;
+function guiarPassageiro() {
+  const p = jogador.passagem;
+  if (jogador.voo) { const v = vooRegular(); painelVoo(`✈️ Em voo para ${AERO[jogador.voo.d].nome} · chegada em ${Math.max(0, Math.ceil(v.fim))} s`); painelPassagem = true; return; }
+  if (!p || jogador.carro) { if (painelPassagem) { painelPassagem = false; painelVoo(''); } return; }
+  const seg = agoraServidor() / 1000, e = proximoEmbarque(p.de, p.para, seg), a = AERO[p.de]; if (!e) return;
+  const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  const noPortao = Math.hypot(a.portao.x - jogador.pos.x, a.portao.z - jogador.pos.z) < 7;
+  painelVoo(seg >= e.ini ? `🎫 Voo para ${AERO[p.para].nome}: EMBARQUE AGORA no portão ✈️ de ${a.nome} — sai em ${Math.ceil(e.fim - seg)} s${noPortao ? ' (toque em Embarcar)' : ''}`
+    : `🎫 Voo para ${AERO[p.para].nome}: o avião chega ao portão ✈️ de ${a.nome} em ${mmss(e.ini - seg)}${noPortao ? ' — espere aqui' : ' — siga a marcação'}`);
+  painelPassagem = true;
+  if (!noPortao && !rastreio) rastrear({ nome: `✈️ Portão de embarque (${a.nome})`, x: a.portao.x, z: a.portao.z });
+}
 function comprarPassagem(a) {
   const destinos = AEROPORTOS.filter((x) => x.id !== a.id && VOO_REGULAR.trechos.some((t) => t.o === a.id && t.d === x.id));
   escolher('🎫 Passagem aérea · 150', `Saindo de ${a.nome}. O voo regular para no portão; embarque quando ele chegar.`, destinos.map((d) => ({
-    rotulo: `✈️ ${d.nome}`, fn: async () => { try { await rede.transporte.passagem(); jogador.passagem = { de: a.id, para: d.id }; aviso(`🎫 Passagem para ${d.nome}. Espere o avião no portão (✈️).`, 4); } catch (e) { aviso(e.message); } },
+    rotulo: `✈️ ${d.nome} · embarque ${(() => { const e = proximoEmbarque(a.id, d.id, agoraServidor() / 1000); if (!e) return ''; const f = e.ini - agoraServidor() / 1000; return f <= 0 ? 'agora' : `em ${Math.floor(f / 60)}:${String(Math.floor(f % 60)).padStart(2, '0')}`; })()}`, fn: async () => { try { await rede.transporte.passagem(); jogador.passagem = { de: a.id, para: d.id }; rastrear({ nome: `✈️ Portão de embarque (${a.nome})`, x: a.portao.x, z: a.portao.z }); aviso(`🎫 Passagem para ${d.nome}! Siga a marcação até o portão ✈️; o painel no alto mostra quando o avião chega.`, 5); } catch (e) { aviso(e.message); } },
   })));
 }
 function embarcarVoo(v) { jogador.voo = { id: v.id, d: v.d }; jogador.passagem = null; jogador.avatar.raiz.visible = false; aviso(`✈️ Embarcou! Voo ${VOO_REGULAR.cs}${String(v.n % 100).padStart(2, '0')} para ${AERO[v.d].nome}.`, 3); }
@@ -8863,6 +8887,7 @@ function atualizarPainelVoos(seg) {
 // ---- por quadro
 function atualizarAviacao(dt) {
   montarAeroportos(); atualizarAvioesParados(); guiarPiloto(dt);
+  if ((atualizarAviacao.tp = (atualizarAviacao.tp || 0) - dt) <= 0) { atualizarAviacao.tp = 0.5; if (!jogador.carro?.aviao) guiarPassageiro(); }
   const seg = agoraServidor() / 1000;
   for (const av of atendentes) av.mixer.update(dt);
   if ((tempoPainel -= dt) <= 0) { tempoPainel = 1; atualizarPainelVoos(seg); desenharRadio(); }
