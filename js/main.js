@@ -6987,7 +6987,8 @@ function posicionarUniforme(av) {
     U.colete.position.copy(pesc).addScaledVector(cima, 0.035 * alt - C.topo * sy).addScaledVector(frente, 0.015 * alt);   // o alto do colete nos ombros
     // chapéu medido pela própria cabeça (personagens cabeçudos ganham capacete maior) e centrado no crânio
     const P = PECAS_FARDA[U.peca], cab = U.ossos ? U.ossos.cabeca.getWorldPosition(new THREE.Vector3()) : topo.clone().addScaledVector(_cy.set(0, 1, 0), -0.13 * alt);
-    const eixo = _cy.subVectors(topo, cab); let hc = eixo.length(); if (hc < 0.05 * alt || hc > 0.4 * alt) { hc = 0.13 * alt; eixo.copy(cima); } else eixo.normalize();
+    let hc = _cy.subVectors(topo, cab).length(); if (hc < 0.05 * alt || hc > 0.4 * alt) hc = 0.13 * alt;
+    const eixo = _cy.set(0, 1, 0);   // sempre reto (só gira junto com o corpo): o osso da cabeça balança e entortava o capacete
     const fr = _cz.copy(frente).addScaledVector(eixo, -frente.dot(eixo)).normalize(), ld = _cw.crossVectors(eixo, fr).normalize();
     _um.makeBasis(ld, eixo, fr); U.chapeu.quaternion.setFromRotationMatrix(_um);
     const sc = hc * P.folga / P.copa;   // a copa um pouco mais larga que a cabeça
