@@ -673,15 +673,19 @@ function montarMalhas() {
   tronco.castShadow = true; copa.castShadow = true; copa.receiveShadow = true; scene.add(tronco); if (folhosas.length) scene.add(copa);
   // árvores 3D (GLB) perto do jogador; as de longe continuam leves
   const MAXA = window.matchMedia?.('(pointer: coarse)').matches ? 70 : 150;
-  const glbA = ['arvore_comum', 'arvore_pinheiro', 'arvore_palmeira'].map((n) => {
-    const base = ctx.modelo?.(n); let malha = null; if (!base) return null;
+  // modelos novos (prop_arvore / prop_pinheiro, altura 1 centrada) quando existem; senão os antigos
+  const ESC = [0.68, 0.6, 0.78], ALVO = [4.4, 4.8];
+  const glbA = [['prop_arvore', 'arvore_comum'], ['prop_pinheiro', 'arvore_pinheiro'], ['arvore_palmeira']].map((nomes, k) => {
+    const n = nomes.find((x) => ctx.modelo?.(x)); if (!n) return null;
+    const base = ctx.modelo(n); let malha = null;
     base.updateMatrixWorld(true); base.traverse((o) => { if (o.isMesh && !malha) malha = o; }); if (!malha) return null;
     const geo = malha.geometry.clone().applyMatrix4(new THREE.Matrix4().copy(base.matrixWorld).invert().multiply(malha.matrixWorld));
+    if (n.startsWith('prop_')) { geo.computeBoundingBox(); const bb = geo.boundingBox; geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2); ESC[k] = ALVO[k] / ((bb.max.y - bb.min.y) || 1); }
     const m = [].concat(malha.material)[0].clone(); m.vertexColors = true; m.flatShading = true; m.roughness = 0.9;
     const im = new THREE.InstancedMesh(geo, m, MAXA); im.count = 0; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; scene.add(im);
     return im;
   });
-  arvoresLod = { info, tronco, copa, pinho, glb: glbA, max: MAXA, t: 0, ESC: [0.68, 0.6, 0.78] };
+  arvoresLod = { info, tronco, copa, pinho, glb: glbA, max: MAXA, t: 0, ESC };
   // arbustos da mata (sem colisão)
   if (arbustos.length) {
     const ab = new THREE.InstancedMesh(geoCopa([[0, 0.45, 0, 0.7], [0.55, 0.3, 0.2, 0.5], [-0.5, 0.3, -0.2, 0.55]]), MAT.copa, arbustos.length);
@@ -1026,17 +1030,22 @@ export function atualizar(dt) {
 
 // semáforos nos cruzamentos do centro e hidrantes nas esquinas dos quarteirões do centro
 function planejarProps() {
-  for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
-    const x = ruaC(i), z = ruaC(j), d = RW / 2 + 0.9;
-    for (const [sx, sz] of [[1, 1], [-1, -1]]) {
-      const px = x + sx * d, pz = z + sz * d;
-      PROPS.semaforo.push([px, pz, Math.atan2(x - px, z - pz)]); addCol({ tipo: 'circ', x: px, z: pz, r: 0.25 });
-    }
+  // existe rua aqui? (a avenida do meio só no centro; ferrovia corta as horizontais fora do centro; territórios cortam algumas)
+  const temV = (i, z) => (i === 2 ? Math.abs(z) <= METADE : !((i === -1 || i === N + 1) && Math.abs(z) < ruaC(3)));
+  const temH = (j, x) => { const centro = j >= 0 && j <= N; if (!centro && Math.abs(x) < CORREDOR + 1) return false; if (j === 2 && Math.abs(x) > METADE && Math.abs(x) < -ruaC(-2) + RW / 2 + 6) return false; return true; };
+  const d = RW / 2 + 0.9;
+  for (let i = MI; i <= MA + 1; i++) for (let j = MI; j <= MA + 1; j++) {
+    const x = ruaC(i), z = ruaC(j); if (!temV(i, z) || !temH(j, x)) continue;
+    for (const [sx, sz] of [[1, 1], [-1, -1]]) { const px = x + sx * d, pz = z + sz * d; PROPS.semaforo.push([px, pz, Math.atan2(x - px, z - pz)]); addCol({ tipo: 'circ', x: px, z: pz, r: 0.25 }); }
   }
-  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
-    const bx = quadC(i), bz = quadC(j), d = QB / 2 - 1.1;
-    for (const [sx, sz] of [[1, -1], [-1, 1]]) { const px = bx + sx * d, pz = bz + sz * d; PROPS.hidrante.push([px, pz, sx > 0 ? 0 : Math.PI]); addCol({ tipo: 'circ', x: px, z: pz, r: 0.3 }); }
+  for (const c of CIDADES) for (const cx of CID.colunas) for (const rz of CID.ruas) {   // cidades
+    const z = c.s * rz;
+    for (const [sx, sz] of [[1, 1], [-1, -1]]) { const px = cx + sx * d, pz = z + sz * d; PROPS.semaforo.push([px, pz, Math.atan2(cx - px, z - pz)]); addCol({ tipo: 'circ', x: px, z: pz, r: 0.25 }); }
   }
+  // hidrantes: dois por quarteirão (metrópole e cidades)
+  const hid = (bx, bz) => { const dd = QB / 2 - 1.1; for (const [sx, sz] of [[1, -1], [-1, 1]]) { const px = bx + sx * dd, pz = bz + sz * dd; PROPS.hidrante.push([px, pz, sx > 0 ? 0 : Math.PI]); addCol({ tipo: 'circ', x: px, z: pz, r: 0.3 }); } };
+  for (let i = MI; i <= MA; i++) for (let j = MI; j <= MA; j++) if ((i >= 0 && i < N && j >= 0 && j < N) || blocosMetro.has(i + ',' + j)) hid(quadC(i), quadC(j));
+  for (const c of CIDADES) for (const bz of CID.blocos) for (const bx of CID.xs) hid(bx, c.s * bz);
 }
 // recebe o modelo leve (GLB) e espalha cópias com uma InstancedMesh só (um desenho para todos)
 const ALTURA_PROP = { banco: 0.9, hidrante: 0.85, semaforo: 4.4 };
@@ -1047,9 +1056,21 @@ export function montarProps(nome, cenaGlb, scene) {
   g.computeBoundingBox(); const b = g.boundingBox, alt = b.max.y - b.min.y || 1, esc = ALTURA_PROP[nome] / alt;
   g.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2); g.scale(esc, esc, esc);
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: nome === 'semaforo' ? 0.3 : 0.05 });
-  const im = new THREE.InstancedMesh(g, mat, lista.length);
-  lista.forEach(([x, z, a], k) => { _q.setFromAxisAngle(_v.set(0, 1, 0), a); _m.compose(_v.set(x, alturaChaoMundo(x, z), z), _q, _e.set(1, 1, 1)); im.setMatrixAt(k, _m); });
+  const max = Math.min(lista.length, nome === 'banco' ? 40 : 56);
+  const im = new THREE.InstancedMesh(g, mat, max); im.count = 0; im.frustumCulled = false;
   im.castShadow = nome !== 'hidrante'; im.receiveShadow = true; scene.add(im);
+  propsLod[nome] = { im, lista, max, y: lista.map(([x, z]) => alturaChaoMundo(x, z)) };
+}
+// a cada meio segundo, cada tipo de objeto mostra só as cópias mais perto do jogador (a cidade toda tem centenas)
+const propsLod = {}; let tempoProps = 0;
+export function propsPerto(px, pz, dt) {
+  if ((tempoProps -= dt) > 0) return; tempoProps = 0.5;
+  for (const P of Object.values(propsLod)) {
+    const perto = []; P.lista.forEach(([x, z], k) => { const d = Math.abs(x - px) + Math.abs(z - pz); if (d < 190) perto.push([d, k]); });
+    perto.sort((a, b) => a[0] - b[0]); const n = Math.min(P.max, perto.length);
+    for (let i = 0; i < n; i++) { const k = perto[i][1], [x, z, a] = P.lista[k]; _q.setFromAxisAngle(_v.set(0, 1, 0), a); _m.compose(_v.set(x, P.y[k], z), _q, _e.set(1, 1, 1)); P.im.setMatrixAt(i, _m); }
+    P.im.count = n; P.im.instanceMatrix.needsUpdate = true;
+  }
 }
 const alturaChaoMundo = (x, z) => { for (const [cx, cz, w, d, y] of calcadas) if (Math.abs(x - cx) <= w / 2 && Math.abs(z - cz) <= d / 2) return y; return 0.18; };
 export function finalizar() { planejarProps(); montarMobiliario(); montarMalhas(); }

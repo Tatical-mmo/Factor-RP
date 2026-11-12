@@ -669,3 +669,8 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Cada setor tem o seu caminhão do sistema, em horários diferentes, com dois garis NPC nos estribos de trás. Em cada lixeira eles descem, levam os sacos ao caminhão e sobem de novo.
 - O gari jogador escolhe o setor na garagem (um gari por setor). O caminhão do sistema daquele setor sai de cena e os dois garis NPC trabalham com o jogador: ao parar do lado de uma lixeira cheia, eles descem e recolhem. Se o caminhão andar antes de eles voltarem, a coleta daquela lixeira é cancelada.
 - Sem SQL nesta versão.
+
+## Versão 12/11 (v) · objetos de rua em toda a cidade
+- 🚦 Os semáforos em 3D agora estão em todos os cruzamentos da Metrópole (610 no total) e das cidades. Os hidrantes estão em todos os quarteirões (484 no total). Para não pesar no celular, só as cópias mais perto aparecem (até 56 de cada tipo), e elas trocam conforme você anda.
+- 🌳 As árvores 3D perto do jogador agora usam os modelos novos (árvore e pinheiro); as de longe continuam leves.
+- Sem SQL nesta versão.

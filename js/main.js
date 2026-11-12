@@ -5387,6 +5387,7 @@ function quadro() {
   mundo.atualizar(dt);
   mundo.carrosPerto(foco().x, foco().z, dt);
   mundo.arvoresPerto(foco().x, foco().z, dt);
+  mundo.propsPerto(foco().x, foco().z, dt);
   sedes.atualizar(dt);
   if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); checarTrem(); atualizarArmaPd(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
   atualizarJogador(dt);
