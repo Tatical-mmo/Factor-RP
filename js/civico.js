@@ -159,7 +159,8 @@ export const CARROS = {
 // quantos passageiros cada veículo leva (além do motorista); veículos do Exército só levam militares
 export const LUGARES = { tanque: 1, militar: 3, exercito_caminhao: 8, helicoptero_exercito: 6, helicoptero: 4, suv: 3, popular: 3, classico: 3, esportivo: 1, presidencial: 3 };
 // veículos abertos: o motorista aparece sentado (banco: altura e posição no modelo, motorista do lado esquerdo)
-export const ABERTOS = { militar: { banco: [1.02, -0.62] } };
+// lugares: [lado (1 = esquerda, -1 = direita), altura do assento, z]; o 1º é o do motorista
+export const ABERTOS = { militar: { lugares: [[1, 0.98, -0.28], [-1, 0.98, -0.28], [1, 1.0, -0.98], [-1, 1.0, -0.98]] } };
 export const DO_EXERCITO = new Set(['militar', 'exercito_caminhao', 'helicoptero_exercito', 'tanque']);
 export const CORES_CARRO = ['#c0392b', '#2c3e50', '#ecf0f1', '#f1c40f', '#2980b9', '#16a085', '#8e44ad', '#1f1f1f', '#d35400'];
 

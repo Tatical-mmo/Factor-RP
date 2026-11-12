@@ -819,3 +819,21 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - **Outros jogadores:** o motor pega quando o veículo deles aparece perto; parados, fazem marcha lenta; andando, rotação alta.
 - **Aviões:** só quem está fora ouve. No chão por perto é a marcha lenta; no ar é a rotação alta, que some com a distância.
 - Os sons novos só são baixados quando tocam pela primeira vez. Os sons antigos de motor deixaram de ser baixados.
+
+## Versão 13/11 · piloto automático (20261113j)
+
+- O botão **🤖 AUTO** do avião (no lugar do antigo POUSAR) liga o piloto automático. Você escolhe o destino (o avião grande só pousa na Metrópole) e ele faz o voo inteiro:
+  1. taxia pela faixa até a cabeceira;
+  2. alinha e pede a decolagem à torre;
+  3. decola e sobe até a altura de cruzeiro;
+  4. voa até a entrada da reta final;
+  5. alinha com a pista e desce pela rampa (10 m a cada 100 m);
+  6. arredonda, toca e freia até parar.
+- No ar, ele pousa no destino escolhido.
+- Nas pistas de Vila Serra e Porto Sul, a chegada é pelo lado de dentro do mapa, no sentido contrário ao da decolagem.
+- Ele arremete e tenta de novo se a chegada ficar torta, alta demais, longe do começo da pista, ou se a torre mandar.
+- O painel mostra a fase, a altura, a velocidade e a distância até a pista.
+- Mexer forte no manche ou nos pedais devolve o controle. Tocar em **DESLIGAR** também.
+- Ao parar na pista, ele devolve o controle.
+- Voo entre aeroportos paga igual ao manual. Na aula de voo, usar o piloto automático faz a aula não contar.
+- **Jipe:** o motorista agora senta no banco da frente (antes ficava no de trás). Até 3 passageiros aparecem sentados: um ao lado e dois atrás, com as mãos no colo.
