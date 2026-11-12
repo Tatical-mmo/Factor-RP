@@ -8428,8 +8428,9 @@ function montarAeroportos() {
     muro(T.x0, T.z1 - 0.3, 314, T.z1, vidro); muro(326, T.z1 - 0.3, T.x1, T.z1, vidro);              // entrada pela calçada
     for (const x of [T.x0, T.x1]) caixa(x, H + 0.6, (T.z0 + T.z1) / 2, 0.6, 1.2, T.z1 - T.z0 + 0.6, azul);
     const teto = caixa((T.x0 + T.x1) / 2, H + 0.25, (T.z0 + T.z1) / 2, T.x1 - T.x0 + 2, 0.5, T.z1 - T.z0 + 2, parede); tetosTerminal.push(teto);
+    const term3d = glbEm('aero_terminal', (T.x0 + T.x1) / 2, 0, (T.z0 + T.z1) / 2, T.x1 - T.x0 + 2, 11, T.z1 - T.z0 + 2, 0); if (term3d) tetosTerminal.push(term3d);   // fachada 3D: some quando você entra (aparece o salão)
     const faixaTeto = caixa((T.x0 + T.x1) / 2, H + 0.7, T.z1 + 0.6, T.x1 - T.x0 + 2, 0.8, 0.3, azul); tetosTerminal.push(faixaTeto);
-    const nomeT = rotuloSimples('✈️ AEROPORTO DA METRÓPOLE', 16); nomeT.position.set(320, H + 3, T.z1 + 1); scene.add(nomeT);
+    const nomeT = rotuloSimples('✈️ AEROPORTO DA METRÓPOLE', 16); nomeT.position.set(320, H + 5.5, T.z1 + 1); scene.add(nomeT);
     caixa(346, 0.55, -702.2, 12, 1.1, 1.2, azul, true);   // balcão
     for (let k = 0; k < 3; k++) caixa(340 + k * 6, 1.6, -705.5, 3.6, 1.2, 0.2, M('#222833'));
     for (let fila = 0; fila < 3; fila++) for (let k = 0; k < 6; k++) caixa(292 + k * 4, 0.45, -700 - fila * 3, 3, 0.5, 0.7, M('#3a4a63'));   // cadeiras
@@ -8446,8 +8447,8 @@ function montarAeroportos() {
     else { caixa(405, 13, -701, 6, 26, 6, parede, true); caixa(405, 28, -701, 10, 4, 10, vidro); caixa(405, 30.3, -701, 11, 0.6, 11, azul); caixa(405, 32.5, -701, 0.2, 4, 0.2, metal); }
     farolTorre = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 0.5), new THREE.MeshStandardMaterial({ color: '#d8ffd8', emissive: '#7dff8a', emissiveIntensity: 0.5 })); farolTorre.position.set(405, torre3d ? 11 * 2.519 + 0.6 : 31.2, -701); scene.add(farolTorre);
     // hangar com o portão aberto para o pátio
-    caixa(465, 6.5, -704, 70, 13, 24, metal, true);
-    const porta = new THREE.Mesh(new THREE.PlaneGeometry(50, 11), M('#1b1e22')); porta.position.set(465, 5.5, -716.05); porta.rotation.y = Math.PI; scene.add(porta);
+    if (glbEm('aero_hangar', 465, 0, -704, 70, 16, 24, Math.PI)) mundo.addCol({ tipo: 'caixa', x0: 430, x1: 500, z0: -716, z1: -692 });   // hangar 3D com o portão para o pátio
+    else { caixa(465, 6.5, -704, 70, 13, 24, metal, true); const porta = new THREE.Mesh(new THREE.PlaneGeometry(50, 11), M('#1b1e22')); porta.position.set(465, 5.5, -716.05); porta.rotation.y = Math.PI; scene.add(porta); }
   }
   // luzes da pista (amarelas) e da taxiway (azuis): acendem à noite
   const geoLuz = new THREE.BoxGeometry(0.5, 0.35, 0.5);

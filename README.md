@@ -716,3 +716,8 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - ✈️ No avião e 🚁 no helicóptero: olho em cima do nariz, então o bico aparece embaixo da visão, com a moldura da cabine.
 - Arrastando para virar a cabeça, o painel some; ao olhar para a frente de novo, ele volta.
 - Sem SQL nesta versão.
+
+## Versão 13/11 (b) · terminal e hangar em 3D
+- ✈️ O terminal de passageiros do Aeroporto da Metrópole tem a fachada 3D de vidro. Ao entrar, a fachada some e aparece o salão (balcão, atendente, cadeiras e painel de voos).
+- 🛩️ O hangar dos pilotos é o modelo 3D, com o portão fechado virado para o pátio dos aviões.
+- Sem SQL nesta versão.
