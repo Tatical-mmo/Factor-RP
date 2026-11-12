@@ -365,7 +365,7 @@ export function modeloCarro(modelo, cor) {
     const g = base.clone(true);
     if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
     else if (SEM_TINTA.has(modelo)) { const sr = { ambulancia: [3.4, 0.9], bombeiros: [3.15, 2.5] }[modelo]; if (sr) sirene(g, sr); }
-    else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), modelo === 'onibus' ? 0.22 : 0.45); } });
+    else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), modelo === 'onibus' ? 0.38 : 0.45); } });
     cacheCarro.set(chave, g);
     return g.clone();
   }

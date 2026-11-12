@@ -80,3 +80,15 @@ export function posicao(nome) {
   return ((p % l.src.buffer.duration) + l.src.buffer.duration) % l.src.buffer.duration;
 }
 export const perto = (d, raio) => Math.max(0, 1 - d / raio);
+// "clique" do rádio (chiado curto + bipe), gerado na hora: sem arquivo
+export function radio() {
+  if (!ac || !ligado) return;
+  const t = ac.currentTime, n = Math.floor(ac.sampleRate * 0.12), buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) * 0.35;
+  const ru = ac.createBufferSource(), fr = ac.createBiquadFilter(), g = ac.createGain();
+  ru.buffer = buf; fr.type = 'bandpass'; fr.frequency.value = 1800; fr.Q.value = 0.8; g.gain.value = 0.25;
+  ru.connect(fr); fr.connect(g); g.connect(mestre); ru.start(t);
+  const o = ac.createOscillator(), go = ac.createGain(); o.type = 'square'; o.frequency.value = 1250;
+  go.gain.setValueAtTime(0.0001, t + 0.1); go.gain.exponentialRampToValueAtTime(0.06, t + 0.11); go.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+  o.connect(go); go.connect(mestre); o.start(t + 0.1); o.stop(t + 0.22);
+}

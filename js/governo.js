@@ -167,7 +167,7 @@ const SERVICOS = {
   conta: ['⚙️ Conta e segurança', telaConta],
   trabalho: ['💼 Seu trabalho', telaTrabalho],
   taxi: ['Carona: para onde?', telaTaxi],
-  onibus: ['🚌 Terminal de ônibus', telaOnibus],
+  onibus: ['🚌 Rodoviária', telaOnibus],
   piloto: ['🛩️ Hangar dos pilotos', telaPiloto],
   torre: ['🗼 Torre de controle', telaTorre],
 };
@@ -347,7 +347,7 @@ function ligarProfissao(prof) {
 
 async function telaOnibus(c) {
   const carreira = await cartaoCarreira('motorista');
-  c.innerHTML = `${carreira}${telaProfissao(c, 'motorista', 'Motorista de ônibus', 'A <b>Linha 1 · Circular</b> roda pelo centro nos dois sentidos (Ida e Volta). Em serviço, toque em <b>Pegar ônibus</b> no terminal: você assume a próxima saída da tabela. Siga as paradas (🚏 no mapa), pare em cada uma para os passageiros, respeite os horários (nem adiantado, nem atrasado) e volte ao terminal. Cada passageiro vale <b>12</b> e a volta no horário dá <b>+150</b>. Quando não há motorista, ônibus do sistema fazem a linha.')}`;
+  c.innerHTML = `${carreira}${telaProfissao(c, 'motorista', 'Motorista de ônibus', 'Três linhas saem da <b>Rodoviária</b> (nordeste do centro), cada uma da sua plataforma: <b>1 · Circular</b> (centro), <b>2 · Aeroporto</b> e <b>3 · Leste</b>. Em serviço, vá ao <b>Despacho</b> da rodoviária e escolha a linha: você assume o ônibus que está na plataforma e sai no horário dele. Siga os pontos (🚏 no mapa), pare em cada um para os passageiros, respeite os horários (nem adiantado, nem atrasado) e volte para a fila da sua plataforma. Cada passageiro vale <b>12</b> e a volta no horário dá <b>+150</b>. Quando não há motorista, ônibus do sistema fazem as linhas.')}`;
   ligarProfissao('motorista');
 }
 async function telaPiloto(c) {
@@ -357,7 +357,7 @@ async function telaPiloto(c) {
 }
 async function telaTorre(c) {
   const carreira = await cartaoCarreira('controlador');
-  c.innerHTML = `${carreira}${telaProfissao(c, 'controlador', 'Controlador de voo', 'Fique na <b>torre de controle</b> do Aeroporto da Metrópole: os pedidos de pouso e decolagem dos pilotos chegam com aviso. Toque em <b>Torre</b> e autorize: cada autorização vale <b>40</b>. Sem controlador na torre, a autorização é automática.')}`;
+  c.innerHTML = `${carreira}${telaProfissao(c, 'controlador', 'Controlador de voo', 'Fique na <b>torre de controle</b> do Aeroporto da Metrópole: os pedidos de pouso e decolagem dos pilotos chegam com aviso. Toque em <b>Torre</b> e responda pelo rádio: <b>autorizar</b> (vale <b>40</b>), <b>aguarde</b> ou <b>arremeter</b> (manda o avião subir de novo). O rádio também mostra os voos do sistema. Sem controlador na torre, a autorização é automática.')}`;
   ligarProfissao('controlador');
 }
 async function telaHospital(c) {

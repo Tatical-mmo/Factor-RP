@@ -349,6 +349,18 @@ export function abrirTrilha(pts, larg = 3) {
     arvores.splice(k, 1);
   }
 }
+// esvazia um retângulo antes de montar as malhas: árvores, arbustos, gramados e bancos (com a colisão deles)
+export function limparArea(x0, z0, x1, z1) {
+  const dentro = (x, z) => x >= x0 && x <= x1 && z >= z0 && z <= z1;
+  for (let k = arvores.length - 1; k >= 0; k--) { const [x, z, , c] = arvores[k]; if (!dentro(x, z)) continue; if (c) Object.assign(c, { x: 1e7, z: 1e7, r: 0 }); arvores.splice(k, 1); }
+  for (let k = arbustos.length - 1; k >= 0; k--) if (dentro(arbustos[k][0], arbustos[k][1])) arbustos.splice(k, 1);
+  for (let k = gramados.length - 1; k >= 0; k--) if (dentro(gramados[k][0], gramados[k][1])) gramados.splice(k, 1);
+  for (let k = PROPS.banco.length - 1; k >= 0; k--) {
+    const [x, z] = PROPS.banco[k]; if (!dentro(x, z)) continue;
+    for (const l of grade.values()) for (const c of l) if (c.tipo === 'circ' && c.x === x && c.z === z) Object.assign(c, { x: 1e7, z: 1e7, r: 0 });
+    PROPS.banco.splice(k, 1);
+  }
+}
 function rua(x, z, w, d) { ruas.push([x, z, w, d, d > w]); }
 
 // um quarteirão de 44 m: calçada e o que tem em cima
@@ -812,6 +824,16 @@ function cruzamentos(r) {
   }
   return lista;
 }
+// trechos onde não se estaciona (o caminho dos ônibus): [[x,z],[x,z]] em metros
+const corredores = [];
+export function semEstacionar(pts) { for (let i = 0; i < pts.length - 1; i++) corredores.push([pts[i], pts[i + 1]]); }
+function pertoDeCorredor(x, z) {
+  for (const [[ax, az], [bx, bz]] of corredores) {
+    const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
+    if (Math.hypot(x - (ax + dx * t), z - (az + dz * t)) < 3.4) return true;
+  }
+  return false;
+}
 function montarMobiliario() {
   const { scene } = ctx;
   // meio-fio em volta das calçadas
@@ -843,6 +865,7 @@ function montarMobiliario() {
       if (rnd() > 0.3 || !longe(t, RW / 2 + 5)) continue;
       const lat = (rnd() < 0.5 ? -1 : 1) * (RW / 2 - 1.15);
       const [px, pz] = ponto(t, lat);
+      if (pertoDeCorredor(px, pz)) continue;   // faixa por onde passam os ônibus
       carros.push([px, pz, vert ? (lat > 0 ? 0 : Math.PI) : (lat > 0 ? Math.PI / 2 : -Math.PI / 2)]);
     }
   }

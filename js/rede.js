@@ -772,4 +772,5 @@ export const transporte = {
   passagem: () => rpc('comprar_passagem'),
   pagarVoo: (porte) => rpc('pagar_voo', { p_porte: porte }),
   pagarTorre: () => rpc('pagar_torre'),
+  tarifa: () => rpc('tarifa_onibus'),
 };

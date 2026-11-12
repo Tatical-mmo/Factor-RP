@@ -593,3 +593,22 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - 🚁 Os helicópteros executivo e do Exército agora têm as pás do rotor separadas: giram quando alguém está pilotando (mais rápido no ar) e ficam paradas quando estacionados. Vale para quem pilota e para quem vê.
 - 📱 Com o celular deitado, o menu ☰ vira uma grade de 2 colunas com rolagem e cabe na tela.
 - SQL desta versão: **39_perdao_materias.sql**.
+
+## Versão 12/11 (p) · Rodoviária, três linhas de ônibus, aeroporto completo e gráfico mais leve
+- 🚌 Rodoviária no quarteirão a nordeste do centro (onde era uma praça), com três plataformas cobertas, uma por linha, e painéis com a próxima saída:
+  - Linha 1 · Circular (azul): centro da Metrópole.
+  - Linha 2 · Aeroporto (laranja): sobe a avenida até o terminal do aeroporto e volta.
+  - Linha 3 · Leste (verde): Zona Leste e Cemitério.
+- Os ônibus do sistema seguem a tabela pelo relógio do servidor. Quem volta antes da vez espera na fila atrás do que está na plataforma e só encosta quando ele sai. As três linhas chegam quase juntas, uma em cada plataforma. Ônibus indo e vindo se cruzam nas ruas de mão dupla.
+- Passageiro: perto de um ônibus parado (ponto ou plataforma), toque em Embarcar (5 moedas, vão para a prefeitura). Toque em Descer para saltar no próximo ponto. No fim da linha você desce na rodoviária.
+- Motorista: no 🚌 Despacho da rodoviária escolha a linha e assuma o ônibus que está na plataforma.
+- As linhas e os pontos aparecem no mapa grande.
+- ✈️ Aeroporto da Metrópole:
+  - Cercado, com pórtico de entrada, estacionamento, terminal de vidro (o teto some quando você entra), atendente no balcão de passagens, painel de partidas, pontes de embarque, taxiway, pátio, torre com farol giratório e hangar.
+  - Aviões parados e um voo internacional (avião grande) que sai e volta.
+  - Luzes da pista acendem à noite. O aeroporto aparece no minimapa e no mapa grande (aba Aeroporto).
+- Pistas de Vila Serra e Porto Sul: cercadas, com pátio, quiosque com atendente, avião parado e estrada de terra até a cidade. Os esconderijos que ficavam colados nelas foram afastados.
+- 📻 Rádio: a torre conversa com os aviões (pushback, táxi, decolagem, final, pouso). O controlador responde aos pilotos com Autorizar, Aguarde ou Arremeter.
+- Aviões e ônibus agora usam o modelo original com textura (antes eram reduzidos e manchados).
+- 🎨 Gráfico: a qualidade Média ficou sem pós-processamento (mais leve). As cores ficaram mais vivas e os brancos não estouram mais. A Alta tem brilho só à noite.
+- SQL desta versão: **58_tarifa_onibus.sql**.
