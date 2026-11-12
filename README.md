@@ -612,3 +612,21 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Aviões e ônibus agora usam o modelo original com textura (antes eram reduzidos e manchados).
 - 🎨 Gráfico: a qualidade Média ficou sem pós-processamento (mais leve). As cores ficaram mais vivas e os brancos não estouram mais. A Alta tem brilho só à noite.
 - SQL desta versão: **58_tarifa_onibus.sql**.
+
+## Versão 12/11 (q) · fiscal, autoescola, luzes dos veículos e rádio só para quem voa
+- 🧾 Fiscal da Rodoviária (nova profissão, 20/min + 30 por atraso registrado):
+  - Algumas saídas do sistema atrasam de 15 a 35 s. O painel da plataforma fica vermelho ("ATRASADO") e o ônibus corre mais na rua para recuperar o horário.
+  - O fiscal recebe o aviso, vai até o ônibus e toca em Registrar. Vale também para motorista jogador parado na rodoviária depois do horário: ele perde o bônus de pontualidade.
+  - O Quadro do fiscal (ponto 🧾 Fiscalização) mostra os horários e os atrasados.
+  - Sem fiscal jogador, um fiscal NPC vai até o ônibus atrasado e anota.
+- 🚗 Autoescola (oeste do centro):
+  - Carteira B (carro, 300), C (caminhão, 600, precisa da B), D (ônibus, 900, precisa da C) e brevê (avião, 1500). O dinheiro vai para a prefeitura.
+  - Prova prática: seguir os pontos 📍 dentro do tempo, sem bater 3 vezes. Na D também é preciso parar 2 s nos pontos de ônibus.
+  - Brevê: pegue o avião da escola no hangar do aeroporto, decole e pouse numa pista sem cair.
+  - Para entrar em serviço: médico precisa da B, bombeiro da C, motorista de ônibus da D e piloto do brevê. Quem já trabalha continua; a equipe não precisa.
+- 💡 Luzes à noite (só com o veículo em uso):
+  - Carros, caminhões e ônibus: faróis com luz no chão e lanternas vermelhas.
+  - Aviões e helicópteros: luzes vermelha e verde nas pontas, estrobo branco piscando e farol vermelho girando.
+  - Avião: farol de pouso iluminando a pista à frente. Helicóptero: holofote iluminando o chão embaixo.
+- 📻 O rádio da torre agora só aparece para quem está na torre e para quem está num avião perto do aeroporto (decolando ou pousando).
+- SQL desta versão: **59_fiscal_autoescola.sql**.

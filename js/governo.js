@@ -170,6 +170,7 @@ const SERVICOS = {
   onibus: ['🚌 Rodoviária', telaOnibus],
   piloto: ['🛩️ Hangar dos pilotos', telaPiloto],
   torre: ['🗼 Torre de controle', telaTorre],
+  fiscal: ['🧾 Fiscalização da Rodoviária', telaFiscal],
 };
 
 async function telaBanco(c) {
@@ -197,11 +198,12 @@ async function telaBanco(c) {
 const PUBLICOS = [
   { id: 'policia', nome: '🚓 Polícia', inicio: 'Soldado', req: 'ficha limpa', onde: 'Delegacia', base: 'salário definido pelo prefeito' },
   { id: 'prf', nome: '🛡 PRF · Polícia Eleitoral', inicio: 'Agente', req: 'ficha limpa, sem clã e sem ser prefeito', onde: 'Prefeitura', base: '40/min' },
-  { id: 'medico', nome: '✚ Hospital', inicio: 'Socorrista', req: 'ficha limpa', onde: 'Hospital', base: '30/min' },
-  { id: 'bombeiro', nome: '🚒 Bombeiros', inicio: 'Recruta', req: 'ficha limpa', onde: 'Quartel dos Bombeiros', base: '30/min' },
+  { id: 'medico', nome: '✚ Hospital', inicio: 'Socorrista', req: 'ficha limpa e carteira B (autoescola)', onde: 'Hospital', base: '30/min' },
+  { id: 'bombeiro', nome: '🚒 Bombeiros', inicio: 'Recruta', req: 'ficha limpa e carteira C (autoescola)', onde: 'Quartel dos Bombeiros', base: '30/min' },
   { id: 'jornalista', nome: '📰 Jornal da Cidade', inicio: 'Estagiário', req: 'ficha limpa', onde: 'Prefeitura (balcão do jornal)', base: '24/min' },
-  { id: 'motorista', nome: '🚌 Ônibus (motorista)', inicio: 'Motorista', req: 'ficha limpa', onde: 'Terminal de ônibus (Rua dos Clãs × Av. Central)', base: '18/min + 12 por passageiro' },
-  { id: 'piloto', nome: '✈️ Piloto de avião', inicio: 'Copiloto', req: 'ficha limpa', onde: 'Hangar do Aeroporto da Metrópole', base: '30/min + 250 a 600 por voo' },
+  { id: 'motorista', nome: '🚌 Ônibus (motorista)', inicio: 'Motorista', req: 'ficha limpa e carteira D (autoescola)', onde: 'Rodoviária (Despacho)', base: '18/min + 12 por passageiro' },
+  { id: 'piloto', nome: '✈️ Piloto de avião', inicio: 'Copiloto', req: 'ficha limpa e brevê (autoescola)', onde: 'Hangar do Aeroporto da Metrópole', base: '30/min + 250 a 600 por voo' },
+  { id: 'fiscal', nome: '🧾 Fiscal da Rodoviária', inicio: 'Fiscal', req: 'ficha limpa', onde: 'Rodoviária (Fiscalização)', base: '20/min + 30 por atraso registrado' },
   { id: 'controlador', nome: '🗼 Controlador de voo', inicio: 'Controlador Trainee', req: 'ficha limpa', onde: 'Torre do Aeroporto da Metrópole', base: '26/min + 40 por autorização' },
   { id: 'exercito', nome: '🎖️ Exército', inicio: 'Recruta', req: 'ficha limpa (a equipe também pode entrar)', onde: 'Quartel do Exército (Porto Sul)', base: '35/min' },
 ];
@@ -359,6 +361,11 @@ async function telaTorre(c) {
   const carreira = await cartaoCarreira('controlador');
   c.innerHTML = `${carreira}${telaProfissao(c, 'controlador', 'Controlador de voo', 'Fique na <b>torre de controle</b> do Aeroporto da Metrópole: os pedidos de pouso e decolagem dos pilotos chegam com aviso. Toque em <b>Torre</b> e responda pelo rádio: <b>autorizar</b> (vale <b>40</b>), <b>aguarde</b> ou <b>arremeter</b> (manda o avião subir de novo). O rádio também mostra os voos do sistema. Sem controlador na torre, a autorização é automática.')}`;
   ligarProfissao('controlador');
+}
+async function telaFiscal(c) {
+  const carreira = await cartaoCarreira('fiscal');
+  c.innerHTML = `${carreira}${telaProfissao(c, 'fiscal', 'Fiscal da Rodoviária', 'Fique nas plataformas da <b>Rodoviária</b>. Quando um ônibus não sai no horário, o painel da plataforma fica vermelho (<b>ATRASADO</b>) e você recebe um aviso: vá até o ônibus e toque em <b>Registrar</b> (vale <b>30</b>). Vale para os ônibus do sistema e para motoristas jogadores (quem atrasa perde o bônus de horário da volta). O <b>Quadro do fiscal</b> mostra os horários e os atrasados. Sem fiscal jogador, um fiscal NPC faz o serviço.')}`;
+  ligarProfissao('fiscal');
 }
 async function telaHospital(c) {
   const carreira = await cartaoCarreira('medico');

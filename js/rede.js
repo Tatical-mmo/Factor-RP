@@ -81,6 +81,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'algemaNpc' }, ({ payload }) => eventos.algemaNpc?.(payload));
   canal.on('broadcast', { event: 'torre' }, ({ payload }) => eventos.torre?.(payload));
   canal.on('broadcast', { event: 'torreOk' }, ({ payload }) => eventos.torreOk?.(payload));
+  canal.on('broadcast', { event: 'fiscal' }, ({ payload }) => eventos.fiscal?.(payload));
   canal.on('broadcast', { event: 'bueiro' }, ({ payload }) => eventos.bueiro?.(payload));
   canal.on('broadcast', { event: 'carroRua' }, ({ payload }) => eventos.carroRua?.(payload));
   canal.on('broadcast', { event: 'reset' }, ({ payload }) => eventos.reset?.(payload));
@@ -767,10 +768,15 @@ export async function meuClaId(id) { const d = await sel(sb.from('membros_cla').
 export const listarTerritorios = () => sel(sb.from('territorios').select('*').order('id'));
 export const listarCasas = () => sel(sb.from('casas').select('id, x, z, preco, dono, tipo, rotulo, modelo, pai, nivel, inquilino, aluguel, pago_ate, a_venda, dono_perfil:perfis!casas_dono_fkey(nome), inquilino_perfil:perfis!casas_inquilino_fkey(nome)').order('id'));
 
+export const autoescola = {
+  iniciar: (cat) => rpc('iniciar_autoescola', { p_cat: cat }),
+  concluir: (cat) => rpc('concluir_autoescola', { p_cat: cat }),
+};
 export const transporte = {
   pagarOnibus: (passageiros, pontual) => rpc('pagar_onibus', { p_passageiros: passageiros, p_pontual: pontual }),
   passagem: () => rpc('comprar_passagem'),
   pagarVoo: (porte) => rpc('pagar_voo', { p_porte: porte }),
   pagarTorre: () => rpc('pagar_torre'),
   tarifa: () => rpc('tarifa_onibus'),
+  pagarFiscal: () => rpc('pagar_fiscal'),
 };

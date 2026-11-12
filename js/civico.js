@@ -144,6 +144,7 @@ export const CARROS = {
   helicoptero: { nome: 'Helicóptero executivo', preco: 1500000, vel: 24, voa: true },
   tanque: { nome: 'Tanque do Exército', preco: 0, vel: 7 },
   onibus: { nome: 'Ônibus', preco: 0, vel: 12 },
+  caminhao_escola: { nome: 'Caminhão da autoescola', preco: 0, vel: 9 },
   aviao_pequeno: { nome: 'Avião pequeno', preco: 0, vel: 40, voa: true },
   aviao_medio: { nome: 'Avião médio', preco: 0, vel: 52, voa: true },
   aviao_grande: { nome: 'Avião grande', preco: 0, vel: 64, voa: true },
@@ -159,7 +160,7 @@ function bloco(g, m, w, h, d, x, y, z) {
 }
 
 export function iniciar(contexto) { ctx = contexto; }
-const GLB_CARRO = { tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande' };
+const GLB_CARRO = { tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', caminhao_escola: 'caminhao', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande' };
 const SEM_TINTA = new Set(['aviao_pequeno', 'aviao_medio', 'aviao_grande', 'tanque', 'presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
@@ -357,7 +358,8 @@ export function pontoNoCemiterio() {
 
 // carros: frente em +Z, chão em y = 0
 const cacheCarro = new Map();
-export function modeloCarro(modelo, cor) {
+export function modeloCarro(modelo, cor) { const o = modeloCarroBase(modelo, cor); if (o.getObjectByName('luzes')) comLuz.add(o); return o; }
+function modeloCarroBase(modelo, cor) {
   const chave = modelo + cor;
   if (cacheCarro.has(chave)) return cacheCarro.get(chave).clone();
   const base = ctx?.modelo?.(GLB_CARRO[modelo]);
@@ -366,13 +368,14 @@ export function modeloCarro(modelo, cor) {
     if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
     else if (SEM_TINTA.has(modelo)) { const sr = { ambulancia: [3.4, 0.9], bombeiros: [3.15, 2.5] }[modelo]; if (sr) sirene(g, sr); }
     else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), modelo === 'onibus' ? 0.38 : 0.45); } });
+    adicionarLuzes(g, modelo);
     cacheCarro.set(chave, g);
     return g.clone();
   }
   const g = new THREE.Group();
   const pint = mat(cor, { roughness: 0.25, metalness: 0.55 }), vidro = mat('#1b2633', { roughness: 0.1, metalness: 0.6 }), pneu = mat('#161616', { roughness: 0.9 });
   const luz = mat('#fff6d0', { emissive: '#fff1c8', emissiveIntensity: 1.4 }), lanterna = mat('#c81e1e', { emissive: '#c81e1e', emissiveIntensity: 0.8 });
-  if (modelo === 'onibus') { const o = modeloOnibus(cor); cacheCarro.set(chave, o); return o.clone(); }
+  if (modelo === 'onibus') { const o = modeloOnibus(cor); adicionarLuzes(o, modelo); cacheCarro.set(chave, o); return o.clone(); }
   if (!{ popular: 1, suv: 1, esportivo: 1, presidencial: 1 }[modelo]) modelo = 'suv';
   const dims = { popular: [1.7, 0.6, 3.9, 1.5, 0.55, 2.0, 0.34], suv: [1.95, 0.85, 4.6, 1.8, 0.75, 2.7, 0.42], esportivo: [1.95, 0.5, 4.5, 1.6, 0.42, 1.8, 0.36], presidencial: [2.0, 0.7, 6.4, 1.85, 0.62, 3.6, 0.4] }[modelo];
   const [w, h, l, cw, ch, cl, r] = dims;
@@ -389,6 +392,7 @@ export function modeloCarro(modelo, cor) {
     bloco(g, mat('#cfcfcf', { metalness: 0.7 }), 0.04, 0.5, 0.04, sx, r + h + 0.35, l / 2 - 0.4);
     const b = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.26), mat(sx < 0 ? '#2f9e5b' : '#f2c230', { side: THREE.DoubleSide })); b.position.set(sx, r + h + 0.5, l / 2 - 0.6); b.rotation.y = Math.PI / 2; g.add(b);
   }
+  adicionarLuzes(g, modelo);
   cacheCarro.set(chave, g);
   return g.clone();
 }
@@ -491,3 +495,100 @@ export function procuradosNosOutdoors(lista) {
 }
 export function placasOutdoors() { return [...outdoors.values()].map((v) => ({ mesh: v.placa, o: v.o, canvas: v.placa.material.map?.image })); }
 export function brilhoOutdoors(noite) { for (const v of outdoors.values()) v.placa.material.emissiveIntensity = 0.15 + noite * 0.6; }
+
+// ================================================================= luzes dos veículos à noite
+// Carros, caminhões e ônibus: faróis (com a luz no chão à frente) e lanternas vermelhas atrás.
+// Aviões e helicópteros: luzes de navegação (vermelha à esquerda, verde à direita), estrobo branco piscando,
+// farol giratório vermelho em cima e, perto do chão, o farol de pouso iluminando a pista (helicóptero: holofote embaixo).
+// Só acendem com o veículo em uso (andou nos últimos segundos) e de noite. Tudo é sprite/plano aditivo, sem luz real (leve no celular).
+const comLuz = new Set();
+const extremos = new Map();
+let texBrilho = null, texFeixe = null, texPoca = null, M = null, tLuz = 0;
+function texturas() {
+  if (M) return;
+  const canv = (w, h, f) => { const c = document.createElement('canvas'); c.width = w; c.height = h; f(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
+  texBrilho = canv(64, 64, (g, w) => { const r = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.25, 'rgba(255,255,255,.8)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, w, w); });
+  texFeixe = canv(64, 128, (g, w, h) => {   // cone de luz: forte perto do carro (embaixo da textura), some à frente
+    for (let y = 0; y < h; y++) { const k = y / h, larg = w * (0.25 + 0.75 * (1 - k)) / 2, a = Math.pow(k, 1.6) * 0.95; const lg = g.createLinearGradient(w / 2 - larg, 0, w / 2 + larg, 0); lg.addColorStop(0, 'rgba(255,240,200,0)'); lg.addColorStop(0.5, `rgba(255,240,200,${a})`); lg.addColorStop(1, 'rgba(255,240,200,0)'); g.fillStyle = lg; g.fillRect(0, y, w, 1); }
+  });
+  texPoca = canv(64, 64, (g, w) => { const r = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); r.addColorStop(0, 'rgba(255,248,225,.95)'); r.addColorStop(0.5, 'rgba(255,240,200,.45)'); r.addColorStop(1, 'rgba(255,240,200,0)'); g.fillStyle = r; g.fillRect(0, 0, w, w); });
+  const spr = (cor) => new THREE.SpriteMaterial({ map: texBrilho, color: cor, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false });
+  M = { farol: spr('#fff1c8'), lanterna: spr('#ff2a1a'), navV: spr('#ff2020'), navG: spr('#1fff5a'), estrobo: spr('#ffffff'), giro: spr('#ff3020'),
+    feixe: new THREE.MeshBasicMaterial({ map: texFeixe, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false, opacity: 0.8 }),
+    poca: new THREE.MeshBasicMaterial({ map: texPoca, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }) };
+}
+// pontos extremos do modelo (no espaço do próprio objeto), ignorando as pás do rotor
+function medir(g) {
+  g.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), m = new THREE.Matrix4(), v = new THREE.Vector3();
+  const e = { min: new THREE.Vector3(1e9, 1e9, 1e9), max: new THREE.Vector3(-1e9, -1e9, -1e9), px: null, nx: null, py: null, nz: null };
+  const pulas = (o) => { for (let x = o; x && x !== g; x = x.parent) if (x.name === 'rotor' || x === g.userData.rotor || x === g.userData.rotorCauda) return true; return false; };
+  g.traverse((o) => {
+    if (!o.isMesh || !o.geometry?.attributes?.position || pulas(o)) return;
+    m.multiplyMatrices(inv, o.matrixWorld); const pa = o.geometry.attributes.position, passo = Math.max(1, Math.floor(pa.count / 5000));
+    for (let i = 0; i < pa.count; i += passo) {
+      v.fromBufferAttribute(pa, i).applyMatrix4(m); e.min.min(v); e.max.max(v);
+      if (!e.px || v.x > e.px.x) e.px = v.clone(); if (!e.nx || v.x < e.nx.x) e.nx = v.clone();
+      if (!e.py || v.y > e.py.y) e.py = v.clone(); if (!e.nz || v.z < e.nz.z) e.nz = v.clone();
+    }
+  });
+  return e.px ? e : null;
+}
+function adicionarLuzes(g, tipo, chave = null) {
+  texturas();
+  if (g.getObjectByName('luzes')) return g;
+  let e = chave && extremos.get(chave); if (!e) { e = medir(g); if (!e) return g; if (chave) extremos.set(chave, e); }
+  const aereo = /^(aviao_|helicoptero)/.test(tipo), heli = /^helicoptero/.test(tipo);
+  const L = new THREE.Group(); L.name = 'luzes'; L.visible = false; L.userData = { aereo, heli, comp: e.max.z - e.min.z };
+  const sp = (mat, x, y, z, t) => { const s = new THREE.Sprite(mat); s.position.set(x, y, z); s.scale.set(t, t, t); L.add(s); return s; };
+  const w = e.max.x - e.min.x, h = e.max.y - e.min.y, cx = (e.max.x + e.min.x) / 2;
+  if (!aereo) {
+    const grande = w > 2.2, yf = e.min.y + h * (grande ? 0.22 : 0.38);
+    for (const s of [-1, 1]) {
+      sp(M.farol, cx + s * w * 0.34, yf, e.max.z + 0.08, grande ? 0.9 : 0.7);
+      sp(M.lanterna, cx + s * w * 0.4, yf + (grande ? 0.3 : 0.05), e.min.z - 0.08, grande ? 0.6 : 0.5);
+    }
+    const comp = grande ? 16 : 12, f = new THREE.Mesh(new THREE.PlaneGeometry(grande ? 6 : 4.8, comp).rotateX(-Math.PI / 2), M.feixe);
+    f.position.set(cx, e.min.y + 0.06, e.max.z + comp / 2 - 0.5); f.rotation.y = Math.PI; f.renderOrder = 3; L.add(f);
+  } else {
+    const t = Math.max(0.9, w * 0.05);
+    sp(M.navV, e.px.x, e.px.y, e.px.z, t * 1.3);   // ponta esquerda (o modelo olha para +Z: esquerda = +X)
+    sp(M.navG, e.nx.x, e.nx.y, e.nx.z, t * 1.3);
+    for (const p of [e.px, e.nx, e.nz]) sp(M.estrobo, p.x, p.y, p.z, t * 2.2);
+    sp(M.giro, e.py.x, e.py.y + 0.15, e.py.z, t * 1.5);
+    sp(M.giro, cx, e.min.y + 0.1, (e.min.z + e.max.z) / 2, t * 1.2);   // farol de baixo
+  }
+  g.add(L);
+  return g;
+}
+// para veículos que não saem de modeloCarro (frota das empresas, caminhão das ruas)
+export function luzesEm(o, tipo, chave) { adicionarLuzes(o, tipo, chave); if (o.getObjectByName('luzes')) comLuz.add(o); return o; }
+const _f = new THREE.Vector3();
+export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
+  if (!M) return;
+  tLuz += dt;
+  M.estrobo.opacity = (tLuz % 1.3) < 0.07 || ((tLuz % 1.3) > 0.18 && (tLuz % 1.3) < 0.24) ? 1 : 0;   // pisca-pisca duplo
+  M.giro.opacity = 0.25 + 0.75 * Math.max(0, Math.sin(tLuz * 5.5));
+  M.feixe.opacity = 0.75 * noite; M.poca.opacity = noite;
+  for (const o of comLuz) {
+    const L = o.getObjectByName('luzes');
+    if (!o.parent || !L) { if (L) L.visible = false; if (o.userData.pocaLuz) o.userData.pocaLuz.visible = false; comLuz.delete(o); continue; }
+    o.getWorldPosition(_f);
+    const u = o.userData, ult = u.ultLuz;
+    if (ult && Math.hypot(_f.x - ult.x, _f.y - ult.y, _f.z - ult.z) > 0.03) u.ativoAte = tLuz + 4;
+    u.ultLuz = { x: _f.x, y: _f.y, z: _f.z };
+    const ligado = noite > 0.25 && tLuz < (u.ativoAte || 0) && o.visible;
+    L.visible = ligado;
+    if (!L.userData.aereo) continue;
+    // farol de pouso (avião, perto do chão) / holofote (helicóptero, no ar): mancha de luz no chão
+    const alt = _f.y - chao(_f.x, _f.z);
+    const mostra = ligado && alt < 90 && (!L.userData.heli || alt > 1.2);
+    if (!mostra) { if (u.pocaLuz) u.pocaLuz.visible = false; continue; }
+    if (!u.pocaLuz) { u.pocaLuz = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), M.poca); u.pocaLuz.renderOrder = 3; cena.add(u.pocaLuz); }
+    const yaw = o.rotation.y, frente = L.userData.heli ? 2 : L.userData.comp * 0.5 + 8 + alt * 0.6;
+    const px = _f.x + Math.sin(yaw) * frente, pz = _f.z + Math.cos(yaw) * frente, r = L.userData.heli ? 7 + alt * 0.08 : 10 + alt * 0.15;
+    u.pocaLuz.position.set(px, chao(px, pz) + 0.08, pz); u.pocaLuz.scale.set(r * 2, 1, L.userData.heli ? r * 2 : r * 3); u.pocaLuz.rotation.y = yaw;
+    u.pocaLuz.material = M.poca; u.pocaLuz.visible = true;
+    u.pocaLuz.userData.k = Math.max(0.25, 1 - alt / 90);
+  }
+}
