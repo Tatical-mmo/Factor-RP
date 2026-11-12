@@ -6910,9 +6910,9 @@ function texturaUniforme(u) {
 const PECAS_FARDA = {
   colete: { arq: 'farda_colete', largura: 0.84, prof: 0.77, topo: 0.5 },
   // chapéus: copa = largura da parte que veste a cabeça; cx = onde fica o centro da copa (o boné tem a aba na frente)
-  bone: { arq: 'farda_bone', copa: 0.69, cx: -0.1, topo: 0.277, folga: 1.12, subir: 0 },
-  bombeiro: { arq: 'farda_capacete_bombeiro', copa: 0.7, cx: 0.016, topo: 0.465, folga: 0.92, subir: 0.22 },   // aba larga: menor e mais alto, senão engole a cabeça,
-  militar: { arq: 'farda_capacete_militar', copa: 0.78, cx: 0.014, topo: 0.5, folga: 1.2, subir: 0 },
+  bone: { arq: 'farda_bone', copa: 0.69, cx: -0.1, topo: 0.277, folga: 1.08, subir: 0 },
+  bombeiro: { arq: 'farda_capacete_bombeiro', copa: 0.7, cx: 0.016, topo: 0.465, folga: 0.88, subir: 0.05 },   // aba larga: menor e mais alto, senão engole a cabeça,
+  militar: { arq: 'farda_capacete_militar', copa: 0.78, cx: 0.014, topo: 0.5, folga: 1.12, subir: 0 },
 };
 const CHAPEU_DE = { policia: 'bone', prf: 'bone', bombeiro: 'bombeiro', medico: 'bone', exercito: 'militar', jornalista: 'bone' };
 const pecasFarda = {}; let pecasPedidas = false;
@@ -6939,16 +6939,51 @@ function pecaGlb(nome, cor, u) {
   g.rotation.y = -Math.PI / 2;   // a frente do modelo (+X) vira a frente do personagem (+Z)
   const h = new THREE.Group(); h.add(g); return h;
 }
+// Mede a parte do corpo pela própria malha do personagem (na pose de descanso), nas coordenadas de um osso:
+// assim o capacete e o colete viram "filhos" do osso e acompanham cabeça e peito exatamente, em qualquer personagem.
+function medirParte(modelo, osso, incluir) {
+  const v = new THREE.Vector3(), pts = []; let bi = null, esq = null;
+  modelo.traverse((m) => {   // todas as malhas com esqueleto (cabeça, cabelo e roupa podem ser malhas separadas)
+    if (!m.isSkinnedMesh) return;
+    const sk = m.skeleton, ia = sk.bones.indexOf(osso); if (ia < 0) return;
+    const quer = new Set(); sk.bones.forEach((b, i) => { if (incluir(b)) quer.add(i); });
+    const g = m.geometry, P = g.attributes.position, SI = g.attributes.skinIndex, SW = g.attributes.skinWeight; if (!P || !SI || !SW) return;
+    const M = new THREE.Matrix4().multiplyMatrices(sk.boneInverses[ia], m.bindMatrix);
+    const passo = Math.max(1, Math.floor(P.count / 6000));
+    for (let k = 0; k < P.count; k += passo) {
+      let w = 0; for (let c = 0; c < 4; c++) if (quer.has(SI.getComponent(k, c))) w += SW.getComponent(k, c);
+      if (w >= 0.4) pts.push(v.fromBufferAttribute(P, k).applyMatrix4(M).clone());
+    }
+    bi = sk.boneInverses[ia]; esq = sk;
+  });
+  if (!bi || pts.length < 30) return null;
+  const R = new THREE.Matrix3().setFromMatrix4(bi);   // direções do mundo (em pé, olhando +Z) dentro do osso
+  const cima = new THREE.Vector3(0, 1, 0).applyMatrix3(R).normalize();
+  const frente = new THREE.Vector3(0, 0, 1).applyMatrix3(R); frente.addScaledVector(cima, -frente.dot(cima)).normalize();
+  const lado = new THREE.Vector3().crossVectors(cima, frente).normalize();
+  const faixa = (eixo, a, b) => { const l = pts.map((p) => p.dot(eixo)).sort((x, y) => x - y); return [l[Math.floor(l.length * a)], l[Math.min(l.length - 1, Math.floor(l.length * b))]]; };
+  const [l0, l1] = faixa(lado, 0.05, 0.95), [f0, f1] = faixa(frente, 0.08, 0.92), [c0, c1] = faixa(cima, 0.02, 0.96);   // ignora pontas (nariz, mochila, cabelo espetado)
+  // posição de outro osso (na pose de descanso) medida neste osso: usada para a altura do colete (do quadril ao pescoço)
+  const alturaDe = (b) => { const i = esq.bones.indexOf(b); if (i < 0) return null; return new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().copy(bi).multiply(new THREE.Matrix4().copy(esq.boneInverses[i]).invert())).dot(cima); };
+  return { cima, frente, lado, largura: l1 - l0, prof: f1 - f0, baixo: c0, topo: c1, cl: (l0 + l1) / 2, cf: (f0 + f1) / 2, alturaDe };
+}
+const descendeDe = (b, pai) => { for (let x = b; x; x = x.parent) if (x === pai) return true; return false; };
+function encaixar(peca, osso, med, sx, sy, sz, centro) {
+  const m = new THREE.Matrix4().makeBasis(med.lado, med.cima, med.frente);
+  peca.quaternion.setFromRotationMatrix(m); peca.scale.set(sx, sy, sz);
+  peca.position.set(0, 0, 0).addScaledVector(med.lado, med.cl).addScaledVector(med.frente, centro.f).addScaledVector(med.cima, centro.c);
+  osso.add(peca);
+}
 function vestir(av, papel) {
   if (!av) return;
   const glb = !!(papel && pecasFarda.colete && pecasFarda[CHAPEU_DE[papel]]);
   if (av.uniforme?.papel === papel && av.uniforme.glb === glb) return;
-  if (av.uniforme) { scene.remove(av.uniforme.colete, av.uniforme.chapeu); av.uniforme = null; }
+  if (av.uniforme) { av.uniforme.colete.removeFromParent(); av.uniforme.chapeu.removeFromParent(); av.uniforme = null; }
   if (!papel) return;
   carregarPecasFarda();
   const u = UNIFORMES[papel], achados = {};
   // cada modelo nomeia os ossos de um jeito (mixamorigSpine1, mixamorig:Spine1, Spine1...): procura pelo fim do nome
-  av.modelo.traverse((x) => { const n = (x.name || '').toLowerCase().replace(/[^a-z0-9_]/g, ''); for (const k of ['spine2', 'spine1', 'spine', 'neck', 'headtop_end', 'head']) if (!achados[k] && n.endsWith(k)) { achados[k] = x; break; } });
+  av.modelo.traverse((x) => { if (!x.isBone) return; const n = (x.name || '').toLowerCase().replace(/[^a-z0-9_]/g, ''); for (const k of ['spine2', 'spine1', 'spine', 'neck', 'headtop_end', 'head', 'hips']) if (!achados[k] && n.endsWith(k)) { achados[k] = x; break; } });
   let ossos = { base: achados.spine1 || achados.spine || achados.spine2, pescoco: achados.neck, cabeca: achados.head, topo: achados.headtop_end };
   if (!ossos.base || !ossos.pescoco || !ossos.cabeca) ossos = null;   // sem esqueleto conhecido: veste pela altura do corpo
   let colete, chapeu;
@@ -6959,13 +6994,36 @@ function vestir(av, papel) {
     const copa = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1, 0.55, 14), new THREE.MeshStandardMaterial({ color: u.chapeu, roughness: 0.6 })); copa.position.y = 0.27; chapeu.add(copa);
     colete.castShadow = true;
   }
-  scene.add(colete, chapeu);
-  av.uniforme = { papel, colete, chapeu, ossos, glb, peca: CHAPEU_DE[papel] };
+  let preso = false;
+  if (glb && ossos) {
+    if (!av._medidas) {   // mede uma vez por personagem
+      const tronco = achados.spine2 || achados.spine1 || achados.spine;
+      av._medidas = {
+        tronco, cabeca: ossos.cabeca,
+        mt: medirParte(av.modelo, tronco, (b) => /spine\d?$/i.test((b.name || '').replace(/[^a-z0-9]/gi, ''))),
+        mc: medirParte(av.modelo, ossos.cabeca, (b) => descendeDe(b, ossos.cabeca) || b === ossos.pescoco),
+      };
+    }
+    const { tronco, cabeca, mt, mc } = av._medidas;
+    if (mt && mc) {
+      // colete: do pescoço até um pouco acima do quadril; largura e fundura do peito medidas na malha
+      const C = PECAS_FARDA.colete, quadril = achados.hips || av.modelo.getObjectByName('mixamorigHips');
+      let topo = mt.alturaDe(ossos.pescoco), base = quadril ? mt.alturaDe(quadril) : null;
+      if (topo === null || base === null || topo - base < 0.05) { topo = mt.topo; base = mt.baixo; } else base += (topo - base) * 0.12;
+      const H = topo - base;
+      encaixar(colete, tronco, mt, mt.largura * 1.22 / C.largura, H, Math.min(mt.prof, mt.largura * 0.85) * 1.25 / C.prof, { f: mt.cf, c: (topo + base) / 2 });
+      const P = PECAS_FARDA[CHAPEU_DE[papel]], hc = mc.topo - mc.baixo, sc = Math.min(mc.largura, hc * 0.95) * P.folga / P.copa;
+      encaixar(chapeu, cabeca, mc, sc, sc, sc, { f: mc.cf - P.cx * sc, c: mc.topo + hc * (0.03 + P.subir) - P.topo * sc });
+      preso = true;
+    }
+  }
+  if (!preso) scene.add(colete, chapeu);
+  av.uniforme = { papel, colete, chapeu, ossos, glb, preso, peca: CHAPEU_DE[papel] };
 }
 const _cx = new THREE.Vector3(), _cy = new THREE.Vector3(), _cz = new THREE.Vector3(), _cw = new THREE.Vector3();
 const _ua = new THREE.Vector3(), _ub = new THREE.Vector3(), _uc = new THREE.Vector3(), _ud = new THREE.Vector3(), _um = new THREE.Matrix4(), _ux = new THREE.Vector3(), _uq = new THREE.Quaternion();
 function posicionarUniforme(av) {
-  const U = av?.uniforme; if (!U) return;
+  const U = av?.uniforme; if (!U || U.preso) return;   // presa aos ossos: anda sozinha com o corpo
   const vis = av.raiz.visible; U.colete.visible = U.chapeu.visible = vis; if (!vis) return;
   const alt = av.altura || 1.8, yaw = av.raiz.rotation.y, r = av.raiz.position;
   // eixos do corpo: "cima" segue a coluna; sem ossos, fica em pé
