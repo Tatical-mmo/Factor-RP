@@ -36,6 +36,7 @@ async function desenhar() {
     if (SERVICOS[modo]) {
       abas.innerHTML = ''; $('governoTitulo').textContent = SERVICOS[modo][0]; await SERVICOS[modo][1](c); c.scrollTop = rolagem;
       c.querySelectorAll('[data-farda]').forEach((b) => { b.onclick = () => { fechar(); ctx.vestiario?.(); }; });   // vestiário do QG
+      c.querySelectorAll('[data-treino]').forEach((b) => { b.onclick = () => { fechar(); ctx.treino?.(); }; });
       return;
     }
     $('governoTitulo').textContent = 'Prefeitura';
@@ -233,7 +234,7 @@ async function quadroTrabalho() {
 // Exército: veículos e, para Tenente para cima, as ordens de caçada aos procurados
 async function blocoExercito(car) {
   const cmd = ctx.perfil().cargo === 'admin' || (car?.nivel || 0) >= 8;
-  let h = `<div class="botoes"><button data-farda="1">👔 Vestiário (farda)</button></div><div class="linha"><small>🚙 Jipe (3 passageiros), 🚚 caminhão (8) e 🚁 helicóptero (6, só Tenente para cima pilota) ficam no quartel, em Porto Sul. São ilimitados: chegue perto e toque em Dirigir. Militares embarcam como passageiros.</small></div>`;
+  let h = `<div class="botoes"><button data-farda="1">👔 Vestiário (farda)</button><button data-treino="1">🏋️ Centro de treinamento</button></div><div class="linha"><small>🚙 Jipe (3 passageiros), 🚚 caminhão (8) e 🚁 helicóptero (6, só Tenente para cima pilota) ficam no quartel, em Porto Sul. São ilimitados: chegue perto e toque em Dirigir. Militares embarcam como passageiros.</small></div>`;
   if (ctx.perfil().cargo === 'admin') h += await blocoGeneral();
   h += await blocoFicha(cmd);
   if (!cmd) return h + '<div class="linha"><small>A partir de Tenente você pode autorizar os soldados a caçar procurados.</small></div>';

@@ -980,6 +980,7 @@ function acaoContexto() {
   if (perto(civico.BANCO.empregos, 3.2)) { abrirServico('empregos'); return; }
   if (perto(civico.HOSPITAL.balcao, 3.2)) { abrirServico('hospital'); return; }
   if (perto(civico.BOMBEIROS.balcao, 3.2)) { entrarPublico('bombeiros', salaBombeiros, civico.BOMBEIROS.balcao, '🚒 Quartel dos bombeiros: balcão, quadro de incêndios, vestiário e enfermaria.'); return; }
+  { const s = tropaPerto(); if (s) { iniciarTropa(s); return; } }
   if (perto(civico.EXERCITO.arsenal, 3.2)) { usarArsenal(); return; }
   if (perto(CONTRABANDISTA, 3.2)) { falarContrabandista(); return; }
   if (BANCAS.some((b) => perto(b, 3.2))) { abrirServico('jornal'); return; }
@@ -1436,7 +1437,7 @@ function socar() {
   jogador.alvo = null;
   jogador.soco = (jogador.soco + 1) % 2;
   jogador.avatar.tocar(jogador.soco ? 'punch_right' : 'punch_left', { umaVez: true, velocidade: 1.7, fade: 0.08 });
-  jogador.trava = 0.72;
+  jogador.trava = 0.72 / (1 + bonusTreino('luta'));
   jogador.eventos.push({ t: 0.3, fn: golpeSoco });
 }
 
@@ -1510,7 +1511,8 @@ function atirar(alvo) {
   const vyMira = dourada ? null : miraNoAlvo(boca, dir, A.vel);
   const v = dir.multiplyScalar(dourada ? 34 : A.vel).add(new THREE.Vector3(0, vyMira ?? (dourada ? 0.6 : 1.2 * 24 / A.vel), 0));
   criarBola(boca, v, cor, true, dourada ? 1 : A.bola || 1);
-  bolas[bolas.length - 1].dano = A.dano;
+  const critico = Math.random() < bonusTreino('tiro');   // treino de tiro: chance de acerto crítico (dano dobrado)
+  bolas[bolas.length - 1].dano = Math.round(A.dano * (critico ? 2 : 1) * fatorForca()); bolas[bolas.length - 1].critico = critico;
   if (dourada) {
     bolas[bolas.length - 1].pd = true; bolas[bolas.length - 1].m.scale.setScalar(1.6);
     armaPd = { ...armaPd, balas: armaPd.balas - 1 };
@@ -1519,7 +1521,7 @@ function atirar(alvo) {
   }
   const r2 = (n) => Math.round(n * 100) / 100;
   conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: cor, s: A.bola || 1 });
-  if (!dourada) jogador.recarga = A.recarga;
+  if (!dourada) jogador.recarga = A.recarga / (1 + bonusTreino('luta'));
 }
 function criarBola(pos, vel, cor, minha = false, escala = 1) {
   if (escala < 3) sons.tocar('tiro', { vol: 0.7, dist: jogador.avatar ? Math.hypot(pos.x - jogador.pos.x, pos.z - jogador.pos.z) : 0, raio: 55, velocidade: 0.9 + Math.random() * 0.2 });
@@ -1755,6 +1757,7 @@ function alvosRastreio() {
   r.push({ icone: '🏥', nome: 'Hospital', x: civico.HOSPITAL.balcao.x, z: civico.HOSPITAL.balcao.z - 2 });
   r.push({ icone: '🚒', nome: 'Bombeiros', x: civico.BOMBEIROS.balcao.x, z: civico.BOMBEIROS.balcao.z - 2 });
   for (const f of servicos.listaIncendios()) r.push({ icone: '🔥', nome: f.nome, x: f.x, z: f.z });
+  r.unshift(...fugitivosNoMapa());   // fugitivos primeiro: dá para rastrear e o rastreio acompanha
   return r;
 }
 function rastrear(alvo) {
@@ -1782,6 +1785,7 @@ function proximoPasso() {
 }
 function atualizarRastreio(dt) {
   if (!rastreio) return;
+  seguirFugitivoRastreado(); if (!rastreio) return;
   const passo = proximoPasso(), d = Math.hypot(passo.x - jogador.pos.x, passo.z - jogador.pos.z);
   if (beacon) {
     beacon.position.set(passo.x, alturaChao(passo.x, passo.z), passo.z);
@@ -1865,6 +1869,16 @@ function desenharMapa() {
     const pisca = Math.sin(performance.now() / 150) > 0;
     for (const r of remotos.values()) if (r.meta?.crimes > 0 && r.av) desenhar(r.av.raiz.position.x, r.av.raiz.position.z, pisca ? '#ff2020' : '#ffffff', 6);
     for (const o of ocorrencias) desenhar(o.x, o.z, '#ff5a1f', 8);
+  }
+  if (veFugitivos()) {   // fugitivos: piscando no mapa e, se estiverem longe, uma seta vermelha na borda
+    const pisca = Math.sin(performance.now() / 150) > 0;
+    for (const f of fugitivosNoMapa()) {
+      const mx = ((f.x - px) / MAPA_R * 0.5 + 0.5) * w, mz = ((f.z - pz) / MAPA_R * 0.5 + 0.5) * w;
+      if (mx > 6 && mz > 6 && mx < w - 6 && mz < w - 6) { desenhar(f.x, f.z, pisca ? '#ff2020' : '#ffffff', f.ladrao !== undefined ? 8 : 6); continue; }
+      const a = Math.atan2(mz - w / 2, mx - w / 2), rr = w / 2 - 10;
+      g.save(); g.translate(w / 2 + Math.cos(a) * rr, w / 2 + Math.sin(a) * rr); g.rotate(a); g.fillStyle = pisca ? '#ff2020' : '#ffffff'; g.strokeStyle = '#111'; g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(9, 0); g.lineTo(-6, -7); g.lineTo(-6, 7); g.closePath(); g.fill(); g.stroke(); g.restore();
+    }
   }
   const passo = proximoPasso();
   if (passo) {
@@ -2015,7 +2029,7 @@ async function iniciarJogo(perfil) {
   });
   jornal.iniciarJornal({ perfil: () => jogador.perfil, mudou: () => { tempoJornal = 0.3; tempoTelao = 0; } });
   iniciarGoverno({
-    perfil: () => jogador.perfil, vestiario: () => vestiario(), agora: agoraServidor, recarregar: () => { tempoPrefeitura = 0.3; tempoCarros = 0.5; tempoSocial = 0.5; },
+    perfil: () => jogador.perfil, vestiario: () => vestiario(), treino: () => entrarTreino(), agora: agoraServidor, recarregar: () => { tempoPrefeitura = 0.3; tempoCarros = 0.5; tempoSocial = 0.5; },
     clas: () => [...clasCache.values()], territorios: () => [...territorios.values()].map((v) => v.d),
     minhasEmpresas: () => [...empresas.values()].filter((e) => e.dono === jogador.perfil.id),
     meusCarros: () => [...carrosMundo.values()].map((v) => v.d).filter((d) => d.dono === jogador.perfil.id),
@@ -2891,17 +2905,19 @@ function aplicarDanoRemoto(id, valor) {
 }
 function golpeSoco() {
   const f = new THREE.Vector3(Math.sin(jogador.yaw), 0, Math.cos(jogador.yaw));
+  if (golpeNoBoneco(f)) return;
+  const forca = Math.round(10 * fatorForca());
   for (const n of npcs) {
     if (!n.policia) continue;
     const d = new THREE.Vector3().subVectors(n.av.raiz.position, jogador.pos); d.y = 0;
     const dist = d.length();
-    if (dist < 1.7 && dist > 0.01 && d.normalize().dot(f) > 0.5) { acertarPoliciaNPC(n, 10); return; }
+    if (dist < 1.7 && dist > 0.01 && d.normalize().dot(f) > 0.5) { acertarPoliciaNPC(n, forca); return; }
   }
   for (const [id, r] of remotos) {
     if (!r.av?.raiz.visible) continue;
     const d = new THREE.Vector3().subVectors(r.av.raiz.position, jogador.pos); d.y = 0;
     const dist = d.length();
-    if (dist < 1.7 && dist > 0.01 && d.normalize().dot(f) > 0.5) { aplicarDanoRemoto(id, 10); return; }
+    if (dist < 1.7 && dist > 0.01 && d.normalize().dot(f) > 0.5) { aplicarDanoRemoto(id, forca); return; }
   }
   const c = caminhaoProximo(3.4);
   if (c) atacarCaminhao(c);
@@ -2949,7 +2965,7 @@ function atualizarMira() {
   mira.linha.visible = mira.anel.visible = true;
 }
 // no estande, a mira compensa a queda da tinta: se você está virado para um alvo, o tiro sai na curva certa até ele
-const podeAlvo = (a) => (a.quem ? daPolicia() : militar());
+const podeAlvo = (a) => (a.quem === 'treino' ? daPolicia() || militar() : a.quem ? daPolicia() : militar());
 function miraNoAlvo(boca, dir, vel) {
   if (!militar() && !daPolicia()) return null;
   let melhor = null, mc = 0.985;
@@ -2970,7 +2986,7 @@ function acertoNoAlvo(b) {
     const r = Math.hypot(p.z - a.z, p.y - a.y); if (r > a.raio + 0.07) continue;
     if (!podeAlvo(a)) return true;
     const anel = r < 0.07 ? 10 : r < 0.17 ? 8 : r < 0.3 ? 6 : r < 0.42 ? 4 : 2, pts = Math.round(anel * (1 + a.d / 20));
-    pontosEstande += pts;
+    pontosEstande += pts; acertoTreinoTiro();
     manchar(new THREE.Vector3(a.x - 0.03, p.y, p.z), new THREE.Vector3(-1, 0, 0), b.cor);
     aviso(`🎯 Alvo de ${a.d} m: ${anel === 10 ? 'NA MOSCA! ' : ''}+${pts} pontos · total ${pontosEstande}`, 1.6);
     return true;
@@ -2993,7 +3009,7 @@ function acertoDaBola(b) {
     if (!r.av?.raiz.visible) continue;
     const q = r.av.raiz.position;
     if (Math.hypot(p.x - q.x, p.z - q.z) < 0.5 && p.y > q.y + 0.1 && p.y < q.y + 1.9) {
-      if (b.pd) acertoDourado(id); else aplicarDanoRemoto(id, b.dano || 20);
+      if (b.pd) acertoDourado(id); else { aplicarDanoRemoto(id, b.dano || 20); if (b.critico) aviso('💥 Acerto crítico!', 1.2); }
       manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true;
     }
   }
@@ -4050,7 +4066,7 @@ function receberDano(d) {
   if (jogador.perfil.imortal || jogador.pena > 0) return;
   const r = remotos.get(d.de);
   if (!r?.av || r.av.raiz.position.distanceTo(jogador.pos) > 30) return;     // golpe de longe demais: ignora
-  const v = Math.max(0, Math.min(80, Number(d.v) || 0));
+  const v = Math.max(0, Math.min(80, Number(d.v) || 0)) * (1 - bonusTreino('luta'));   // treino de luta: defesa
   jogador.vida -= v; jogador.ultimoAgressor = d.de;
   desenharFome();
   if (jogador.vida <= 0) { morrerLocal(); return; }
@@ -4998,6 +5014,10 @@ function atualizarJogador(dt) {
   }
   if (j.passageiro) { seguirComoPassageiro(); av.mixer.update(dt); return; }
   if (j.carro) { if (!j.carro.taxi) dirigir(dt); av.mixer.update(dt); av.raiz.updateMatrixWorld(true); return; }
+  if (correTropa) {
+    if (forca > 0.15 || j.morto || j.trava > 0) pararTropa('Você saiu da corrida da tropa.');
+    else { correrComTropa(dt); av.tocar('run', { velocidade: 0.8 }); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw; av.mixer.update(dt); av.raiz.updateMatrixWorld(true); return; }
+  }
   const correr = !j.carregando && !j.armado && (teclas.has('shift') || (joy.ativo && forca > 0.92) || (j.alvo && j.pos.distanceTo(j.alvo) > 12));
 
   if (j.trava > 0) {
@@ -5007,7 +5027,7 @@ function atualizarJogador(dt) {
     if (forca > 0.15) {
       vel = j.carregando ? VELOCIDADE.carregando : j.armado ? VELOCIDADE.armado : correr ? VELOCIDADE.correr : VELOCIDADE.andar;
       if (joy.ativo && !correr) vel *= THREE.MathUtils.clamp(forca * 1.3, 0.5, 1);
-      if (j.fome <= 0) vel *= 0.6;
+      vel *= fatorVelocidade();
       j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 12);
       j.pos.x += dir.x * vel * dt; j.pos.z += dir.z * vel * dt;
       resolverColisao(j.pos, j.raio);
@@ -5165,6 +5185,7 @@ function contexto() {
   if (perto(civico.BANCO.empregos, 3.2)) return ['agência de empregos: vagas nas empresas', 'Vagas'];
   if (perto(civico.HOSPITAL.balcao, 3.2)) return ['hospital: tratamento e plantão médico', 'Hospital'];
   if (perto(civico.BOMBEIROS.balcao, 3.2)) return ['entrar no quartel dos bombeiros', 'Bombeiros'];
+  if (tropaPerto()) return ['correr com a tropa (treino de corrida)', 'Correr'];
   if (perto(civico.EXERCITO.arsenal, 3.2)) return [jogador.armaPesada ? 'guardar a arma pesada' : 'arsenal: pegar a arma pesada (com autorização)', 'Arsenal'];
   if (BANCAS.some((b) => perto(b, 3.2))) return ['banca de jornal: ler as notícias', 'Jornal'];
   if (perto(CONTRABANDISTA, 3.2)) return ['contrabandista: arma militar e alicate de corte', 'Negociar'];
@@ -5276,7 +5297,7 @@ function quadro() {
   atualizarRemotos(dt);
   voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
-  atualizarUniformes();
+  atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt);
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
@@ -6166,6 +6187,7 @@ function salaDelegacia(chave, bz, titulo, cor) {
     placa('Celas', 17, -1.8, 3);
     estandeInterno(i, chave, -14, -2);
     for (let k = 0; k < 4; k++) caixa(0.7, 1.9, 0.5, '#3d4652', -11.2 + k * 0.8, 0.95, 6.4);   // armários do vestiário
+    caixa(2, 2.6, 0.15, '#4b5a3a', -16, 1.3, 6.8); i.pontos.treino = { x: i.base.x - 16, z: i.base.z + 5.8 }; placa('🏋️ Centro de treinamento', -16, 6.6, 3);
     movel(i, 'vestiario', -10, 6.4, 3.2, 0.5, [0, -1]); placa('👔 Vestiário', -10, 6.4, 2.6);
     caixa(1.6, 2.4, 0.15, '#2b2f36', 4, 1.2, -6.8); i.pontos.celas = { x: i.base.x + 4, z: i.base.z - 5.8 }; placa('🔒 Carceragem', 4, -6.5, 2.9);
   });
@@ -6204,6 +6226,7 @@ SALAS.delegacia = {
   contexto: () => {
     if (naPorta()) return ['sair da delegacia', 'Sair'];
     if (pontoInterior('vestiario', 1.6)) return ['vestiário: vestir ou tirar a farda', 'Farda'];
+    if (pontoInterior('treino', 1.8)) return ['centro de treinamento: corrida, luta e tiro', 'Treinar'];
     if (pontoInterior('celas', 1.6)) return [daPolicia() ? 'entrar na carceragem (celas dos presos)' : 'carceragem (só policiais e PRF)', 'Celas'];
     if (pontoInterior('balcao', 1.8)) return [servicoPolicia(), 'Polícia'];
     if (pontoInterior('quadro', 1.8)) return ['quadro de procurados', 'Ver'];
@@ -6213,6 +6236,7 @@ SALAS.delegacia = {
   acao: () => {
     if (naPorta()) { sairSala(); return; }
     if (pontoInterior('vestiario', 1.6)) { vestiario('Polícia'); return; }
+    if (pontoInterior('treino', 1.8)) { const pt = jogador.pos; entrarTreino({ chave: jogador.dentroCasa, x: pt.x, z: pt.z }); return; }
     if (pontoInterior('celas', 1.6)) { entrarCarceragem(); return; }
     if (pontoInterior('balcao', 1.8)) { alternarServico(); return; }
     if (pontoInterior('quadro', 1.8)) { quadroProcurados(); return; }
@@ -6223,6 +6247,7 @@ SALAS.prf = {
   contexto: () => {
     if (naPorta()) return ['sair do posto da PRF', 'Sair'];
     if (pontoInterior('vestiario', 1.6)) return ['vestiário: vestir ou tirar a farda', 'Farda'];
+    if (pontoInterior('treino', 1.8)) return ['centro de treinamento: corrida, luta e tiro', 'Treinar'];
     if (pontoInterior('celas', 1.6)) return [daPolicia() ? 'entrar na carceragem (celas dos presos)' : 'carceragem (só policiais e PRF)', 'Celas'];
     if (pontoInterior('balcao', 1.8)) return ['posto da PRF: serviço e investigações', 'PRF'];
     if (pontoInterior('quadro', 1.8)) return ['quadro de procurados', 'Ver'];
@@ -6232,6 +6257,7 @@ SALAS.prf = {
   acao: () => {
     if (naPorta()) { sairSala(); return; }
     if (pontoInterior('vestiario', 1.6)) { vestiario('PRF'); return; }
+    if (pontoInterior('treino', 1.8)) { const pt = jogador.pos; entrarTreino({ chave: jogador.dentroCasa, x: pt.x, z: pt.z }); return; }
     if (pontoInterior('celas', 1.6)) { entrarCarceragem(); return; }
     if (pontoInterior('balcao', 1.8)) { abrirPrefeitura('prf'); return; }
     if (pontoInterior('quadro', 1.8)) { quadroProcurados(); return; }
@@ -6669,6 +6695,192 @@ async function materializar(tipo, id) {
   } catch (e) { aviso(e.message, 3); }
 }
 
+// ================================================================= fome, preparação física e treinamento
+// Fome: abaixo de 20 o personagem fica FRACO (mais lento e com golpes mais fracos); zerada, ainda perde vida aos poucos.
+// Saciado (80 ou mais) anda 0,2% mais rápido.
+// Treino (Polícia, PRF e Exército): cada treino completo vale +0,1% na especialidade, até 0,6%:
+//   corrida → velocidade de movimento · luta (boneco) → velocidade de ataque e defesa · tiro no alvo → chance de crítico.
+// Os bônus só valem no expediente: saiu do serviço, perde tudo e precisa treinar de novo.
+const SACIADO = 80, FRACO = 20, BONUS_SACIADO = 0.002, TREINO_PASSO = 0.001, TREINO_MAX = 6;
+const NOME_TREINO = { corrida: ['corrida', 'velocidade de movimento'], luta: ['luta', 'velocidade de ataque e defesa'], tiro: ['tiro', 'chance de acerto crítico'] };
+let treino = { corrida: 0, luta: 0, tiro: 0 }, treinoPapel, golpesBoneco = 0, acertosTiro = 0, volta = null, correTropa = null, boneco = null, treinoVolta = null, avisoFraco = false, sangriaFome = 0;
+const PISTA = [[-18, -3], [18, -3], [18, 13], [-18, 13]];   // cantos da pista (na ordem da volta), relativos à sala
+function corporacao() {
+  const p = jogador.perfil; if (!p) return null;
+  if (p.policial) return 'policia';
+  if (p.prf) return 'prf';
+  if (p.profissao === 'exercito') return 'exercito';
+  return souEquipe() ? 'equipe' : null;
+}
+function bonusTreino(tipo) { return corporacao() ? (treino[tipo] || 0) * TREINO_PASSO : 0; }
+function fatorVelocidade() {
+  const f = jogador.fome;
+  return (f <= 0 ? 0.6 : f < FRACO ? 0.85 : 1) * (1 + (f >= SACIADO ? BONUS_SACIADO : 0) + bonusTreino('corrida'));
+}
+const fatorForca = () => (jogador.fome < FRACO ? 0.75 : 1);
+function fraquezaFome(dt) {
+  const f = jogador.fome;
+  if (f < FRACO && f > 0 && !avisoFraco) { avisoFraco = true; aviso('😵 Você está FRACO de fome: mais lento e com golpes mais fracos. Coma algo.', 4); }
+  if (f >= FRACO + 5) avisoFraco = false;
+  if (f <= 0 && !jogador.morto && jogador.vida > 15) {   // sem comida nenhuma: perde 1 de vida a cada 6 s (não mata: para em 15)
+    sangriaFome += dt; if (sangriaFome >= 6) { sangriaFome = 0; jogador.vida = Math.max(15, jogador.vida - 1); desenharFome(); }
+  }
+}
+function salvarTreino() { try { localStorage.setItem('fator_treino_' + (jogador.perfil?.id || ''), JSON.stringify({ papel: treinoPapel, ...treino })); } catch { /* sem armazenamento */ } }
+function seguirTreino() {
+  if (!jogador.perfil) return;
+  const c = corporacao();
+  if (treinoPapel === undefined) {   // ao abrir o jogo: recupera o treino se continua no mesmo expediente
+    treinoPapel = c;
+    try { const t = JSON.parse(localStorage.getItem('fator_treino_' + (jogador.perfil?.id || '')) || 'null'); if (t && t.papel === c && c) treino = { corrida: t.corrida | 0, luta: t.luta | 0, tiro: t.tiro | 0 }; } catch { /* nada */ }
+    return;
+  }
+  if (c === treinoPapel) return;
+  const tinha = treino.corrida + treino.luta + treino.tiro > 0;
+  treinoPapel = c; treino = { corrida: 0, luta: 0, tiro: 0 }; golpesBoneco = 0; acertosTiro = 0; salvarTreino();
+  if (tinha && !c) aviso('Fim do expediente: os bônus de treino foram perdidos. Treine de novo no próximo serviço.', 4);
+}
+function ganharTreino(tipo) {
+  const [nome, efeito] = NOME_TREINO[tipo];
+  if (!corporacao()) { aviso('Treino só conta no expediente (Polícia, PRF ou Exército em serviço).', 3.5); return; }
+  if (treino[tipo] >= TREINO_MAX) { aviso(`💪 Treino de ${nome} no máximo: +0,6% de ${efeito}.`, 3); return; }
+  treino[tipo]++; salvarTreino();
+  aviso(`💪 Treino de ${nome} completo! Agora +${(treino[tipo] * 0.1).toFixed(1).replace('.', ',')}% de ${efeito}.`, 3.5);
+}
+function verPreparacao() {
+  const linha = (k) => `${NOME_TREINO[k][0]}: ${'▰'.repeat(treino[k])}${'▱'.repeat(TREINO_MAX - treino[k])} +${(treino[k] * 0.1).toFixed(1).replace('.', ',')}% de ${NOME_TREINO[k][1]}`;
+  escolher('💪 Sua preparação', corporacao() ? 'Vale enquanto você estiver no expediente.' : 'Você não está no expediente: os bônus não valem agora.',
+    ['corrida', 'luta', 'tiro'].map((k) => ({ rotulo: linha(k), fn: () => {} })));
+}
+// ---- sala de treinamento (Polícia e PRF entram pela delegacia/posto; o Exército pelo comando do quartel)
+function salaTreino() {
+  return montarSala('treino', 3600, 1000, 44, 34, { piso: '#596247', parede: '#cfd3c4' }, (i) => {
+    const { caixa, placa, g } = i;
+    // pista de corrida: faixas no chão e cones nos cantos
+    const [a, b, c, d] = PISTA;
+    for (const [p, q] of [[a, b], [b, c], [c, d], [d, a]]) {
+      const cx = (p[0] + q[0]) / 2, cz = (p[1] + q[1]) / 2, horiz = p[1] === q[1];
+      caixa(horiz ? Math.abs(q[0] - p[0]) + 2.2 : 2.2, 0.02, horiz ? 2.2 : Math.abs(q[1] - p[1]) + 2.2, '#a5522f', cx, 0.011, cz);
+    }
+    for (const [x, z] of PISTA) caixa(0.5, 0.8, 0.5, '#ff7a1a', x, 0.4, z);
+    placa('🏃 Largada', d[0], d[1] + 1.4, 2.2); i.pontos.largada = { x: i.base.x + d[0], z: i.base.z + d[1] + 1.4 };
+    const marca = new THREE.Mesh(new THREE.RingGeometry(1.2, 1.7, 28), new THREE.MeshBasicMaterial({ color: '#ffd23e', side: THREE.DoubleSide }));
+    marca.rotation.x = -Math.PI / 2; marca.position.y = 0.05; marca.visible = false; g.add(marca); i.marca = marca;
+    // tiro ao alvo (fundo da sala)
+    estandeInterno(i, 'treino', -12, -11);
+    // boneco de luta no meio da pista
+    caixa(2.6, 0.1, 2.6, '#2b2f36', 0, 0.05, 5); placa('🥊 Boneco de luta', 0, 5, 2.9);
+    i.obst.push([-0.5, 0.5, 4.5, 5.5]); i.pontos.boneco = { x: i.base.x, z: i.base.z + 6.4 };
+    criarAvatar('robos', 'Rusty_Scout_Bot').then((av) => { av.raiz.position.set(i.base.x, 0.1, i.base.z + 5); av.raiz.rotation.y = 0; av.tocar('idle'); scene.add(av.raiz); boneco = av; }).catch(() => {});
+    // quadro da preparação
+    caixa(0.1, 1.8, 3, '#20262e', -21.7, 2, 5); movel(i, 'quadro', -21.5, 5, 0.4, 3, [1, 0]); placa('💪 Sua preparação', -21.4, 5, 3.2);
+  });
+}
+function entrarTreino(voltaPara) {
+  if (!corporacao()) { aviso('O centro de treinamento é da Polícia, PRF e Exército em serviço.', 3); return; }
+  if (jogador.carro) { aviso('Desça do veículo primeiro.'); return; }
+  const i = salaTreino();
+  treinoVolta = voltaPara || null;
+  entrarSala('treino', voltaPara ? jogador.saidaSala : { x: jogador.pos.x + 1.5, z: jogador.pos.z + 1.5 }, i.pontos.porta.x - 1, i.pontos.porta.z - 1.5);
+  aviso('🏋️ Centro de treinamento: corra na pista, lute com o boneco e atire nos alvos. Cada treino: +0,1% (até 0,6%).', 5);
+}
+SALAS.treino = {
+  contexto: () => {
+    if (naPorta()) return ['sair do centro de treinamento', 'Sair'];
+    if (pontoInterior('largada', 2)) return [volta ? 'correndo: passe pelos 4 cones' : 'pista: correr uma volta em até 40 s', 'Correr'];
+    if (pontoInterior('boneco', 1.8)) return [`boneco de luta: dê socos (${golpesBoneco % 12}/12)`, 'Socar'];
+    if (pontoInterior('quadro', 1.8)) return ['ver sua preparação', 'Ver'];
+    if (pontoInterior('estande', 2.2)) return ['tiro ao alvo: saque a arma e acerte os alvos (6 acertos = 1 treino)', 'Estande'];
+    return ['', ''];
+  },
+  acao: () => {
+    if (naPorta()) {
+      const v = treinoVolta; treinoVolta = null; volta = null;
+      if (v) { const s = jogador.saidaSala; entrarSala(v.chave, s, v.x, v.z); } else sairSala();
+      return;
+    }
+    if (pontoInterior('largada', 2)) { if (!volta) { volta = { k: 0, t0: performance.now() }; aviso('🏃 Valendo! Passe pelos 4 cones e volte à largada.', 3); } return; }
+    if (pontoInterior('boneco', 1.8)) { socar(); return; }
+    if (pontoInterior('quadro', 1.8)) { verPreparacao(); return; }
+    if (pontoInterior('estande', 2.2)) aviso('🎯 Saque a arma (Arma) e atire nos alvos.', 3);
+  },
+  sair: () => { volta = null; },
+};
+function golpeNoBoneco(f) {
+  if (jogador.dentroCasa !== 'treino' || !boneco) return false;
+  const d = new THREE.Vector3().subVectors(boneco.raiz.position, jogador.pos); d.y = 0;
+  const dist = d.length(); if (dist > 1.9 || dist < 0.01 || d.normalize().dot(f) < 0.4) return false;
+  boneco.tocar('hit', { umaVez: true, velocidade: 1.4, fade: 0.08 });
+  golpesBoneco++;
+  if (golpesBoneco % 12 === 0) ganharTreino('luta'); else aviso(`🥊 ${golpesBoneco % 12}/12`, 0.8);
+  return true;
+}
+function acertoTreinoTiro() {
+  if (!corporacao()) return;
+  acertosTiro++;
+  if (acertosTiro % 6 === 0) ganharTreino('tiro');
+}
+// ---- corrida com a tropa do Exército (pátio do quartel): o personagem acompanha o pelotão sozinho
+function tropaPerto() {
+  if (correTropa || jogador.carro || !['exercito', 'equipe'].includes(corporacao())) return null;
+  return soldados.find((s) => s.corre && s.av.raiz.visible && s.av.raiz.position.distanceTo(jogador.pos) < 5) || null;
+}
+function correrComTropa(dt) {
+  const t = correTropa;
+  if (!soldados.some((s) => s.corre && s.av.raiz.visible)) { pararTropa(); return; }
+  const p = pontoNoLaco(t.l, agoraServidor() / 1000 * t.vel + t.fase);
+  jogador.pos.set(p.x, alturaChao(p.x, p.z), p.z); jogador.yaw = suavizarAngulo(jogador.yaw, p.ang, dt * 6); jogador.alvo = null;
+  t.dist += t.vel * dt;
+  if (t.dist >= t.l.total) { t.dist -= t.l.total; ganharTreino('corrida'); }
+}
+function iniciarTropa(s) {
+  const fase = Math.min(...soldados.filter((x) => x.corre).map((x) => x.fase)) - 1.5;   // no fim da fila
+  correTropa = { l: s.l, vel: s.vel, fase, dist: 0 };
+  aviso('🎖️ Correndo com a tropa! Cada volta completa no pátio = 1 treino de corrida. Mexa o controle para sair.', 4.5);
+}
+function pararTropa(msg) { correTropa = null; if (msg) aviso(msg, 2.5); }
+function atualizarTreino(dt) {
+  seguirTreino();
+  boneco?.mixer.update(dt);
+  const i = interiores.get('treino');
+  if (i?.marca) i.marca.visible = !!volta && jogador.dentroCasa === 'treino';
+  if (!volta || jogador.dentroCasa !== 'treino') { if (jogador.dentroCasa !== 'treino') volta = null; return; }
+  const alvo = volta.k < PISTA.length ? PISTA[volta.k] : [PISTA[3][0], PISTA[3][1] + 1.4];
+  i.marca.position.set(alvo[0], 0.05, alvo[1]);
+  const seg = (performance.now() - volta.t0) / 1000;
+  if (seg > 40) { volta = null; aviso('⏱️ Tempo esgotado (40 s). Volte à largada e tente de novo.', 3); return; }
+  if (Math.hypot(i.base.x + alvo[0] - jogador.pos.x, i.base.z + alvo[1] - jogador.pos.z) < 2.6) {
+    volta.k++;
+    if (volta.k > PISTA.length) { volta = null; aviso(`Volta em ${seg.toFixed(1).replace('.', ',')} s!`, 2); ganharTreino('corrida'); }
+    else aviso(volta.k === PISTA.length ? 'Agora volte à largada!' : `Cone ${volta.k}/4 · ${seg.toFixed(0)} s`, 1.2);
+  }
+}
+// ---- fugitivos no mapa: ladrões NPC em fuga e jogadores procurados (para Polícia, PRF, Exército e equipe)
+const veFugitivos = () => ['policia', 'prf', 'exercito'].includes(papelDe(jogador.perfil)) || souEquipe();
+function ladroesEmFuga() {
+  const r = [], ciclo = cicloCrime();
+  for (const c of [ciclo, ciclo - 1]) {
+    if (presosNpc.has(c)) continue;
+    const cr = crimeDoCiclo(c); if (!cr) continue;
+    const t = agoraServidor() / 1000 - c * CICLO_CRIME; if (t < 0 || t > FUGA) continue;
+    const p = servicos.pontoNaRota(cr.rota, Math.min(cr.rota.total, t * 4.2));
+    r.push({ x: p.x, z: p.z, ciclo: c });
+  }
+  return r;
+}
+function fugitivosNoMapa() {
+  if (!veFugitivos()) return [];
+  const r = ladroesEmFuga().map((l) => ({ icone: '🦹', nome: '🦹 Ladrão em fuga', x: l.x, z: l.z, ladrao: l.ciclo }));
+  for (const [id, x] of remotos) if (x.meta?.crimes > 0 && x.av) r.push({ icone: '🚨', nome: `🚨 ${x.meta.nome || 'Procurado'}`, x: x.av.raiz.position.x, z: x.av.raiz.position.z, jogador: id });
+  return r;
+}
+// o rastreio de um fugitivo acompanha ele andando
+function seguirFugitivoRastreado() {
+  if (!rastreio) return;
+  if (rastreio.ladrao !== undefined) { const l = ladroesEmFuga().find((x) => x.ciclo === rastreio.ladrao); if (l) { rastreio.x = l.x; rastreio.z = l.z; } else { rastrear(null); aviso('O ladrão sumiu do mapa (preso ou escapou).', 2.5); } }
+  else if (rastreio.jogador) { const x = remotos.get(rastreio.jogador); if (x?.av) { rastreio.x = x.av.raiz.position.x; rastreio.z = x.av.raiz.position.z; } }
+}
+
 // ================================================================= uniformes e símbolo do clã
 // Em serviço, cada corporação veste um colete e um boné/capacete com a cor dela, visíveis para todos:
 // Polícia azul-escuro, PRF preto com faixa amarela, Bombeiros vermelho com faixa refletiva, Hospital branco com cruz
@@ -6718,8 +6930,8 @@ function posicionarUniforme(av) {
   const alt = av.altura || 1.8, yaw = av.raiz.rotation.y;
   if (!U.ossos) {
     const r = av.raiz.position; U.colete.rotation.set(0, yaw, 0); U.chapeu.rotation.set(0, yaw, 0);
-    U.colete.position.set(r.x, r.y + alt * 0.62, r.z); U.colete.scale.set(0.115 * alt, alt * 0.26, 0.08 * alt);
-    U.chapeu.position.set(r.x, r.y + alt * 0.97, r.z); U.chapeu.scale.setScalar(0.068 * alt);
+    U.colete.position.set(r.x, r.y + alt * 0.62, r.z); U.colete.scale.set(0.16 * alt, alt * 0.3, 0.12 * alt);
+    U.chapeu.position.set(r.x, r.y + alt * 1.0, r.z); U.chapeu.scale.setScalar(0.1 * alt);
     return;
   }
   U.ossos.base.getWorldPosition(_ua); U.ossos.pescoco.getWorldPosition(_ub);
@@ -6728,14 +6940,14 @@ function posicionarUniforme(av) {
   const lado = _ux.crossVectors(cima, frente).normalize();
   _um.makeBasis(lado, cima, frente);
   U.colete.quaternion.setFromRotationMatrix(_um);
-  U.colete.position.copy(_ua).addScaledVector(cima, comp * 0.45);
-  U.colete.scale.set(0.115 * alt, comp * 1.25, 0.08 * alt);
+  U.colete.position.copy(_ua).addScaledVector(cima, comp * 0.5);
+  U.colete.scale.set(0.16 * alt, comp * 1.5, 0.12 * alt);   // largo e grosso: aparece por cima de qualquer roupa
   // boné/capacete: no alto da cabeça
   U.ossos.cabeca.getWorldPosition(_ua);
   if (U.ossos.topo) U.ossos.topo.getWorldPosition(_ub); else _ub.copy(_ua).addScaledVector(cima, 0.13 * alt);
-  U.chapeu.position.copy(_ua).lerp(_ub, 0.62);
+  U.chapeu.position.copy(_ua).lerp(_ub, 0.8);
   U.chapeu.quaternion.copy(U.colete.quaternion);
-  U.chapeu.scale.setScalar(0.068 * alt);
+  U.chapeu.scale.setScalar(0.1 * alt);   // maior que a cabeça: o capacete/boné fica à vista
 }
 // A farda: veste sozinha ao entrar no expediente e sai ao terminar. No vestiário do QG de cada trabalho dá para
 // vestir ou tirar quando quiser. A equipe (admin e moderadores) pode vestir qualquer uma.
@@ -6851,7 +7063,7 @@ function atualizarBandidos() {
     cr.n.bandido = { ciclo: c, rota: cr.rota, placa, loja: cr.loja }; cr.n.av.tocar('run', { fade: 0.2 });
     if (ultimoAlertaCrime !== c && papelDe(jogador.perfil) && ['policia', 'prf', 'exercito'].includes(papelDe(jogador.perfil))) {
       ultimoAlertaCrime = c; aviso('🚨 Assalto numa loja! O ladrão está fugindo pelas ruas: prenda ele (+300).', 5);
-      rastrear({ nome: '🦹 Ladrão em fuga', x: cr.loja.x, z: cr.loja.z });
+      rastrear({ nome: '🦹 Ladrão em fuga', x: cr.loja.x, z: cr.loja.z, ladrao: c });
     }
   }
 }
