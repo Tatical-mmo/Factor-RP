@@ -708,3 +708,11 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - 🏭 Transportadoras de nível 1 a 4 usam o prédio novo. Fábricas de nível 5 a 9 usam o galpão com a frente aberta, mostrando a esteira e os braços robóticos.
 - O terminal de passageiros e o hangar continuam os de antes: os modelos novos não ficaram bons (e as colunas da cobertura grande da rodoviária caíam em cima das faixas dos ônibus).
 - Sem SQL nesta versão.
+
+## Versão 13/11 (a) · primeira pessoa com mãos e cabines
+- 👁️ A pé, na primeira pessoa, a câmera fica na cabeça do personagem, um pouco à frente do rosto. Aparecem os braços, as mãos e a arma (socar, carregar caixa, atirar). Chapéu, capacete e etiqueta do nome somem só para você.
+- 🚗 No carro: o olho fica dentro da cabine e o capô aparece pelo para-brisa, com colunas, painel e volante desenhados na frente.
+- 🚌 No ônibus e 🚚 no caminhão: posição do motorista atrás do para-brisa, com a moldura (no ônibus, a coluna do meio e o letreiro por dentro), painel e volante.
+- ✈️ No avião e 🚁 no helicóptero: olho em cima do nariz, então o bico aparece embaixo da visão, com a moldura da cabine.
+- Arrastando para virar a cabeça, o painel some; ao olhar para a frente de novo, ele volta.
+- Sem SQL nesta versão.
