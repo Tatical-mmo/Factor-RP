@@ -7008,7 +7008,7 @@ function vestir(av, papel) {
   let preso = false;
   if (glb && ossos) {
     if (!av._medidas) {   // mede uma vez por personagem
-      const tronco = achados.spine2 || achados.spine1 || achados.spine;
+      const tronco = achados.spine1 || achados.spine || achados.spine2;   // osso do meio da coluna: o colete gira em torno do próprio centro e não balança para trás ao andar
       av._medidas = {
         tronco, cabeca: ossos.cabeca,
         mt: medirParte(av.modelo, tronco, (b) => /spine\d?$/i.test((b.name || '').replace(/[^a-z0-9]/gi, ''))),
