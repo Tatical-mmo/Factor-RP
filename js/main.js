@@ -7496,6 +7496,7 @@ function atualizarOnibus(dt) {
   }
   for (let k = n; k < onibusNpc.length; k++) { onibusNpc[k].ativo = false; onibusNpc[k].mesh.visible = false; }
   if (minhaVolta) atualizarMinhaVolta(dt, t);
+  animarRota(dt);
   atualizarFiscal(dt, t);
   // motor: o seu (dirigindo ou de passageiro) ou o do sistema que passa perto
   let vol = jogador.carro?.servico === 'onibus' || jogador.onibus ? 0.5 : 0;
@@ -7584,8 +7585,49 @@ function pontoMinhaVolta(v) {
   const p = v.L.pontos[v.prox]; return { ...pontoCaminho(v.L, p.s), nome: p.nome };
 }
 function guiarProxima() { const v = minhaVolta; if (!v) return; const q = pontoMinhaVolta(v); rastrear({ nome: `🚏 ${q.fim ? 'Fim: ' : ''}${q.nome}`, x: q.x, z: q.z }); }
+// ---- linha amarela no chão: mostra ao motorista (e na prova da autoescola) por onde ir até o próximo ponto
+let rotaMesh = null, rotaTex = null, tempoRota = 0;
+function texturaRota() {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = 'rgba(255,210,62,.55)'; g.fillRect(0, 0, 64, 64);
+  g.strokeStyle = '#fff3b0'; g.lineWidth = 9; g.lineCap = 'round'; g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(12, 46); g.lineTo(32, 18); g.lineTo(52, 46); g.stroke();   // seta apontando para frente
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function desenharRota(pts) {
+  if (pts.length < 2) { esconderRota(); return; }
+  if (!rotaTex) rotaTex = texturaRota();
+  const pos = [], uv = [], idx = []; let acum = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)], dx = b[0] - a[0], dz = b[1] - a[1], d = Math.hypot(dx, dz) || 1, nx = -dz / d * 0.55, nz = dx / d * 0.55;
+    if (i) acum += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    const y = alturaChao(pts[i][0], pts[i][1]) + 0.1;
+    pos.push(pts[i][0] + nx, y, pts[i][1] + nz, pts[i][0] - nx, y, pts[i][1] - nz); uv.push(0, acum / 1.6, 1, acum / 1.6);
+    if (i) { const k = (i - 1) * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx);
+  if (!rotaMesh) { rotaMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: rotaTex, transparent: true, depthWrite: false, toneMapped: false, side: THREE.DoubleSide })); rotaMesh.renderOrder = 4; rotaMesh.frustumCulled = false; scene.add(rotaMesh); }
+  else { rotaMesh.geometry.dispose(); rotaMesh.geometry = geo; }
+  rotaMesh.visible = true;
+}
+function esconderRota() { if (rotaMesh) rotaMesh.visible = false; }
+function animarRota(dt) { if (rotaTex && rotaMesh?.visible) rotaTex.offset.y -= dt * 1.4; }
+// trecho do caminho da linha entre onde o motorista está e o próximo ponto
+function rotaDaVolta(v) {
+  const L = v.L; let melhor = v.s ?? 0, dm = Infinity;
+  for (let s = Math.max(0, (v.s ?? 0) - 25); s <= Math.min(L.L, (v.s ?? 0) + 90); s += 1) { const q = pontoCaminho(L, s), d = Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z); if (d < dm) { dm = d; melhor = s; } }
+  if (dm > 25) {   // saiu muito do caminho: procura na linha toda
+    for (let s = 0; s <= L.L; s += 2) { const q = pontoCaminho(L, s), d = Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z); if (d < dm) { dm = d; melhor = s; } }
+  }
+  v.s = melhor;
+  const alvo = v.prox < L.pontos.length ? L.pontos[v.prox].s : L.sFila, pts = [[jogador.pos.x, jogador.pos.z]];
+  for (let s = Math.min(alvo, v.s + 3); s < alvo && s < v.s + 450; s += 2) { const q = pontoCaminho(L, s); pts.push([q.x, q.z]); }
+  const f = pontoCaminho(L, Math.min(alvo, v.s + 450)); pts.push([f.x, f.z]);
+  return pts;
+}
 function atualizarMinhaVolta(dt, t) {
   const v = minhaVolta;
+  if ((tempoRota -= dt) <= 0) { tempoRota = 0.25; desenharRota(rotaDaVolta(v)); }
   if (!jogador.carro || jogador.carro.mesh !== v.mesh) { encerrarVolta('Você largou o ônibus: a volta foi cancelada.'); return; }
   const e = t - v.saida;
   if (!v.saiu) {   // na plataforma, antes do horário
@@ -7620,7 +7662,7 @@ async function pagarVolta() {
 function encerrarVolta(msg) {
   const v = minhaVolta; if (!v) return; minhaVolta = null;
   if (jogador.carro?.mesh === v.mesh) { const c = jogador.carro; jogador.carro = null; modoVolante(false); jogador.avatar.raiz.visible = true; const lx = Math.cos(jogador.yaw) * 2.4, lz = -Math.sin(jogador.yaw) * 2.4; jogador.pos.x += lx; jogador.pos.z += lz; resolverColisao(jogador.pos, jogador.raio); c.mesh = null; }
-  scene.remove(v.mesh); rastrear(null); conexao?.rastrear(metaPresenca());
+  scene.remove(v.mesh); rastrear(null); esconderRota(); conexao?.rastrear(metaPresenca());
   if (msg) aviso(msg, 3);
 }
 // ---- fiscal da rodoviária: registra os ônibus que não saíram no horário (do sistema e de motoristas jogadores)
@@ -7797,7 +7839,7 @@ async function encerrarAula(passou, msg) {
     else jogador.pos.x += 3;
     resolverColisao(jogador.pos, jogador.raio); jogador.avatar.raiz.visible = true;
   }
-  rastrear(null);
+  rastrear(null); esconderRota();
   if (!passou) { aviso(`❌ ${msg || 'Reprovado.'} Pague a aula de novo para tentar outra vez.`, 5); return; }
   try {
     const h = await rede.autoescola.concluir(a.cat); if (jogador.perfil) jogador.perfil.habilitacoes = h;
@@ -7818,6 +7860,7 @@ function atualizarAula(dt) {
   if (a.batidas >= 3) { encerrarAula(false, 'Bateu 3 vezes.'); return; }
   const p = C.pontos[a.i], d = Math.hypot(p[0] - jogador.pos.x, p[1] - jogador.pos.z);
   if (!rastreio) proximoPontoAula();
+  if ((tempoRota -= dt) <= 0) { tempoRota = 0.25; const pts = []; for (let k = 0; k <= 1.001; k += Math.min(1, 2 / Math.max(2, d))) pts.push([jogador.pos.x + (p[0] - jogador.pos.x) * k, jogador.pos.z + (p[1] - jogador.pos.z) * k]); desenharRota(pts); }
   if (d > 8) { a.parado = 0; return; }
   if (p[2] === 'parar') {
     if (Math.abs(a.veiculo.vel) > 0.5) { a.parado = 0; return; }

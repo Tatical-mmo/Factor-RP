@@ -630,3 +630,8 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
   - Avião: farol de pouso iluminando a pista à frente. Helicóptero: holofote iluminando o chão embaixo.
 - 📻 O rádio da torre agora só aparece para quem está na torre e para quem está num avião perto do aeroporto (decolando ou pousando).
 - SQL desta versão: **59_fiscal_autoescola.sql**.
+
+## Versão 12/11 (r) · rota amarela no chão
+- 🟨 O motorista de ônibus vê uma faixa amarela no asfalto, com setas andando, mostrando o caminho da linha até o próximo ponto (e no fim, até a fila da plataforma). Ela acompanha o ônibus e, se ele sair do caminho, volta a apontar para a rota.
+- Na prova da autoescola a faixa aponta para o próximo ponto 📍.
+- Sem SQL nesta versão.
