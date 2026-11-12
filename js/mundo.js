@@ -753,6 +753,7 @@ const _ray = new THREE.Ray(), _box = new THREE.Box3();
 let tempoOclusao = 0;
 function definirCorte(i, cortar) {
   const e = edificios[i];
+  if (cortar && em3d.has(i)) { em3d.delete(i); refazer3d = true; }
   malhaPredios.setMatrixAt(i, matrizPredio(e, cortar ? Math.min(e.h, 2.2) : e.h));
   if (idxTelha.has(i)) malhaTelhas.setMatrixAt(idxTelha.get(i), matrizTelha(e, !cortar));
   for (const k of e.det) malhaDet.setMatrixAt(k, matrizDet(detalhes[k], !cortar));
@@ -777,6 +778,78 @@ export function atualizarOclusao(dt, pos, dirCamera) {
   for (const i of cortados) if (!agora.has(i)) { definirCorte(i, false); cortados.delete(i); mudou = true; }
   for (const i of agora) if (!cortados.has(i)) { definirCorte(i, true); cortados.add(i); mudou = true; }
   if (mudou) { malhaPredios.instanceMatrix.needsUpdate = true; malhaTelhas.instanceMatrix.needsUpdate = true; malhaDet.instanceMatrix.needsUpdate = true; }
+  if (refazer3d) { tempo3d = 0; refazer3d = false; }
+}
+
+// ---------------------------------------------------------------- prédios 3D (GLB) perto do jogador
+// Os prédios e casas mais perto trocam a caixa pelo modelo 3D do tipo (casa, sobrado, residencial, escritório, galpão),
+// esticado para o tamanho do lote e virado para a rua. Os de longe continuam caixas leves. Quantos e até onde depende da
+// qualidade gráfica (Baixa = nenhum). Prédio cortado (tapando o jogador na câmera de cima) volta a ser caixa cortada.
+const em3d = new Map();   // índice do prédio -> tipo do modelo
+let refazer3d = false, tempo3d = 0, modelos3d = null;
+export function ativarPredios3d(mapa) {   // mapa: nome -> cena do GLB
+  modelos3d = {};
+  for (const [nome, cena] of Object.entries(mapa)) {
+    let malha = null; cena.updateMatrixWorld(true); cena.traverse((o) => { if (o.isMesh && !malha) malha = o; }); if (!malha) continue;
+    const geo = malha.geometry.clone();
+    for (const k of Object.keys(geo.attributes)) {   // posição quantizada (inteiros) vira float antes de transformar
+      const a = geo.attributes[k]; if (a.array instanceof Float32Array) continue;
+      const f = new Float32Array(a.count * a.itemSize), get = ['getX', 'getY', 'getZ', 'getW']; for (let i = 0; i < a.count; i++) for (let c = 0; c < a.itemSize; c++) f[i * a.itemSize + c] = a[get[c]](i);
+      geo.setAttribute(k, new THREE.BufferAttribute(f, a.itemSize));
+    }
+    geo.applyMatrix4(new THREE.Matrix4().copy(cena.matrixWorld).invert().multiply(malha.matrixWorld));
+    geo.computeBoundingBox();
+    const mat = [].concat(malha.material)[0];
+    const im = new THREE.InstancedMesh(geo, mat, 28); im.count = 0; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; ctx.scene.add(im);
+    modelos3d[nome] = im;
+  }
+  tempo3d = 0;
+}
+// que modelo usar e para onde o prédio olha (a rua mais perto do lote)
+function tipo3d(e) {
+  if (e.y === 0) return null;                                        // horizonte: longe demais, fica caixa
+  if (e.tipo === 'casa') return e.h > 4 ? 'predio_sobrado' : (Math.round(e.x * 7 + e.z * 3) % 2 ? 'predio_casa1' : 'predio_casa2');
+  if (e.loja === false && e.w > 30) return 'predio_galpao';
+  if (e.w >= 28 && e.d >= 22 && e.h >= 30 && e.loja === false) return null;   // prédio de apartamentos especial (tem portaria própria)
+  return e.h <= 15 ? 'predio_residencial' : 'predio_escritorio';
+}
+function rumo3d(e) {
+  const i = Math.round((e.x - quadC(0)) / PASSO), j = Math.round((e.z - quadC(0)) / PASSO), dx = e.x - quadC(i), dz = e.z - quadC(j);
+  if (Math.abs(dz) >= Math.abs(dx) - 0.5) return dz >= 0 ? 0 : Math.PI;
+  return dx >= 0 ? Math.PI / 2 : -Math.PI / 2;
+}
+export function predios3dPerto(px, pz, dt) {
+  if (!modelos3d || !malhaPredios) return;
+  if ((tempo3d -= dt) > 0) return; tempo3d = 0.7;
+  const q = ctx.qualidade?.() || 'medio', max = q === 'alto' ? 22 : q === 'medio' ? 10 : 0, raio = q === 'alto' ? 150 : 95;
+  const perto = [];
+  if (max) for (const k of chaves(px - raio, pz - raio, px + raio, pz + raio)) for (const i of gradeEd.get(k) || []) {
+    const e = edificios[i]; if (cortados.has(i)) continue; const t = tipo3d(e); if (!t || !modelos3d[t]) continue;
+    const d = Math.hypot(e.x - px, e.z - pz); if (d < raio) perto.push([d, i, t]);
+  }
+  perto.sort((a, b) => a[0] - b[0]);
+  const novo = new Map(); const conta = {};
+  for (const [, i, t] of perto) { if (novo.has(i)) continue; conta[t] = conta[t] || 0; if (novo.size >= max || conta[t] >= 28) continue; novo.set(i, t); conta[t]++; }
+  // os que saíram voltam a ser caixa; os que entraram escondem a caixa (e telhado / detalhes)
+  const mostrar = (i, vis) => {
+    const e = edificios[i];
+    malhaPredios.setMatrixAt(i, vis ? matrizPredio(e, cortados.has(i) ? Math.min(e.h, 2.2) : e.h) : _m.makeScale(0, 0, 0));
+    if (idxTelha.has(i)) malhaTelhas.setMatrixAt(idxTelha.get(i), matrizTelha(e, vis && !cortados.has(i)));
+    for (const k of e.det) malhaDet.setMatrixAt(k, matrizDet(detalhes[k], vis && !cortados.has(i)));
+  };
+  for (const i of em3d.keys()) if (!novo.has(i)) mostrar(i, true);
+  for (const i of novo.keys()) if (!em3d.has(i)) mostrar(i, false);
+  em3d.clear(); for (const [i, t] of novo) em3d.set(i, t);
+  malhaPredios.instanceMatrix.needsUpdate = true; malhaTelhas.instanceMatrix.needsUpdate = true; malhaDet.instanceMatrix.needsUpdate = true;
+  const n = {}; for (const t of Object.keys(modelos3d)) n[t] = 0;
+  for (const [i, t] of em3d) {
+    const e = edificios[i], ang = rumo3d(e), lado = Math.abs(Math.sin(ang)) > 0.5;
+    const h = e.tipo === 'casa' ? e.h + 1.5 : e.h;
+    _q.setFromAxisAngle(_v.set(0, 1, 0), ang);
+    _m.compose(_v.set(e.x, e.y, e.z), _q, _e.set(lado ? e.d : e.w, h, lado ? e.w : e.d));
+    modelos3d[t].setMatrixAt(n[t]++, _m);
+  }
+  for (const [t, im] of Object.entries(modelos3d)) { im.count = n[t]; im.instanceMatrix.needsUpdate = true; }
 }
 
 // ---------------------------------------------------------------- minimapa (em metros; o chamador já aplicou a escala)

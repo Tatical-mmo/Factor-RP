@@ -2042,8 +2042,8 @@ async function iniciarJogo(perfil) {
   await Promise.all(carregamentos);
   montarQuarteiroes();
   montarPlacasRuas();
-  sedes.iniciar({ scene, texturaCanvas });
-  mundo.montar({ scene, texturaCanvas, ruido, textoSprite, modelo: (n) => modelos[n] });
+  sedes.iniciar({ scene, texturaCanvas, modelo: (n) => modelos[n] });
+  mundo.montar({ scene, texturaCanvas, ruido, textoSprite, modelo: (n) => modelos[n], qualidade: () => visual.nivelAtual() });
   ferrovia.montar({ scene, textoSprite, modelo: (n) => modelos[n] });
   clima.iniciar({ scene, alturaChao, naRua, mudou: (t) => { if (jogador.avatar) aviso(t === 'limpo' ? '☀️ O tempo abriu.' : { chuva: '🌧️ Começou a chover.', tempestade: '⛈️ Tempestade chegando! Fique atento aos raios.', neve: '❄️ Começou a nevar.' }[t], 3.5); } });
   carregarClima();
@@ -2052,6 +2052,9 @@ async function iniciarJogo(perfil) {
   mundo.finalizar();
   // objetos de rua em 3D (leves): bancos de praça, hidrantes e semáforos — carregam em segundo plano
   for (const n of ['banco', 'hidrante', 'semaforo']) Promise.resolve(carregarGLB(`assets/modelos/prop_${n}.glb`)).then((g) => { if (g?.scene) mundo.montarProps(n, g.scene, scene); }).catch(() => {});
+  // prédios 3D (perto do jogador): carregam em segundo plano
+  { const nomes = ['predio_casa1', 'predio_casa2', 'predio_sobrado', 'predio_residencial', 'predio_escritorio', 'predio_galpao'];
+    Promise.all(nomes.map((n) => Promise.resolve(carregarGLB(`assets/modelos/${n}.glb`)).then((g) => [n, g?.scene]).catch(() => [n, null]))).then((l) => { const m = Object.fromEntries(l.filter(([, c]) => c)); if (Object.keys(m).length) mundo.ativarPredios3d(m); }); }
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
   civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n] });
@@ -5463,6 +5466,7 @@ function quadro() {
   mundo.carrosPerto(foco().x, foco().z, dt);
   mundo.arvoresPerto(foco().x, foco().z, dt);
   mundo.propsPerto(foco().x, foco().z, dt);
+  mundo.predios3dPerto(foco().x, foco().z, dt);
   sedes.atualizar(dt);
   if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); checarTrem(); atualizarArmaPd(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
   atualizarJogador(dt);

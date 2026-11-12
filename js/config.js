@@ -46,7 +46,7 @@ export const MODELOS = [
   'bancada', 'base_cla', 'loja', 'delegacia', 'transportadora', 'casa', 'empresa', 'arvore', 'poste',
   'van', 'helicoptero', 'carro_popular', 'carro_suv', 'carro_esportivo', 'carro_presidencial', 'robo_motorista', 'ambulancia', 'caminhao_bombeiros',
   'exercito_jipe', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero_executivo', 'trem', 'navio', 'arvore_comum', 'arvore_pinheiro', 'arvore_palmeira',
-  'tanque', 'onibus_grande', 'onibus_urbano', 'onibus_executivo', 'onibus_executivo2', 'onibus_dois_andares', 'caminhao_lixo', 'prop_arvore', 'prop_pinheiro', 'aviao_pequeno', 'aviao_medio', 'aviao_grande', 'arma_policia', 'arma_prf', 'arma_exercito', 'arma_militar', 'arma_grande_porte',
+  'tanque', 'onibus_grande', 'onibus_urbano', 'onibus_executivo', 'onibus_executivo2', 'onibus_dois_andares', 'caminhao_lixo', 'prop_arvore', 'prop_pinheiro', 'empresa_f1', 'empresa_f2', 'empresa_f3', 'aviao_pequeno', 'aviao_medio', 'aviao_grande', 'arma_policia', 'arma_prf', 'arma_exercito', 'arma_militar', 'arma_grande_porte',
 ];
 
 // Cidade central: grade de quarteirões

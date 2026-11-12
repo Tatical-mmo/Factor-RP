@@ -3,6 +3,7 @@
 // 10–14: complexo industrial: docas extras, escritório no telhado, chaminés e linha de produção
 //  15:   sede gigante: torre de vidro sobre o galpão, 4 docas e linha de produção dupla
 // O lote tem 19 x 19 m; a frente (rua) fica em +Z e o pátio dos caminhões atrás (−Z).
+// Quando existe o modelo 3D da fase (empresa_f1..f3), ele substitui o prédio; docas, pátio e heliporto continuam por código.
 import * as THREE from 'three';
 
 const XL = -9.3, XR = 6.1;            // largura útil (à direita fica o corredor dos caminhões)
@@ -97,9 +98,12 @@ export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0 }) {
   materiais();
   const f = fase(nivel), n = docasDaFase(f), cor = corDaEmpresa(id);
   const g = new THREE.Group(); g.position.set(x, 0.18, z);
-  const D = f === 1 ? 9 : 10, H = f === 1 ? 7 : f === 2 ? 8 : 9, W = XR - XL, cx = (XL + XR) / 2;
+  const D = f === 1 ? 9 : 10, W = XR - XL, cx = (XL + XR) / 2;
+  let H = f === 1 ? 7 : f === 2 ? 8 : 9;
   const zw = FRENTE - D;                         // parede de trás (docas)
   const anima = [];
+  const glb = f >= 1 && ctx.modelo?.(`empresa_f${f}`);
+  if (glb) return construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, id, cor, helis, anima });
   // galpão: chão, paredes de zinco, telhado e faixa da cor da empresa
   caixa(g, M.piso, W, 0.1, D, cx, 0.05, zw + D / 2);
   caixa(g, M.zinco, W, H, 0.25, cx, H / 2, zw + 0.12, 3);                          // fundo
@@ -172,6 +176,44 @@ export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0 }) {
   return {
     grupo: g, mats, docas, heliportos, altura: H, topo,
     caixa: new THREE.Box3(new THREE.Vector3(x + XL, 0, z + zw - 1.2), new THREE.Vector3(x + XR, topo, z + FRENTE)),
+    remover: () => { reg.vivo = false; vivas.delete(reg); ctx.scene.remove(g); },
+  };
+}
+// prédio da fase em 3D (GLB normalizado: caixa de 1 x 1 x 1, frente em +Z), esticado para o lote
+const ALT_GLB = { 1: 0.48, 2: 0.594, 3: 1.261 * 1.6 };
+function construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, id, cor, helis, anima }) {
+  caixa(g, M.piso, W, 0.1, D, cx, 0.05, zw + D / 2);
+  const m = glb.clone(true), alt = W * ALT_GLB[f];
+  m.position.set(cx, 0, zw + D / 2); m.scale.set(W, alt, D); m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); g.add(m);
+  const faixaMat = new THREE.MeshStandardMaterial({ color: cor, roughness: 0.5, metalness: 0.2 });
+  caixa(g, faixaMat, W * 0.6, 0.6, 0.12, cx, Math.min(alt - 0.8, 5.2), FRENTE + 0.08);   // placa com a cor da empresa
+  // docas no fundo
+  const docas = [];
+  for (let k = 0; k < n; k++) {
+    const dx = XL + W * (k + 0.5) / n;
+    caixa(g, M.concreto, 3.4, 1.1, 1.2, dx, 0.55, zw - 0.6);
+    caixa(g, M.listra, 3.4, 0.14, 0.06, dx, 1.04, zw - 1.22);
+    caixa(g, M.borracha, 3.4, 3.7, 0.2, dx, 2.95, zw - 0.05);
+    caixa(g, M.porta, 2.9, 3.0, 0.12, dx, 2.65, zw - 0.17);
+    caixa(g, M.luz, 0.5, 0.14, 0.3, dx, 4.6, zw - 0.25);
+    docas.push({ x: x + dx, z: z + zw - 1.2 - 3.75 });
+  }
+  // altura do telhado onde fica o heliporto (o modelo pode ter alturas diferentes): raio de cima para baixo
+  g.position.set(x, 0.18, z); g.updateMatrixWorld(true);
+  const rc = new THREE.Raycaster(), teto = (lx, lz) => { rc.set(new THREE.Vector3(x + lx, 300, z + lz), new THREE.Vector3(0, -1, 0)); const h = rc.intersectObject(m, true)[0]; return h ? h.point.y - 0.18 : alt; };
+  const heliportos = [];
+  for (let k = 0; k < Math.min(2, helis); k++) {
+    const hx = XR - 2.9, hz = zw + 2.7 + k * 4.7, hy = teto(hx, hz);
+    caixa(g, M.escuro, 4.6, 0.12, 4.6, hx, hy + 0.06, hz);
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2).rotateX(-Math.PI / 2), M.heli); pad.position.set(hx, hy + 0.13, hz); g.add(pad);
+    heliportos.push({ x: x + hx, z: z + hz, y: 0.18 + hy + 0.15 });
+  }
+  ctx.scene.add(g); g.updateMatrixWorld(true);
+  const reg = { anima, vivo: true }; vivas.add(reg);
+  const mats = []; g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); mats.push(o.material); } });
+  return {
+    grupo: g, mats, docas, heliportos, altura: Math.min(alt, 9), topo: alt,
+    caixa: new THREE.Box3(new THREE.Vector3(x + XL, 0, z + zw - 1.2), new THREE.Vector3(x + XR, alt, z + FRENTE)),
     remover: () => { reg.vivo = false; vivas.delete(reg); ctx.scene.remove(g); },
   };
 }

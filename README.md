@@ -684,3 +684,13 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Nas câmeras 3D os prédios não são mais cortados, e os botões ⟲ ⟳ giram 45°.
 - 🏭 Os galpões de Porto Sul que invadiam as ruas agora ficam dentro do quarteirão.
 - Sem SQL nesta versão.
+
+## Versão 12/11 (x) · prédios 3D e sedes das empresas em 3D
+- 🏙️ Os prédios e casas mais perto do jogador trocam a caixa pelo modelo 3D do tipo, esticado para o tamanho do lote e virado para a rua. Os de longe continuam caixas leves:
+  - casa térrea (dois modelos que se alternam) e sobrado;
+  - prédio residencial (até ~15 m) e prédio de escritórios de vidro (os mais altos);
+  - galpão.
+- A quantidade depende da qualidade gráfica: Baixa = nenhum; Média = até 10 num raio de 95 m; Alta = até 22 num raio de 150 m.
+- Na câmera de cima, um prédio que tapa o personagem volta a ser a caixa cortada, como antes.
+- 🏭 Sedes das empresas em 3D por fase: galpão (níveis 5–9), complexo com chaminés (10–14) e sede com torre de vidro (15). Docas, pátio dos caminhões e heliporto continuam iguais; uma placa na frente leva a cor da empresa.
+- Sem SQL nesta versão.
