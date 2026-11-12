@@ -757,3 +757,21 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
   - sair da pista acima de 16 m/s é acidente.
 - O painel de voo mostra a altura e a velocidade vertical.
 - O som do avião agora só é ouvido por quem está do lado de fora. O piloto e os passageiros ficam em silêncio.
+
+## Versão 13/11 · rodas (20261113g)
+
+- **Rodas que giram** nos carros, ônibus, caminhões e no jipe e no caminhão do Exército, conforme o veículo anda. Elas giram para trás na ré, e as da frente viram nas curvas. Há cinco estilos:
+  - aro de liga prateado (popular e presidencial);
+  - aro escuro esportivo com pinça vermelha (esportivo);
+  - aro grafite de 6 raios com pneu de cravos (SUV e ambulância);
+  - aro de aço com furos e porcas (ônibus e caminhões);
+  - aro verde-oliva com pneu de cravos (Exército).
+- A roda original do modelo é apagada só dentro do círculo da roda nova, na hora de carregar. Os arquivos .glb dos veículos não foram alterados. As rodas novas ficam em `assets/modelos/roda_*.glb`.
+- **Embaixo do veículo** não fica mais oco: tem assoalho escuro, caixas de roda, motor/cárter, escapamento e tanque, e nos pesados também eixos e diferencial.
+- Os veículos longe usam uma roda simples e não giram, para não pesar no celular.
+- **Primeira pessoa:**
+  - cada veículo tem a posição do motorista medida no próprio modelo, e aparece o capô do carro que você dirige;
+  - o painel não tampa mais a vista;
+  - o volante fica à esquerda, e o console e o retrovisor ficam para a direita;
+  - o popular, o jipe e os caminhões usam o interior do próprio modelo.
+- **Jipe:** os vidros opacos do para-brisa foram tirados, e o motorista aparece sentado (você e os outros jogadores).

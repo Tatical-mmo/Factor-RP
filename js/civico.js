@@ -1,5 +1,6 @@
 // Prefeitura, concessionária, outdoors e modelos de carro (tudo feito por código).
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 let ctx = null;
 export const PREFEITURA = { x: -135, z: -135, porta: { x: -135, z: -120.5 }, prf: { x: -146, z: -115 }, jornal: { x: -124, z: -115 } };
@@ -156,6 +157,8 @@ export const CARROS = {
 };
 // quantos passageiros cada veículo leva (além do motorista); veículos do Exército só levam militares
 export const LUGARES = { tanque: 1, militar: 3, exercito_caminhao: 8, helicoptero_exercito: 6, helicoptero: 4, suv: 3, popular: 3, esportivo: 1, presidencial: 3 };
+// veículos abertos: o motorista aparece sentado (banco: altura e posição no modelo, motorista do lado esquerdo)
+export const ABERTOS = { militar: { banco: [1.02, -0.62] } };
 export const DO_EXERCITO = new Set(['militar', 'exercito_caminhao', 'helicoptero_exercito', 'tanque']);
 export const CORES_CARRO = ['#c0392b', '#2c3e50', '#ecf0f1', '#f1c40f', '#2980b9', '#16a085', '#8e44ad', '#1f1f1f', '#d35400'];
 
@@ -361,18 +364,113 @@ export function pontoNoCemiterio() {
   return { x: CEMITERIO.x - 16 + xi * 4 + 1.6, z: CEMITERIO.z - 12 + zi * 5.2 + 0.5 };
 }
 
+// tira do modelo os triângulos com os 3 vértices dentro de uma região (coordenadas do modelo inteiro);
+// a geometria é compartilhada pelas cópias, então isso é feito uma vez só por modelo
+export function removerTriangulos(g, dentro, marca) {
+  g.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), v = new THREE.Vector3(), m = new THREE.Matrix4();
+  g.traverse((o) => {
+    if (!o.isMesh || !o.geometry?.index || o.geometry.userData[marca]) return;
+    const geo = o.geometry, pos = geo.attributes.position, idx = geo.index, fica = [];
+    m.multiplyMatrices(inv, o.matrixWorld);
+    const ok = new Uint8Array(pos.count); for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(m); ok[i] = dentro(v.x, v.y, v.z) ? 1 : 0; }
+    for (let t = 0; t < idx.count; t += 3) { const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2); if (!(ok[a] && ok[b] && ok[c])) fica.push(a, b, c); }
+    geo.setIndex(fica); geo.userData[marca] = true;
+  });
+}
+// jipe: os vidros do para-brisa são opacos no modelo e tapavam a vista do motorista; fica só a moldura
+const VIDRO_JIPE = (x, y, z) => Math.abs(x) > 0.055 && Math.abs(x) < 0.8 && y > 1.5 && y < 2.01 && z > 0.35 && z < 0.95;
+// rodas que giram: posição de cada eixo medida no modelo (z, raio), altura do centro (cy) e as faces de fora/dentro
+// da roda (xo/xi, lado esquerdo; o direito é espelhado). A roda original do modelo é apagada dentro desse cilindro.
+export const RODAS = {
+  carro_popular: { estilo: 'carro', eixos: [[-1.22, 0.345], [1.17, 0.345]], cy: 0.35, xo: 0.87, xi: 0.6 },
+  carro_suv: { estilo: 'suv', eixos: [[-1.33, 0.42], [1.47, 0.42]], cy: 0.42, xo: 0.99, xi: 0.71 },
+  carro_esportivo: { estilo: 'esporte', eixos: [[-1.19, 0.36], [1.31, 0.36]], cy: 0.36, xo: 1.0, xi: 0.71 },
+  carro_presidencial: { estilo: 'carro', eixos: [[-1.85, 0.44], [2.12, 0.44]], cy: 0.44, xo: 1.23, xi: 0.85 },
+  exercito_jipe: { estilo: 'militar', eixos: [[-1.08, 0.46], [1.34, 0.46]], cy: 0.45, xo: 0.97, xi: 0.59 },
+  ambulancia: { estilo: 'suv', eixos: [[-1.58, 0.47], [1.78, 0.47]], cy: 0.47, xo: 1.4, xi: 0.94 },
+  caminhao_bombeiros: { estilo: 'pesado', eixos: [[-2.35, 0.6], [2.45, 0.6]], cy: 0.6, xo: 1.76, xi: 1.21 },
+  caminhao: { estilo: 'pesado', eixos: [[-1.75, 0.5], [2.15, 0.5]], cy: 0.5, xo: 1.35, xi: 0.95 },
+  caminhao_lixo: { estilo: 'pesado', eixos: [[-1.95, 0.55], [2.92, 0.53]], cy: 0.54, xo: 0.96, xi: 0.72 },
+  exercito_caminhao: { estilo: 'militar', eixos: [[-2.15, 0.55], [-1.0, 0.55], [2.45, 0.55]], cy: 0.53, xo: 1.29, xi: 0.95 },
+  onibus_grande: { estilo: 'pesado', eixos: [[-2.55, 0.53], [3.3, 0.53]], cy: 0.52, xo: 1.2, xi: 0.85 },
+  onibus_urbano: { estilo: 'pesado', eixos: [[-2.7, 0.52], [3.7, 0.52]], cy: 0.53, xo: 1.27, xi: 0.78 },
+  onibus_executivo: { estilo: 'pesado', eixos: [[-2.42, 0.53], [3.3, 0.53]], cy: 0.53, xo: 1.17, xi: 0.78 },
+  onibus_executivo2: { estilo: 'pesado', eixos: [[-2.85, 0.55], [3.1, 0.55]], cy: 0.55, xo: 1.12, xi: 0.79 },
+  onibus_dois_andares: { estilo: 'pesado', eixos: [[-3.8, 0.48], [-2.78, 0.48], [2.68, 0.48], [3.75, 0.48]], cy: 0.48, xo: 1.14, xi: 0.81 },
+};
+const LARG_RODA = { carro: 0.30, esporte: 0.32, suv: 0.36, pesado: 0.30, militar: 0.38 };
+const comRodas = new Set();
+// embaixo do veículo (para não ficar oco): assoalho, caixas de roda, motor/cárter, escapamento, tanque, eixos e diferencial
+function geoChassi(nome, R, b) {
+  const { estilo, eixos, cy, xo, xi } = R, r = Math.max(...eixos.map((e) => e[1])), s = r / 0.35, xin = xi - 0.03;
+  const zs = eixos.map((e) => e[0]), zf = Math.max(...zs), zr = Math.min(...zs), alto = estilo === 'pesado' || estilo === 'militar', onibus = nome.startsWith('onibus');
+  const fb = cy * (alto ? 1.1 : 0.72), ft = cy * (alto ? 1.6 : 1.25);
+  const zmin = Math.max(b.min.z + 0.35, zr - r * (alto ? 2.2 : 1.25)), zmax = Math.min(b.max.z - 0.35, zf + r * (alto ? 1.6 : 1.25));
+  const ESC = [0.07, 0.075, 0.08], MET = [0.2, 0.21, 0.23], FER = [0.13, 0.135, 0.14], PRETO = [0.05, 0.05, 0.055], lista = [];
+  const add = (geo, cor) => { const n = geo.attributes.position.count, c = new Float32Array(n * 3); for (let i = 0; i < n; i++) c.set(cor, i * 3); geo.setAttribute('color', new THREE.BufferAttribute(c, 3)); if (geo.index) geo = geo.toNonIndexed(); geo.deleteAttribute('uv'); lista.push(geo); };
+  const caixa = (w, h, d, x, y, z, cor) => add(new THREE.BoxGeometry(w, h, d).translate(x, y, z), cor);
+  caixa(2 * xin, ft - fb, zmax - zmin, 0, (fb + ft) / 2, (zmin + zmax) / 2, ESC);                       // assoalho
+  for (const [z, rr] of eixos) for (const sg of [1, -1]) {
+    const L = (xo - 0.04) - (xi - 0.02);
+    add(new THREE.CylinderGeometry(rr * 1.09, rr * 1.09, L, 16, 1, true, -Math.PI * 0.62 + Math.PI / 2, Math.PI * 1.24).rotateZ(Math.PI / 2).translate(sg * ((xi - 0.02) + L / 2), cy, z), PRETO);   // caixa de roda
+    add(new THREE.CircleGeometry(rr * 1.1, 16).rotateY(Math.PI / 2).translate(sg * (xi - 0.02), cy, z), PRETO);   // fundo da caixa de roda
+  }
+  if (alto) for (const [z, rr] of eixos) { add(new THREE.CylinderGeometry(rr * 0.09, rr * 0.09, 2 * xin, 8).rotateZ(Math.PI / 2).translate(0, cy, z), MET); caixa(0.32 * s, 0.26 * s, 0.32 * s, 0, cy, z, MET); }
+  const ze = onibus ? zr - r * 2.2 : zf + r * 0.35;
+  caixa(xin * 1.2, cy * 0.7, r * 1.5, 0, fb + cy * 0.35 + 0.01, ze, MET);                               // motor / cárter
+  const z0 = onibus ? ze - r : zr - r * 1.2, z1 = onibus ? zmin + 0.2 : zf - r * 0.2;
+  add(new THREE.CylinderGeometry(0.035 * s, 0.035 * s, Math.abs(z1 - z0), 10).rotateX(Math.PI / 2).translate(-xin * 0.55, fb - 0.04 * s, (z0 + z1) / 2), FER);   // escapamento
+  caixa(xin * 0.6, 0.1 * s, 0.45 * s, xin * 0.3, fb - 0.03 * s, onibus ? (zr + zf) / 2 : zr + r * 1.6, FER);   // tanque
+  return mergeGeometries(lista);
+}
+let matChassi = null;
+function montarRodas(g, nome) {
+  const R = RODAS[nome], base = R && ctx?.modelo?.('roda_' + R.estilo); if (!base) return;
+  const { eixos, cy, xo, xi } = R, W = LARG_RODA[R.estilo], zf = Math.max(...eixos.map((e) => e[0]));
+  removerTriangulos(g, (x, y, z) => { const sx = Math.abs(x); if (sx < xi - 0.03 || sx > xo + 0.06) return false; for (const [ez, r] of eixos) if (Math.hypot(y - cy, z - ez) < r * 1.04) return true; return false; }, 'semRodas');
+  const b = new THREE.Box3().setFromObject(g);
+  const grupo = new THREE.Group(); grupo.name = 'rodas'; g.add(grupo);
+  matChassi ||= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0.1, side: THREE.DoubleSide });
+  const ch = new THREE.Mesh(geoChassi(nome, R, b), matChassi); ch.name = 'chassi'; grupo.add(ch);
+  for (const [z, r] of eixos) for (const sg of [1, -1]) {
+    const piv = new THREE.Object3D(); piv.position.set(sg * (xo + xi) / 2, cy, z); piv.userData.dianteira = z === zf && eixos.length > 1; grupo.add(piv);
+    const rd = base.clone(true); rd.scale.set(sg * (xo - xi) / (2 * W), r, r); rd.userData.raio = r; piv.add(rd);
+  }
+}
+// gira as rodas pelo quanto cada veículo andou (serve para o seu, os NPCs e os outros jogadores) e vira as da frente
+// nas curvas; de longe usa a roda simples e não gira
+const _pR = new THREE.Vector3();
+export function atualizarRodas(dt, cam) {
+  for (const m of comRodas) {
+    if (!m.parent) { comRodas.delete(m); continue; }
+    const gr = m.userData.grupoRodas || (m.userData.grupoRodas = m.getObjectByName('rodas')); if (!gr) { comRodas.delete(m); continue; }
+    m.getWorldPosition(_pR); const d = _pR.distanceTo(cam), perto = d < 45;
+    if (gr.userData.perto !== perto) { gr.userData.perto = perto; gr.traverse((o) => { if (o.name === 'perto') o.visible = perto; else if (o.name === 'longe') o.visible = !perto; }); }
+    const u = m.userData, ry = m.rotation.y;
+    if (!u.ultR) { u.ultR = _pR.clone(); u.ultY = ry; continue; }
+    const dx = _pR.x - u.ultR.x, dz = _pR.z - u.ultR.z; u.ultR.copy(_pR);
+    const dyaw = Math.atan2(Math.sin(ry - u.ultY), Math.cos(ry - u.ultY)); u.ultY = ry;
+    if (d > 120 || Math.hypot(dx, dz) > 6) continue;
+    const anda = dx * Math.sin(ry) + dz * Math.cos(ry);
+    const alvo = Math.abs(anda) > 0.004 ? THREE.MathUtils.clamp(Math.atan(dyaw * 2.6 / anda), -0.55, 0.55) : (u.esterco || 0);
+    u.esterco = (u.esterco || 0) + (alvo - (u.esterco || 0)) * Math.min(1, dt * 8);
+    for (const piv of gr.children) { if (piv.name === 'chassi') continue; const rd = piv.children[0]; if (rd) rd.rotation.x += anda / (rd.userData.raio || 0.4); if (piv.userData.dianteira) piv.rotation.y = u.esterco; }
+  }
+}
 // carros: frente em +Z, chão em y = 0
 const cacheCarro = new Map();
-export function modeloCarro(modelo, cor) { const o = modeloCarroBase(modelo, cor); if (o.getObjectByName('luzes')) comLuz.add(o); return o; }
+export function modeloCarro(modelo, cor) { const o = modeloCarroBase(modelo, cor); if (o.getObjectByName('luzes')) comLuz.add(o); if (o.getObjectByName('rodas')) comRodas.add(o); return o; }
 function modeloCarroBase(modelo, cor) {
   const chave = modelo + cor;
   if (cacheCarro.has(chave)) return cacheCarro.get(chave).clone();
   const base = ctx?.modelo?.(GLB_CARRO[modelo]);
   if (base) {   // modelo 3D: pinta de leve com a cor escolhida (o presidencial fica como é)
-    const g = base.clone(true);
+    const g = base.clone(true); g.userData.glb = GLB_CARRO[modelo];
+    if (modelo === 'militar') removerTriangulos(g, VIDRO_JIPE, 'semVidro');
     if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
     else if (SEM_TINTA.has(modelo)) { const sr = { ambulancia: [3.4, 0.9], bombeiros: [3.15, 2.5] }[modelo]; if (sr) sirene(g, sr); }
     else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), modelo.startsWith('onibus') ? 0.38 : modelo === 'caminhao_lixo' ? 0.12 : 0.45); } });
+    try { montarRodas(g, GLB_CARRO[modelo]); } catch (e) { console.warn('rodas:', modelo, e); }   // depois da pintura: as rodas e o chassi têm cor própria
     adicionarLuzes(g, modelo);
     cacheCarro.set(chave, g);
     return g.clone();

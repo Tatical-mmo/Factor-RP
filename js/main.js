@@ -2363,7 +2363,9 @@ function atualizarRemotos(dt) {
       r.carro.position.x += (a.x - r.carro.position.x) * kc; r.carro.position.y += (a.y - r.carro.position.y) * kc; r.carro.position.z += (a.z - r.carro.position.z) * kc;
       r.carro.rotation.y = suavizarAngulo(r.carro.rotation.y, a.r, dt * 10);
       if (mod === 'ambulancia' || mod === 'bombeiros') civico.atualizarSirenes(performance.now() / 1000, r.carro);
-      raiz.position.copy(r.carro.position); raiz.visible = false; r.av.mixer.update(dt); continue;
+      raiz.position.copy(r.carro.position); raiz.visible = false; r.av.mixer.update(dt);
+      if (sentarNoVeiculo(r.av, r.carro, mod)) { r.arma.visible = false; r.anim = 'idle'; }
+      continue;
     }
     if (r.carro) { scene.remove(r.carro); r.carro = null; r.carroId = null; raiz.visible = true; tempoCarros = 0; }
     if (!raiz.visible || Math.hypot(a.x - raiz.position.x, a.z - raiz.position.z) > 8) { raiz.position.set(a.x, a.y, a.z); raiz.visible = true; }
@@ -5181,7 +5183,7 @@ function atualizarJogador(dt) {
   if (j.voo) { seguirVoo(); return; }
   if (j.onibus) { seguirOnibus(); av.mixer.update(dt); return; }
   if (j.passageiro) { seguirComoPassageiro(); av.mixer.update(dt); return; }
-  if (j.carro) { if (!j.carro.taxi) dirigir(dt); av.mixer.update(dt); av.raiz.updateMatrixWorld(true); return; }
+  if (j.carro) { if (!j.carro.taxi) dirigir(dt); av.mixer.update(dt); if (!sentarNoVeiculo(av, j.carro.mesh, j.carro.modelo)) av.raiz.updateMatrixWorld(true); return; }
   if (correTropa) {
     if (forca > 0.15 || j.morto || j.trava > 0) pararTropa('Você saiu da corrida da tropa.');
     else { correrComTropa(dt); av.tocar('run', { velocidade: 0.8 }); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw; av.mixer.update(dt); av.raiz.updateMatrixWorld(true); return; }
@@ -5266,7 +5268,66 @@ function tipoCabine() {
 // olho do motorista / piloto, medido uma vez pelo modelo: no carro, dentro da cabine (o capô aparece pelo vidro);
 // no ônibus e no caminhão, logo atrás do para-brisa; no avião e no helicóptero, em cima do nariz (aparece o bico)
 const _rcOlho = new THREE.Raycaster();
+// posição do motorista e do capô medidas em cada modelo (coordenadas do modelo: frente em +Z, esquerda em +X):
+// olho = [altura, z]; capo = base do para-brisa [altura, z]; x = distância do centro até o motorista (esquerda);
+// interior = o modelo já tem painel e volante por dentro (não desenha a moldura); nada = sem moldura (tanque)
+const CABINE = {
+  carro_popular: { olho: [1.38, -0.05], interior: 1 },
+  exercito_jipe: { olho: [1.8, -0.5], interior: 1 },
+  carro_suv: { olho: [1.72, 0.25], capo: [1.38, 1.25] },
+  carro_esportivo: { olho: [1.07, -0.35], capo: [0.92, 0.65] },
+  carro_presidencial: { olho: [1.58, 0.6], capo: [1.28, 1.35] },
+  ambulancia: { olho: [2.2, 1.5], capo: [1.55, 2.25], x: 0.5 },
+  caminhao_bombeiros: { olho: [2.6, 2.9], capo: [1.9, 3.6], x: 0.75 },
+  caminhao: { olho: [2.55, 1.3], x: 0.65, interior: 1 },
+  caminhao_lixo: { olho: [2.55, 3.15], capo: [1.85, 3.85], x: 0.6 },
+  exercito_caminhao: { olho: [2.4, 2.2], x: 0.6, interior: 1 },
+  tanque: { olho: [3.05, -0.6], nada: 1 },
+  onibus_grande: { olho: [2.2, 4.6], capo: [1.15, 5.4], x: 0.7 },
+  onibus_urbano: { olho: [2.25, 5.0], capo: [1.05, 5.75], x: 0.7 },
+  onibus_executivo: { olho: [2.35, 4.9], capo: [1.2, 5.6], x: 0.7 },
+  onibus_executivo2: { olho: [2.3, 4.9], capo: [1.2, 5.7], x: 0.7 },
+  onibus_dois_andares: { olho: [2.1, 5.2], capo: [1.0, 5.9], x: 0.7 },
+};
+function caixaDoModelo(mesh) {
+  if (!mesh.userData.caixa) {
+    const r = mesh.rotation.clone(), p = mesh.position.clone(); mesh.rotation.set(0, 0, 0); mesh.position.set(0, 0, 0); mesh.updateMatrixWorld(true);
+    const luz = (o) => { for (let x = o; x; x = x.parent) if (x.name === 'luzes' || x.name === 'giroflex' || x.name === 'rotor' || x.name === 'rodas') return true; return false; };
+    const b = new THREE.Box3(); mesh.traverse((o) => { if (o.isMesh && !luz(o)) b.expandByObject(o); });
+    mesh.rotation.copy(r); mesh.position.copy(p); mesh.updateMatrixWorld(true); mesh.userData.caixa = b;
+  }
+  return mesh.userData.caixa;
+}
+// veículo aberto (jipe): o motorista aparece sentado no banco da esquerda, pernas dobradas e mãos para o volante.
+// A pose é aplicada por cima da animação parada, dobrando os ossos em volta do eixo lateral do corpo.
+const _qS = new THREE.Quaternion(), _qP = new THREE.Quaternion(), _eixoS = new THREE.Vector3(), _latS = new THREE.Vector3(), _vS = new THREE.Vector3(), _Y = new THREE.Vector3(0, 1, 0);
+function ossosSentar(av) {
+  if (!av.ossosSentar) { const o = {}; av.modelo.traverse((b) => { if (!b.isBone) return; const n = (b.name || '').toLowerCase(); for (const k of ['leftupleg', 'rightupleg', 'leftleg', 'rightleg', 'leftarm', 'rightarm', 'leftforearm', 'rightforearm', 'hips']) if (!o[k] && n.endsWith(k)) o[k] = b; }); av.ossosSentar = o; }
+  return av.ossosSentar;
+}
+function girarOsso(b, ang) { if (!b?.parent) return; b.parent.getWorldQuaternion(_qP).invert(); _eixoS.copy(_latS).applyQuaternion(_qP).normalize(); b.quaternion.premultiply(_qS.setFromAxisAngle(_eixoS, ang)); }
+function sentarNoVeiculo(av, mesh, modelo) {
+  const A = civico.ABERTOS[modelo]; if (!A || !av || !mesh) return false;
+  if (av.nomeAtual !== 'idle') av.tocar('idle', { fade: 0.15 });
+  const b = caixaDoModelo(mesh), cx = (b.min.x + b.max.x) / 2, W = b.max.x - b.min.x, raiz = av.raiz;
+  const banco = mesh.localToWorld(_vS.set(cx + Math.min(0.45, W * 0.2), A.banco[0], A.banco[1]));
+  raiz.visible = true; raiz.rotation.y = mesh.rotation.y; raiz.position.copy(banco); raiz.updateMatrixWorld(true);
+  _latS.set(1, 0, 0).applyAxisAngle(_Y, raiz.rotation.y);
+  const o = ossosSentar(av);
+  girarOsso(o.leftupleg, -1.45); girarOsso(o.rightupleg, -1.45);
+  girarOsso(o.leftleg, 1.5); girarOsso(o.rightleg, 1.5);
+  girarOsso(o.leftarm, -0.95); girarOsso(o.rightarm, -0.95);
+  girarOsso(o.leftforearm, -0.45); girarOsso(o.rightforearm, -0.45);
+  if (o.hips) { raiz.updateMatrixWorld(true); const yq = o.hips.getWorldPosition(_eixoS).y; raiz.position.y += banco.y + 0.1 - yq; }
+  raiz.updateMatrixWorld(true);
+  return true;
+}
 function olhoDoVeiculo(mesh, tipo) {
+  const T = tipo !== 'aviao' && tipo !== 'heli' && CABINE[mesh.userData.glb];
+  if (T && mesh.userData.olhoTipo !== tipo) {
+    const b = caixaDoModelo(mesh), cx = (b.min.x + b.max.x) / 2, W = b.max.x - b.min.x;
+    mesh.userData.olho = new THREE.Vector3(cx + (T.x ?? Math.min(0.45, W * 0.2)), T.olho[0], T.olho[1]); mesh.userData.olhoTipo = tipo;
+  }
   if (!mesh.userData.olho || mesh.userData.olhoTipo !== tipo) {
     const r = mesh.rotation.clone(), p = mesh.position.clone(); mesh.rotation.set(0, 0, 0); mesh.position.set(0, 0, 0); mesh.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(mesh), h = b.max.y - b.min.y, L = b.max.z - b.min.z, cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2;
@@ -5283,6 +5344,37 @@ function olhoDoVeiculo(mesh, tipo) {
 }
 // painel na frente da câmera (só na primeira pessoa, dentro do veículo): colunas, para-brisa, painel e volante
 const cabines = {};
+// moldura do motorista feita para cada modelo: o painel começa logo abaixo do capô (o capô do próprio veículo aparece
+// pelo para-brisa), o volante fica na frente do motorista (lado esquerdo) e o resto do painel, o console e o
+// retrovisor ficam para a direita, onde está o resto do carro
+function cabineVeiculo(mesh, tipo) {
+  const nome = mesh.userData.glb, T = CABINE[nome];
+  if (!T || !mesh.userData.olho) return cabine(tipo);
+  if (cabines[nome]) return cabines[nome];
+  const g = new THREE.Group(); g.visible = false; camP.add(g); cabines[nome] = g;
+  if (T.interior || T.nada || !T.capo) return g;
+  const mat = (cor) => new THREE.MeshBasicMaterial({ color: cor, depthTest: false, depthWrite: false, fog: false });
+  const escuro = mat('#1a1d21'), cinza = mat('#2e3339'), borracha = mat('#101214'), vidro = mat('#0b0f12');
+  const caixa = (m, w, h, d, x, y, z, rx = 0, rz = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.rotation.set(rx, 0, rz); o.renderOrder = 20; g.add(o); return o; };
+  const b = caixaDoModelo(mesh), o = mesh.userData.olho, cx = (b.min.x + b.max.x) / 2, meia = (b.max.x - b.min.x) * (nome.startsWith('onibus') ? 0.48 : 0.43);
+  const eL = Math.max(0.25, cx + meia - o.x), eR = Math.max(0.6, o.x - (cx - meia));   // até a parede da esquerda / da direita
+  const grande = !nome.startsWith('carro');
+  const dz = Math.max(0.35, T.capo[1] - o.z), dy = T.capo[0] - o.y, teto = Math.min(b.max.y, o.y + (grande ? 0.75 : 0.4)) - o.y - 0.04;
+  const d = 0.6, topo = Math.max(d * dy / dz + 0.008, -0.36);   // topo do painel na linha da base do para-brisa (nunca tampa mais que o pé da tela)
+  caixa(escuro, eL + eR, 1.2, 0.04, (eR - eL) / 2, topo - 0.6, -d);                      // painel (até as duas portas)
+  caixa(cinza, eL + eR, 0.025, 0.12, (eR - eL) / 2, topo, -d - 0.04);                    // borda de cima do painel
+  // colunas do para-brisa (da base, junto do capô, até o teto, inclinadas para trás)
+  const zb = -dz, yb = dy, zt = -dz * (grande ? 0.85 : 0.45), yt = teto, comp = Math.hypot(zt - zb, yt - yb), inc = Math.atan2(zt - zb, yt - yb);
+  for (const x of [-eL + 0.04, eR - 0.05]) caixa(cinza, grande ? 0.12 : 0.09, comp, 0.08, x, (yb + yt) / 2, (zb + zt) / 2, inc);
+  caixa(cinza, eL + eR, grande ? 0.1 : 0.06, 0.05, (eR - eL) / 2, teto, zt);              // borda do teto
+  if (!grande) caixa(vidro, 0.2, 0.055, 0.02, (eR - eL) / 2, teto - 0.08, zt + 0.02).renderOrder = 21;   // retrovisor (no meio do carro: à direita do motorista)
+  if (!grande) caixa(escuro, 0.22, 0.5, 0.3, Math.min(0.42, eR * 0.45), topo - 0.37, -0.45).renderOrder = 21;   // console entre os bancos
+  // volante na frente do motorista
+  const rv = nome.startsWith('onibus') ? 0.25 : grande ? 0.23 : 0.19, yv = Math.max(topo - 0.02, -0.4) - rv * 0.55, zv = -0.5, inclV = nome.startsWith('onibus') ? -1.0 : -0.45;
+  const v = new THREE.Mesh(new THREE.TorusGeometry(rv, rv * 0.12, 8, 28), borracha); v.position.set(0, yv, zv); v.rotation.x = inclV; v.renderOrder = 22; g.add(v);
+  caixa(borracha, rv * 1.6, rv * 0.14, 0.03, 0, yv, zv, inclV).renderOrder = 22;
+  return g;
+}
 function cabine(tipo) {
   if (cabines[tipo]) return cabines[tipo];
   const g = new THREE.Group(); g.visible = false; camP.add(g);
@@ -5335,7 +5427,8 @@ function atualizarCamera3D(dt) {
     let olho, yaw = olhar.yaw;
     if (v) {   // dentro do veículo: olha para a frente dele (dá para virar a cabeça arrastando; volta sozinho)
       const tc = tipoCabine(); olho = olhoDoVeiculo(v, tc); if (olhar.arrastou <= 0) olhar.veic *= Math.max(0, 1 - dt * 2);
-      for (const [k, g] of Object.entries(cabines)) g.visible = k === tc; cabine(tc).visible = Math.abs(olhar.veic) < 1.2;
+      const cb = tc === 'aviao' || tc === 'heli' ? cabine(tc) : cabineVeiculo(v, tc);
+      for (const g of Object.values(cabines)) g.visible = g === cb && Math.abs(olhar.veic) < 1.2;
       // a visão acompanha o veículo com suavidade e olha um pouco para dentro da curva (onde você vai passar)
       const alvoYaw = v.rotation.y - (jogador.carro?.volante || 0) * 0.22 + olhar.veic;
       olhar.yawVeic = olhar.yawVeic === undefined ? alvoYaw : olhar.yawVeic + Math.atan2(Math.sin(alvoYaw - olhar.yawVeic), Math.cos(alvoYaw - olhar.yawVeic)) * Math.min(1, dt * 6);
@@ -5588,7 +5681,7 @@ function quadro() {
   atualizarRemotos(dt);
   voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
-  atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene);
+  atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);

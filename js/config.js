@@ -44,6 +44,7 @@ export const ROBOS = ['Rusty_Scout_Bot', 'Rustbolt_Sentinel'];
 export const MODELOS = [
   'caminhao', 'caminhao_danificado', 'viatura', 'van_policia', 'caixa', 'arma_paintball', 'algemas',
   'bancada', 'base_cla', 'loja', 'delegacia', 'transportadora', 'casa', 'empresa', 'arvore', 'poste',
+  'roda_carro', 'roda_esporte', 'roda_suv', 'roda_pesado', 'roda_militar',
   'van', 'helicoptero', 'carro_popular', 'carro_suv', 'carro_esportivo', 'carro_presidencial', 'robo_motorista', 'ambulancia', 'caminhao_bombeiros',
   'exercito_jipe', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero_executivo', 'trem', 'navio', 'arvore_comum', 'arvore_pinheiro', 'arvore_palmeira',
   'tanque', 'onibus_grande', 'onibus_urbano', 'onibus_executivo', 'onibus_executivo2', 'onibus_dois_andares', 'caminhao_lixo', 'prop_arvore', 'prop_pinheiro', 'empresa_f0', 'empresa_f1', 'empresa_f2', 'empresa_f3', 'transp_f0', 'transp_f1', 'transp_f2', 'transp_f3', 'fabrica_aberta', 'aero_torre', 'aero_quiosque', 'rodo_cidade', 'aero_terminal', 'aero_hangar', 'aviao_pequeno', 'aviao_medio', 'aviao_grande', 'arma_policia', 'arma_prf', 'arma_exercito', 'arma_militar', 'arma_grande_porte',
