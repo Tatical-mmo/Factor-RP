@@ -394,6 +394,7 @@ export const configJogo = {
   salvar: (policia, crimes, chance) => rpc('admin_config', { p_policia: policia, p_crimes: crimes, p_chance: chance }),
   presos: async (desde) => (await sel(sb.from('bandidos_presos').select('ciclo').gte('ciclo', desde))) || [],
   prenderBandido: (ciclo) => rpc('prender_bandido', { p_ciclo: ciclo }),
+  salvarFarda: (farda) => rpc('admin_farda', { p_farda: farda }),
 };
 export const clima = {
   async ler() { const { data, error } = await sb.from('clima').select('*').eq('id', 1).maybeSingle(); if (error) throw error; return data; },

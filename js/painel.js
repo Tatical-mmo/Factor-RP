@@ -223,7 +223,11 @@ async function abaCidade() {
     <p class="dica">Ligado, a cada 2 minutos pode acontecer um assalto de NPC numa loja (com a chance abaixo). O ladrão foge pelas ruas por até 3 minutos; Polícia, PRF e Exército em serviço recebem o alerta e prendem chegando perto (+300).</p>
     <div class="botoes"><label><input type="checkbox" id="cCrimes" ${cf.crimes_npc ? 'checked' : ''}> Ligado</label></div>
     <div class="botoes"><span style="flex:1">Chance de ocorrência por ciclo</span><input id="cChance" type="range" min="0" max="100" step="5" value="${cf.chance_crime}" style="flex:1"><b id="cChanceN" style="min-width:44px;text-align:center">${cf.chance_crime}%</b></div>
-    <div class="botoes"><button id="cSalvar">Salvar</button></div>`;
+    <div class="botoes"><button id="cSalvar">Salvar</button></div>
+    <div class="sub">👔 Farda</div>
+    <p class="dica">Ajuste o tamanho e a posição do colete e do capacete/boné de cada corporação, uma por uma, vendo no seu personagem. Ao salvar, vale para todos.</p>
+    <div class="botoes"><button id="cFarda">👔 Ajustar a farda</button></div>`;
+  $('cFarda').onclick = () => { fechar(); ctx.ajustarFarda?.(); };
   $('cPol').oninput = () => { $('cPolN').textContent = $('cPol').value; };
   $('cChance').oninput = () => { $('cChanceN').textContent = $('cChance').value + '%'; };
   $('cSalvar').onclick = async () => {

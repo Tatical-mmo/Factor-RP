@@ -2075,6 +2075,7 @@ async function iniciarJogo(perfil) {
   $('btFianca').onclick = async () => { try { await rede.policia.fianca(); aviso('Fiança paga. Você está livre.'); } catch (e) { aviso(e.message); } };
   iniciarPainel({
     perfil: () => jogador.perfil,
+    ajustarFarda: () => abrirEditorFarda(),
     prefeito: () => prefeitoAtual,
     prefeitoMudou: () => carregarPrefeitura().catch(() => {}),
     climaMudou: async () => { await carregarClima(); conexao?.enviar('clima', {}); },
@@ -6974,10 +6975,20 @@ function encaixar(peca, osso, med, sx, sy, sz, centro) {
   peca.position.set(0, 0, 0).addScaledVector(med.lado, med.cl).addScaledVector(med.frente, centro.f).addScaledVector(med.cima, centro.c);
   osso.add(peca);
 }
+// ---- ajuste fino da farda (feito pelo admin, salvo para todos): por corporação, colete e capacete/boné separados
+// colete: larg/alt/fund (multiplicam) e subir/frente (deslocam, em fração da altura do tronco)
+// chapéu: tam (multiplica) e subir/frente (fração da altura da cabeça)
+let ajusteFarda = {}, versaoFarda = 0;
+const AJ_PADRAO = { colete: { larg: 1, alt: 1, fund: 1, subir: 0, frente: 0 }, chapeu: { tam: 1, subir: 0, frente: 0 } };
+function ajusteDe(papel, peca) { return { ...AJ_PADRAO[peca], ...(ajusteFarda?.[papel]?.[peca] || {}) }; }
+function definirAjusteFarda(novo) {
+  const txt = JSON.stringify(novo || {}); if (txt === JSON.stringify(ajusteFarda)) return;
+  ajusteFarda = JSON.parse(txt); versaoFarda++;   // muda a versão: todo mundo se veste de novo com o ajuste
+}
 function vestir(av, papel) {
   if (!av) return;
   const glb = !!(papel && pecasFarda.colete && pecasFarda[CHAPEU_DE[papel]]);
-  if (av.uniforme?.papel === papel && av.uniforme.glb === glb) return;
+  if (av.uniforme?.papel === papel && av.uniforme.glb === glb && av.uniforme.v === versaoFarda) return;
   if (av.uniforme) { av.uniforme.colete.removeFromParent(); av.uniforme.chapeu.removeFromParent(); av.uniforme = null; }
   if (!papel) return;
   carregarPecasFarda();
@@ -7010,15 +7021,16 @@ function vestir(av, papel) {
       const C = PECAS_FARDA.colete, quadril = achados.hips || av.modelo.getObjectByName('mixamorigHips');
       let topo = mt.alturaDe(ossos.pescoco), base = quadril ? mt.alturaDe(quadril) : null;
       if (topo === null || base === null || topo - base < 0.05) { topo = mt.topo; base = mt.baixo; } else base += (topo - base) * 0.12;
-      const H = topo - base;
-      encaixar(colete, tronco, mt, mt.largura * 1.22 / C.largura, H, Math.min(mt.prof, mt.largura * 0.85) * 1.25 / C.prof, { f: mt.cf, c: (topo + base) / 2 });
-      const P = PECAS_FARDA[CHAPEU_DE[papel]], hc = mc.topo - mc.baixo, sc = Math.min(mc.largura, hc * 0.95) * P.folga / P.copa;
-      encaixar(chapeu, cabeca, mc, sc, sc, sc, { f: mc.cf - P.cx * sc, c: mc.topo + hc * (0.03 + P.subir) - P.topo * sc });
+      const H = topo - base, ac = ajusteDe(papel, 'colete'), ah = ajusteDe(papel, 'chapeu');
+      encaixar(colete, tronco, mt, mt.largura * 1.35 * ac.larg / C.largura, H * ac.alt, Math.min(mt.prof, mt.largura * 0.85) * 1.5 * ac.fund / C.prof,
+        { f: mt.cf + ac.frente * H, c: (topo + base) / 2 + ac.subir * H });
+      const P = PECAS_FARDA[CHAPEU_DE[papel]], hc = mc.topo - mc.baixo, sc = Math.min(mc.largura, hc * 0.95) * P.folga * 1.1 * ah.tam / P.copa;
+      encaixar(chapeu, cabeca, mc, sc, sc, sc, { f: mc.cf - P.cx * sc + ah.frente * hc, c: mc.topo + hc * (0.03 + P.subir + ah.subir) - P.topo * sc });
       preso = true;
     }
   }
   if (!preso) scene.add(colete, chapeu);
-  av.uniforme = { papel, colete, chapeu, ossos, glb, preso, peca: CHAPEU_DE[papel] };
+  av.uniforme = { papel, colete, chapeu, ossos, glb, preso, peca: CHAPEU_DE[papel], v: versaoFarda };
 }
 const _cx = new THREE.Vector3(), _cy = new THREE.Vector3(), _cz = new THREE.Vector3(), _cw = new THREE.Vector3();
 const _ua = new THREE.Vector3(), _ub = new THREE.Vector3(), _uc = new THREE.Vector3(), _ud = new THREE.Vector3(), _um = new THREE.Matrix4(), _ux = new THREE.Vector3(), _uq = new THREE.Quaternion();
@@ -7134,11 +7146,68 @@ function atualizarNomesCla(dt) {
   }
 }
 
+// ================================================================= editor da farda (admin): ajusta olhando o próprio personagem
+let editorFarda = null;
+const CAMPOS_FARDA = {
+  colete: [['larg', 'Largura', 0.5, 2, 0.02], ['alt', 'Altura', 0.5, 2, 0.02], ['fund', 'Fundura', 0.5, 2.5, 0.02], ['subir', 'Subir / descer', -0.6, 0.6, 0.01], ['frente', 'Frente / trás', -0.6, 0.6, 0.01]],
+  chapeu: [['tam', 'Tamanho', 0.5, 2, 0.02], ['subir', 'Subir / descer', -0.8, 0.8, 0.01], ['frente', 'Frente / trás', -0.8, 0.8, 0.01]],
+};
+function abrirEditorFarda() {
+  if (!souEquipe() || jogador.perfil?.cargo !== 'admin') { aviso('Só o administrador ajusta a farda.'); return; }
+  if (editorFarda) return;
+  const rascunho = JSON.parse(JSON.stringify(ajusteFarda || {})), antes = jogador.farda;
+  if (!document.getElementById('estiloEditorFarda')) {
+    const st = document.createElement('style'); st.id = 'estiloEditorFarda';
+    st.textContent = '#editorFarda button{background:#2c333d;color:#eee;border:1px solid #4a5361;border-radius:8px;padding:7px 10px;font:600 13px system-ui}';
+    document.head.appendChild(st);
+  }
+  const el = document.createElement('div'); el.id = 'editorFarda';
+  el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(20,24,30,.9);color:#eee;padding:10px 12px 14px;font:14px system-ui;max-height:48vh;overflow:auto;border-top:2px solid #f2a33a;touch-action:pan-y';
+  let papel = jogador.farda || 'policia', peca = 'colete';
+  const desenhar = () => {
+    const aj = { ...AJ_PADRAO[peca], ...(rascunho[papel]?.[peca] || {}) };
+    el.innerHTML = `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b style="flex:1">👔 Ajuste da farda</b>
+        <button data-a="girar">↻ Girar</button><button data-a="fechar">✕</button></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${Object.keys(UNIFORMES).map((k) => `<button data-p="${k}" style="${k === papel ? 'background:#f2a33a;color:#111' : ''}">${NOME_FARDA[k]}</button>`).join('')}</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">${[['colete', '🦺 Colete'], ['chapeu', '⛑️ Capacete / boné']].map(([k, t]) => `<button data-q="${k}" style="flex:1;${k === peca ? 'background:#f2a33a;color:#111' : ''}">${t}</button>`).join('')}</div>
+      ${CAMPOS_FARDA[peca].map(([k, n, mi, ma, st]) => `<label style="display:flex;align-items:center;gap:8px;margin:4px 0"><span style="width:110px">${n}</span>
+        <input type="range" data-c="${k}" min="${mi}" max="${ma}" step="${st}" value="${aj[k]}" style="flex:1"><b data-v="${k}" style="width:46px;text-align:right">${(+aj[k]).toFixed(2)}</b></label>`).join('')}
+      <div style="display:flex;gap:6px;margin-top:8px"><button data-a="zerar" style="flex:1">↺ Padrão desta peça</button><button data-a="salvar" style="flex:1;background:#2f8f4e;color:#fff">💾 Salvar para todos</button></div>
+      <small style="opacity:.75">Mexa e veja no seu personagem. Cada corporação e cada peça têm o seu ajuste. Só muda para todos depois de salvar.</small>`;
+    el.querySelectorAll('[data-p]').forEach((b) => { b.onclick = () => { papel = b.dataset.p; definirFarda(papel, true); desenhar(); }; });
+    el.querySelectorAll('[data-q]').forEach((b) => { b.onclick = () => { peca = b.dataset.q; desenhar(); }; });
+    el.querySelectorAll('[data-c]').forEach((r) => {
+      r.oninput = () => {
+        ((rascunho[papel] ||= {})[peca] ||= {})[r.dataset.c] = +r.value;
+        el.querySelector(`[data-v="${r.dataset.c}"]`).textContent = (+r.value).toFixed(2);
+        definirAjusteFarda(rascunho);   // pré-visualização na hora
+      };
+    });
+    el.querySelectorAll('[data-a]').forEach((b) => {
+      b.onclick = async () => {
+        const a = b.dataset.a;
+        if (a === 'girar') { jogador.yaw += Math.PI / 4; return; }
+        if (a === 'zerar') { if (rascunho[papel]) delete rascunho[papel][peca]; definirAjusteFarda(rascunho); desenhar(); return; }
+        if (a === 'salvar') {
+          b.disabled = true;
+          try { await rede.configJogo.salvarFarda(rascunho); aviso('✅ Ajuste da farda salvo: já vale para todos os jogadores.', 3.5); }
+          catch (e) { aviso(/admin_farda|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 53_farda_ajuste.sql no Supabase e tente de novo.' : 'Não salvou: ' + (e.message || e), 4.5); }
+          b.disabled = false; return;
+        }
+        if (a === 'fechar') {
+          el.remove(); editorFarda = null; definirFarda(antes, true);
+          rede.configJogo.ler().then((c) => { if (c) definirAjusteFarda(c.farda); }).catch(() => {});   // volta ao que está salvo
+        }
+      };
+    });
+  };
+  definirFarda(papel, true); desenhar(); document.body.appendChild(el); editorFarda = el;
+}
 // ================================================================= configurações do admin (polícia robô e crimes de NPC)
 let configJogo = { policia_robo: 12, crimes_npc: false, chance_crime: 30 }, tempoConfig = 0;
 function atualizarConfigJogo(dt) {
   if ((tempoConfig -= dt) > 0) return; tempoConfig = 30;
-  rede.configJogo.ler().then((c) => { if (c) configJogo = c; }).catch(() => {});
+  rede.configJogo.ler().then((c) => { if (c) { configJogo = c; if (!editorFarda) definirAjusteFarda(c.farda); } }).catch(() => {});
   rede.configJogo.presos(cicloCrime() - 3).then((l) => { for (const x of l) presosNpc.add(x.ciclo); }).catch(() => {});
 }
 // ---------------------------------------------------------------- ladrões NPC: a cada 2 minutos, com a chance definida, um pedestre
