@@ -94,7 +94,7 @@ function chamine(g, x, z, base, h) {
   });
 }
 
-export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0 }) {
+export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0, nome = '' }) {
   materiais();
   const f = fase(nivel), n = docasDaFase(f), cor = corDaEmpresa(id);
   const g = new THREE.Group(); g.position.set(x, 0.18, z);
@@ -102,8 +102,9 @@ export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0 }) {
   let H = f === 1 ? 7 : f === 2 ? 8 : 9;
   const zw = FRENTE - D;                         // parede de trás (docas)
   const anima = [];
-  const glb = f >= 1 && ctx.modelo?.(`empresa_f${f}`);
-  if (glb) return construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, id, cor, helis, anima });
+  const tr = !fabrica && ctx.modelo?.(`transp_f${f}`), ab = fabrica && f === 1 && ctx.modelo?.('fabrica_aberta');   // fábrica 5–9: frente aberta com a produção à mostra
+  const glb = f >= 1 && (tr || ab || ctx.modelo?.(`empresa_f${f}`));
+  if (glb) return construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, cor, helis, anima, alt: ab ? 0.585 : (tr ? ALT_TR : ALT_GLB)[f], nome });
   // galpão: chão, paredes de zinco, telhado e faixa da cor da empresa
   caixa(g, M.piso, W, 0.1, D, cx, 0.05, zw + D / 2);
   caixa(g, M.zinco, W, H, 0.25, cx, H / 2, zw + 0.12, 3);                          // fundo
@@ -180,13 +181,20 @@ export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0 }) {
   };
 }
 // prédio da fase em 3D (GLB normalizado: caixa de 1 x 1 x 1, frente em +Z), esticado para o lote
-const ALT_GLB = { 1: 0.48, 2: 0.594, 3: 1.261 * 1.6 };
-function construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, id, cor, helis, anima }) {
+const ALT_GLB = { 1: 0.48, 2: 0.594, 3: 1.261 * 1.6 }, ALT_TR = { 1: 0.517, 2: 0.417, 3: 0.82 * 1.6 };
+// placa da fachada com o nome da empresa sobre a cor dela
+function placaNome(nome, cor) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 96; const t = c.getContext('2d');
+  t.fillStyle = `#${cor.getHexString()}`; t.fillRect(0, 0, 512, 96); t.strokeStyle = 'rgba(255,255,255,.8)'; t.lineWidth = 6; t.strokeRect(3, 3, 506, 90);
+  t.fillStyle = '#fff'; t.font = 'bold 54px system-ui'; t.textAlign = 'center'; t.textBaseline = 'middle'; t.fillText(String(nome || '').toUpperCase(), 256, 52, 480);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.25 });
+}
+function construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, cor, helis, anima, alt: altRel, nome }) {
   caixa(g, M.piso, W, 0.1, D, cx, 0.05, zw + D / 2);
-  const m = glb.clone(true), alt = W * ALT_GLB[f];
+  const m = glb.clone(true), alt = W * altRel;
   m.position.set(cx, 0, zw + D / 2); m.scale.set(W, alt, D); m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); g.add(m);
-  const faixaMat = new THREE.MeshStandardMaterial({ color: cor, roughness: 0.5, metalness: 0.2 });
-  caixa(g, faixaMat, W * 0.6, 0.6, 0.12, cx, Math.min(alt - 0.8, 5.2), FRENTE + 0.08);   // placa com a cor da empresa
+  caixa(g, placaNome(nome, cor), W * 0.62, 1.15, 0.12, cx, Math.min(alt - 1, 5.2), FRENTE + 0.1);   // placa com o nome e a cor da empresa
   // docas no fundo
   const docas = [];
   for (let k = 0; k < n; k++) {

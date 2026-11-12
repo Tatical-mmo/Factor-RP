@@ -694,3 +694,17 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Na câmera de cima, um prédio que tapa o personagem volta a ser a caixa cortada, como antes.
 - 🏭 Sedes das empresas em 3D por fase: galpão (níveis 5–9), complexo com chaminés (10–14) e sede com torre de vidro (15). Docas, pátio dos caminhões e heliporto continuam iguais; uma placa na frente leva a cor da empresa.
 - Sem SQL nesta versão.
+
+## Versão 12/11 (y) · empresas: fase 1, transportadoras e placa com nome
+- Fábricas de nível 1 a 4 usam o novo prédio 3D (prédio pequeno com placa e porta de enrolar atrás).
+- Transportadoras têm modelos próprios nos níveis 5–9 (depósito com 3 docas), 10–14 (centro de distribuição) e 15 (sede com torre de vidro e detalhes laranja). Os níveis 1–4 continuam no modelo antigo até chegar o novo.
+- A placa da fachada das sedes agora mostra o nome da empresa sobre a cor dela.
+- Sem SQL nesta versão.
+
+## Versão 12/11 (z) · rodoviárias, torre e quiosques em 3D
+- 🚌 As coberturas das plataformas da Rodoviária da Metrópole e as rodoviárias de Vila Serra e Porto Sul usam o abrigo 3D (teto curvo, bancos e guichê).
+- 🗼 A torre de controle do aeroporto é o modelo 3D, com o farol giratório no topo.
+- ✈️ As pistas de Vila Serra e Porto Sul têm o quiosque 3D com cúpula e biruta; a atendente fica no balcão da frente.
+- 🏭 Transportadoras de nível 1 a 4 usam o prédio novo. Fábricas de nível 5 a 9 usam o galpão com a frente aberta, mostrando a esteira e os braços robóticos.
+- O terminal de passageiros e o hangar continuam os de antes: os modelos novos não ficaram bons (e as colunas da cobertura grande da rodoviária caíam em cima das faixas dos ônibus).
+- Sem SQL nesta versão.

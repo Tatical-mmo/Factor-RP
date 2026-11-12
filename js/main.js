@@ -2433,7 +2433,7 @@ function desenharLote(l) {
   const fabrica = u.funcao === 'fabrica';
   const modelo = fabrica ? 'empresa' : 'transportadora';
   if (sedes.fase(e.nivel) >= 1) { desenharSede(l, e, u, v, fabrica, modelo); return; }
-  const obj = colocarPredio(modelo, x, z, 0);
+  const obj = colocarPredio(fabrica && modelos.empresa_f0 ? 'empresa_f0' : !fabrica && modelos.transp_f0 ? 'transp_f0' : modelo, x, z, 0);   // níveis 1–4 (modelo novo quando existe)
   // prédio um pouco menor para sobrar pátio atrás (estacionamento) e corredor na lateral
   obj.scale.setScalar(0.85 * (1 + (e.nivel - 1) * 0.04)); obj.updateMatrixWorld(true);
   const b0 = new THREE.Box3().setFromObject(obj);
@@ -2483,7 +2483,7 @@ function enfeitesNivel(x, z, e, v) {
 function desenharSede(l, e, u, v, fabrica, modelo) {
   const { x, z } = centroLote(l);
   const principal = Math.min(...[...unidades.entries()].filter(([, k]) => k.empresa === e.id).map(([lote]) => lote)) === l.id;
-  const sd = sedes.construir({ x, z, nivel: e.nivel, fabrica, id: e.id, corProduto: PRODUTOS[e.produto]?.cor || '#c9a06a', helis: principal ? helisPorEmpresa.get(e.id) || 0 : 0 });
+  const sd = sedes.construir({ x, z, nivel: e.nivel, fabrica, id: e.id, corProduto: PRODUTOS[e.produto]?.cor || '#c9a06a', helis: principal ? helisPorEmpresa.get(e.id) || 0 : 0, nome: e.nome });
   v.sede = sd; v.docas = sd.docas; v.heliportos = sd.heliportos;
   const pr = { obj: sd.grupo, caixa: sd.caixa, mats: sd.mats, opac: 1 };
   predios.push(pr); v.predio = pr;
@@ -7545,6 +7545,7 @@ function montarRodovias() {
   const cob = new THREE.MeshStandardMaterial({ color: '#e9e4d8', roughness: 0.5 }), metal = new THREE.MeshStandardMaterial({ color: '#59606a', metalness: 0.5, roughness: 0.5 });
   for (const c of RODO_CIDADES) {
     const cx = (c.x0 + c.x1) / 2, w = c.x1 - c.x0;
+    if (glbEm('rodo_cidade', cx, 0.12, c.z, w, 5.6, 7, c.lado < 0 ? Math.PI : 0)) { const r = rotuloSimples(`🚌 ${c.nome.toUpperCase()}`, 9); r.position.set(cx, 7.4, c.z); scene.add(r); continue; }
     const t = new THREE.Mesh(new THREE.BoxGeometry(w, 0.3, 7), cob); t.position.set(cx, 4.4, c.z); t.castShadow = true; scene.add(t);
     for (let x = c.x0 + 2; x <= c.x1 - 2; x += 10) for (const dz of [-2.8, 2.8]) { const pc = new THREE.Mesh(new THREE.BoxGeometry(0.25, 4.3, 0.25), metal); pc.position.set(x, 2.25, c.z + dz); pc.castShadow = true; scene.add(pc); mundo.addCol({ tipo: 'circ', x, z: c.z + dz, r: 0.25 }); }
     for (let x = c.x0 + 6; x <= c.x1 - 6; x += 8) { const b = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.45, 0.6), metal); b.position.set(x, 0.45, c.z - c.lado * 2); scene.add(b); }
@@ -7568,6 +7569,7 @@ function montarRodoviaria() {
   for (const [x, w] of ilhas) {
     caixa(x, y + 0.13, R.z, w, 0.26, R.z1 - R.z0 - 6, ilha, false);
     if (x === 155.3) continue;
+    if (glbEm('rodo_cidade', x, y + 0.26, R.z - 2, 32, 4.4, w + 1.2, Math.PI / 2)) continue;   // cobertura 3D (abrigo com bancos)
     caixa(x, y + 4.1, R.z - 2, w + 1.4, 0.25, 32, cobertura);
     for (const dz of [-14, -2, 10]) { caixa(x, y + 2.1, R.z - 2 + dz, 0.25, 4, 0.25, metal); mundo.addCol({ tipo: 'circ', x, z: R.z - 2 + dz, r: 0.3 }); }
     for (const dz of [-8, 4]) caixa(x - 0.8, y + 0.7, R.z - 2 + dz, 0.5, 0.45, 3, metal);
@@ -7598,6 +7600,12 @@ function atualizarPlacasRodo(t) {
     g.font = 'bold 50px system-ui'; g.fillStyle = at ? '#ff5a4a' : '#ffd23e'; g.fillText(at ? `ATRASADO ${at} s` : falta > 0 ? `sai em ${falta} s` : 'saindo!', 256, 108);
     p.t.needsUpdate = true;
   }
+}
+// coloca um modelo 3D normalizado (caixa 1 x 1 x 1, frente em +Z) esticado para (sx, sy, sz) e girado; null se não carregou
+function glbEm(nome, x, y, z, sx, sy, sz, rot = 0) {
+  const base = modelos[nome]; if (!base) return null;
+  const o = base.clone(true); o.position.set(x, y, z); o.scale.set(sx, sy, sz); o.rotation.y = rot;
+  o.traverse((k) => { if (k.isMesh) { k.castShadow = true; k.receiveShadow = true; } }); scene.add(o); return o;
 }
 function rotuloSimples(texto, larg) {
   const c = document.createElement('canvas'); c.width = 512; c.height = 96; const x = c.getContext('2d');
@@ -8329,7 +8337,8 @@ function montarAeroportos() {
       plano(-228, a.vaga.z - Math.sign(a.vaga.z) * 18, 30, 64, patio, 0.028);
       for (const [x0, z0] of a.estrada.slice(0, 1)) plano((x0 + a.estrada[1][0]) / 2, z0, Math.abs(a.estrada[1][0] - x0), 6, M('#7a6448', { roughness: 1 }), 0.02);
       const zc = a.balcao.z;
-      caixa(-204, 3.1, zc, 7, 0.25, 8, azul); for (const [sx, sz] of [[-3, -3.6], [-3, 3.6], [3, -3.6], [3, 3.6]]) caixa(-204 + sx, 1.5, zc + sz, 0.2, 3, 0.2, metal);
+      if (glbEm('aero_quiosque', -207.6, 0, zc, 9, 6, 4.7, Math.PI / 2)) mundo.addCol({ tipo: 'caixa', x0: -210, x1: -205.3, z0: zc - 4.5, z1: zc + 4.5 });   // quiosque 3D virado para a estrada
+      else { caixa(-204, 3.1, zc, 7, 0.25, 8, azul); for (const [sx, sz] of [[-3, -3.6], [-3, 3.6], [3, -3.6], [3, 3.6]]) caixa(-204 + sx, 1.5, zc + sz, 0.2, 3, 0.2, metal); }
       caixa(-202, 0.55, zc, 0.8, 1.1, 4, concreto, true);
       const r = rotuloSimples(`✈️ ${a.nome}`, 6); r.position.set(-204, 4.6, zc); scene.add(r);
       const rb = rotuloSimples('🎫 Passagens', 3.2); rb.position.set(a.balcao.x, 2.6, a.balcao.z); scene.add(rb);
@@ -8372,9 +8381,10 @@ function montarAeroportos() {
     for (const x of [285, 330]) { caixa(x, 4, -717.5, 3, 2.6, 11, metal); caixa(x, 1.4, -721, 0.5, 2.8, 0.5, metal, true); }
     for (const [o, t] of [[a.balcao, '🎫 Passagens'], [a.portao, '✈️ Embarque · Portão 1'], [a.torre, '🗼 Torre de controle'], [a.hangar, '🛩️ Hangar dos pilotos']]) { const r = rotuloSimples(t, 4.4); r.position.set(o.x, 3.4, o.z); scene.add(r); }
     // torre de controle: base, cabine de vidro, teto e farol giratório
-    caixa(405, 13, -701, 6, 26, 6, parede, true);
-    caixa(405, 28, -701, 10, 4, 10, vidro); caixa(405, 30.3, -701, 11, 0.6, 11, azul); caixa(405, 32.5, -701, 0.2, 4, 0.2, metal);
-    farolTorre = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 0.5), new THREE.MeshStandardMaterial({ color: '#d8ffd8', emissive: '#7dff8a', emissiveIntensity: 0.5 })); farolTorre.position.set(405, 31.2, -701); scene.add(farolTorre);
+    const torre3d = glbEm('aero_torre', 405, 0, -701, 11, 11 * 2.519, 11, Math.PI);   // modelo 3D (porta para a rua)
+    if (torre3d) mundo.addCol({ tipo: 'caixa', x0: 402, x1: 408, z0: -704, z1: -698 });
+    else { caixa(405, 13, -701, 6, 26, 6, parede, true); caixa(405, 28, -701, 10, 4, 10, vidro); caixa(405, 30.3, -701, 11, 0.6, 11, azul); caixa(405, 32.5, -701, 0.2, 4, 0.2, metal); }
+    farolTorre = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 0.5), new THREE.MeshStandardMaterial({ color: '#d8ffd8', emissive: '#7dff8a', emissiveIntensity: 0.5 })); farolTorre.position.set(405, torre3d ? 11 * 2.519 + 0.6 : 31.2, -701); scene.add(farolTorre);
     // hangar com o portão aberto para o pátio
     caixa(465, 6.5, -704, 70, 13, 24, metal, true);
     const porta = new THREE.Mesh(new THREE.PlaneGeometry(50, 11), M('#1b1e22')); porta.position.set(465, 5.5, -716.05); porta.rotation.y = Math.PI; scene.add(porta);
