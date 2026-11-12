@@ -6888,7 +6888,7 @@ function seguirFugitivoRastreado() {
 const UNIFORMES = {
   policia: { cor: '#1b2a4a', texto: 'POLÍCIA', letra: '#ffffff', faixa: null, chapeu: '#14203a' },
   prf: { cor: '#111111', texto: 'PRF', letra: '#f2c230', faixa: '#f2c230', chapeu: '#111111' },
-  bombeiro: { cor: '#b3261e', texto: 'BOMBEIROS', letra: '#ffffff', faixa: '#e8e36a', chapeu: '#c9a227' },
+  bombeiro: { cor: '#b3261e', texto: 'BOMBEIROS', letra: '#ffffff', faixa: '#e8e36a', chapeu: '#f0b400' },
   medico: { cor: '#f4f4f4', texto: '✚ RESGATE', letra: '#c0392b', faixa: '#c0392b', chapeu: '#f4f4f4' },
   exercito: { cor: '#4b5d33', texto: 'EXÉRCITO', letra: '#e8e3c8', faixa: null, chapeu: '#3c4a28' },
   jornalista: { cor: '#1f4f8a', texto: 'IMPRENSA', letra: '#ffffff', faixa: '#ffffff', chapeu: '#1f4f8a' },
@@ -6910,9 +6910,9 @@ function texturaUniforme(u) {
 const PECAS_FARDA = {
   colete: { arq: 'farda_colete', largura: 0.84, prof: 0.77, topo: 0.5 },
   // chapéus: copa = largura da parte que veste a cabeça; cx = onde fica o centro da copa (o boné tem a aba na frente)
-  bone: { arq: 'farda_bone', copa: 0.69, cx: -0.1, topo: 0.277, folga: 1.12 },
-  bombeiro: { arq: 'farda_capacete_bombeiro', copa: 0.7, cx: 0.016, topo: 0.465, folga: 1.22 },
-  militar: { arq: 'farda_capacete_militar', copa: 0.78, cx: 0.014, topo: 0.5, folga: 1.2 },
+  bone: { arq: 'farda_bone', copa: 0.69, cx: -0.1, topo: 0.277, folga: 1.12, subir: 0 },
+  bombeiro: { arq: 'farda_capacete_bombeiro', copa: 0.7, cx: 0.016, topo: 0.465, folga: 0.92, subir: 0.22 },   // aba larga: menor e mais alto, senão engole a cabeça,
+  militar: { arq: 'farda_capacete_militar', copa: 0.78, cx: 0.014, topo: 0.5, folga: 1.2, subir: 0 },
 };
 const CHAPEU_DE = { policia: 'bone', prf: 'bone', bombeiro: 'bombeiro', medico: 'bone', exercito: 'militar', jornalista: 'bone' };
 const pecasFarda = {}; let pecasPedidas = false;
@@ -6993,7 +6993,7 @@ function posicionarUniforme(av) {
     _um.makeBasis(ld, eixo, fr); U.chapeu.quaternion.setFromRotationMatrix(_um);
     const sc = hc * P.folga / P.copa;   // a copa um pouco mais larga que a cabeça
     U.chapeu.scale.setScalar(sc);
-    U.chapeu.position.copy(topo).addScaledVector(eixo, 0.16 * hc - P.topo * sc).addScaledVector(fr, -0.02 * hc - P.cx * sc);   // a copa do boné/capacete no alto da cabeça
+    U.chapeu.position.copy(topo).addScaledVector(eixo, (0.16 + P.subir) * hc - P.topo * sc).addScaledVector(fr, -0.02 * hc - P.cx * sc);   // a copa do boné/capacete no alto da cabeça
     return;
   }
   const comp = Math.max(0.2, _ub.distanceTo(U.ossos ? U.ossos.base.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(r.x, r.y + alt * 0.5, r.z)));
