@@ -663,3 +663,9 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
   - Autoescola: a prova segue um percurso pelas ruas. Fora da faixa da direita por mais de 1 s, subir na calçada ou não parar no ponto (prova D) é infração; 3 infrações ou 3 batidas reprovam.
   - Pilotos: no chão, a faixa leva pela taxiway até a cabeceira. No ar, mostra a aproximação, a descida e a pista do aeroporto de destino (o mais perto, escolhido na decolagem). Um painel no alto dá as instruções: altura, velocidade máxima, alinhamento e a hora de tocar em POUSAR.
 - Sem SQL nesta versão.
+
+## Versão 12/11 (u) · setores de coleta e garis NPC
+- ♻️ A coleta tem 4 setores (rotas), todos saindo e voltando à Central de Reciclagem: Leste, Centro, Oeste e Norte. São 54 lixeiras pela cidade; as que ficam no mesmo lugar em dois setores são a mesma lixeira.
+- Cada setor tem o seu caminhão do sistema, em horários diferentes, com dois garis NPC nos estribos de trás. Em cada lixeira eles descem, levam os sacos ao caminhão e sobem de novo.
+- O gari jogador escolhe o setor na garagem (um gari por setor). O caminhão do sistema daquele setor sai de cena e os dois garis NPC trabalham com o jogador: ao parar do lado de uma lixeira cheia, eles descem e recolhem. Se o caminhão andar antes de eles voltarem, a coleta daquela lixeira é cancelada.
+- Sem SQL nesta versão.

@@ -2979,7 +2979,7 @@ const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfi
 function metaPresenca() {
   const p = jogador.perfil;
   return { nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
-    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? 1 : 0 };
+    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
 function etiquetaStatus(r) {
@@ -7821,7 +7821,7 @@ function prepararTransporte() {
   for (const [x0, z0, x1, z1] of RODOVIAS) mundo.abrirTrilha([[x0, z0], [x1, z1]], 9);
   for (const c of RODO_CIDADES) mundo.abrirTrilha([[c.x0, c.z], [c.x1, c.z]], 4);
   mundo.limparArea(RODO.x0 - 1, RODO.z0 - 1, RODO.x1 + 1, RODO.z1 + 1);
-  mundo.limparArea(CENTRAL.x0 - 1, CENTRAL.z0 - 1, CENTRAL.x1 + 1, CENTRAL.z1 + 1); mundo.semEstacionar(COLETA.pts);
+  mundo.limparArea(CENTRAL.x0 - 1, CENTRAL.z0 - 1, CENTRAL.x1 + 1, CENTRAL.z1 + 1); for (const S of SETORES) mundo.semEstacionar(S.cam.pts);
   mundo.limparArea(AUTOESCOLA.x0 - 1, AUTOESCOLA.z0 - 1, AUTOESCOLA.x1 + 1, AUTOESCOLA.z1 + 1);
   mundo.semEstacionar([[AUTOESCOLA.x0 - 12, AUTOESCOLA.saida.z], [AUTOESCOLA.x1 + 6, AUTOESCOLA.saida.z]]);
   for (const a of AEROPORTOS) {
@@ -7971,39 +7971,47 @@ function montarAutoescola() {
     const et = textoSprite('Instrutor', { escala: 0.5, fundo: 'rgba(232,137,28,.95)' }); et.position.y = 2.2; av.raiz.add(et); atendentes.push(av);
   }).catch(() => {});
 }
-// ================================================================= coleta de lixo: Central de Reciclagem, lixeiras e o caminhão
-// O caminhão faz uma volta pelo leste da cidade passando pelas lixeiras. Lixeira cheia (sacos em volta) precisa ser
-// recolhida: o caminhão para do lado por alguns segundos. Depois descarrega na Central (gari jogador ganha por lixeira).
-// Sem gari jogador, o caminhão do sistema faz a volta sozinho (horário igual para todos) e esvazia as lixeiras.
+// ================================================================= coleta de lixo: Central de Reciclagem, setores, lixeiras e caminhões
+// Quatro setores (rotas) saem e voltam à Central. Em cada um roda um caminhão do sistema com dois garis NPC nos
+// estribos de trás: em cada lixeira cheia eles descem, levam os sacos ao caminhão e sobem de novo. O gari jogador
+// escolhe um setor; o caminhão do sistema daquele setor sai de cena e os dois garis NPC passam a trabalhar com ele.
 const CENTRAL = { x: 351, z: -81, x0: 329, x1: 373, z0: -103, z1: -59, garagem: { x: 362, z: -72 }, descarga: { x: 351, z: -86 } };
-const COLETA = { nome: 'Coleta', faixa: 351, ini: [[351, -86], [351, -64]], fimPts: [[351, -100], [351, -86]],
-  rua: [[351, -54], [378, -54], [378, 162], [216, 162], [216, -162], [378, -162], [378, -108], [351, -108]] };
-montarCaminho(COLETA);
-const LIXEIRAS = (() => {
-  const r = [], n = 14, ini = 45, fim = COLETA.L - 45;
-  for (let k = 0; k < n; k++) { const s = ini + (fim - ini) * k / (n - 1), q = pontoCaminho(COLETA, s), rx = -Math.cos(q.ang), rz = Math.sin(q.ang); r.push({ s, x: q.x + rx * 4.6, z: q.z + rz * 4.6, ang: q.ang, coletada: -1e9, mesh: null }); }
-  return r;
-})();
+const SETORES = [
+  { id: 1, nome: 'Setor Leste', rua: [[351, -54], [378, -54], [378, 162], [216, 162], [216, -162], [378, -162], [378, -108], [351, -108]] },
+  { id: 2, nome: 'Setor Centro', rua: [[351, -54], [108, -54], [-108, -54], [-108, 108], [378, 108], [378, -108], [351, -108]] },
+  { id: 3, nome: 'Setor Oeste', rua: [[351, -54], [-378, -54], [-378, 216], [-162, 216], [-162, 108], [108, 108], [108, -108], [351, -108]] },
+  { id: 4, nome: 'Setor Norte', rua: [[351, -54], [378, -54], [378, -378], [54, -378], [54, -108], [351, -108]] },
+];
+const LIXEIRAS = [];
 const CHEIA_EM = 240;   // segundos para encher de novo
 const lixeiraCheia = (l, t) => t - l.coletada > CHEIA_EM;
-// caminhão do sistema: 7 m/s, para 5 s em cada lixeira e 20 s na Central
-const TAB_LIXO = (() => {
-  const tab = []; let t = 0, sAnt = 0;
-  for (const l of LIXEIRAS) { const chega = t + (l.s - sAnt) / 7 + 2; tab.push({ chega, sai: chega + 5 }); t = chega + 5; sAnt = l.s; }
-  const fim = t + (COLETA.L - sAnt) / 7 + 2; return { tab, fim, ciclo: fim + 20 };
-})();
-function caminhaoLixoNpc(t) {
-  const u = ((t % TAB_LIXO.ciclo) + TAB_LIXO.ciclo) % TAB_LIXO.ciclo; let sAnt = 0, tAnt = 0;
-  for (let i = 0; i < LIXEIRAS.length; i++) {
-    const tb = TAB_LIXO.tab[i];
-    if (u < tb.chega) return { s: sAnt + (LIXEIRAS[i].s - sAnt) * THREE.MathUtils.smootherstep((u - tAnt) / (tb.chega - tAnt), 0, 1) };
-    if (u < tb.sai) return { s: LIXEIRAS[i].s, lixeira: i };
-    sAnt = LIXEIRAS[i].s; tAnt = tb.sai;
+const PARADA_LIXO = 8;   // segundos parado em cada lixeira (os garis descem, recolhem e sobem)
+SETORES.forEach((S, k) => {
+  S.cam = { faixa: 351, ini: [[351, -86], [351, -64]], fimPts: [[351, -100], [351, -86]], rua: S.rua }; montarCaminho(S.cam);
+  const n = Math.max(8, Math.min(14, Math.round(S.cam.L / 85))), ini = 45, fim = S.cam.L - 45; S.lix = [];
+  for (let i = 0; i < n; i++) {
+    const s = ini + (fim - ini) * i / (n - 1), q = pontoCaminho(S.cam, s), rx = -Math.cos(q.ang), rz = Math.sin(q.ang);
+    const l = { s, x: q.x + rx * 4.6, z: q.z + rz * 4.6, ang: q.ang, coletada: -1e9, mesh: null, i: LIXEIRAS.length, setor: S.id }; LIXEIRAS.push(l); S.lix.push(l);
   }
-  if (u < TAB_LIXO.fim) return { s: sAnt + (COLETA.L - sAnt) * THREE.MathUtils.smootherstep((u - tAnt) / (TAB_LIXO.fim - tAnt), 0, 1) };
-  return { s: COLETA.L, central: true };
+  // caminhão do sistema: 7 m/s, para em cada lixeira e 20 s na Central; os setores saem em horários diferentes
+  const tab = []; let t = 0, sAnt = 0;
+  for (const l of S.lix) { const chega = t + (l.s - sAnt) / 7 + 2; tab.push({ chega, sai: chega + PARADA_LIXO }); t = chega + PARADA_LIXO; sAnt = l.s; }
+  const fimT = t + (S.cam.L - sAnt) / 7 + 2; S.tab = { tab, fim: fimT, ciclo: fimT + 20 }; S.fase = k * 47;
+  S.npc = null; S.garis = [];
+});
+const SETOR_ID = Object.fromEntries(SETORES.map((S) => [S.id, S]));
+function caminhaoLixoNpc(S, t) {
+  const C = S.tab.ciclo, u = (((t - S.fase) % C) + C) % C; let sAnt = 0, tAnt = 0;
+  for (let i = 0; i < S.lix.length; i++) {
+    const tb = S.tab.tab[i];
+    if (u < tb.chega) return { s: sAnt + (S.lix[i].s - sAnt) * THREE.MathUtils.smootherstep((u - tAnt) / (tb.chega - tAnt), 0, 1) };
+    if (u < tb.sai) return { s: S.lix[i].s, lixeira: S.lix[i], f: (u - tb.chega) / PARADA_LIXO };
+    sAnt = S.lix[i].s; tAnt = tb.sai;
+  }
+  if (u < S.tab.fim) return { s: sAnt + (S.cam.L - sAnt) * THREE.MathUtils.smootherstep((u - tAnt) / (S.tab.fim - tAnt), 0, 1) };
+  return { s: S.cam.L, central: true };
 }
-let centralMontada = false, lixoNpc = null, minhaColeta = null;
+let centralMontada = false, minhaColeta = null;
 const ehGari = () => jogador.perfil?.profissao === 'gari' || jogador.perfil?.cargo === 'admin';
 function montarCentral() {
   if (centralMontada) return; centralMontada = true;
@@ -8012,15 +8020,17 @@ function montarCentral() {
   const piso = new THREE.Mesh(new THREE.PlaneGeometry(C.x1 - C.x0, C.z1 - C.z0).rotateX(-Math.PI / 2), Mt('#5a5d61')); piso.position.set(C.x, y + 0.012, C.z); piso.receiveShadow = true; scene.add(piso);
   caixa(338, y + 4, -81, 14, 8, 34, Mt('#7d8f63', { metalness: 0.3, roughness: 0.6 }), true);   // galpão de triagem
   caixa(338, y + 8.3, -81, 15, 0.5, 35, Mt('#4f5a3a'));
-  const cores = ['#2f6fd1', '#e0c22a', '#c8322a', '#2e9e57'];   // contêineres de reciclagem
-  cores.forEach((c, k) => caixa(366, y + 0.8, -98 + k * 3, 2.4, 1.6, 2.2, Mt(c), true));
+  ['#2f6fd1', '#e0c22a', '#c8322a', '#2e9e57'].forEach((c, k) => caixa(366, y + 0.8, -98 + k * 3, 2.4, 1.6, 2.2, Mt(c), true));   // contêineres de reciclagem
   const sacos = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.55, 0), Mt('#1d2024', { roughness: 0.4 }), 26);
   for (let k = 0; k < 26; k++) sacos.setMatrixAt(k, new THREE.Matrix4().makeTranslation(355 + (k % 6) * 1.1 + Math.sin(k) * 0.3, y + 0.45 + Math.floor(k / 12) * 0.6, -66 + Math.floor(k / 6) % 2 * 1.2)); scene.add(sacos);
   for (const [o, t] of [[C.garagem, '🚛 Garagem da coleta'], [C.descarga, '♻️ Descarga']]) { const r = rotuloSimples(t, 4.2); r.position.set(o.x, 3.4, o.z); scene.add(r); }
   const nome = rotuloSimples('♻️ CENTRAL DE RECICLAGEM', 11); nome.position.set(C.x, 10, C.z1 + 1); scene.add(nome);
   // lixeiras: contêiner verde com tampa; sacos em volta quando cheia
   const corpo = Mt('#2f6b3a', { roughness: 0.6 }), tampa = Mt('#24532d'), saco = Mt('#1d2024', { roughness: 0.4 });
+  const vistas = [];
   for (const l of LIXEIRAS) {
+    if (vistas.some((v) => Math.hypot(v.x - l.x, v.z - l.z) < 3)) { l.gemea = vistas.find((v) => Math.hypot(v.x - l.x, v.z - l.z) < 3); continue; }   // setores que passam no mesmo lugar dividem a lixeira
+    vistas.push(l);
     const g = new THREE.Group(); g.position.set(l.x, alturaChao(l.x, l.z), l.z); g.rotation.y = l.ang; scene.add(g);
     const c1 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.2, 1.1), corpo); c1.position.y = 0.6; c1.castShadow = true; g.add(c1);
     const c2 = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.12, 1.2), tampa); c2.position.y = 1.26; g.add(c2);
@@ -8030,59 +8040,110 @@ function montarCentral() {
     mundo.addCol({ tipo: 'circ', x: l.x, z: l.z, r: 0.9 });
   }
 }
-function garisOnline() { for (const r of remotos.values()) if (r.meta?.gr) return true; return !!minhaColeta; }
+// uma lixeira compartilhada (mesmo lugar em dois setores) é a mesma: recolher uma esvazia a outra
+const lixReal = (l) => l.gemea || l;
+function esvaziar(l, t) { const r = lixReal(l); r.coletada = t; for (const o of LIXEIRAS) if (o.gemea === r) o.coletada = t; }
+// ---- garis NPC: dois por caminhão, nos estribos de trás; descem na lixeira e levam os sacos
+const ROUPA_GARI = ['Urban_Explorer', 'Patchwork_Scout'];
+function garisDe(dono) {
+  if (dono.garis.length || dono.criandoGaris) return dono.garis;
+  dono.criandoGaris = true;
+  ROUPA_GARI.forEach((id, k) => criarAvatar('personagens', id).then((av) => {
+    const et = textoSprite('Gari', { escala: 0.45, fundo: 'rgba(232,137,28,.95)' }); et.position.y = 2.1; av.raiz.add(et);
+    av.raiz.visible = false; scene.add(av.raiz); dono.garis[k] = { av, anim: '' };
+  }).catch(() => {}));
+  return dono.garis;
+}
+// f: 0..1 na parada (null = andando); caminhão em (x, z, ang); lixeira l
+function posicionarGaris(dono, mesh, f, l, visivel, dt) {
+  const gs = garisDe(dono), a = mesh.rotation.y, fx = Math.sin(a), fz = Math.cos(a), rx = -Math.cos(a), rz = Math.sin(a);
+  gs.forEach((g, k) => {
+    if (!g) return; const av = g.av; av.raiz.visible = visivel; if (!visivel) return;
+    const lado = k ? 0.65 : -0.65, est = { x: mesh.position.x - fx * 4.9 + rx * lado, z: mesh.position.z - fz * 4.9 + rz * lado };
+    let p = est, anim = 'idle', y = mesh.position.y + 0.45, rot = a;
+    if (f !== null && l) {
+      const lx = l.x - rx * 0.9 + fx * (k ? 0.7 : -0.7), lz = l.z - rz * 0.9 + fz * (k ? 0.7 : -0.7);
+      const fase = THREE.MathUtils.clamp((f - k * 0.06) / 0.9, 0, 1);
+      if (fase < 0.3) { const u = fase / 0.3; p = { x: est.x + (lx - est.x) * u, z: est.z + (lz - est.z) * u }; anim = 'walk'; y = alturaChao(p.x, p.z); rot = Math.atan2(lx - est.x, lz - est.z); }
+      else if (fase < 0.45) { p = { x: lx, z: lz }; anim = 'idle'; y = alturaChao(lx, lz); rot = Math.atan2(l.x - lx, l.z - lz); }
+      else if (fase < 0.8) { const u = (fase - 0.45) / 0.35; p = { x: lx + (est.x - lx) * u, z: lz + (est.z - lz) * u }; anim = 'carry_walk'; y = alturaChao(p.x, p.z); rot = Math.atan2(est.x - lx, est.z - lz); }
+      else { p = est; anim = 'idle'; }
+    }
+    av.raiz.position.set(p.x, y, p.z); av.raiz.rotation.y = rot;
+    if (anim !== g.anim) { g.anim = anim; av.tocar(anim, { velocidade: 1 }); }
+    av.mixer.update(dt);
+  });
+}
+function setoresComGari() { const r = new Set(); for (const x of remotos.values()) if (x.meta?.gr) r.add(Number(x.meta.gr)); if (minhaColeta) r.add(minhaColeta.S.id); return r; }
 function atualizarColeta(dt) {
   montarCentral();
-  const t = agoraServidor() / 1000;
-  // caminhão do sistema (só sem gari jogador trabalhando)
-  const npcAtivo = !garisOnline();
-  if (!lixoNpc && modelos.caminhao_lixo && Math.abs(jogador.pos.x - CENTRAL.x) + Math.abs(jogador.pos.z - CENTRAL.z) < 700) { lixoNpc = civico.modeloCarro('caminhao_lixo', '#ffffff'); lixoNpc.userData.giroflex = true; scene.add(lixoNpc); }
-  if (lixoNpc) {
-    const e = caminhaoLixoNpc(t), q = pontoCaminho(COLETA, e.s);
-    lixoNpc.position.set(q.x, alturaChao(q.x, q.z), q.z); lixoNpc.rotation.y = q.ang;
-    lixoNpc.visible = npcAtivo && !jogador.dentroCasa;
-    if (npcAtivo && e.lixeira !== undefined) LIXEIRAS[e.lixeira].coletada = t;
-    if (lixoNpc.visible) sons.continuo('caminhao_andando', 0.45 * sons.perto(Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z), 50));
-    lixoNpc.userData.parado = e.lixeira !== undefined || e.central;
+  const t = agoraServidor() / 1000, ocupados = setoresComGari();
+  for (const S of SETORES) {
+    const e = caminhaoLixoNpc(S, t), q = pontoCaminho(S.cam, e.s), perto = Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) < 260;
+    const ativo = !ocupados.has(S.id);
+    if (ativo && e.lixeira) esvaziar(e.lixeira, t);   // o caminhão do sistema recolhe mesmo longe (todos veem igual)
+    if (!S.npc && perto && modelos.caminhao_lixo) { S.npc = civico.modeloCarro('caminhao_lixo', '#ffffff'); S.npc.userData.giroflex = true; scene.add(S.npc); }
+    if (!S.npc) continue;
+    S.npc.position.set(q.x, alturaChao(q.x, q.z), q.z); S.npc.rotation.y = q.ang;
+    S.npc.visible = ativo && perto && !jogador.dentroCasa;
+    if (S.npc.visible) sons.continuo('caminhao_andando', 0.45 * sons.perto(Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z), 50));
+    if (S.npc.visible || S.garis.length) posicionarGaris(S, S.npc, e.lixeira ? e.f : null, e.lixeira ? lixReal(e.lixeira) : null, S.npc.visible && Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) < 160, dt);
   }
   for (const l of LIXEIRAS) if (l.cheio) l.cheio.visible = lixeiraCheia(l, t);
   if (minhaColeta) atualizarMinhaColeta(dt, t);
 }
-// colisão do caminhão do sistema (empurra quem está na frente)
+// colisão dos caminhões do sistema (empurram quem está na frente)
 function colidirLixoNpc(p, raio) {
-  if (!lixoNpc?.visible) return;
-  const a = lixoNpc.rotation.y, fx = Math.sin(a), fz = Math.cos(a);
-  for (const o of [-2.6, 0, 2.6]) { const cx = lixoNpc.position.x + fx * o, cz = lixoNpc.position.z + fz * o, dx = p.x - cx, dz = p.z - cz, r = raio + 1.4, d2 = dx * dx + dz * dz; if (d2 < r * r && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = cx + dx / d * r; p.z = cz + dz / d * r; } }
+  for (const S of SETORES) {
+    const m = S.npc; if (!m?.visible) continue;
+    const a = m.rotation.y, fx = Math.sin(a), fz = Math.cos(a);
+    for (const o of [-2.6, 0, 2.6]) { const cx = m.position.x + fx * o, cz = m.position.z + fz * o, dx = p.x - cx, dz = p.z - cz, r = raio + 1.4, d2 = dx * dx + dz * dz; if (d2 < r * r && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = cx + dx / d * r; p.z = cz + dz / d * r; } }
+  }
 }
 // ---- gari jogador
 function pegarCaminhaoLixo() {
   if (!ehGari()) { abrirServico('lixo'); return; }
   if (jogador.carro) { aviso('Desça do veículo primeiro.'); return; }
-  const q = pontoCaminho(COLETA, 0), mesh = civico.modeloCarro('caminhao_lixo', '#ffffff'); mesh.userData.giroflex = true;
+  const ocupados = setoresComGari();
+  escolher('🚛 Garagem da coleta', 'Escolha o setor. Os dois garis NPC vão com você e descem em cada lixeira.', SETORES.map((S) => ({
+    rotulo: `${ocupados.has(S.id) ? '🚫' : '🗑️'} ${S.nome} · ${S.lix.length} lixeiras · ${(S.cam.L / 1000).toFixed(1)} km${ocupados.has(S.id) ? ' (outro gari)' : ''}`,
+    fn: () => (ocupados.has(S.id) ? aviso('Outro gari já está nesse setor.') : sairComCaminhao(S)),
+  })));
+}
+function sairComCaminhao(S) {
+  const q = pontoCaminho(S.cam, 0), mesh = civico.modeloCarro('caminhao_lixo', '#ffffff'); mesh.userData.giroflex = true;
   mesh.position.set(q.x, alturaChao(q.x, q.z), q.z); mesh.rotation.y = q.ang; scene.add(mesh);
   if (jogador.armado) alternarArma();
   modoVolante(true);
   jogador.carro = { id: 'l' + jogador.perfil.id.slice(0, 8), servico: 'lixo', modelo: 'caminhao_lixo', cor: '#ffffff', vel: 0, mesh, salvar: 1e9, max: 9, raio: 1.8, alt: 0 };
   jogador.pos.set(q.x, alturaChao(q.x, q.z), q.z); jogador.yaw = q.ang; jogador.alvo = null; jogador.avatar.raiz.visible = false;
-  minhaColeta = { mesh, carga: 0, s: 0, parado: 0 };
+  minhaColeta = { S, mesh, carga: 0, s: 0, parado: 0, garis: [], recolhendo: null };
   conexao?.rastrear(metaPresenca());
-  aviso('🚛 Siga a faixa amarela até as lixeiras cheias (com sacos em volta). Pare do lado para recolher. Depois descarregue na Central.', 6);
+  aviso(`🚛 ${S.nome}: siga a faixa amarela até as lixeiras cheias. Pare do lado e espere os garis recolherem. Depois descarregue na Central.`, 6);
 }
 function alvoColeta(c, t) {
-  if (c.carga < 14) for (const l of LIXEIRAS) if (l.s > c.s - 5 && lixeiraCheia(l, t)) return { s: l.s, l };
-  return { s: COLETA.L, central: true };
+  if (c.carga < 14) for (const l of c.S.lix) if (l.s > c.s - 5 && lixeiraCheia(lixReal(l), t)) return { s: l.s, l };
+  return { s: c.S.cam.L, central: true };
 }
 function atualizarMinhaColeta(dt, t) {
   const c = minhaColeta;
   if (!jogador.carro || jogador.carro.mesh !== c.mesh) { encerrarColeta(); return; }
   const alvo = alvoColeta(c, t);
-  if ((tempoRota -= dt) <= 0) { tempoRota = 0.25; const v = { L: COLETA, s: c.s, prox: 0, alvoS: alvo.s }; desenharRota(rotaDaVolta(v)); c.s = v.s; }
-  if (Math.abs(jogador.carro.vel) > 0.5) { c.parado = 0; return; }
+  if ((tempoRota -= dt) <= 0) { tempoRota = 0.25; const v = { L: c.S.cam, s: c.s, prox: 0, alvoS: alvo.s }; desenharRota(rotaDaVolta(v)); c.s = v.s; }
+  const parado = Math.abs(jogador.carro.vel) < 0.5;
+  // os garis NPC trabalham com você: descem quando você para do lado de uma lixeira cheia
+  if (!c.recolhendo && parado && c.carga < 14) { const l = c.S.lix.find((x) => lixeiraCheia(lixReal(x), t) && Math.hypot(lixReal(x).x - jogador.pos.x, lixReal(x).z - jogador.pos.z) < 8); if (l) c.recolhendo = { l: lixReal(l), f: 0 }; }
+  if (c.recolhendo) {
+    if (!parado && c.recolhendo.f < 0.8) { c.recolhendo = null; aviso('Espere os garis voltarem para o caminhão!', 2); }
+    else {
+      c.recolhendo.f += dt / 4.5;
+      if (c.recolhendo.f >= 1) { const l = c.recolhendo.l; esvaziar(l, t); c.carga++; c.recolhendo = null; conexao?.enviar('lixo', { i: l.i }); aviso(`🗑️ Lixeira recolhida! Carga: ${c.carga}/14.${c.carga >= 14 ? ' Caminhão cheio: volte à Central.' : ''}`, 2.5); }
+    }
+  }
+  posicionarGaris(c, c.mesh, c.recolhendo ? c.recolhendo.f : null, c.recolhendo?.l, !jogador.dentroCasa, dt);
+  if (!parado) { c.parado = 0; return; }
   c.parado += dt;
-  // lixeira cheia ao lado
-  const l = LIXEIRAS.find((x) => lixeiraCheia(x, t) && Math.hypot(x.x - jogador.pos.x, x.z - jogador.pos.z) < 7.5);
-  if (l && c.carga < 14) { if (c.parado < 2.5) return; l.coletada = t; c.carga++; c.parado = 0; conexao?.enviar('lixo', { i: LIXEIRAS.indexOf(l) }); aviso(`🗑️ Lixeira recolhida! Carga: ${c.carga}/14.${c.carga >= 14 ? ' Caminhão cheio: volte à Central.' : ''}`, 2.5); return; }
-  const fim = pontoCaminho(COLETA, COLETA.L);
+  const fim = pontoCaminho(c.S.cam, c.S.cam.L);
   if (c.carga > 0 && Math.hypot(fim.x - jogador.pos.x, fim.z - jogador.pos.z) < 10 && c.parado > 1.5 && !c.pagando) {
     c.pagando = true; const n = c.carga;
     rede.transporte.pagarColeta(n).then((v) => { c.carga = 0; c.s = 0; aviso(`♻️ Descarregou ${n} lixeira(s): +${v} moedas. Pode sair para outra volta.`, 4); })
@@ -8092,13 +8153,14 @@ function atualizarMinhaColeta(dt, t) {
 function encerrarColeta() {
   const c = minhaColeta; if (!c) return; minhaColeta = null;
   if (jogador.carro?.mesh === c.mesh) { jogador.carro = null; modoVolante(false); jogador.avatar.raiz.visible = true; jogador.pos.x += Math.cos(jogador.yaw) * 2.6; jogador.pos.z -= Math.sin(jogador.yaw) * 2.6; resolverColisao(jogador.pos, jogador.raio); }
+  for (const g of c.garis) if (g) scene.remove(g.av.raiz);
   scene.remove(c.mesh); esconderRota(); conexao?.rastrear(metaPresenca());
   aviso(c.carga ? `🚛 Caminhão devolvido. ${c.carga} lixeira(s) não descarregada(s) foram perdidas.` : '🚛 Caminhão devolvido à garagem.', 3);
 }
-function receberLixo(m) { const l = LIXEIRAS[m.i]; if (l) l.coletada = agoraServidor() / 1000; }
+function receberLixo(m) { const l = LIXEIRAS[m.i]; if (l) esvaziar(l, agoraServidor() / 1000); }
 function contextoColeta() {
   if (jogador.carro) return null;
-  if (Math.hypot(CENTRAL.garagem.x - jogador.pos.x, CENTRAL.garagem.z - jogador.pos.z) < 3.5) return [ehGari() ? 'garagem: pegar o caminhão de lixo' : 'Central de Reciclagem (vagas para gari)', 'Coleta'];
+  if (Math.hypot(CENTRAL.garagem.x - jogador.pos.x, CENTRAL.garagem.z - jogador.pos.z) < 3.5) return [ehGari() ? 'garagem: escolher o setor e pegar o caminhão de lixo' : 'Central de Reciclagem (vagas para gari)', 'Coleta'];
   return null;
 }
 function acaoColeta() { if (contextoColeta()) { pegarCaminhaoLixo(); return true; } return false; }

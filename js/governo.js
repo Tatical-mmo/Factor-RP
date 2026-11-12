@@ -366,7 +366,7 @@ async function telaTorre(c) {
 }
 async function telaLixo(c) {
   const carreira = await cartaoCarreira('gari');
-  c.innerHTML = `${carreira}${telaProfissao(c, 'gari', 'Gari · coleta de lixo', 'Na <b>Central de Reciclagem</b> (leste do centro), pegue o caminhão de lixo na garagem. A faixa amarela leva às lixeiras cheias (com sacos em volta): pare do lado por alguns segundos para recolher. Cabem 14 lixeiras; depois volte à Central e pare na <b>Descarga</b>. Cada lixeira vale <b>15</b> e cada descarga <b>+100</b>. As lixeiras enchem de novo em 4 minutos. Sem gari jogador, o caminhão do sistema faz a coleta.')}`;
+  c.innerHTML = `${carreira}${telaProfissao(c, 'gari', 'Gari · coleta de lixo', 'Na <b>Central de Reciclagem</b> (leste do centro), escolha um dos 4 setores na garagem e pegue o caminhão de lixo. A faixa amarela leva às lixeiras cheias (com sacos em volta): pare do lado e espere os dois garis NPC descerem, levarem os sacos e subirem de novo. Cabem 14 lixeiras; depois volte à Central e pare na <b>Descarga</b>. Cada lixeira vale <b>15</b> e cada descarga <b>+100</b>. As lixeiras enchem de novo em 4 minutos. Em cada setor sem gari jogador, um caminhão do sistema faz a coleta com os seus garis NPC.')}`;
   ligarProfissao('gari');
 }
 async function telaFiscal(c) {
