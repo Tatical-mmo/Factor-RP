@@ -96,6 +96,8 @@ export function limitar(p) {
     }
     if (md < 3) { p.x = melhor[0]; p.z = melhor[1]; return; }
   }
+  if (p.x >= 110 && p.x <= 530 && p.z >= -880 && p.z <= -650) return;   // Aeroporto da Metrópole
+  if (p.x >= 157 && p.x <= 167 && p.z >= -662 && p.z <= -630) return;   // acesso ao aeroporto
   if (Math.abs(p.z) > 700) {
     const s = Math.sign(p.z);
     p.x = THREE.MathUtils.clamp(p.x, -CIDADE_Z.x, CIDADE_Z.x);

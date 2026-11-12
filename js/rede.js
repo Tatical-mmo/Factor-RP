@@ -79,6 +79,8 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'clima' }, ({ payload }) => eventos.clima?.(payload));
   canal.on('broadcast', { event: 'assalto' }, ({ payload }) => eventos.assalto?.(payload));
   canal.on('broadcast', { event: 'algemaNpc' }, ({ payload }) => eventos.algemaNpc?.(payload));
+  canal.on('broadcast', { event: 'torre' }, ({ payload }) => eventos.torre?.(payload));
+  canal.on('broadcast', { event: 'torreOk' }, ({ payload }) => eventos.torreOk?.(payload));
   canal.on('broadcast', { event: 'bueiro' }, ({ payload }) => eventos.bueiro?.(payload));
   canal.on('broadcast', { event: 'carroRua' }, ({ payload }) => eventos.carroRua?.(payload));
   canal.on('broadcast', { event: 'reset' }, ({ payload }) => eventos.reset?.(payload));
@@ -767,4 +769,7 @@ export const listarCasas = () => sel(sb.from('casas').select('id, x, z, preco, d
 
 export const transporte = {
   pagarOnibus: (passageiros, pontual) => rpc('pagar_onibus', { p_passageiros: passageiros, p_pontual: pontual }),
+  passagem: () => rpc('comprar_passagem'),
+  pagarVoo: (porte) => rpc('pagar_voo', { p_porte: porte }),
+  pagarTorre: () => rpc('pagar_torre'),
 };

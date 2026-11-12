@@ -168,6 +168,8 @@ const SERVICOS = {
   trabalho: ['💼 Seu trabalho', telaTrabalho],
   taxi: ['Carona: para onde?', telaTaxi],
   onibus: ['🚌 Terminal de ônibus', telaOnibus],
+  piloto: ['🛩️ Hangar dos pilotos', telaPiloto],
+  torre: ['🗼 Torre de controle', telaTorre],
 };
 
 async function telaBanco(c) {
@@ -199,6 +201,8 @@ const PUBLICOS = [
   { id: 'bombeiro', nome: '🚒 Bombeiros', inicio: 'Recruta', req: 'ficha limpa', onde: 'Quartel dos Bombeiros', base: '30/min' },
   { id: 'jornalista', nome: '📰 Jornal da Cidade', inicio: 'Estagiário', req: 'ficha limpa', onde: 'Prefeitura (balcão do jornal)', base: '24/min' },
   { id: 'motorista', nome: '🚌 Ônibus (motorista)', inicio: 'Motorista', req: 'ficha limpa', onde: 'Terminal de ônibus (Rua dos Clãs × Av. Central)', base: '18/min + 12 por passageiro' },
+  { id: 'piloto', nome: '✈️ Piloto de avião', inicio: 'Copiloto', req: 'ficha limpa', onde: 'Hangar do Aeroporto da Metrópole', base: '30/min + 250 a 600 por voo' },
+  { id: 'controlador', nome: '🗼 Controlador de voo', inicio: 'Controlador Trainee', req: 'ficha limpa', onde: 'Torre do Aeroporto da Metrópole', base: '26/min + 40 por autorização' },
   { id: 'exercito', nome: '🎖️ Exército', inicio: 'Recruta', req: 'ficha limpa (a equipe também pode entrar)', onde: 'Quartel do Exército (Porto Sul)', base: '35/min' },
 ];
 const servicoAtual = (eu) => (eu.policial ? 'policia' : eu.prf ? 'prf' : eu.profissao || null);
@@ -345,6 +349,16 @@ async function telaOnibus(c) {
   const carreira = await cartaoCarreira('motorista');
   c.innerHTML = `${carreira}${telaProfissao(c, 'motorista', 'Motorista de ônibus', 'A <b>Linha 1 · Circular</b> roda pelo centro nos dois sentidos (Ida e Volta). Em serviço, toque em <b>Pegar ônibus</b> no terminal: você assume a próxima saída da tabela. Siga as paradas (🚏 no mapa), pare em cada uma para os passageiros, respeite os horários (nem adiantado, nem atrasado) e volte ao terminal. Cada passageiro vale <b>12</b> e a volta no horário dá <b>+150</b>. Quando não há motorista, ônibus do sistema fazem a linha.')}`;
   ligarProfissao('motorista');
+}
+async function telaPiloto(c) {
+  const carreira = await cartaoCarreira('piloto');
+  c.innerHTML = `${carreira}${telaProfissao(c, 'piloto', 'Piloto de avião', 'Pegue o avião no hangar (Copiloto: pequeno · Piloto: médio · Comandante: grande). Na pista, a torre autoriza a decolagem; acelere e suba. Para pousar, toque em <b>🛬 POUSAR</b> alinhado com uma pista, devagar. Fora da pista, torto ou rápido demais, o avião cai e explode. O avião grande só pousa no Aeroporto da Metrópole. Cada voo entre aeroportos paga <b>250 a 600</b>.')}`;
+  ligarProfissao('piloto');
+}
+async function telaTorre(c) {
+  const carreira = await cartaoCarreira('controlador');
+  c.innerHTML = `${carreira}${telaProfissao(c, 'controlador', 'Controlador de voo', 'Fique na <b>torre de controle</b> do Aeroporto da Metrópole: os pedidos de pouso e decolagem dos pilotos chegam com aviso. Toque em <b>Torre</b> e autorize: cada autorização vale <b>40</b>. Sem controlador na torre, a autorização é automática.')}`;
+  ligarProfissao('controlador');
 }
 async function telaHospital(c) {
   const carreira = await cartaoCarreira('medico');

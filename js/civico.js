@@ -144,6 +144,9 @@ export const CARROS = {
   helicoptero: { nome: 'Helicóptero executivo', preco: 1500000, vel: 24, voa: true },
   tanque: { nome: 'Tanque do Exército', preco: 0, vel: 7 },
   onibus: { nome: 'Ônibus', preco: 0, vel: 12 },
+  aviao_pequeno: { nome: 'Avião pequeno', preco: 0, vel: 40, voa: true },
+  aviao_medio: { nome: 'Avião médio', preco: 0, vel: 52, voa: true },
+  aviao_grande: { nome: 'Avião grande', preco: 0, vel: 64, voa: true },
 };
 // quantos passageiros cada veículo leva (além do motorista); veículos do Exército só levam militares
 export const LUGARES = { tanque: 1, militar: 3, exercito_caminhao: 8, helicoptero_exercito: 6, helicoptero: 4, suv: 3, popular: 3, esportivo: 1, presidencial: 3 };
@@ -156,8 +159,8 @@ function bloco(g, m, w, h, d, x, y, z) {
 }
 
 export function iniciar(contexto) { ctx = contexto; }
-const GLB_CARRO = { tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros' };
-const SEM_TINTA = new Set(['tanque', 'presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
+const GLB_CARRO = { tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande' };
+const SEM_TINTA = new Set(['aviao_pequeno', 'aviao_medio', 'aviao_grande', 'tanque', 'presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
 export function montarPrefeitura() {
@@ -362,7 +365,7 @@ export function modeloCarro(modelo, cor) {
     const g = base.clone(true);
     if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
     else if (SEM_TINTA.has(modelo)) { const sr = { ambulancia: [3.4, 0.9], bombeiros: [3.15, 2.5] }[modelo]; if (sr) sirene(g, sr); }
-    else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), 0.45); } });
+    else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), modelo === 'onibus' ? 0.22 : 0.45); } });
     cacheCarro.set(chave, g);
     return g.clone();
   }
