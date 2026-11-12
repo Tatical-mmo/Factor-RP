@@ -775,3 +775,18 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
   - o volante fica à esquerda, e o console e o retrovisor ficam para a direita;
   - o popular, o jipe e os caminhões usam o interior do próprio modelo.
 - **Jipe:** os vidros opacos do para-brisa foram tirados, e o motorista aparece sentado (você e os outros jogadores).
+
+## Versão 13/11 · clássico V8 (20261113h)
+
+- Carro novo na concessionária: **Clássico V8**, por 1.000.000 moedas. É o carro mais caro e o mais rápido (até ~58 km/h no jogo). Leva 3 passageiros e entra no limite de 3 veículos por jogador. Vender devolve a metade, como os outros.
+- **Rode o SQL `supabase/61_carro_classico.sql`** no Supabase antes de vender o carro, ou a compra é recusada.
+- O modelo está em `assets/modelos/carro_classico.glb`: frente +Z, 5 m de comprimento, textura de cor 1024.
+- Rodas novas no estilo cromado de 5 janelas (`roda_classico.glb`), com o embaixo do carro preenchido.
+- Primeira pessoa com o interior do próprio modelo: painel, volante à esquerda e o capô laranja aparecendo.
+- Sons do motor tirados do áudio enviado:
+  - `classico_partida`: ligando;
+  - `classico_lenta`: marcha lenta, em loop;
+  - `classico_alto`: rotação alta, em loop;
+  - `classico_ronco`: acelerada curta.
+- Parado, toca a marcha lenta. Conforme acelera, entra o ronco alto e o tom sobe com a velocidade. Pisar no acelerador devagar dá uma acelerada de vez em quando (no máximo uma a cada 5 s).
+- A concessionária mostra o Clássico V8 laranja junto com os outros.

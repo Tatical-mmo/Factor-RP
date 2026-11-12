@@ -6,8 +6,8 @@
 
 const ARQUIVOS = ['sirene_bombeiros', 'sirene_ambulancia', 'sirene_policia', 'helicoptero_baixo', 'helicoptero_alto',
   'buzina_trem', 'trem_andando', 'robo_conversando', 'tiro',
-  'carro_geral', 'carro_esportivo', 'motor_jipe', 'caminhao_andando', 'van', 'carro_partida', 'passaros'];
-const SOB_DEMANDA = ['cidade_ambiente', 'chuva', 'tempestade', 'nevasca', 'aviao_fora', 'aviao_dentro', 'aviao_pequeno', 'aviao_medio', 'onibus_grande', 'onibus_pequeno'];
+  'carro_geral', 'carro_esportivo', 'motor_jipe', 'caminhao_andando', 'van', 'carro_partida', 'passaros', 'classico_partida', 'classico_ronco'];
+const SOB_DEMANDA = ['cidade_ambiente', 'chuva', 'tempestade', 'nevasca', 'aviao_fora', 'aviao_dentro', 'aviao_pequeno', 'aviao_medio', 'onibus_grande', 'onibus_pequeno', 'classico_lenta', 'classico_alto'];
 const CONTINUOS = ['sirene_bombeiros', 'sirene_ambulancia', 'sirene_policia', 'helicoptero_baixo', 'helicoptero_alto', 'trem_andando',
   'carro_geral', 'carro_esportivo', 'motor_jipe', 'caminhao_andando', 'van', 'passaros', ...SOB_DEMANDA];
 let ac = null, mestre = null, ligado = true;

@@ -1228,7 +1228,7 @@ function entrarCarro(v) {
   modoVolante(true);
   if (jogador.armado) alternarArma();
   jogador.carro = { id: v.d.id, modelo: v.d.modelo, cor: v.d.cor, vel: 0, mesh: v.mesh, salvar: 20, voa: !!civico.CARROS[v.d.modelo]?.voa, alt: 0, raio: v.d.modelo === 'helicoptero' ? 2.2 : undefined };
-  if (!jogador.carro.voa) sons.tocar('carro_partida', { vol: 0.6 });
+  if (!jogador.carro.voa) sons.tocar(jogador.carro.modelo === 'classico' ? 'classico_partida' : 'carro_partida', { vol: jogador.carro.modelo === 'classico' ? 0.75 : 0.6 });
   jogador.pos.set(v.mesh.position.x, v.mesh.position.y, v.mesh.position.z); jogador.yaw = v.mesh.rotation.y; jogador.alvo = null;
   jogador.avatar.raiz.visible = false;
   aviso(`${civico.CARROS[v.d.modelo]?.nome || 'Carro'}: use o controle para dirigir. Toque em Sair para estacionar.`, 3.5);
@@ -3798,13 +3798,21 @@ function atualizarSons() {
 }
 // motor de cada tipo de veículo: o meu (tom sobe com a velocidade), dos outros jogadores e das empresas por perto
 const SOM_MOTOR = { popular: 'carro_geral', suv: 'carro_geral', viatura: 'carro_geral', presidencial: 'carro_geral', ambulancia: 'carro_geral',
-  esportivo: 'carro_esportivo', militar: 'motor_jipe', exercito_caminhao: 'caminhao_andando', bombeiros: 'caminhao_andando', tanque: 'caminhao_andando',
+  esportivo: 'carro_esportivo', classico: 'classico_alto', militar: 'motor_jipe', exercito_caminhao: 'caminhao_andando', bombeiros: 'caminhao_andando', tanque: 'caminhao_andando',
   caminhao: 'caminhao_andando', van: 'van', lixo: 'caminhao_andando', caminhao_lixo: 'caminhao_andando', autoescola: 'carro_geral', caminhao_escola: 'caminhao_andando' };
 function somMotores(dist) {
   const c = jogador.carro;
   if (c && !c.voa) {
     const mod = c.caminhao ? (c.tipo || 'caminhao') : (c.servico || c.modelo), nome = SOM_MOTOR[mod];
-    if (nome) {
+    if (mod === 'classico') {   // V8: marcha lenta parada, ronco alto conforme acelera, e uma acelerada de vez em quando
+      const max = c.max || civico.CARROS.classico.vel, k = THREE.MathUtils.clamp(Math.abs(c.vel || 0) / max, 0, 1), pe = pedais.acel || teclas.has('w') || teclas.has('arrowup');
+      const alto = THREE.MathUtils.smoothstep(k + (pe ? 0.25 : 0), 0.08, 0.55);
+      sons.continuo('classico_lenta', 0.5 * (1 - alto), 1 + 0.35 * k);
+      sons.continuo('classico_alto', 0.15 + 0.5 * alto, 0.72 + 0.45 * k);
+      const agora = performance.now();
+      if (pe && !c.peAntes && k < 0.3 && agora - (c.ultRonco || 0) > 5000) { c.ultRonco = agora; sons.tocar('classico_ronco', { vol: 0.6 }); }
+      c.peAntes = pe;
+    } else if (nome) {
       const max = c.max || civico.CARROS[c.modelo]?.vel || 11, k = THREE.MathUtils.clamp(Math.abs(c.vel || 0) / max, 0, 1);
       const base = mod === 'tanque' ? 0.65 : nome === 'carro_esportivo' ? 0.8 : 0.85;
       sons.continuo(nome, 0.22 + 0.33 * k, base + (nome === 'carro_esportivo' ? 0.5 : 0.55) * k);
@@ -5273,6 +5281,7 @@ const _rcOlho = new THREE.Raycaster();
 // interior = o modelo já tem painel e volante por dentro (não desenha a moldura); nada = sem moldura (tanque)
 const CABINE = {
   carro_popular: { olho: [1.38, -0.05], interior: 1 },
+  carro_classico: { olho: [1.28, -0.3], interior: 1 },
   exercito_jipe: { olho: [1.8, -0.5], interior: 1 },
   carro_suv: { olho: [1.72, 0.25], capo: [1.38, 1.25] },
   carro_esportivo: { olho: [1.07, -0.35], capo: [0.92, 0.65] },
@@ -8867,7 +8876,7 @@ function testarVeiculo(modelo) {
   jogador.alvo = null; jogador.avatar.raiz.visible = false;
   document.body.classList.toggle('tanque', modelo === 'tanque');
   if (modelo === 'tanque' && TOQUE) $('btTiro').classList.remove('oculto');
-  if (!C.voa) sons.tocar('carro_partida', { vol: 0.6 });
+  if (!C.voa) sons.tocar(modelo === 'classico' ? 'classico_partida' : 'carro_partida', { vol: modelo === 'classico' ? 0.75 : 0.6 });
   aviso(`🧪 Testando: ${C.nome}. Saia do veículo para guardá-lo.`, 3);
 }
 function entrarAviao(porte, parado = aviaoLivre(porte)) {

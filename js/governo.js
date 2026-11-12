@@ -142,7 +142,7 @@ async function telaCarros(c) {
   const meus = ctx.meusCarros();
   c.innerHTML = `<p class="dica">Moedas: <b>${num(ctx.perfil().moedas)}</b>. Até 3 carros por jogador. O carro novo fica estacionado aqui na frente: chegue perto e toque em <b>Dirigir</b>. Ele fica onde você descer.</p>
     <div class="sub">Cor</div><div class="cores">${CORES_CARRO.map((k, i) => `<button data-cor="${k}" class="${i === 0 ? 'sel' : ''}" style="background:${k}"></button>`).join('')}</div>
-    <div class="lista">${['popular', 'suv', 'esportivo', 'helicoptero'].map((m) => `<div class="linha item"><span class="nm"><b>${CARROS[m].nome}</b><small>${num(CARROS[m].preco)} · até ${Math.round(CARROS[m].vel * 3.6)} km/h</small></span>
+    <div class="lista">${['popular', 'suv', 'esportivo', 'classico', 'helicoptero'].map((m) => `<div class="linha item"><span class="nm"><b>${CARROS[m].nome}</b><small>${num(CARROS[m].preco)} · até ${Math.round(CARROS[m].vel * 3.6)} km/h</small></span>
       <span class="bts"><button data-carro="${m}">Comprar</button></span></div>`).join('')}</div>
     <div class="sub">Seus carros</div>
     <div class="lista">${meus.length ? meus.map((k) => `<div class="linha item"><span class="nm"><b style="color:${esc(k.cor)}">■</b> <b>${CARROS[k.modelo]?.nome}</b><small>${k.modelo === 'presidencial' ? 'do cargo de prefeito' : `vende por ${num(CARROS[k.modelo].preco / 2)}`}</small></span>

@@ -135,6 +135,7 @@ export const CARROS = {
   popular: { nome: 'Popular', preco: 40000, vel: 10 },
   suv: { nome: 'SUV', preco: 95000, vel: 11 },
   esportivo: { nome: 'Esportivo', preco: 180000, vel: 14 },
+  classico: { nome: 'Clássico V8', preco: 1000000, vel: 16 },
   ambulancia: { nome: 'Ambulância', preco: 0, vel: 12 },
   viatura: { nome: 'Viatura', preco: 0, vel: 12 },
   bombeiros: { nome: 'Caminhão dos bombeiros', preco: 0, vel: 10 },
@@ -156,7 +157,7 @@ export const CARROS = {
   aviao_grande: { nome: 'Avião grande', preco: 0, vel: 64, voa: true },
 };
 // quantos passageiros cada veículo leva (além do motorista); veículos do Exército só levam militares
-export const LUGARES = { tanque: 1, militar: 3, exercito_caminhao: 8, helicoptero_exercito: 6, helicoptero: 4, suv: 3, popular: 3, esportivo: 1, presidencial: 3 };
+export const LUGARES = { tanque: 1, militar: 3, exercito_caminhao: 8, helicoptero_exercito: 6, helicoptero: 4, suv: 3, popular: 3, classico: 3, esportivo: 1, presidencial: 3 };
 // veículos abertos: o motorista aparece sentado (banco: altura e posição no modelo, motorista do lado esquerdo)
 export const ABERTOS = { militar: { banco: [1.02, -0.62] } };
 export const DO_EXERCITO = new Set(['militar', 'exercito_caminhao', 'helicoptero_exercito', 'tanque']);
@@ -168,7 +169,7 @@ function bloco(g, m, w, h, d, x, y, z) {
 }
 
 export function iniciar(contexto) { ctx = contexto; }
-const GLB_CARRO = { tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', caminhao_escola: 'caminhao', caminhao_lixo: 'caminhao_lixo', onibus_urbano: 'onibus_urbano', onibus_executivo: 'onibus_executivo', onibus_executivo2: 'onibus_executivo2', onibus_dois_andares: 'onibus_dois_andares', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande' };
+const GLB_CARRO = { tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', classico: 'carro_classico', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', caminhao_escola: 'caminhao', caminhao_lixo: 'caminhao_lixo', onibus_urbano: 'onibus_urbano', onibus_executivo: 'onibus_executivo', onibus_executivo2: 'onibus_executivo2', onibus_dois_andares: 'onibus_dois_andares', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande' };
 const SEM_TINTA = new Set(['aviao_pequeno', 'aviao_medio', 'aviao_grande', 'tanque', 'presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
@@ -209,7 +210,7 @@ export function montarConcessionaria() {
   bloco(g, mat('#c0392b'), 28.5, 1.1, 0.3, 0, 5.6, 4.2);
   for (const [w, d, x, z] of [[28, 0.1, 0, 4], [0.1, 18, -14, -5], [0.1, 18, 14, -5]]) bloco(g, vidro, w, 5.6, d, x, 2.9, z);
   bloco(g, mat('#e9e6df'), 28, 6, 0.3, 0, 3, -14);
-  ['popular', 'suv', 'esportivo'].forEach((m, k) => { const c = modeloCarro(m, CORES_CARRO[k * 3 % CORES_CARRO.length]); c.position.set(-8 + k * 8, 0.15, -4); c.rotation.y = 0.5; g.add(c); });
+  ['popular', 'suv', 'esportivo', 'classico'].forEach((m, k) => { const c = modeloCarro(m, k === 3 ? '#d35400' : CORES_CARRO[k * 3 % CORES_CARRO.length]); c.position.set(-10.5 + k * 7, 0.15, -4); c.rotation.y = 0.5; g.add(c); });
   ctx.scene.add(g);
   const t = ctx.textoSprite('CONCESSIONÁRIA', { escala: 1.2, fundo: 'rgba(160,30,30,.92)' }); t.position.set(CONCESSIONARIA.x, 8.2, CONCESSIONARIA.z + 2); ctx.scene.add(t);
   ctx.colisores.push({ tipo: 'caixa', x0: CONCESSIONARIA.x - 14, x1: CONCESSIONARIA.x + 14, z0: CONCESSIONARIA.z - 14, z1: CONCESSIONARIA.z + 4 });
@@ -382,6 +383,7 @@ const VIDRO_JIPE = (x, y, z) => Math.abs(x) > 0.055 && Math.abs(x) < 0.8 && y > 
 // rodas que giram: posição de cada eixo medida no modelo (z, raio), altura do centro (cy) e as faces de fora/dentro
 // da roda (xo/xi, lado esquerdo; o direito é espelhado). A roda original do modelo é apagada dentro desse cilindro.
 export const RODAS = {
+  carro_classico: { estilo: 'classico', eixos: [[-1.38, 0.35], [1.57, 0.35]], cy: 0.36, xo: 0.95, xi: 0.64 },
   carro_popular: { estilo: 'carro', eixos: [[-1.22, 0.345], [1.17, 0.345]], cy: 0.35, xo: 0.87, xi: 0.6 },
   carro_suv: { estilo: 'suv', eixos: [[-1.33, 0.42], [1.47, 0.42]], cy: 0.42, xo: 0.99, xi: 0.71 },
   carro_esportivo: { estilo: 'esporte', eixos: [[-1.19, 0.36], [1.31, 0.36]], cy: 0.36, xo: 1.0, xi: 0.71 },
@@ -398,7 +400,7 @@ export const RODAS = {
   onibus_executivo2: { estilo: 'pesado', eixos: [[-2.85, 0.55], [3.1, 0.55]], cy: 0.55, xo: 1.12, xi: 0.79 },
   onibus_dois_andares: { estilo: 'pesado', eixos: [[-3.8, 0.48], [-2.78, 0.48], [2.68, 0.48], [3.75, 0.48]], cy: 0.48, xo: 1.14, xi: 0.81 },
 };
-const LARG_RODA = { carro: 0.30, esporte: 0.32, suv: 0.36, pesado: 0.30, militar: 0.38 };
+const LARG_RODA = { classico: 0.32, carro: 0.30, esporte: 0.32, suv: 0.36, pesado: 0.30, militar: 0.38 };
 const comRodas = new Set();
 // embaixo do veículo (para não ficar oco): assoalho, caixas de roda, motor/cárter, escapamento, tanque, eixos e diferencial
 function geoChassi(nome, R, b) {
