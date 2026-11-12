@@ -741,3 +741,19 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - Quem vira piloto recebe uma marca até a frota. O hangar também usa um avião da frota.
 - O som do avião pequeno não se mistura mais com o do helicóptero, nem nos aviões dos outros jogadores.
 - Admin: o painel ganhou **🧪 Testar veículo**, com todos os veículos do jogo. Carros, ônibus, caminhões, tanque e helicópteros aparecem onde você está. Aviões levam você à vaga na frota. Ao sair, o veículo de teste some. O teleporte tem também **🛩️ Aviões dos pilotos (frota)**.
+
+## Versão 13/11 · manche (20261113f)
+
+- O avião tem **manche** e não usa mais o controle de carro. No celular, o manche amarelo fica onde estavam as setas. Arrastar para baixo puxa (o nariz sobe) e para cima empurra (desce). Para os lados, o avião vira. Solto, ele mantém a altura. Os pedais continuam sendo o motor.
+- No PC: W/S acelera e reduz, as setas ↑/↓ são o manche (↓ sobe) e A/D ou ←/→ viram.
+- Decolagem: com a torre autorizando e na velocidade mínima, é preciso puxar o manche para sair do chão.
+- No ar:
+  - subir gasta velocidade e descer ganha;
+  - devagar demais dá **estol** e o nariz cai;
+  - o teto é de cerca de 300 m.
+- Pouso:
+  - o botão POUSAR virou piloto automático de descida, que segue a rampa da faixa amarela até a cabeceira, e o manche ainda corrige;
+  - tocar o chão descendo a mais de 5 m/s é pouso duro;
+  - sair da pista acima de 16 m/s é acidente.
+- O painel de voo mostra a altura e a velocidade vertical.
+- O som do avião agora só é ouvido por quem está do lado de fora. O piloto e os passageiros ficam em silêncio.

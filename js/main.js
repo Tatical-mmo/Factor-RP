@@ -851,6 +851,7 @@ function alturaChao(x, z) {
 // ================================================================= ENTRADA
 const teclas = new Set();
 const joy = { ativo: false, x: 0, y: 0, id: null };
+const manche = { ativo: false, x: 0, y: 0, id: null };   // avião: x inclina (vira), y puxa (sobe) / empurra (desce)
 const pedais = { esq: false, dir: false, acel: false, freio: false };
 window.addEventListener('keydown', (e) => {
   const foco = document.activeElement;
@@ -935,10 +936,19 @@ function configurarJoystick() {
   const fim = (e) => { if (e.pointerId !== joy.id) return; joy.ativo = false; joy.x = joy.y = 0; bola.style.transform = ''; };
   base.addEventListener('pointerup', fim); base.addEventListener('pointercancel', fim);
   const toque = (id, fn) => $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
+  // manche do avião: arrastar para baixo puxa (nariz sobe), para cima empurra (desce); para os lados vira
+  const mb = $('manche'); if (mb) {
+    const mbola = mb.querySelector('i'), rm = 58;
+    const moverM = (e) => { const r = mb.getBoundingClientRect(); let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2); const d = Math.hypot(dx, dy); if (d > rm) { dx = dx / d * rm; dy = dy / d * rm; } manche.x = dx / rm; manche.y = dy / rm; mbola.style.transform = `translate(${dx}px, ${dy}px)`; };
+    mb.addEventListener('pointerdown', (e) => { e.preventDefault(); manche.ativo = true; manche.id = e.pointerId; try { mb.setPointerCapture(e.pointerId); } catch { } moverM(e); });
+    mb.addEventListener('pointermove', (e) => { if (manche.ativo && e.pointerId === manche.id) moverM(e); });
+    const fimM = (e) => { if (e && e.pointerId !== manche.id) return; manche.ativo = false; manche.x = manche.y = 0; mbola.style.transform = ''; };
+    mb.addEventListener('pointerup', fimM); mb.addEventListener('pointercancel', fimM); mb.addEventListener('lostpointercapture', fimM);
+  }
   // volante: setas e pedais (cada botão com o próprio dedo)
   $('vPairar').onclick = (e) => {
     e.stopPropagation(); const c = jogador.carro; if (!c?.voa) return;
-    if (c.aviao) { if (!c.noAr) { aviso('✈️ Na pista: a torre autoriza e você acelera para decolar.', 2.5); return; } c.pousar = !c.pousar; aviso(c.pousar ? '🛬 Descendo para pousar: alinhe com a pista e vá devagar.' : '🛫 Pouso cancelado: subindo de novo.', 2.5); return; }
+    if (c.aviao) { if (!c.noAr) { aviso('✈️ Na pista: a torre autoriza e você acelera para decolar.', 2.5); return; } c.pousar = !c.pousar; aviso(c.pousar ? '🛬 Piloto automático de descida: alinhe com a pista; o manche ainda corrige (desça a menos de 5 m/s).' : '🛫 Descida automática desligada: o manche volta a mandar.', 2.5); return; }
     c.pairar = !c.pairar; aviso(c.pairar ? '🚁 Pairando: o helicóptero fica parado no ar.' : '🚁 Pairar desligado: parado, ele desce para pousar.', 2.5);
   };
   for (const [id, k] of [['vEsq', 'esq'], ['vDir', 'dir'], ['vAcel', 'acel'], ['vFreio', 'freio']]) {
@@ -1211,6 +1221,7 @@ function meuCarroProximo() {
 }
 let voandoUI = false;
 function modoVolante(sim) {
+  if (!sim) { document.body.classList.remove('aviao'); manche.x = manche.y = 0; manche.ativo = false; const b = $('manche')?.querySelector('i'); if (b) b.style.transform = ''; }
   if (!sim && voandoUI) { voandoUI = false; document.body.classList.remove('voando'); } if (!sim && document.body.classList.contains('tanque')) { document.body.classList.remove('tanque'); $('btTiro').classList.toggle('oculto', !jogador.armado || !TOQUE); } document.body.classList.toggle('dirigindo', sim); for (const k in pedais) pedais[k] = false; joy.ativo = false; joy.x = joy.y = 0; }
 function entrarCarro(v) {
   if (jogador.carregando) { aviso('Largue a caixa antes de dirigir.'); return; }
@@ -8770,39 +8781,62 @@ function entrarAviao(porte, parado = aviaoLivre(porte)) {
   const P = PORTES[porte], a = AERO.metro, x = parado ? parado.x : a.spawn.x, z = parado ? parado.z : a.spawn.z, yaw = parado ? parado.ang + Math.PI : Math.PI;
   const mesh = civico.modeloCarro(P.modelo, '#ffffff'); mesh.position.set(x, 0, z); mesh.rotation.y = yaw; scene.add(mesh);
   if (jogador.armado) alternarArma();
-  modoVolante(true);
-  jogador.carro = { id: 'a' + jogador.perfil.id.slice(0, 8), servico: 'aviao', aviao: true, porte, modelo: P.modelo, cor: '#ffffff', vel: 0, mesh, salvar: 1e9, max: P.vmax, raio: P.raio, voa: true, alt: 0, vaga: parado };
+  modoVolante(true); document.body.classList.add('aviao');
+  jogador.carro = { id: 'a' + jogador.perfil.id.slice(0, 8), servico: 'aviao', pitch: 0, vs: 0, aviao: true, porte, modelo: P.modelo, cor: '#ffffff', vel: 0, mesh, salvar: 1e9, max: P.vmax, raio: P.raio, voa: true, alt: 0, vaga: parado };
   if (parado) { for (const c of parado.cols) c.off = true; if (parado.mesh) parado.mesh.visible = false; }
   jogador.pos.set(x, 0, z); jogador.yaw = yaw; if (rastreio?.frota) rastrear(null); jogador.alvo = null; jogador.avatar.raiz.visible = false;
-  aviso(`✈️ Avião ${P.nome} (${prefixo()}): siga a taxiway até a cabeceira ${a.cab} (oeste). A torre autoriza; acelere até ${P.vdec} m/s para subir. Para pousar, 🛬 POUSAR alinhado com uma pista.`, 7);
+  aviso(`✈️ Avião ${P.nome} (${prefixo()}): o manche amarelo (no PC, setas) vira e sobe/desce; os pedais aceleram (no PC, W/S). Taxie até a cabeceira ${a.cab}, acelere até ${P.vdec} m/s e puxe o manche (▼). Solto, ele mantém a altura.`, 8);
 }
 function pilotarAviao(c, dt) {
   const P = PORTES[c.porte];
-  const acel = pedais.acel || teclas.has('w') || teclas.has('arrowup'), freio = pedais.freio || teclas.has('s') || teclas.has('arrowdown');
-  const volante = (pedais.dir || teclas.has('d') || teclas.has('arrowright') ? 1 : 0) - (pedais.esq || teclas.has('a') || teclas.has('arrowleft') ? 1 : 0);
-  c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * 4);
-  const pe = pistaEm(jogador.pos.x, jogador.pos.z);
+  // PC: W/S = motor, setas ↑/↓ = manche (↑ empurra, ↓ puxa), A/D ou ←/→ = inclinar. Celular: pedais = motor, manche amarelo = direção.
+  const acel = pedais.acel || teclas.has('w'), freio = pedais.freio || teclas.has('s');
+  const lado = THREE.MathUtils.clamp(manche.x + (pedais.dir || teclas.has('d') || teclas.has('arrowright') ? 1 : 0) - (pedais.esq || teclas.has('a') || teclas.has('arrowleft') ? 1 : 0), -1, 1);
+  const puxa = THREE.MathUtils.clamp(manche.y + (teclas.has('arrowdown') ? 1 : 0) - (teclas.has('arrowup') ? 1 : 0), -1, 1);   // + = nariz para cima
+  c.volante = (c.volante || 0) + (lado - (c.volante || 0)) * Math.min(1, dt * 4);
+  const pe = pistaEm(jogador.pos.x, jogador.pos.z), suave = (alvo, taxa) => { c.pitch += THREE.MathUtils.clamp(alvo - c.pitch, -taxa * dt, taxa * dt); };
   if (!c.noAr) {
     const lim = pe && c.liberado ? P.vmax : 10;
-    if (acel && !freio) c.vel = Math.min(lim, c.vel + (pe ? 6 : 3) * dt); else if (freio) c.vel = Math.max(0, c.vel - 10 * dt); else c.vel = Math.max(0, c.vel - 2 * dt);
+    if (acel && !freio) c.vel = Math.min(lim, c.vel + (pe ? 6 : 3) * dt); else if (freio) c.vel = Math.max(0, c.vel - 10 * dt); else c.vel = Math.max(0, c.vel - (c.vel > 10 ? 4 : 2) * dt);
     if (pe && !c.liberado && acel) pedirTorre(c, 'decolagem');
     jogador.yaw -= c.volante * 1.1 * Math.min(1, c.vel / 3) / (1 + c.vel / 15) * dt;
     jogador.pos.x += Math.sin(jogador.yaw) * c.vel * dt; jogador.pos.z += Math.cos(jogador.yaw) * c.vel * dt;
     resolverColisao(jogador.pos, Math.min(3, P.raio));
-    if (pe && c.liberado && c.vel >= P.vdec) { if (c.aula) c.aula.decolou = true; c.destino = destinoVoo(pe, c.porte); c.noAr = true; c.origem = pe.id; c.liberado = false; c.pedido = null; radio('piloto', `${prefixo()}: No ar, subindo!`); aviso('🛫 Decolou! Toque em 🛬 POUSAR quando estiver alinhado com uma pista.', 4); }
+    // rotação: com velocidade, puxar o manche levanta o nariz; sem velocidade a roda do nariz fica no chão
+    suave(c.vel >= P.vdec * 0.85 && puxa > 0.15 ? 0.16 * puxa : 0, 0.5);
+    if (!pe && c.vel > 16) { acidenteVeiculo(c, '💥 O avião saiu da pista em alta velocidade!'); return; }
+    if (pe && c.liberado && c.vel >= P.vdec && c.pitch > 0.07) {
+      if (c.aula) c.aula.decolou = true; c.destino = destinoVoo(pe, c.porte); c.noAr = true; c.alt = 0.4; c.origem = pe.id; c.liberado = false; c.pedido = null; c.avisoEstol = false;
+      radio('piloto', `${prefixo()}: No ar, subindo!`); aviso('🛫 Decolou! Manche puxado sobe, empurrado desce, solto mantém a altura.', 4);
+    }
+    c.vs = 0;
   } else {
-    if (acel && !freio) c.vel = Math.min(P.vmax, c.vel + 5 * dt); else if (freio) c.vel = Math.max(P.vdec * 0.85, c.vel - 6 * dt);
-    if (c.pousar) c.vel = Math.max(P.vdec * 0.9, c.vel - 4 * dt);
+    const estol = c.vel < P.vdec * 0.8;
+    // auto-pouso (botão POUSAR): desce ~3,5 m/s e reduz; o manche ainda corrige
+    let desceAuto = 0;
+    if (c.pousar) {   // segue a rampa da faixa amarela (12 m de altura a cada 100 m até a cabeceira)
+      const pa = pista(AERO[c.destino] || aeroProximo()), ux = (pa.fim.x - pa.ini.x) / pa.len, uz = (pa.fim.z - pa.ini.z) / pa.len;
+      const falta = Math.max(0, -((jogador.pos.x - pa.ini.x) * ux + (jogador.pos.z - pa.ini.z) * uz));
+      const vsAlvo = THREE.MathUtils.clamp((falta * 0.12 - c.alt) * 0.6, -4.5, 1.5);
+      desceAuto = Math.asin(THREE.MathUtils.clamp(vsAlvo / Math.max(c.vel, 1), -0.3, 0.3));
+    }
+    let alvo = estol ? -0.22 : THREE.MathUtils.clamp(desceAuto + puxa * 0.32, -0.32, 0.32);
+    if (c.alt > 300 && alvo > 0) alvo = 0;   // teto
+    suave(alvo, estol ? 0.6 : 0.45);
+    if (estol && !c.avisoEstol) { c.avisoEstol = true; aviso('⚠️ ESTOL: devagar demais! Acelere e empurre o manche.', 3); } else if (!estol) c.avisoEstol = false;
+    if (acel && !freio) c.vel += 5 * dt; else if (freio) c.vel -= 6 * dt;
+    if (c.pousar && !acel) c.vel = Math.max(P.vdec * 0.9, c.vel - 4 * dt);
+    c.vel = THREE.MathUtils.clamp(c.vel - Math.sin(c.pitch) * 9 * dt, P.vdec * 0.6, P.vmax * 1.1);   // subir gasta velocidade, descer ganha
+    c.vs = estol ? Math.min(c.vel * Math.sin(c.pitch), -6) : c.vel * Math.sin(c.pitch);
     jogador.yaw -= c.volante * P.giro * dt;
-    jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * dt, -1300, 1300);
-    jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * dt, -1400, 1400);
-    const alvoAlt = c.pousar ? 0 : P.cruz;
-    c.alt += THREE.MathUtils.clamp(alvoAlt - c.alt, -5 * dt, 8 * dt);
+    jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, -1300, 1300);
+    jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, -1400, 1400);
+    c.alt = Math.min(320, c.alt + c.vs * dt);
     if (c.pousar && !c.pedidoPouso) { c.pedidoPouso = true; pedirTorre(c, 'pouso'); }
     if (c.alt <= 0.3) {   // tocou o chão
-      const ok = pe && alinhado(pe, jogador.yaw) && c.vel <= P.vdec * 1.3 && (c.porte !== 'grande' || pe.grande);
-      if (!ok) { acidenteVeiculo(c, !pe ? '💥 O avião caiu fora da pista!' : c.porte === 'grande' && !pe.grande ? '💥 Pista curta demais para o avião grande!' : !alinhado(pe, jogador.yaw) ? '💥 Pouso torto: o avião saiu da pista!' : '💥 Pouso rápido demais!'); return; }
-      c.noAr = false; c.pousar = false; c.pedidoPouso = false; c.alt = 0; c.vel = Math.min(c.vel, P.vdec);
+      const ok = pe && alinhado(pe, jogador.yaw) && c.vel <= P.vdec * 1.3 && c.vs > -5 && (c.porte !== 'grande' || pe.grande);
+      if (!ok) { acidenteVeiculo(c, !pe ? '💥 O avião caiu fora da pista!' : c.porte === 'grande' && !pe.grande ? '💥 Pista curta demais para o avião grande!' : !alinhado(pe, jogador.yaw) ? '💥 Pouso torto: o avião saiu da pista!' : c.vs <= -5 ? '💥 Pouso duro: desceu rápido demais!' : '💥 Pouso rápido demais!'); return; }
+      c.noAr = false; c.pousar = false; c.pedidoPouso = false; c.alt = 0; c.vs = 0; c.pitch = 0; c.vel = Math.min(c.vel, P.vdec);
       if (c.aula && c.aula.decolou) { c.vel = 0; encerrarAula(true); return; }
       radio('torre', `${pe.torreNome}: ${prefixo()}, bem-vindo! Livre a pista.`);
       if (c.origem && pe.id !== c.origem) rede.transporte.pagarVoo(c.porte).then((v) => aviso(`🛬 Pouso perfeito em ${pe.nome}! +${v} moedas.`, 4)).catch((e) => aviso(`🛬 Pousou em ${pe.nome}. ${e.message || ''}`, 3));
@@ -8813,7 +8847,7 @@ function pilotarAviao(c, dt) {
   const chao = alturaChao(jogador.pos.x, jogador.pos.z);
   jogador.pos.y = chao;
   c.mesh.position.set(jogador.pos.x, chao + c.alt, jogador.pos.z);
-  c.mesh.rotation.set(c.noAr ? (c.pousar ? 0.06 : -0.05) : 0, jogador.yaw, c.noAr ? -c.volante * 0.35 : 0, 'YXZ');
+  c.mesh.rotation.set(-c.pitch, jogador.yaw, c.noAr ? -c.volante * 0.35 : 0, 'YXZ');
   jogador.avatar.raiz.position.copy(jogador.pos);
   const bp = $('vPairar'); if (bp) { bp.classList.toggle('ativo', !!c.pousar); bp.innerHTML = c.noAr ? '🛬<br>POUSAR' : '✈️<br>PISTA'; }
 }
@@ -8846,7 +8880,7 @@ function guiarPiloto(dt) {
     pts.push([p.ini.x + dir.x * Math.min(p.len, 220), p.ini.z + dir.z * Math.min(p.len, 220)]);
     const det = []; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 3)); for (let k2 = 0; k2 < n; k2++) det.push([ax + (bx - ax) * k2 / n, az + (bz - az) * k2 / n]); }
     desenharRota(det, 1.2);
-    painelVoo(c.liberado ? `🛫 Autorizado! Acelere até ${P.vdec} m/s (agora ${Math.round(c.vel)}).` : pe && alinhado(pe, jogador.yaw) ? `🛫 Na cabeceira ${a.cab}: acelere — a torre autoriza a decolagem.` : `🛫 Siga a faixa até a cabeceira ${a.cab} de ${a.nome}, pela taxiway.`);
+    painelVoo(c.liberado ? `🛫 Autorizado! Acelere até ${P.vdec} m/s (agora ${Math.round(c.vel)}) e PUXE o manche (▼) para subir.` : pe && alinhado(pe, jogador.yaw) ? `🛫 Na cabeceira ${a.cab}: acelere — a torre autoriza a decolagem.` : `🛫 Siga a faixa até a cabeceira ${a.cab} de ${a.nome}, pela taxiway.`);
     return;
   }
   // no ar: aproximação da pista de destino, descida e pista
@@ -8859,9 +8893,10 @@ function guiarPiloto(dt) {
   const ul = vt[vt.length - 1]; det.push([ul[0], ul[1], alturaChao(ul[0], ul[1]) + ul[2] + 0.3]);
   desenharRota(det, 2.4);
   const ok = alinhado(a, jogador.yaw), vmax = Math.round(P.vdec * 1.3);
+  const vs = Math.round(c.vs || 0), alt = `${Math.round(c.alt)} m · ${vs > 0 ? '+' : ''}${vs} m/s`;
   painelVoo(c.pousar ? `🛬 Descendo · altura ${Math.round(c.alt)} m · ${Math.round(c.vel)} m/s (máx ${vmax}) · ${ok ? 'alinhado ✅' : 'corrija o rumo ↔️'}`
-    : dA > 220 ? `✈️ Rumo a ${a.nome} · pista ${a.cab}: siga a linha amarela (${(dA / 1000).toFixed(1)} km).`
-      : `🛬 Aproximação da pista ${a.cab}: ${ok ? 'alinhado ✅' : 'alinhe com a pista ↔️'} — toque em POUSAR agora.`);
+    : dA > 220 ? `✈️ ${alt} · Rumo a ${a.nome} · pista ${a.cab}: siga a linha amarela (${(dA / 1000).toFixed(1)} km).`
+      : `🛬 ${alt} · Aproximação da pista ${a.cab}: ${ok ? 'alinhado ✅' : 'alinhe com a pista ↔️'} — empurre o manche devagar ou toque em POUSAR.`);
   void chao;
 }
 // ---- torre de controle (controlador jogador ou automática)
@@ -8972,12 +9007,13 @@ function atualizarAviacao(dt) {
   });
   const tw = ehControlador() && naTorre(); if (tw !== estavaNaTorre) { estavaNaTorre = tw; conexao?.rastrear(metaPresenca()); }
   // sons por porte: grande = som de dentro + som passando no céu; médio e pequeno = um som cada (dentro e fora)
-  const dentro = jogador.voo ? 'medio' : jogador.carro?.aviao ? jogador.carro.porte : null;
+  const dentro = jogador.voo || jogador.carro?.aviao || (jogador.passageiro?.piloto && /^aviao_/.test(remotos.get(jogador.passageiro.piloto)?.carroModelo || ''));
   for (const r of remotos.values()) if (r.carro && /^aviao_/.test(r.carroModelo || '')) ouvir(r.carroModelo.slice(6), r.carro.position.x, r.carro.position.z, r.carro.position.y - alturaChao(r.carro.position.x, r.carro.position.z));
-  sons.continuo('aviao_dentro', dentro === 'grande' ? 0.55 : 0);
-  sons.continuo('aviao_fora', dentro === 'grande' ? 0 : Math.max(0, vols.grande) * 0.85);
-  sons.continuo('aviao_medio', dentro === 'medio' ? 0.5 : Math.max(0, vols.medio) * 0.8);
-  sons.continuo('aviao_pequeno', dentro === 'pequeno' ? 0.55 : Math.max(0, vols.pequeno) * 0.8);
+  // o ronco do avião é para quem está do lado de fora: dentro (piloto ou passageiro) fica em silêncio
+  sons.continuo('aviao_dentro', 0);
+  sons.continuo('aviao_fora', dentro ? 0 : Math.max(0, vols.grande) * 0.85);
+  sons.continuo('aviao_medio', dentro ? 0 : Math.max(0, vols.medio) * 0.8);
+  sons.continuo('aviao_pequeno', dentro ? 0 : Math.max(0, vols.pequeno) * 0.8);
 }
 function contextoAviacao() {
   if (jogador.carro || jogador.voo) return null;

@@ -195,6 +195,12 @@
   #setas { position:absolute; left:calc(18px + env(safe-area-inset-left)); bottom:calc(24px + env(safe-area-inset-bottom)); display:flex; gap:14px; pointer-events:auto; }
   #pedais { position:absolute; right:calc(16px + env(safe-area-inset-right)); bottom:calc(24px + env(safe-area-inset-bottom)); display:flex; gap:12px; align-items:flex-end; pointer-events:auto; }
   .pd { border:2px solid rgba(255,255,255,.3); background:rgba(20,24,34,.72); color:#fff; font-weight:800; touch-action:none; user-select:none; -webkit-user-select:none; }
+  #manche { display:none; position:absolute; left:calc(14px + env(safe-area-inset-left)); bottom:calc(20px + env(safe-area-inset-bottom)); width:150px; height:150px; border-radius:50%; pointer-events:auto; touch-action:none;
+    background:radial-gradient(circle, rgba(255,210,62,.10) 0 30%, rgba(20,24,34,.55) 31%); border:2px solid rgba(255,210,62,.55); }
+  #manche i { position:absolute; left:50%; top:50%; width:62px; height:62px; margin:-31px 0 0 -31px; border-radius:50%; background:rgba(255,210,62,.75); box-shadow:0 0 0 3px rgba(0,0,0,.25); }
+  #manche span { position:absolute; left:0; right:0; text-align:center; font:700 10px system-ui; color:#ffe7a8; pointer-events:none; }
+  #manche .m-t { top:5px; } #manche .m-b { bottom:5px; } #manche .m-l, #manche .m-r { top:50%; margin-top:-6px; width:22px; } #manche .m-l { left:3px; right:auto; } #manche .m-r { right:3px; left:auto; }
+  body.aviao #manche { display:block; } body.aviao #setas { display:none; }
   #setas .pd { width:84px; height:84px; border-radius:50%; font-size:34px; }
   #vFreio { width:76px; height:96px; border-radius:16px; font-size:12px; }
   #vAcel { width:80px; height:140px; border-radius:18px; font-size:12px; background:rgba(40,120,60,.75); }
@@ -250,25 +256,25 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261113e",
-  "./js/mundo.js": "./js/mundo.js?v=20261113e",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261113e",
-  "./js/cla.js": "./js/cla.js?v=20261113e",
-  "./js/config.js": "./js/config.js?v=20261113e",
-  "./js/empresa.js": "./js/empresa.js?v=20261113e",
-  "./js/loja.js": "./js/loja.js?v=20261113e",
-  "./js/painel.js": "./js/painel.js?v=20261113e",
-  "./js/rede.js": "./js/rede.js?v=20261113e",
-  "./js/sedes.js": "./js/sedes.js?v=20261113e",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261113e",
-  "./js/civico.js": "./js/civico.js?v=20261113e",
-  "./js/governo.js": "./js/governo.js?v=20261113e",
-  "./js/servicos.js": "./js/servicos.js?v=20261113e",
-  "./js/sons.js": "./js/sons.js?v=20261113e",
-  "./js/voz.js": "./js/voz.js?v=20261113e",
-  "./js/clima.js": "./js/clima.js?v=20261113e",
-  "./js/jornal.js": "./js/jornal.js?v=20261113e",
-  "./js/visual.js": "./js/visual.js?v=20261113e"
+  "./js/main.js": "./js/main.js?v=20261113f",
+  "./js/mundo.js": "./js/mundo.js?v=20261113f",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261113f",
+  "./js/cla.js": "./js/cla.js?v=20261113f",
+  "./js/config.js": "./js/config.js?v=20261113f",
+  "./js/empresa.js": "./js/empresa.js?v=20261113f",
+  "./js/loja.js": "./js/loja.js?v=20261113f",
+  "./js/painel.js": "./js/painel.js?v=20261113f",
+  "./js/rede.js": "./js/rede.js?v=20261113f",
+  "./js/sedes.js": "./js/sedes.js?v=20261113f",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261113f",
+  "./js/civico.js": "./js/civico.js?v=20261113f",
+  "./js/governo.js": "./js/governo.js?v=20261113f",
+  "./js/servicos.js": "./js/servicos.js?v=20261113f",
+  "./js/sons.js": "./js/sons.js?v=20261113f",
+  "./js/voz.js": "./js/voz.js?v=20261113f",
+  "./js/clima.js": "./js/clima.js?v=20261113f",
+  "./js/jornal.js": "./js/jornal.js?v=20261113f",
+  "./js/visual.js": "./js/visual.js?v=20261113f"
 } }
 </script>
 </head>
@@ -411,13 +417,14 @@
   </div>
   <div id="girar"><button class="bt" id="btGiraE">⟲</button><button class="bt" id="btGiraD">⟳</button></div>
   <div id="volante">
+    <div id="manche"><span class="m-t">▲ DESCE</span><span class="m-b">▼ SOBE</span><span class="m-l">◀</span><span class="m-r">▶</span><i></i></div>
     <div id="setas"><button class="pd" id="vEsq">◀</button><button class="pd" id="vDir">▶</button></div>
     <div id="pedais"><button class="pd" id="vPairar">🚁<br>PAIRAR</button><button class="pd" id="vFreio">FREIO<br>RÉ</button><button class="pd" id="vAcel">ACELERAR</button></div>
   </div>
 </div>
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 13/11 · teste de veículos</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 13/11 · manche</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {
