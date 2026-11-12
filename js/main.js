@@ -2101,7 +2101,8 @@ function atualizarInfo() {
   const p = jogador.perfil;
   const tags = (p.cargo !== 'jogador' ? `<i class="tagc ${p.cargo}">${p.cargo}</i>` : '') + (p.imortal ? '<i class="tagc imortal">imortal</i>' : '');
   $('info').innerHTML = `<b>${escapar(p.nome)}</b>${tags}<br>Moedas: ${p.moedas.toLocaleString('pt-BR')}<br>`
-    + `Vida <span class="vida" id="barVida"><i></i></span> Fome <span class="fome" id="barFome"><i></i></span><br>`
+    + `Vida <span class="vida" id="barVida"><i></i></span> Fome <span class="fome" id="barFome"><i></i></span>`
+    + `<span id="linhaEscudo" style="display:none"> 🛡️<span class="vida escudo" id="barEscudo"><i></i></span><small id="txtEscudo"></small></span><br>`
     + (p.policial ? '<span style="color:#7fb8ff">● Em serviço (polícia)</span><br>' : '') + (p.crimes > 0 ? `<span style="color:#ff6b6b">● PROCURADO (${p.crimes})</span><br>` : '')
     + `<span class="online">● ${online} online</span>${conectado ? '' : ' <small>(conectando…)</small>'}<br><button id="btSair">Sair da conta</button>`;
   $('btSair').onclick = async () => { await salvarAgora(); await rede.sair(); location.reload(); };
@@ -3256,7 +3257,7 @@ function colidirVeiculo(c, dt) {
 function danoLocal(v) {
   const j = jogador;
   if (j.morto || !j.avatar || j.perfil?.imortal || j.pena > 0) return;
-  j.vida -= v; desenharFome();
+  j.vida -= absorverEscudo(v); desenharFome();
   if (j.vida <= 0) { j.ultimoAgressor = null; morrerLocal(); return; }
   if (!j.carro && j.trava <= 0) { j.avatar.tocar('hit', { umaVez: true, velocidade: 1.4, fade: 0.08 }); j.trava = 0.4; }
 }
@@ -4051,7 +4052,7 @@ function receberAtropelo(d) {
   const r = remotos.get(d.de), pl = r && (r.carro?.position || r.av?.raiz.position);
   if (!pl || Math.hypot(pl.x - jogador.pos.x, pl.z - jogador.pos.z) > 12) return;
   if (jogador.carro) sairCarro();
-  jogador.vida -= Math.max(0, Math.min(100, Number(d.v) || 0)); jogador.ultimoAgressor = d.de;
+  jogador.vida -= absorverEscudo(Math.max(0, Math.min(100, Number(d.v) || 0))); jogador.ultimoAgressor = d.de;
   desenharFome();
   if (jogador.vida <= 0) { aviso('Você foi atropelado!', 3); morrerLocal(); }
   else { aviso('💥 Você foi atropelado!', 2); jogador.trava = 0.6; jogador.avatar.tocar('hit', { umaVez: true, velocidade: 1.2, fade: 0.08 }); }
@@ -4068,7 +4069,7 @@ function receberDano(d) {
   const r = remotos.get(d.de);
   if (!r?.av || r.av.raiz.position.distanceTo(jogador.pos) > 30) return;     // golpe de longe demais: ignora
   const v = Math.max(0, Math.min(80, Number(d.v) || 0)) * (1 - bonusTreino('luta'));   // treino de luta: defesa
-  jogador.vida -= v; jogador.ultimoAgressor = d.de;
+  jogador.vida -= absorverEscudo(v); jogador.ultimoAgressor = d.de;
   desenharFome();
   if (jogador.vida <= 0) { morrerLocal(); return; }
   if (jogador.trava <= 0) { jogador.avatar.tocar('hit', { umaVez: true, velocidade: 1.4, fade: 0.08 }); jogador.trava = 0.45; }
@@ -5261,6 +5262,7 @@ function atualizarFome(dt) {
 }
 let tempoInfo = 1;
 function desenharFome() {
+  desenharEscudo();
   const v = $('barVida'); if (v) { v.firstChild.style.width = Math.max(0, jogador.vida).toFixed(0) + '%'; v.classList.toggle('baixa', jogador.vida < 35); }
   const b = $('barFome'); if (!b) return;
   b.firstChild.style.width = jogador.fome.toFixed(0) + '%';
@@ -7079,7 +7081,7 @@ function chaveFarda() { return 'fator_farda_' + (jogador.perfil?.id || ''); }
 function definirFarda(papel, silencioso) {
   jogador.farda = papel || null;
   try { if (papel) localStorage.setItem(chaveFarda(), papel); else localStorage.removeItem(chaveFarda()); } catch { /* sem armazenamento */ }
-  conexao?.rastrear(metaPresenca());
+  conexao?.rastrear(metaPresenca()); desenharEscudo();
   if (!silencioso) aviso(papel ? `👔 Farda vestida: ${NOME_FARDA[papel]}.` : '👕 Farda guardada no armário.', 2.5);
 }
 function seguirExpediente() {
@@ -7091,17 +7093,47 @@ function seguirExpediente() {
     if (jogador.farda) conexao?.rastrear(metaPresenca());
     return;
   }
+  if (jogador.farda && !souEquipe() && jogador.farda !== p) definirFarda(p || null, true);   // farda é só da própria corporação
   if (p === papelVisto) return;
   papelVisto = p;
   if (p) definirFarda(p);                                          // entrou no expediente: veste
   else if (jogador.farda && !souEquipe()) definirFarda(null);       // saiu: guarda
 }
+// ---- escudo da farda: o colete aguenta 100 de dano antes da vida; o capacete segura 10% do que passar.
+// Colete destruído: só um novo no vestiário (o escudo fica guardado entre expedientes, não volta sozinho).
+const ESCUDO_MAX = 100;
+let escudo = null;   // lido do aparelho na primeira vez
+function chaveEscudo() { return 'fator_escudo_' + (jogador.perfil?.id || ''); }
+function escudoAtual() {
+  if (escudo === null) { let v = null; try { v = localStorage.getItem(chaveEscudo()); } catch { /* nada */ } escudo = v === null ? ESCUDO_MAX : Math.max(0, Math.min(ESCUDO_MAX, +v || 0)); }
+  return escudo;
+}
+function guardarEscudo() { try { localStorage.setItem(chaveEscudo(), String(Math.round(escudo))); } catch { /* nada */ } }
+const comColete = () => !!jogador.farda && !jogador.carro;
+function absorverEscudo(v) {
+  if (!comColete() || v <= 0) return v;
+  const e = escudoAtual(), tira = Math.min(e, v), resto = (v - tira) * 0.9;   // capacete: -10% no que chega à vida
+  if (tira > 0) {
+    escudo = e - tira; guardarEscudo();
+    if (escudo <= 0) aviso('🛡️ Seu colete foi destruído! Vá ao vestiário do seu trabalho e pegue um colete novo.', 4.5);
+  }
+  return resto;
+}
+function desenharEscudo() {
+  const linha = $('linhaEscudo'); if (!linha) return;
+  const ver = !!jogador.farda; linha.style.display = ver ? '' : 'none'; if (!ver) return;
+  const e = escudoAtual(), b = $('barEscudo');
+  b.firstChild.style.width = (e / ESCUDO_MAX * 100).toFixed(0) + '%';
+  $('txtEscudo').textContent = e <= 0 ? ' ⚠️' : ''; b.title = e <= 0 ? 'Colete quebrado: pegue um novo no vestiário' : `Escudo ${Math.round(e)}%`;
+}
+function trocarColete() { escudo = ESCUDO_MAX; guardarEscudo(); desenharEscudo(); aviso('🛡️ Colete novo! Escudo 100%.', 2.5); }
 function vestiario(trabalho) {
   const p = papelDe(jogador.perfil), opcoes = [];
   if (souEquipe()) for (const k of Object.keys(UNIFORMES)) opcoes.push({ rotulo: `${jogador.farda === k ? '✔️ ' : ''}${NOME_FARDA[k]}`, fn: () => definirFarda(k) });
   else if (p) opcoes.push({ rotulo: jogador.farda === p ? `Tirar a farda (${NOME_FARDA[p]})` : `Vestir a farda: ${NOME_FARDA[p]}`, fn: () => definirFarda(jogador.farda === p ? null : p) });
   else { aviso(`Só quem está no expediente ${trabalho ? `(${trabalho}) ` : ''}veste a farda. Entre em serviço primeiro.`, 3.5); return; }
   if (souEquipe() && jogador.farda) opcoes.push({ rotulo: 'Tirar a farda', fn: () => definirFarda(null) });
+  if (jogador.farda || p) { const e = escudoAtual(); opcoes.unshift({ rotulo: e >= ESCUDO_MAX ? '🛡️ Colete inteiro (100%)' : `🛡️ Pegar colete novo (escudo ${Math.round(e)}% → 100%)`, fn: () => { if (e < ESCUDO_MAX) trocarColete(); } }); }
   escolher('👔 Vestiário', souEquipe() ? 'Equipe: escolha qualquer farda.' : 'Sua farda de trabalho:', opcoes);
 }
 function atualizarUniformes() {
