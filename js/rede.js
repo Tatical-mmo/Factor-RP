@@ -82,6 +82,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'torre' }, ({ payload }) => eventos.torre?.(payload));
   canal.on('broadcast', { event: 'torreOk' }, ({ payload }) => eventos.torreOk?.(payload));
   canal.on('broadcast', { event: 'fiscal' }, ({ payload }) => eventos.fiscal?.(payload));
+  canal.on('broadcast', { event: 'lixo' }, ({ payload }) => eventos.lixo?.(payload));
   canal.on('broadcast', { event: 'bueiro' }, ({ payload }) => eventos.bueiro?.(payload));
   canal.on('broadcast', { event: 'carroRua' }, ({ payload }) => eventos.carroRua?.(payload));
   canal.on('broadcast', { event: 'reset' }, ({ payload }) => eventos.reset?.(payload));
@@ -779,4 +780,5 @@ export const transporte = {
   pagarTorre: () => rpc('pagar_torre'),
   tarifa: () => rpc('tarifa_onibus'),
   pagarFiscal: () => rpc('pagar_fiscal'),
+  pagarColeta: (n) => rpc('pagar_coleta', { p_lixeiras: n }),
 };

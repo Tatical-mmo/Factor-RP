@@ -171,6 +171,7 @@ const SERVICOS = {
   piloto: ['🛩️ Hangar dos pilotos', telaPiloto],
   torre: ['🗼 Torre de controle', telaTorre],
   fiscal: ['🧾 Fiscalização da Rodoviária', telaFiscal],
+  lixo: ['♻️ Central de Reciclagem', telaLixo],
 };
 
 async function telaBanco(c) {
@@ -203,6 +204,7 @@ const PUBLICOS = [
   { id: 'jornalista', nome: '📰 Jornal da Cidade', inicio: 'Estagiário', req: 'ficha limpa', onde: 'Prefeitura (balcão do jornal)', base: '24/min' },
   { id: 'motorista', nome: '🚌 Ônibus (motorista)', inicio: 'Motorista', req: 'ficha limpa e carteira D (autoescola)', onde: 'Rodoviária (Despacho)', base: '18/min + 12 por passageiro' },
   { id: 'piloto', nome: '✈️ Piloto de avião', inicio: 'Copiloto', req: 'ficha limpa e brevê (autoescola)', onde: 'Hangar do Aeroporto da Metrópole', base: '30/min + 250 a 600 por voo' },
+  { id: 'gari', nome: '♻️ Coleta de lixo (gari)', inicio: 'Gari', req: 'ficha limpa e carteira C (autoescola)', onde: 'Central de Reciclagem (leste do centro)', base: '22/min + 15 por lixeira e 100 por descarga' },
   { id: 'fiscal', nome: '🧾 Fiscal da Rodoviária', inicio: 'Fiscal', req: 'ficha limpa', onde: 'Rodoviária (Fiscalização)', base: '20/min + 30 por atraso registrado' },
   { id: 'controlador', nome: '🗼 Controlador de voo', inicio: 'Controlador Trainee', req: 'ficha limpa', onde: 'Torre do Aeroporto da Metrópole', base: '26/min + 40 por autorização' },
   { id: 'exercito', nome: '🎖️ Exército', inicio: 'Recruta', req: 'ficha limpa (a equipe também pode entrar)', onde: 'Quartel do Exército (Porto Sul)', base: '35/min' },
@@ -361,6 +363,11 @@ async function telaTorre(c) {
   const carreira = await cartaoCarreira('controlador');
   c.innerHTML = `${carreira}${telaProfissao(c, 'controlador', 'Controlador de voo', 'Fique na <b>torre de controle</b> do Aeroporto da Metrópole: os pedidos de pouso e decolagem dos pilotos chegam com aviso. Toque em <b>Torre</b> e responda pelo rádio: <b>autorizar</b> (vale <b>40</b>), <b>aguarde</b> ou <b>arremeter</b> (manda o avião subir de novo). O rádio também mostra os voos do sistema. Sem controlador na torre, a autorização é automática.')}`;
   ligarProfissao('controlador');
+}
+async function telaLixo(c) {
+  const carreira = await cartaoCarreira('gari');
+  c.innerHTML = `${carreira}${telaProfissao(c, 'gari', 'Gari · coleta de lixo', 'Na <b>Central de Reciclagem</b> (leste do centro), pegue o caminhão de lixo na garagem. A faixa amarela leva às lixeiras cheias (com sacos em volta): pare do lado por alguns segundos para recolher. Cabem 14 lixeiras; depois volte à Central e pare na <b>Descarga</b>. Cada lixeira vale <b>15</b> e cada descarga <b>+100</b>. As lixeiras enchem de novo em 4 minutos. Sem gari jogador, o caminhão do sistema faz a coleta.')}`;
+  ligarProfissao('gari');
 }
 async function telaFiscal(c) {
   const carreira = await cartaoCarreira('fiscal');

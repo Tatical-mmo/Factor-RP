@@ -145,6 +145,11 @@ export const CARROS = {
   tanque: { nome: 'Tanque do Exército', preco: 0, vel: 7 },
   onibus: { nome: 'Ônibus', preco: 0, vel: 12 },
   caminhao_escola: { nome: 'Caminhão da autoescola', preco: 0, vel: 9 },
+  caminhao_lixo: { nome: 'Caminhão de lixo', preco: 0, vel: 9 },
+  onibus_urbano: { nome: 'Ônibus urbano', preco: 0, vel: 12 },
+  onibus_executivo: { nome: 'Ônibus executivo', preco: 0, vel: 12 },
+  onibus_executivo2: { nome: 'Ônibus executivo', preco: 0, vel: 12 },
+  onibus_dois_andares: { nome: 'Ônibus de dois andares', preco: 0, vel: 12 },
   aviao_pequeno: { nome: 'Avião pequeno', preco: 0, vel: 40, voa: true },
   aviao_medio: { nome: 'Avião médio', preco: 0, vel: 52, voa: true },
   aviao_grande: { nome: 'Avião grande', preco: 0, vel: 64, voa: true },
@@ -160,7 +165,7 @@ function bloco(g, m, w, h, d, x, y, z) {
 }
 
 export function iniciar(contexto) { ctx = contexto; }
-const GLB_CARRO = { tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', caminhao_escola: 'caminhao', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande' };
+const GLB_CARRO = { tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', caminhao_escola: 'caminhao', caminhao_lixo: 'caminhao_lixo', onibus_urbano: 'onibus_urbano', onibus_executivo: 'onibus_executivo', onibus_executivo2: 'onibus_executivo2', onibus_dois_andares: 'onibus_dois_andares', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande' };
 const SEM_TINTA = new Set(['aviao_pequeno', 'aviao_medio', 'aviao_grande', 'tanque', 'presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
@@ -367,7 +372,7 @@ function modeloCarroBase(modelo, cor) {
     const g = base.clone(true);
     if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
     else if (SEM_TINTA.has(modelo)) { const sr = { ambulancia: [3.4, 0.9], bombeiros: [3.15, 2.5] }[modelo]; if (sr) sirene(g, sr); }
-    else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), modelo === 'onibus' ? 0.38 : 0.45); } });
+    else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), modelo.startsWith('onibus') ? 0.38 : modelo === 'caminhao_lixo' ? 0.12 : 0.45); } });
     adicionarLuzes(g, modelo);
     cacheCarro.set(chave, g);
     return g.clone();
@@ -514,6 +519,7 @@ function texturas() {
   texPoca = canv(64, 64, (g, w) => { const r = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); r.addColorStop(0, 'rgba(255,248,225,.95)'); r.addColorStop(0.5, 'rgba(255,240,200,.45)'); r.addColorStop(1, 'rgba(255,240,200,0)'); g.fillStyle = r; g.fillRect(0, 0, w, w); });
   const spr = (cor) => new THREE.SpriteMaterial({ map: texBrilho, color: cor, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false });
   M = { farol: spr('#fff1c8'), lanterna: spr('#ff2a1a'), navV: spr('#ff2020'), navG: spr('#1fff5a'), estrobo: spr('#ffffff'), giro: spr('#ff3020'),
+    laranjaA: spr('#ff8a12'), laranjaB: spr('#ff8a12'),
     feixe: new THREE.MeshBasicMaterial({ map: texFeixe, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false, opacity: 0.8 }),
     poca: new THREE.MeshBasicMaterial({ map: texPoca, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }) };
 }
@@ -559,6 +565,11 @@ function adicionarLuzes(g, tipo, chave = null) {
     sp(M.giro, cx, e.min.y + 0.1, (e.min.z + e.max.z) / 2, t * 1.2);   // farol de baixo
   }
   g.add(L);
+  if (tipo === 'caminhao_lixo') {   // giroflex laranja: duas lâmpadas no teto da cabine, piscando de dia e de noite
+    const G = new THREE.Group(); G.name = 'giroflex'; G.visible = false;
+    for (const [s, m] of [[-1, M.laranjaA], [1, M.laranjaB]]) { const sp2 = new THREE.Sprite(m); sp2.position.set(cx + s * 0.55, e.min.y + h * 0.93, e.max.z - 1.25); sp2.scale.set(0.9, 0.9, 0.9); G.add(sp2); }
+    g.add(G);
+  }
   return g;
 }
 // para veículos que não saem de modeloCarro (frota das empresas, caminhão das ruas)
@@ -570,6 +581,7 @@ export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
   M.estrobo.opacity = (tLuz % 1.3) < 0.07 || ((tLuz % 1.3) > 0.18 && (tLuz % 1.3) < 0.24) ? 1 : 0;   // pisca-pisca duplo
   M.giro.opacity = 0.25 + 0.75 * Math.max(0, Math.sin(tLuz * 5.5));
   M.feixe.opacity = 0.75 * noite; M.poca.opacity = noite;
+  const gi = (tLuz * 2.2) % 1; M.laranjaA.opacity = gi < 0.5 ? 1 : 0.08; M.laranjaB.opacity = gi < 0.5 ? 0.08 : 1;
   for (const o of comLuz) {
     const L = o.getObjectByName('luzes');
     if (!o.parent || !L) { if (L) L.visible = false; if (o.userData.pocaLuz) o.userData.pocaLuz.visible = false; comLuz.delete(o); continue; }
@@ -579,6 +591,7 @@ export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
     u.ultLuz = { x: _f.x, y: _f.y, z: _f.z };
     const ligado = noite > 0.25 && tLuz < (u.ativoAte || 0) && o.visible;
     L.visible = ligado;
+    const G = o.getObjectByName('giroflex'); if (G) G.visible = o.visible && (tLuz < (u.ativoAte || 0) || !!u.giroflex);
     if (!L.userData.aereo) continue;
     // farol de pouso (avião, perto do chão) / holofote (helicóptero, no ar): mancha de luz no chão
     const alt = _f.y - chao(_f.x, _f.z);

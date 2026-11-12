@@ -635,3 +635,17 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - 🟨 O motorista de ônibus vê uma faixa amarela no asfalto, com setas andando, mostrando o caminho da linha até o próximo ponto (e no fim, até a fila da plataforma). Ela acompanha o ônibus e, se ele sair do caminho, volta a apontar para a rota.
 - Na prova da autoescola a faixa aponta para o próximo ponto 📍.
 - Sem SQL nesta versão.
+
+## Versão 12/11 (s) · novos ônibus e coleta de lixo
+- 🚌 Quatro modelos novos de ônibus. As linhas alternam os modelos (cada ônibus da frota mantém o seu):
+  - Circular e Leste: o ônibus de antes e o urbano moderno.
+  - Aeroporto: dois executivos e o de dois andares.
+  - O motorista jogador assume o mesmo modelo que estava na plataforma. Som padrão de ônibus.
+- ♻️ Coleta de lixo (profissão gari, precisa da carteira C):
+  - Central de Reciclagem no leste do centro, com garagem e descarga.
+  - 14 lixeiras ao longo de uma volta pelo leste da cidade. Cheias, elas têm sacos em volta; enchem de novo em 4 minutos.
+  - O gari pega o caminhão de lixo, segue a faixa amarela até as lixeiras cheias, para do lado para recolher e descarrega na Central.
+  - Paga 15 por lixeira e +100 por descarga, além de 22 por minuto em serviço.
+  - Sem gari jogador, o caminhão do sistema faz a volta e esvazia as lixeiras.
+  - Caminhão com som de caminhão e giroflex laranja (duas lâmpadas no teto da cabine) piscando enquanto trabalha.
+- SQL desta versão: **60_coleta_lixo.sql**.
