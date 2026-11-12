@@ -49,7 +49,9 @@
   #msgLogin.ok { color:var(--verde); }
   #info { pointer-events:auto; }
   #info .online { color:var(--verde); }
-  #patente { position:absolute; left:50%; transform:translateX(-50%); bottom:calc(150px + env(safe-area-inset-bottom)); font-size:11px; padding:3px 9px; pointer-events:none; white-space:nowrap; color:#ffe7a8; }
+  #patente { position:absolute; left:50%; transform:translateX(-50%); top:calc(46px + env(safe-area-inset-top)); font-size:11px; padding:3px 9px; pointer-events:auto; cursor:pointer; white-space:nowrap; max-width:calc(100vw - 340px); min-width:0; overflow:hidden; text-overflow:ellipsis; color:#ffe7a8; opacity:.92; }
+  #patente.min { padding:2px 7px; font-size:13px; }
+  @media (max-width:560px){ #patente { max-width:calc(100vw - 200px); } }
   #patente:empty { display:none; }
   #btSair { margin-top:4px; font-size:12px; padding:4px 10px; border-radius:8px; border:1px solid var(--borda); background:transparent; color:var(--suave); cursor:pointer; }
   #erroNome { width:100%; text-align:center; color:#ff8a7a; font-size:13px; min-height:16px; margin:-4px 0 0; }
@@ -150,7 +152,7 @@
     font-size:14px; font-weight:700; padding:8px 14px; border-radius:10px; border:1px solid var(--borda); background:#3a1f22; color:#ffc2c2; cursor:pointer; }
   #btFianca { position:absolute; left:50%; transform:translateX(-50%); bottom:calc(250px + env(safe-area-inset-bottom)); pointer-events:auto;
     font-size:15px; font-weight:700; padding:10px 18px; border-radius:10px; border:0; background:var(--destaque); color:#20160a; cursor:pointer; }
-  #captura { position:absolute; left:50%; transform:translateX(-50%); top:calc(60px + env(safe-area-inset-top)); font-size:14px; min-width:220px; text-align:center; }
+  #captura { position:absolute; left:50%; transform:translateX(-50%); top:calc(80px + env(safe-area-inset-top)); font-size:14px; min-width:220px; text-align:center; }
   #captura i { display:block; height:6px; margin-top:6px; border-radius:3px; background:var(--destaque); }
   .vida { display:inline-block; width:70px; height:8px; border-radius:4px; background:#3a2020; vertical-align:middle; overflow:hidden; margin-left:4px; }
   .vida i { display:block; height:100%; background:#4cc26f; } .vida.baixa i { background:#e05a4f; }
@@ -248,25 +250,25 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261113d",
-  "./js/mundo.js": "./js/mundo.js?v=20261113d",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261113d",
-  "./js/cla.js": "./js/cla.js?v=20261113d",
-  "./js/config.js": "./js/config.js?v=20261113d",
-  "./js/empresa.js": "./js/empresa.js?v=20261113d",
-  "./js/loja.js": "./js/loja.js?v=20261113d",
-  "./js/painel.js": "./js/painel.js?v=20261113d",
-  "./js/rede.js": "./js/rede.js?v=20261113d",
-  "./js/sedes.js": "./js/sedes.js?v=20261113d",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261113d",
-  "./js/civico.js": "./js/civico.js?v=20261113d",
-  "./js/governo.js": "./js/governo.js?v=20261113d",
-  "./js/servicos.js": "./js/servicos.js?v=20261113d",
-  "./js/sons.js": "./js/sons.js?v=20261113d",
-  "./js/voz.js": "./js/voz.js?v=20261113d",
-  "./js/clima.js": "./js/clima.js?v=20261113d",
-  "./js/jornal.js": "./js/jornal.js?v=20261113d",
-  "./js/visual.js": "./js/visual.js?v=20261113d"
+  "./js/main.js": "./js/main.js?v=20261113e",
+  "./js/mundo.js": "./js/mundo.js?v=20261113e",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261113e",
+  "./js/cla.js": "./js/cla.js?v=20261113e",
+  "./js/config.js": "./js/config.js?v=20261113e",
+  "./js/empresa.js": "./js/empresa.js?v=20261113e",
+  "./js/loja.js": "./js/loja.js?v=20261113e",
+  "./js/painel.js": "./js/painel.js?v=20261113e",
+  "./js/rede.js": "./js/rede.js?v=20261113e",
+  "./js/sedes.js": "./js/sedes.js?v=20261113e",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261113e",
+  "./js/civico.js": "./js/civico.js?v=20261113e",
+  "./js/governo.js": "./js/governo.js?v=20261113e",
+  "./js/servicos.js": "./js/servicos.js?v=20261113e",
+  "./js/sons.js": "./js/sons.js?v=20261113e",
+  "./js/voz.js": "./js/voz.js?v=20261113e",
+  "./js/clima.js": "./js/clima.js?v=20261113e",
+  "./js/jornal.js": "./js/jornal.js?v=20261113e",
+  "./js/visual.js": "./js/visual.js?v=20261113e"
 } }
 </script>
 </head>
@@ -415,7 +417,7 @@
 </div>
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 13/11 · voos</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 13/11 · teste de veículos</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

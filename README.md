@@ -733,3 +733,11 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - A marcação (feixe amarelo) não some mais no caminho para o aeroporto.
 - 🛩️ Brevê: ao pagar a aula, o instrutor leva você direto ao hangar e coloca você no avião da escola. A faixa amarela e o painel no alto guiam até a cabeceira, a decolagem e o pouso.
 - Sem SQL nesta versão.
+
+## Versão 13/11 · teste de veículos (20261113e)
+
+- O aviso de cargo e tempo de carreira foi para o topo da tela, abaixo do nome da rua. Um toque minimiza (fica só o ícone) e outro toque mostra de novo. A escolha fica salva no aparelho.
+- Os aviões parados no Aeroporto da Metrópole agora formam a frota dos pilotos: grande, médio e dois pequenos, cada um com uma placa. O piloto chega perto e toca em **Pilotar**. O avião sai da vaga já virado para a taxiway e volta para a vaga quando ele desce.
+- Quem vira piloto recebe uma marca até a frota. O hangar também usa um avião da frota.
+- O som do avião pequeno não se mistura mais com o do helicóptero, nem nos aviões dos outros jogadores.
+- Admin: o painel ganhou **🧪 Testar veículo**, com todos os veículos do jogo. Carros, ônibus, caminhões, tanque e helicópteros aparecem onde você está. Aviões levam você à vaga na frota. Ao sair, o veículo de teste some. O teleporte tem também **🛩️ Aviões dos pilotos (frota)**.

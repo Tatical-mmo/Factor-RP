@@ -357,6 +357,7 @@ function abaEu() {
         .map(([k, t]) => `<label><input type="checkbox" data-reset="${k}" checked> ${t}</label>`).join('')}</div>
       <div class="botoes"><input id="pResetConf" placeholder="Digite RESETAR"><button id="pReset" class="perigo">🧹 Resetar o mapa</button></div>`;
   }
+  if (eu.cargo === 'admin' && ctx.veiculosTeste) h += `<div class="sub">🧪 Testar veículo</div><p class="dica">Aparece aqui onde você está (aviões: na frota do Aeroporto da Metrópole). Para sair, use o botão de sair do veículo: ele some.</p><div class="botoes">${ctx.veiculosTeste().map((v) => `<button data-testar="${v.id}">${esc(v.nome)}</button>`).join('')}</div>`;
   if (pode('teleportar')) h += `<div class="sub">Teleportar para</div><div class="botoes">${ctx.locais().map((l, i) => `<button data-local="${i}">${esc(l.nome)}</button>`).join('')}</div>`;
   h += `<div class="sub">Skin (grátis para a equipe)</div><div class="skins">${[...ROBOS.map((id) => ({ id, nome: id === 'Rusty_Scout_Bot' ? 'Robô Batedor' : 'Robô Sentinela' })), ...PERSONAGENS, ...(eu.cargo === 'admin' ? PERSONAGENS_EVENTO : [])]
     .map((p) => `<button class="skin ${p.id === eu.personagem ? 'sel' : ''}" data-skin="${p.id}"><img src="assets/miniaturas/${p.id}.webp" alt=""><span>${esc(p.nome)}</span></button>`).join('')}</div>`;
@@ -365,6 +366,7 @@ function abaEu() {
   const apd = $('pArmaPd'); if (apd) apd.onclick = () => executar(() => ctx.esconderArmaPd(), 'Arma dourada escondida aqui. Todos foram avisados do evento.');
   const b = $('pImortal'); if (b) b.onclick = () => executar(() => rede.painel.imortal(!eu.imortal), eu.imortal ? 'Modo imortal desligado.' : 'Modo imortal ligado.');
   c.querySelectorAll('[data-local]').forEach((x) => { x.onclick = () => { const l = ctx.locais()[x.dataset.local]; ctx.teleportar(l.x, l.z); msg('Teleportado: ' + l.nome); }; });
+  c.querySelectorAll('[data-testar]').forEach((x) => { x.onclick = () => { fechar(); ctx.testarVeiculo(x.dataset.testar); }; });
   c.querySelectorAll('[data-skin]').forEach((x) => { x.onclick = () => executar(() => rede.painel.skin(x.dataset.skin), 'Skin trocada.'); });
   if (eu.cargo === 'admin') { blocoPrefeitura(); blocoPerdao(); }
   const evSel = () => [...c.querySelectorAll('[data-ev]')].filter((x) => x.checked).map((x) => x.dataset.ev);

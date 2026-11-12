@@ -789,6 +789,7 @@ function resolverColisao(p, raio) {
 }
 function colidirLista(lista, p, raio) {
   for (const c of lista) {
+    if (c.off) continue;
     if (c.tipo === 'caixa') {
       const qx = Math.max(c.x0, Math.min(p.x, c.x1)), qz = Math.max(c.z0, Math.min(p.z, c.z1));
       const dx = p.x - qx, dz = p.z - qz, d2 = dx * dx + dz * dz;
@@ -1230,6 +1231,7 @@ function sairCarro() {
     const t = jogador.pos.clone(); mundo.limitar(t);
     if (Math.hypot(t.x - jogador.pos.x, t.z - jogador.pos.z) > 2) { aviso('Pouse numa cidade ou na mata para descer.', 2.5); return; }
   }
+  if (c.teste) { jogador.carro = null; modoVolante(false); scene.remove(c.mesh); jogador.pos.x += Math.cos(jogador.yaw) * 2.5; jogador.pos.z -= Math.sin(jogador.yaw) * 2.5; resolverColisao(jogador.pos, jogador.raio); jogador.avatar.raiz.visible = true; aviso('🧪 Veículo de teste guardado.', 2); return; }
   if (c.servico === 'aviao') { jogador.carro = null; modoVolante(false); scene.remove(c.mesh); jogador.pos.x += 3; resolverColisao(jogador.pos, jogador.raio); jogador.avatar.raiz.visible = true; aviso('✈️ Avião devolvido ao hangar.', 2.5); return; }
   if (c.servico) {   // ambulância / caminhão dos bombeiros: fica estacionado onde você desceu
     jogador.carro = null; modoVolante(false);
@@ -2222,6 +2224,8 @@ async function iniciarJogo(perfil) {
     teleportar,
     esconderArmaPd: () => rede.pd.esconder(jogador.pos.x, jogador.pos.z),
     locais: () => LOCAIS,
+    veiculosTeste: () => Object.entries(civico.CARROS).map(([id, c]) => ({ id, nome: `${c.voa ? (id.startsWith('aviao') ? '✈️' : '🚁') : id.includes('onibus') ? '🚌' : id.includes('caminhao') || id === 'bombeiros' ? '🚚' : id === 'tanque' ? '🪖' : '🚗'} ${c.nome}${id === 'onibus_executivo2' ? ' 2' : ''}` })),
+    testarVeiculo,
     bueiro: (k) => BUEIROS[k], irPara: (x, z) => { jogador.dentroCasa = null; teleportar(x, z); }, marcar: (a) => rastrear(a),
   });
   if (perfil.cargo === 'moderador') rede.receberSalario().then((v) => { if (v > 0) aviso(`Salário de moderador: +${v} moedas`); }).catch(() => {});
@@ -3761,10 +3765,10 @@ function atualizarSons() {
   }
   // helicópteros dos jogadores (executivo e do Exército): o mesmo som do helicóptero das empresas
   const somHeli = (alt, vol) => { const k = THREE.MathUtils.clamp(alt / 12, 0, 1); sons.continuo('helicoptero_baixo', vol * (1 - k)); sons.continuo('helicoptero_alto', vol * k); };
-  if (jogador.carro?.voa && !jogador.carro.caminhao) somHeli(jogador.carro.alt || 0, 0.6);
-  if (jogador.passageiro?.piloto) { const o = jogador.passageiro.c.obj; if (civico.CARROS[remotos.get(jogador.passageiro.piloto)?.carroModelo]?.voa) somHeli(o.position.y - alturaChao(o.position.x, o.position.z), 0.6); }
+  if (jogador.carro?.voa && !jogador.carro.caminhao && !jogador.carro.aviao) somHeli(jogador.carro.alt || 0, 0.6);
+  if (jogador.passageiro?.piloto) { const o = jogador.passageiro.c.obj; const mp = remotos.get(jogador.passageiro.piloto)?.carroModelo; if (civico.CARROS[mp]?.voa && !String(mp).startsWith('aviao')) somHeli(o.position.y - alturaChao(o.position.x, o.position.z), 0.6); }
   for (const r of remotos.values()) {
-    if (!r.carro || !civico.CARROS[r.carroModelo]?.voa || jogador.passageiro?.piloto && remotos.get(jogador.passageiro.piloto) === r) continue;
+    if (!r.carro || !civico.CARROS[r.carroModelo]?.voa || String(r.carroModelo).startsWith('aviao') || jogador.passageiro?.piloto && remotos.get(jogador.passageiro.piloto) === r) continue;
     somHeli(r.carro.position.y - alturaChao(r.carro.position.x, r.carro.position.z), 0.55 * sons.perto(dist(r.carro), 110));
   }
   // trem: barulho dentro e perto; buzina quando passa perto
@@ -4003,13 +4007,22 @@ async function bloquearCarro(id) {
 
 // ---------------------------------------------------------------- carreiras: turno a cada minuto em serviço, patente e salário
 let tempoTurno = 20, avisouFora = false;
+// o aviso de cargo fica no topo; um toque minimiza (só o ícone) e outro mostra de novo — lembrado no aparelho
+let patenteMin = false; try { patenteMin = localStorage.getItem('patenteMin') === '1'; } catch { }
+function mostrarPatente(texto) {
+  const chip = $('patente'); if (!chip) return;
+  chip.dataset.texto = texto || '';
+  if (!chip.dataset.ligado) { chip.dataset.ligado = '1'; chip.title = 'Toque para minimizar / mostrar'; chip.addEventListener('click', (e) => { e.stopPropagation(); patenteMin = !patenteMin; try { localStorage.setItem('patenteMin', patenteMin ? '1' : '0'); } catch { } mostrarPatente(chip.dataset.texto); }); }
+  chip.classList.toggle('min', patenteMin && !!texto);
+  chip.textContent = !texto ? '' : patenteMin ? texto.split(' ')[0] : texto;
+}
 function atualizarCarreira(dt) {
   const p = jogador.perfil;
   const emServico = p && (p.policial || p.prf || p.profissao);
   const chip = $('patente');
   if (!emServico) {
     jogador.patente = null;
-    if (chip) { const e = emprego && empresas.get(emprego); chip.textContent = e && e.dono !== p?.id ? `💼 ${e.nome}` : ''; }
+    if (chip) { const e = emprego && empresas.get(emprego); mostrarPatente(e && e.dono !== p?.id ? `💼 ${e.nome}` : ''); }
     return;
   }
   tempoTurno -= dt;
@@ -4019,7 +4032,7 @@ function atualizarCarreira(dt) {
     if (!r) return;
     const antes = jogador.patente;
     jogador.patente = r.nome; jogador.patenteNivel = Number(r.nivel) || 0;
-    if (chip) chip.textContent = `🎖️ ${r.nome} · ${Math.floor(r.minutos / 60)}h${String(r.minutos % 60).padStart(2, '0')}${r.proximo ? ` · ${r.proximo} em ${r.falta} min` : ' · topo da carreira'}`;
+    if (chip) mostrarPatente(`🎖️ ${r.nome} · ${Math.floor(r.minutos / 60)}h${String(r.minutos % 60).padStart(2, '0')}${r.proximo ? ` · ${r.proximo} em ${r.falta} min` : ' · topo da carreira'}`);
     if (r.subiu) aviso(`🎖️ PROMOVIDO a ${r.nome}! O salário subiu.`, 5);
     else if (r.pago > 0 && !antes) aviso(`Turno: +${r.pago} moedas por minuto em serviço (${r.nome}).`, 3);
     if (r.fora && !avisouFora) { avisouFora = true; aviso(`Como ${r.nome}, seu turno só conta dentro do hospital.`, 4); }
@@ -4992,6 +5005,7 @@ function montarLocais() {
   LOCAIS.push({ nome: 'Transportadora', x: quadC(2) + 9, z: ruaC(2) + 2.5 });
   LOCAIS.push({ nome: 'Avenida Central', x: 0, z: ruaC(2) });
   for (const a of AEROPORTOS) LOCAIS.push({ nome: `✈️ ${a.nome}`, x: a.balcao.x, z: a.balcao.z + (a.eixo === 'x' ? 4 : 0) });
+  LOCAIS.push({ nome: '🛩️ Aviões dos pilotos (frota)', x: 444, z: -728 });
   LOCAIS.push({ nome: '🚌 Rodoviária', x: RODO.guiche.x - 2, z: RODO.guiche.z });
   LOCAIS.push({ nome: '♻️ Central de Reciclagem', x: CENTRAL.garagem.x, z: CENTRAL.garagem.z + 2 });
   LOCAIS.push({ nome: '🚗 Autoescola', x: AUTOESCOLA.balcao.x, z: AUTOESCOLA.balcao.z + 2 });
@@ -5083,7 +5097,8 @@ function aplicarPerfil(novo) {
       base.veiculo.position.set(base.vaga.x, 0.18, base.vaga.z); base.veiculo.rotation.y = base.vaga.ang;
     }
   }
-  if (novo.profissao !== antigo.profissao) aviso(novo.profissao === 'medico' ? 'Plantão médico: socorra os feridos (✚) pela cidade. +250 por socorro.' : novo.profissao === 'bombeiro' ? 'Você está em serviço nos bombeiros. Apague os incêndios (🔥). +400 por fogo.' : novo.profissao === 'jornalista' ? 'Você é jornalista: vá até incêndios, ocorrências e feridos e toque em Reportar (+200).' : novo.profissao === 'piloto' ? '✈️ Você é piloto! Vá ao hangar do Aeroporto da Metrópole e pegue um avião.' : novo.profissao === 'controlador' ? '🗼 Você é controlador de voo! Fique na torre do Aeroporto e autorize pousos e decolagens.' : novo.profissao === 'motorista' ? '🚌 Você é motorista de ônibus! Vá ao Despacho da Rodoviária e escolha a linha.' : novo.profissao === 'gari' ? '♻️ Você é gari! Vá à Central de Reciclagem (leste do centro) e pegue o caminhão de lixo.' : novo.profissao === 'fiscal' ? '🧾 Você é fiscal da Rodoviária! Fique nas plataformas e registre os ônibus que não saírem no horário (+30).' : novo.profissao === 'exercito' ? 'Você entrou no Exército! Apresente-se no Quartel em Porto Sul. Cada minuto em serviço conta para a patente.' : 'Você saiu do serviço público.', 4);
+  if (novo.profissao === 'piloto' && antigo.profissao !== 'piloto') rastrear({ nome: '🛩️ Aviões dos pilotos', x: 444, z: -728, frota: true });
+  if (novo.profissao !== antigo.profissao) aviso(novo.profissao === 'medico' ? 'Plantão médico: socorra os feridos (✚) pela cidade. +250 por socorro.' : novo.profissao === 'bombeiro' ? 'Você está em serviço nos bombeiros. Apague os incêndios (🔥). +400 por fogo.' : novo.profissao === 'jornalista' ? 'Você é jornalista: vá até incêndios, ocorrências e feridos e toque em Reportar (+200).' : novo.profissao === 'piloto' ? '✈️ Você é piloto! Siga a marca até os aviões da frota no Aeroporto da Metrópole e toque em Pilotar.' : novo.profissao === 'controlador' ? '🗼 Você é controlador de voo! Fique na torre do Aeroporto e autorize pousos e decolagens.' : novo.profissao === 'motorista' ? '🚌 Você é motorista de ônibus! Vá ao Despacho da Rodoviária e escolha a linha.' : novo.profissao === 'gari' ? '♻️ Você é gari! Vá à Central de Reciclagem (leste do centro) e pegue o caminhão de lixo.' : novo.profissao === 'fiscal' ? '🧾 Você é fiscal da Rodoviária! Fique nas plataformas e registre os ônibus que não saírem no horário (+30).' : novo.profissao === 'exercito' ? 'Você entrou no Exército! Apresente-se no Quartel em Porto Sul. Cada minuto em serviço conta para a patente.' : 'Você saiu do serviço público.', 4);
   if (novo.personagem !== antigo.personagem || novo.cargo !== antigo.cargo || novo.nome !== antigo.nome || novo.crimes !== antigo.crimes || novo.policial !== antigo.policial || novo.prf !== antigo.prf || novo.eleitoral !== antigo.eleitoral || novo.profissao !== antigo.profissao || novo.recompensa !== antigo.recompensa) {
     conexao?.rastrear(metaPresenca());
   }
@@ -8516,14 +8531,27 @@ function estacionarCarros() {
 function montarAvioesParados() {
   for (const [porte, x, z, ang] of AVIOES_PARADOS) {
     const P = PORTES[porte];
-    const o = { porte, x, z, ang, mesh: null }; aviaoParado.push(o);
+    const frota = x > 200 && z < -700 && z > -760;   // os da Metrópole são a frota dos pilotos
+    const o = { porte, x, z, ang, mesh: null, cols: [], frota }; aviaoParado.push(o);
     const comp = { pequeno: 9, medio: 20, grande: 32 }[porte], env = { pequeno: 10, medio: 20, grande: 30 }[porte];
-    for (let k = -0.4; k <= 0.41; k += 0.2) mundo.addCol({ tipo: 'circ', x: x + Math.sin(ang) * comp * k, z: z + Math.cos(ang) * comp * k, r: P.raio * 0.55 });
-    for (const lado of [-1, 1]) mundo.addCol({ tipo: 'circ', x: x + Math.cos(ang) * env * 0.3 * lado, z: z - Math.sin(ang) * env * 0.3 * lado, r: P.raio * 0.4 });
+    for (let k = -0.4; k <= 0.41; k += 0.2) o.cols.push({ tipo: 'circ', x: x + Math.sin(ang) * comp * k, z: z + Math.cos(ang) * comp * k, r: P.raio * 0.55 });
+    for (const lado of [-1, 1]) o.cols.push({ tipo: 'circ', x: x + Math.cos(ang) * env * 0.3 * lado, z: z - Math.sin(ang) * env * 0.3 * lado, r: P.raio * 0.4 });
+    o.cols.forEach((c) => mundo.addCol(c));
+    if (frota) { const r = textoSprite(`🛩️ Avião ${P.nome} · pilotos`, { escala: 0.9, fundo: 'rgba(43,95,168,.92)' }); r.position.set(x, { pequeno: 5, medio: 9, grande: 13 }[porte], z); scene.add(r); o.placa = r; }
   }
 }
+// avião da frota mais perto do jogador (a pé), para pilotar
+const ALCANCE_AVIAO = { pequeno: 10, medio: 15, grande: 21 };
+function aviaoFrotaPerto() {
+  let m = null, dm = Infinity;
+  for (const o of aviaoParado) { if (!o.frota) continue; const d = Math.hypot(o.x - jogador.pos.x, o.z - jogador.pos.z); if (d < ALCANCE_AVIAO[o.porte] && d < dm) { dm = d; m = o; } }
+  return m;
+}
+const aviaoLivre = (porte) => aviaoParado.find((o) => o.frota && o.porte === porte && jogador.carro?.vaga !== o);
 function atualizarAvioesParados() {
   for (const o of aviaoParado) {
+    const uso = !!jogador.carro?.aviao && jogador.carro.vaga === o;   // o que estou pilotando some da vaga e libera a colisão
+    if (o.mesh) o.mesh.visible = !uso; if (o.placa) o.placa.visible = !uso; for (const c of o.cols) c.off = uso;
     if (o.mesh || !modelos[PORTES[o.porte].modelo]) continue;
     o.mesh = civico.modeloCarro(PORTES[o.porte].modelo, '#ffffff'); o.mesh.position.set(o.x, alturaChao(o.x, o.z), o.z); o.mesh.rotation.y = o.ang; scene.add(o.mesh);
   }
@@ -8707,18 +8735,45 @@ function portesLiberados() {
   if (jogador.perfil?.cargo === 'admin') return ['pequeno', 'medio', 'grande'];
   const n = jogador.patenteNivel || 1; return n >= 3 ? ['pequeno', 'medio', 'grande'] : n >= 2 ? ['pequeno', 'medio'] : ['pequeno'];
 }
-function pegarAviao() {
+function pegarAviao(o) {
   if (!ehPiloto()) { abrirServico('piloto'); return; }
+  if (o) {
+    if (!portesLiberados().includes(o.porte)) { aviso(`O avião ${PORTES[o.porte].nome} libera com a carreira (Piloto = médio, Comandante = grande). Pegue o pequeno.`, 4); return; }
+    entrarAviao(o.porte, o); return;
+  }
   escolher('🛩️ Hangar', 'Escolha o avião (o porte libera com a carreira: Piloto = médio, Comandante = grande).', portesLiberados().map((p) => ({ rotulo: `✈️ Avião ${PORTES[p].nome}`, fn: () => entrarAviao(p) })));
 }
 const prefixo = () => `PR-${(jogador.perfil?.nome || 'FTR').normalize('NFD').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase().padEnd(3, 'X')}`;
-function entrarAviao(porte) {
-  const P = PORTES[porte], a = AERO.metro, x = a.spawn.x, z = a.spawn.z;
-  const mesh = civico.modeloCarro(P.modelo, '#ffffff'); mesh.position.set(x, 0, z); scene.add(mesh);
+// admin: testa qualquer veículo do jogo (some ao sair; aviões saem da frota do aeroporto)
+function testarVeiculo(modelo) {
+  if (jogador.perfil?.cargo !== 'admin') { aviso('Só o administrador testa veículos.'); return; }
+  if (jogador.carro) { sairCarro(); if (jogador.carro) return; }
+  if (jogador.carregando) { aviso('Largue a caixa antes de dirigir.'); return; }
+  const C = civico.CARROS[modelo]; if (!C) return;
+  if (modelo.startsWith('aviao_')) {
+    const porte = modelo.slice(6), o = aviaoLivre(porte);
+    if (o) { jogador.dentroCasa = null; teleportar(o.x, o.z + 12); }
+    entrarAviao(porte, o); return;
+  }
+  const mesh = civico.modeloCarro(modelo, '#c8202a'); mesh.position.set(jogador.pos.x, alturaChao(jogador.pos.x, jogador.pos.z), jogador.pos.z); mesh.rotation.y = jogador.yaw; scene.add(mesh);
   if (jogador.armado) alternarArma();
   modoVolante(true);
-  jogador.carro = { id: 'a' + jogador.perfil.id.slice(0, 8), servico: 'aviao', aviao: true, porte, modelo: P.modelo, cor: '#ffffff', vel: 0, mesh, salvar: 1e9, max: P.vmax, raio: P.raio, voa: true, alt: 0 };
-  jogador.pos.set(x, 0, z); jogador.yaw = Math.PI; jogador.alvo = null; jogador.avatar.raiz.visible = false;
+  const grande = /onibus|caminhao|bombeiros|tanque/.test(modelo);
+  jogador.carro = { id: 't' + jogador.perfil.id.slice(0, 8), teste: true, servico: modelo === 'tanque' ? 'tanque' : undefined, modelo, cor: '#c8202a', vel: 0, mesh, salvar: 1e9, max: C.vel, raio: modelo.startsWith('helicoptero') ? 2.2 : grande ? 1.9 : 1.3, voa: !!C.voa, alt: 0 };
+  jogador.alvo = null; jogador.avatar.raiz.visible = false;
+  document.body.classList.toggle('tanque', modelo === 'tanque');
+  if (modelo === 'tanque' && TOQUE) $('btTiro').classList.remove('oculto');
+  if (!C.voa) sons.tocar('carro_partida', { vol: 0.6 });
+  aviso(`🧪 Testando: ${C.nome}. Saia do veículo para guardá-lo.`, 3);
+}
+function entrarAviao(porte, parado = aviaoLivre(porte)) {
+  const P = PORTES[porte], a = AERO.metro, x = parado ? parado.x : a.spawn.x, z = parado ? parado.z : a.spawn.z, yaw = parado ? parado.ang + Math.PI : Math.PI;
+  const mesh = civico.modeloCarro(P.modelo, '#ffffff'); mesh.position.set(x, 0, z); mesh.rotation.y = yaw; scene.add(mesh);
+  if (jogador.armado) alternarArma();
+  modoVolante(true);
+  jogador.carro = { id: 'a' + jogador.perfil.id.slice(0, 8), servico: 'aviao', aviao: true, porte, modelo: P.modelo, cor: '#ffffff', vel: 0, mesh, salvar: 1e9, max: P.vmax, raio: P.raio, voa: true, alt: 0, vaga: parado };
+  if (parado) { for (const c of parado.cols) c.off = true; if (parado.mesh) parado.mesh.visible = false; }
+  jogador.pos.set(x, 0, z); jogador.yaw = yaw; if (rastreio?.frota) rastrear(null); jogador.alvo = null; jogador.avatar.raiz.visible = false;
   aviso(`✈️ Avião ${P.nome} (${prefixo()}): siga a taxiway até a cabeceira ${a.cab} (oeste). A torre autoriza; acelere até ${P.vdec} m/s para subir. Para pousar, 🛬 POUSAR alinhado com uma pista.`, 7);
 }
 function pilotarAviao(c, dt) {
@@ -8931,6 +8986,8 @@ function contextoAviacao() {
   if (g && jogador.passagem?.de === g.id) return [`portão de embarque: o voo para ${AERO[jogador.passagem.para].nome} ${v.embarque && v.o === g.id ? 'é outro destino, espere o próximo' : 'ainda não chegou'}`, 'Portão'];
   const b = balcaoPerto(); if (b) return [jogador.passagem ? `passagem para ${AERO[jogador.passagem.para].nome} (embarque no portão ✈️)` : 'atendente: comprar passagem aérea (150)', 'Passagem'];
   if (Math.hypot(AERO.metro.hangar.x - jogador.pos.x, AERO.metro.hangar.z - jogador.pos.z) < 4) return aula?.voo && !aula.veiculo ? ['aula de voo: pegar o avião da escola', 'Aula'] : [ehPiloto() ? 'hangar: pegar um avião' : 'hangar (vagas para piloto)', 'Hangar'];
+  const fa = aviaoFrotaPerto();
+  if (fa) return aula?.voo && !aula.veiculo ? ['aula de voo: pegar o avião da escola', 'Aula'] : [ehPiloto() ? (portesLiberados().includes(fa.porte) ? `pilotar o avião ${PORTES[fa.porte].nome}` : `avião ${PORTES[fa.porte].nome} (libera com a carreira)`) : `avião ${PORTES[fa.porte].nome} (só pilotos)`, 'Pilotar'];
   if (naTorre()) return [ehControlador() ? `torre de controle: ${pedidosTorre.size} pedido(s)` : 'torre de controle (vagas para controlador)', 'Torre'];
   return null;
 }
@@ -8939,6 +8996,7 @@ function acaoAviacao() {
   if (g && v.embarque && v.o === g.id && jogador.passagem?.de === g.id && jogador.passagem.para === v.d) { embarcarVoo(v); return true; }
   const b = balcaoPerto(); if (b) { if (!jogador.passagem) comprarPassagem(b); else aviso('Você já tem passagem. Espere o voo no portão (✈️).'); return true; }
   if (Math.hypot(AERO.metro.hangar.x - jogador.pos.x, AERO.metro.hangar.z - jogador.pos.z) < 4) { if (aula?.voo && !aula.veiculo) entrarAulaVoo(); else pegarAviao(); return true; }
+  const fa = aviaoFrotaPerto(); if (fa) { if (aula?.voo && !aula.veiculo) entrarAulaVoo(); else pegarAviao(fa); return true; }
   if (naTorre()) { abrirTorre(); return true; }
   if (g) { aviso(contextoAviacao()?.[0] || 'Portão de embarque.', 3); return true; }
   return false;
