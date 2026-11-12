@@ -298,6 +298,10 @@ function abaTempo() {
   const nomes = { limpo: '☀️ Limpo', chuva: '🌧️ Chuva', tempestade: '⛈️ Tempestade', neve: '❄️ Neve' };
   const manual = cf.manual && cf.manual_ate && Date.parse(cf.manual_ate) > Date.now();
   c.innerHTML = `<p class="dica">Agora: <b>${nomes[agora] || agora}</b>${manual ? ` (escolhido por você até ${new Date(cf.manual_ate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})` : cf.auto ? ' (automático)' : ''}.</p>
+    <div class="sub">🕒 Hora do dia (agora ${String(Math.floor(ctx.relogio().hora)).padStart(2, '0')}h${ctx.relogio().fixa !== null && ctx.relogio().fixa !== undefined ? ' · travada' : ''})</div>
+    <p class="dica">Pular: a hora muda para todos e o ciclo continua dali. Travar: a hora fica parada até você voltar ao normal.</p>
+    <div class="botoes">${[[6, '🌅 6h'], [12, '☀️ 12h'], [18, '🌇 18h'], [22, '🌙 22h'], [2, '🌑 2h']].map(([h, t]) => `<button data-hora="${h}">${t}</button>`).join('')}</div>
+    <div class="botoes"><label><input type="checkbox" id="tTravar"> Travar na hora escolhida</label><button id="tHoraNormal">↩ Ciclo normal</button></div>
     <div class="sub">Mudar agora</div>
     <div class="botoes"><select id="tMin">${[[5, '5 min'], [10, '10 min'], [20, '20 min'], [32, '1 ciclo (32 min)'], [60, '1 h'], [120, '2 h'], [240, '4 h']].map(([m, t]) => `<option value="${m}" ${m === 10 ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
     <div class="botoes">${Object.entries(nomes).map(([k, t]) => `<button data-tempo="${k}">${t}</button>`).join('')}</div>
@@ -312,6 +316,15 @@ function abaTempo() {
   const depois = async (fn, ok) => { try { await fn(); await ctx.climaMudou(); msg(ok); setTimeout(abaTempo, 300); } catch (e) { msg(e.message, false); } };
   c.querySelectorAll('[data-tempo]').forEach((b) => { b.onclick = () => depois(() => rede.clima.agora(b.dataset.tempo, Number($('tMin').value)), `Tempo: ${nomes[b.dataset.tempo]}. Muda em alguns segundos para todos.`); });
   const v = $('tVoltar'); if (v) v.onclick = () => depois(() => rede.clima.agora(null, 0), 'Voltou ao automático.');
+  const salvarHora = async (desloc, fixa, ok) => {
+    try { await rede.configJogo.salvarHora(desloc, fixa); ctx.relogioMudou({ hora_desloc: desloc, hora_fixa: fixa }); msg(ok); setTimeout(abaTempo, 300); }
+    catch (e) { msg(/admin_hora|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 54_hora_do_dia.sql no SQL Editor do Supabase.' : e.message, false); }
+  };
+  c.querySelectorAll('[data-hora]').forEach((b) => {
+    b.onclick = () => { const h = Number(b.dataset.hora), trava = $('tTravar').checked;
+      salvarHora(trava ? 0 : ctx.deslocParaHora(h), trava ? h : null, trava ? `Hora travada às ${h}h para todos.` : `Agora são ${h}h para todos; o ciclo segue dali.`); };
+  });
+  $('tHoraNormal').onclick = () => salvarHora(0, null, 'Ciclo do dia normal de volta.');
   $('tSalvar').onclick = () => depois(() => rede.clima.auto($('tAuto').checked, Math.floor(Number($('tChuva').value) || 0), Math.floor(Number($('tTemp').value) || 0), Math.floor(Number($('tNeve').value) || 0)), 'Programação salva.');
 }
 // ------------------------------------------------------------ eu

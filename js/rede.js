@@ -395,6 +395,7 @@ export const configJogo = {
   presos: async (desde) => (await sel(sb.from('bandidos_presos').select('ciclo').gte('ciclo', desde))) || [],
   prenderBandido: (ciclo) => rpc('prender_bandido', { p_ciclo: ciclo }),
   salvarFarda: (farda) => rpc('admin_farda', { p_farda: farda }),
+  salvarHora: (desloc, fixa) => rpc('admin_hora', { p_desloc: desloc, p_fixa: fixa }),
 };
 export const clima = {
   async ler() { const { data, error } = await sb.from('clima').select('*').eq('id', 1).maybeSingle(); if (error) throw error; return data; },

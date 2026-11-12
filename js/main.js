@@ -140,9 +140,11 @@ const CEU = {
   hemiDia: new THREE.Color('#dfeeff'), hemiNoite: new THREE.Color('#4a5f92'), chaoDia: new THREE.Color('#8a7457'), chaoNoite: new THREE.Color('#2a2833'),
 };
 let horaAtual = 12;
+const ajusteHora = { desloc: 0, fixa: null };   // ajuste do admin (config_jogo): adiantar o ciclo ou travar uma hora
 function horaDoJogo(t) {
   if (HORA_FIXA !== undefined) return Number(HORA_FIXA) % 24;
-  const f = ((t / CICLO_DIA) % 1 + 1) % 1;
+  if (ajusteHora.fixa !== null && ajusteHora.fixa !== undefined) return Number(ajusteHora.fixa) % 24;
+  const f = (((t + ajusteHora.desloc) / CICLO_DIA) % 1 + 1) % 1;
   return f < 0.7 ? 6 + f / 0.7 * 12 : (18 + (f - 0.7) / 0.3 * 12) % 24;
 }
 function atualizarCeu(t) {
@@ -164,6 +166,14 @@ function atualizarCeu(t) {
   for (const m of luzesCasas) m.emissiveIntensity = noite * 1.1;
   civico.brilhoOutdoors(noite);
 }
+// quantos segundos somar ao relógio para que agora seja a hora h (o ciclo continua dali)
+function deslocParaHora(h) {
+  h = ((h % 24) + 24) % 24;
+  const f = h >= 6 && h < 18 ? (h - 6) / 12 * 0.7 : 0.7 + (((h - 18) + 24) % 24) / 12 * 0.3;
+  const t = agoraServidor() / 1000, atual = ((t % CICLO_DIA) + CICLO_DIA) % CICLO_DIA;
+  return Math.round(((f * CICLO_DIA - atual) % CICLO_DIA + CICLO_DIA) % CICLO_DIA);
+}
+function aplicarRelogio(c) { ajusteHora.desloc = Number(c?.hora_desloc) || 0; ajusteHora.fixa = c?.hora_fixa ?? null; }
 const textoHora = () => `${String(Math.floor(horaAtual)).padStart(2, '0')}:${String(Math.floor((horaAtual % 1) * 60)).padStart(2, '0')}`;
 
 // Câmera isométrica
@@ -2076,6 +2086,9 @@ async function iniciarJogo(perfil) {
   iniciarPainel({
     perfil: () => jogador.perfil,
     ajustarFarda: () => abrirEditorFarda(),
+    relogio: () => ({ ...ajusteHora, hora: horaAtual }),
+    deslocParaHora: (h) => deslocParaHora(h),
+    relogioMudou: (c) => aplicarRelogio(c),
     prefeito: () => prefeitoAtual,
     prefeitoMudou: () => carregarPrefeitura().catch(() => {}),
     climaMudou: async () => { await carregarClima(); conexao?.enviar('clima', {}); },
@@ -7239,7 +7252,7 @@ function abrirEditorFarda() {
 let configJogo = { policia_robo: 12, crimes_npc: false, chance_crime: 30 }, tempoConfig = 0;
 function atualizarConfigJogo(dt) {
   if ((tempoConfig -= dt) > 0) return; tempoConfig = 30;
-  rede.configJogo.ler().then((c) => { if (c) { configJogo = c; if (!editorFarda) definirAjusteFarda(c.farda); } }).catch(() => {});
+  rede.configJogo.ler().then((c) => { if (c) { configJogo = c; aplicarRelogio(c); if (!editorFarda) definirAjusteFarda(c.farda); } }).catch(() => {});
   rede.configJogo.presos(cicloCrime() - 3).then((l) => { for (const x of l) presosNpc.add(x.ciclo); }).catch(() => {});
 }
 // ---------------------------------------------------------------- ladrões NPC: a cada 2 minutos, com a chance definida, um pedestre
