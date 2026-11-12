@@ -6905,49 +6905,94 @@ function texturaUniforme(u) {
   g.fillText(u.texto, 128, 52); g.fillText(u.texto, 384, 52);          // na frente e nas costas
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; _texUni.set(u.texto, t); return t;
 }
+// peças em 3D (GLB, cor neutra: o jogo pinta com a cor de cada corporação). Frente dos modelos = +X.
+// medidas = caixa do modelo (largura no eixo Z, topo no eixo Y), para encaixar pela altura do personagem
+const PECAS_FARDA = {
+  colete: { arq: 'farda_colete', largura: 0.84, prof: 0.77, topo: 0.5 },
+  bone: { arq: 'farda_bone', largura: 0.75, topo: 0.277, alvo: 0.125 },
+  bombeiro: { arq: 'farda_capacete_bombeiro', largura: 1.0, topo: 0.465, alvo: 0.2 },
+  militar: { arq: 'farda_capacete_militar', largura: 0.85, topo: 0.5, alvo: 0.15 },
+};
+const CHAPEU_DE = { policia: 'bone', prf: 'bone', bombeiro: 'bombeiro', medico: 'bone', exercito: 'militar', jornalista: 'bone' };
+const pecasFarda = {}; let pecasPedidas = false;
+function carregarPecasFarda() {
+  if (pecasPedidas) return; pecasPedidas = true;
+  for (const [k, d] of Object.entries(PECAS_FARDA)) carregarGLB(`assets/modelos/${d.arq}.glb`).then((g) => { pecasFarda[k] = g.scene; }).catch(() => { /* fica a farda simples */ });
+}
+const _rotulos = new Map();
+function rotuloFarda(u) {   // plaquinha com o nome da corporação, no peito e nas costas do colete
+  if (_rotulos.has(u.texto)) return _rotulos.get(u.texto);
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = u.cor; g.fillRect(0, 0, 256, 64); if (u.faixa) { g.fillStyle = u.faixa; g.fillRect(0, 52, 256, 8); }
+  g.fillStyle = u.letra; g.font = '800 30px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(u.texto, 128, 28);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -2 }); _rotulos.set(u.texto, m); return m;
+}
+function pecaGlb(nome, cor, u) {
+  const base = pecasFarda[nome]; if (!base) return null;
+  const g = base.clone(true);
+  g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(cor).lerp(new THREE.Color('#ffffff'), 0.12); o.castShadow = true; } });
+  if (u) for (const lado of [1, -1]) {   // frente (+X) e costas (-X)
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.15), rotuloFarda(u)); pl.position.set(lado * 0.405, 0.06, 0); pl.rotation.y = lado * Math.PI / 2; g.add(pl);
+  }
+  g.rotation.y = -Math.PI / 2;   // a frente do modelo (+X) vira a frente do personagem (+Z)
+  const h = new THREE.Group(); h.add(g); return h;
+}
 function vestir(av, papel) {
   if (!av) return;
-  if (av.uniforme?.papel === papel) return;
+  const glb = !!(papel && pecasFarda.colete && pecasFarda[CHAPEU_DE[papel]]);
+  if (av.uniforme?.papel === papel && av.uniforme.glb === glb) return;
   if (av.uniforme) { scene.remove(av.uniforme.colete, av.uniforme.chapeu); av.uniforme = null; }
   if (!papel) return;
+  carregarPecasFarda();
   const u = UNIFORMES[papel], achados = {};
   // cada modelo nomeia os ossos de um jeito (mixamorigSpine1, mixamorig:Spine1, Spine1...): procura pelo fim do nome
   av.modelo.traverse((x) => { const n = (x.name || '').toLowerCase().replace(/[^a-z0-9_]/g, ''); for (const k of ['spine2', 'spine1', 'spine', 'neck', 'headtop_end', 'head']) if (!achados[k] && n.endsWith(k)) { achados[k] = x; break; } });
   let ossos = { base: achados.spine1 || achados.spine || achados.spine2, pescoco: achados.neck, cabeca: achados.head, topo: achados.headtop_end };
   if (!ossos.base || !ossos.pescoco || !ossos.cabeca) ossos = null;   // sem esqueleto conhecido: veste pela altura do corpo
-  const colete = new THREE.Mesh(new THREE.CylinderGeometry(1, 0.94, 1, 14, 1, true), new THREE.MeshStandardMaterial({ map: texturaUniforme(u), roughness: 0.8, side: THREE.DoubleSide }));
-  const chapeu = new THREE.Group();
-  const copa = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1, 0.55, 14), new THREE.MeshStandardMaterial({ color: u.chapeu, roughness: 0.6, metalness: papel === 'bombeiro' ? 0.4 : 0 }));
-  copa.position.y = 0.27; chapeu.add(copa);
-  const aba = new THREE.Mesh(new THREE.CylinderGeometry(papel === 'exercito' ? 1.12 : 0.9, papel === 'exercito' ? 1.12 : 0.9, 0.08, 14), copa.material); aba.position.set(0, 0.03, papel === 'exercito' ? 0 : 0.35); aba.scale.set(1, 1, papel === 'exercito' ? 1 : 0.7); chapeu.add(aba);
-  colete.castShadow = true; scene.add(colete, chapeu);
-  av.uniforme = { papel, colete, chapeu, ossos };
+  let colete, chapeu;
+  if (glb) { colete = pecaGlb('colete', u.cor, u); chapeu = pecaGlb(CHAPEU_DE[papel], u.chapeu); }
+  else {   // enquanto os modelos 3D não carregam: colete e boné simples
+    colete = new THREE.Mesh(new THREE.CylinderGeometry(1, 0.94, 1, 14, 1, true), new THREE.MeshStandardMaterial({ map: texturaUniforme(u), roughness: 0.8, side: THREE.DoubleSide }));
+    chapeu = new THREE.Group();
+    const copa = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1, 0.55, 14), new THREE.MeshStandardMaterial({ color: u.chapeu, roughness: 0.6 })); copa.position.y = 0.27; chapeu.add(copa);
+    colete.castShadow = true;
+  }
+  scene.add(colete, chapeu);
+  av.uniforme = { papel, colete, chapeu, ossos, glb, peca: CHAPEU_DE[papel] };
 }
-const _ua = new THREE.Vector3(), _ub = new THREE.Vector3(), _uc = new THREE.Vector3(), _ud = new THREE.Vector3(), _um = new THREE.Matrix4(), _ux = new THREE.Vector3();
+const _ua = new THREE.Vector3(), _ub = new THREE.Vector3(), _uc = new THREE.Vector3(), _ud = new THREE.Vector3(), _um = new THREE.Matrix4(), _ux = new THREE.Vector3(), _uq = new THREE.Quaternion();
 function posicionarUniforme(av) {
   const U = av?.uniforme; if (!U) return;
   const vis = av.raiz.visible; U.colete.visible = U.chapeu.visible = vis; if (!vis) return;
-  const alt = av.altura || 1.8, yaw = av.raiz.rotation.y;
-  if (!U.ossos) {
-    const r = av.raiz.position; U.colete.rotation.set(0, yaw, 0); U.chapeu.rotation.set(0, yaw, 0);
-    U.colete.position.set(r.x, r.y + alt * 0.62, r.z); U.colete.scale.set(0.16 * alt, alt * 0.3, 0.12 * alt);
-    U.chapeu.position.set(r.x, r.y + alt * 1.0, r.z); U.chapeu.scale.setScalar(0.1 * alt);
+  const alt = av.altura || 1.8, yaw = av.raiz.rotation.y, r = av.raiz.position;
+  // eixos do corpo: "cima" segue a coluna; sem ossos, fica em pé
+  let pesc, topo;
+  if (U.ossos) {
+    U.ossos.base.getWorldPosition(_ua); U.ossos.pescoco.getWorldPosition(_ub);
+    _uc.subVectors(_ub, _ua); if (_uc.lengthSq() < 1e-6) _uc.set(0, 1, 0); _uc.normalize();
+  } else { _ua.set(r.x, r.y + alt * 0.5, r.z); _ub.set(r.x, r.y + alt * 0.8, r.z); _uc.set(0, 1, 0); }
+  const cima = _uc, frente = _ud.set(Math.sin(yaw), 0, Math.cos(yaw)); frente.addScaledVector(cima, -frente.dot(cima)).normalize();
+  const lado = _ux.crossVectors(cima, frente).normalize();
+  _um.makeBasis(lado, cima, frente); _uq.setFromRotationMatrix(_um);
+  pesc = _ub.clone();
+  if (U.ossos) { U.ossos.cabeca.getWorldPosition(_ua); topo = U.ossos.topo ? U.ossos.topo.getWorldPosition(new THREE.Vector3()) : _ua.clone().addScaledVector(cima, 0.13 * alt); }
+  else topo = new THREE.Vector3(r.x, r.y + alt, r.z);
+  U.colete.quaternion.copy(_uq); U.chapeu.quaternion.copy(_uq);
+  if (U.glb) {
+    const C = PECAS_FARDA.colete, sy = 0.32 * alt;
+    U.colete.scale.set(0.27 * alt / C.largura, sy, 0.16 * alt / C.prof);
+    U.colete.position.copy(pesc).addScaledVector(cima, 0.015 * alt - C.topo * sy).addScaledVector(frente, 0.012 * alt);   // o alto do colete nos ombros
+    const P = PECAS_FARDA[U.peca], s = P.alvo * alt / P.largura;
+    U.chapeu.scale.setScalar(s);
+    U.chapeu.position.copy(topo).addScaledVector(cima, 0.02 * alt - P.topo * s);   // a copa do boné/capacete no alto da cabeça
     return;
   }
-  U.ossos.base.getWorldPosition(_ua); U.ossos.pescoco.getWorldPosition(_ub);
-  const cima = _uc.subVectors(_ub, _ua); const comp = cima.length() || 0.4; cima.normalize();
-  const frente = _ud.set(Math.sin(yaw), 0, Math.cos(yaw)); frente.addScaledVector(cima, -frente.dot(cima)).normalize();
-  const lado = _ux.crossVectors(cima, frente).normalize();
-  _um.makeBasis(lado, cima, frente);
-  U.colete.quaternion.setFromRotationMatrix(_um);
-  U.colete.position.copy(_ua).addScaledVector(cima, comp * 0.5);
-  U.colete.scale.set(0.16 * alt, comp * 1.5, 0.12 * alt);   // largo e grosso: aparece por cima de qualquer roupa
-  // boné/capacete: no alto da cabeça
-  U.ossos.cabeca.getWorldPosition(_ua);
-  if (U.ossos.topo) U.ossos.topo.getWorldPosition(_ub); else _ub.copy(_ua).addScaledVector(cima, 0.13 * alt);
-  U.chapeu.position.copy(_ua).lerp(_ub, 0.8);
-  U.chapeu.quaternion.copy(U.colete.quaternion);
-  U.chapeu.scale.setScalar(0.1 * alt);   // maior que a cabeça: o capacete/boné fica à vista
+  const comp = Math.max(0.2, _ub.distanceTo(U.ossos ? U.ossos.base.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(r.x, r.y + alt * 0.5, r.z)));
+  U.colete.position.copy(pesc).addScaledVector(cima, -comp * 0.5);
+  U.colete.scale.set(0.16 * alt, comp * 1.5, 0.12 * alt);
+  U.chapeu.position.copy(topo).addScaledVector(cima, -0.02 * alt);
+  U.chapeu.scale.setScalar(0.1 * alt);
 }
 // A farda: veste sozinha ao entrar no expediente e sai ao terminar. No vestiário do QG de cada trabalho dá para
 // vestir ou tirar quando quiser. A equipe (admin e moderadores) pode vestir qualquer uma.
