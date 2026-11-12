@@ -981,6 +981,13 @@ export function definirNoite(n) {
   if (matCabeca) matCabeca.emissiveIntensity = n * 2.2;
   if (matPoca) { matPoca.opacity = n * 0.6; matPoca.userData.malha.visible = n > 0.02; }
 }
+// chuva: asfalto e calçada escurecem e ficam lisos (refletem o céu e as luzes)
+let molhadoAntes = -1;
+export function molhar(f) {
+  if (!MAT || Math.abs(f - molhadoAntes) < 0.01) return; molhadoAntes = f;
+  MAT.asfalto.roughness = 0.88 - 0.62 * f; MAT.asfalto.color.setScalar(1 - 0.3 * f); MAT.asfalto.envMapIntensity = 1 + 1.6 * f;
+  MAT.calcada.roughness = 0.92 - 0.45 * f; MAT.calcada.color.setScalar(1 - 0.2 * f); MAT.calcada.envMapIntensity = 1 + 0.8 * f;
+}
 export function atualizar(dt) {
   if (MAT?.agua.normalMap) { MAT.agua.normalMap.offset.x += dt * 0.004; MAT.agua.normalMap.offset.y += dt * 0.0025; }
 }

@@ -24,6 +24,7 @@ import * as sons from './sons.js';
 import * as voz from './voz.js';
 import * as clima from './clima.js';
 import * as jornal from './jornal.js';
+import * as visual from './visual.js';
 import { nivelTexto } from './empresa.js';
 import { iniciarPainel, atualizarBotao } from './painel.js';
 
@@ -109,7 +110,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.localClippingEnabled = true;   // corte do teto do trem quando você está dentro
 
@@ -129,6 +130,8 @@ Object.assign(sol.shadow.camera, { left: -SOMBRA, right: SOMBRA, top: SOMBRA, bo
 sol.shadow.bias = -0.0004;
 sol.shadow.normalBias = 0.03;
 scene.add(sol, sol.target);
+scene.fog = new THREE.Fog('#a9c8de', 200, 330);
+visual.iniciar(renderer, scene, sol, TOQUE);
 const SOL_DIR = new THREE.Vector3(-0.55, 1, 0.35).normalize();
 
 // ---------------------------------------------------------------- dia e noite (igual para todos, pelo relógio do servidor)
@@ -139,7 +142,7 @@ const CEU = {
   sol: new THREE.Color('#fff2dc'), solTarde: new THREE.Color('#ffae6a'), lua: new THREE.Color('#9fb4ff'),
   hemiDia: new THREE.Color('#dfeeff'), hemiNoite: new THREE.Color('#4a5f92'), chaoDia: new THREE.Color('#8a7457'), chaoNoite: new THREE.Color('#2a2833'),
 };
-let horaAtual = 12;
+let horaAtual = 12, noiteAtual = 0, molhadoAtual = 0;
 const ajusteHora = { desloc: 0, fixa: null };   // ajuste do admin (config_jogo): adiantar o ciclo ou travar uma hora
 function horaDoJogo(t) {
   if (HORA_FIXA !== undefined) return Number(HORA_FIXA) % 24;
@@ -155,14 +158,17 @@ function atualizarCeu(t) {
   if (dia > 0.02) SOL_DIR.set(Math.cos(ang) * 0.9, Math.max(0.2, elev), 0.35).normalize();
   else SOL_DIR.set(0.45, 1, -0.4).normalize();              // luz da lua
   sol.color.copy(CEU.lua).lerp(CEU.sol, dia).lerp(CEU.solTarde, tarde * 0.75);
-  sol.intensity = 0.3 + 2.1 * dia;
-  hemi.intensity = 0.4 + 0.75 * dia;
+  sol.intensity = 0.3 + 2.6 * dia;
+  hemi.intensity = 0.38 + 0.5 * dia;   // menos luz "chapada": sombras com mais volume
   hemi.color.copy(CEU.hemiNoite).lerp(CEU.hemiDia, dia);
   hemi.groundColor.copy(CEU.chaoNoite).lerp(CEU.chaoDia, dia);
-  scene.environmentIntensity = 0.12 + 0.43 * dia;
+  scene.environmentIntensity = 0.12 + 0.33 * dia + 0.35 * molhadoAtual;   // chão molhado reflete mais
   scene.background.copy(CEU.noite).lerp(CEU.dia, dia).lerp(CEU.tarde, tarde * 0.5);
   const noite = 1 - S(elev, -0.02, 0.3);
   mundo.definirNoite(noite);
+  noiteAtual = noite;
+  // neblina leve no fundo da cena (mesma cor do céu): dá profundidade e esconde o fim do mapa
+  if (scene.fog) { scene.fog.color.copy(scene.background); scene.fog.near = 175 + (1 - molhadoAtual) * 25; scene.fog.far = 330 - molhadoAtual * 90; }
   for (const m of luzesCasas) m.emissiveIntensity = noite * 1.1;
   civico.brilhoOutdoors(noite);
 }
@@ -202,7 +208,7 @@ function trocarCamera() {
   if (modoCam === 'iso') { anguloCam = Math.round(anguloCamSuave); camAtras = false; }
   aviso(modoCam === 'atras' ? '🎥 Câmera atrás do personagem (igual ao carro): ela gira e acompanha para onde você anda.' : '🎥 Câmera de cima (padrão).', 3);
 }
-window.addEventListener('resize', () => { renderer.setSize(window.innerWidth, window.innerHeight); ajustarCamera(); });
+window.addEventListener('resize', () => { visual.redimensionar(); ajustarCamera(); });
 ajustarCamera();
 function offsetCamera(ang) {
   const a = Math.PI / 4 + ang * Math.PI / 2;
@@ -2053,6 +2059,13 @@ async function iniciarJogo(perfil) {
   });
   $('btVeiculos').onclick = () => abrirServico('veiculos');
   $('btAmigos').onclick = () => abrirServico('amigos');
+  const rotuloGrafico = () => { const b = $('btGrafico'); if (b) b.querySelector('span').textContent = `Gráficos: ${visual.NIVEIS[visual.nivelAtual()]}`; };
+  rotuloGrafico();
+  $('btGrafico').onclick = () => {
+    const ordem = ['baixo', 'medio', 'alto'], prox = ordem[(ordem.indexOf(visual.nivelAtual()) + 1) % 3];
+    visual.definirNivel(prox); rotuloGrafico(); ajustarCamera();
+    aviso(`✨ Gráficos: ${visual.NIVEIS[prox]}${prox === 'baixo' ? ' (mais leve, sem efeitos)' : prox === 'alto' ? ' (mais bonito, pesa mais)' : ''}`, 2.5);
+  };
   $('btConta').onclick = () => { abrirServico('conta'); $('menuBar').classList.remove('aberto'); };
   carregarBloqueios();
   $('btTrabalho').onclick = () => abrirServico('trabalho');
@@ -5321,7 +5334,12 @@ function quadro() {
   atualizarCamera(dt);
   mundo.atualizarOclusao(dt, averiguando ? foco() : jogador.pos, offsetCamera(anguloCamSuave));
   atualizarHUD(dt);
-  renderer.render(scene, camAtiva);
+  // chuva molha o chão (asfalto escuro e brilhante); o visual ajusta brilho e cor pela noite e pela chuva
+  const tc = clima.atual(), alvoMolhado = tc === 'chuva' || tc === 'tempestade' ? clima.fatorTempo() : 0;
+  molhadoAtual += (alvoMolhado - molhadoAtual) * Math.min(1, dt * 0.4);
+  mundo.molhar(molhadoAtual);
+  visual.ajustar(noiteAtual, molhadoAtual);
+  visual.render(camAtiva);
 }
 
 // ---------------------------------------------------------------- aperto de mão
