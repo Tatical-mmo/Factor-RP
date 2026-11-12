@@ -6909,9 +6909,10 @@ function texturaUniforme(u) {
 // medidas = caixa do modelo (largura no eixo Z, topo no eixo Y), para encaixar pela altura do personagem
 const PECAS_FARDA = {
   colete: { arq: 'farda_colete', largura: 0.84, prof: 0.77, topo: 0.5 },
-  bone: { arq: 'farda_bone', largura: 0.75, topo: 0.277, alvo: 0.17 },
-  bombeiro: { arq: 'farda_capacete_bombeiro', largura: 1.0, topo: 0.465, alvo: 0.27 },
-  militar: { arq: 'farda_capacete_militar', largura: 0.85, topo: 0.5, alvo: 0.22 },
+  // chapéus: copa = largura da parte que veste a cabeça; cx = onde fica o centro da copa (o boné tem a aba na frente)
+  bone: { arq: 'farda_bone', copa: 0.69, cx: -0.1, topo: 0.277, folga: 1.12 },
+  bombeiro: { arq: 'farda_capacete_bombeiro', copa: 0.7, cx: 0.016, topo: 0.465, folga: 1.22 },
+  militar: { arq: 'farda_capacete_militar', copa: 0.78, cx: 0.014, topo: 0.5, folga: 1.2 },
 };
 const CHAPEU_DE = { policia: 'bone', prf: 'bone', bombeiro: 'bombeiro', medico: 'bone', exercito: 'militar', jornalista: 'bone' };
 const pecasFarda = {}; let pecasPedidas = false;
@@ -6961,6 +6962,7 @@ function vestir(av, papel) {
   scene.add(colete, chapeu);
   av.uniforme = { papel, colete, chapeu, ossos, glb, peca: CHAPEU_DE[papel] };
 }
+const _cy = new THREE.Vector3(), _cz = new THREE.Vector3(), _cw = new THREE.Vector3();
 const _ua = new THREE.Vector3(), _ub = new THREE.Vector3(), _uc = new THREE.Vector3(), _ud = new THREE.Vector3(), _um = new THREE.Matrix4(), _ux = new THREE.Vector3(), _uq = new THREE.Quaternion();
 function posicionarUniforme(av) {
   const U = av?.uniforme; if (!U) return;
@@ -6983,9 +6985,14 @@ function posicionarUniforme(av) {
     const C = PECAS_FARDA.colete, sy = 0.36 * alt;   // largo e fundo o bastante para envolver o tronco de qualquer personagem
     U.colete.scale.set(0.36 * alt / C.largura, sy, 0.26 * alt / C.prof);
     U.colete.position.copy(pesc).addScaledVector(cima, 0.035 * alt - C.topo * sy).addScaledVector(frente, 0.015 * alt);   // o alto do colete nos ombros
-    const P = PECAS_FARDA[U.peca], s = P.alvo * alt / P.largura;
-    U.chapeu.scale.setScalar(s);
-    U.chapeu.position.copy(topo).addScaledVector(cima, 0.05 * alt - P.topo * s);   // um pouco acima: cobre o cabelo   // a copa do boné/capacete no alto da cabeça
+    // chapéu medido pela própria cabeça (personagens cabeçudos ganham capacete maior) e centrado no crânio
+    const P = PECAS_FARDA[U.peca], cab = U.ossos ? U.ossos.cabeca.getWorldPosition(new THREE.Vector3()) : topo.clone().addScaledVector(_cy.set(0, 1, 0), -0.13 * alt);
+    const eixo = _cy.subVectors(topo, cab); let hc = eixo.length(); if (hc < 0.05 * alt || hc > 0.4 * alt) { hc = 0.13 * alt; eixo.copy(cima); } else eixo.normalize();
+    const fr = _cz.copy(frente).addScaledVector(eixo, -frente.dot(eixo)).normalize(), ld = _cw.crossVectors(eixo, fr).normalize();
+    _um.makeBasis(ld, eixo, fr); U.chapeu.quaternion.setFromRotationMatrix(_um);
+    const sc = hc * P.folga / P.copa;   // a copa um pouco mais larga que a cabeça
+    U.chapeu.scale.setScalar(sc);
+    U.chapeu.position.copy(topo).addScaledVector(eixo, 0.12 * hc - P.topo * sc).addScaledVector(fr, 0.1 * hc - P.cx * sc);   // a copa do boné/capacete no alto da cabeça
     return;
   }
   const comp = Math.max(0.2, _ub.distanceTo(U.ossos ? U.ossos.base.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(r.x, r.y + alt * 0.5, r.z)));
