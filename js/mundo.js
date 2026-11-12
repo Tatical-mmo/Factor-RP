@@ -98,6 +98,8 @@ export function limitar(p) {
   }
   if (p.x >= 110 && p.x <= 530 && p.z >= -880 && p.z <= -650) return;   // Aeroporto da Metrópole
   if (p.x >= 157 && p.x <= 167 && p.z >= -662 && p.z <= -630) return;   // acesso ao aeroporto
+  if (p.x >= -167 && p.x <= -157 && p.z >= -950 && p.z <= -636) return;   // rodovia para Vila Serra
+  if (p.x >= 211 && p.x <= 221 && p.z >= 636 && p.z <= 950) return;     // rodovia para Porto Sul
   if (Math.abs(p.z) > 700) {
     const s = Math.sign(p.z);
     p.x = THREE.MathUtils.clamp(p.x, -CIDADE_Z.x, CIDADE_Z.x);

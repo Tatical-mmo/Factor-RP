@@ -649,3 +649,17 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
   - Sem gari jogador, o caminhão do sistema faz a volta e esvazia as lixeiras.
   - Caminhão com som de caminhão e giroflex laranja (duas lâmpadas no teto da cabine) piscando enquanto trabalha.
 - SQL desta versão: **60_coleta_lixo.sql**.
+
+## Versão 12/11 (t) · rodovias, ônibus intermunicipais, mais linhas e rotas com regras
+- 🛣️ Duas rodovias: a Norte (rua x = -162) liga a Metrópole a Vila Serra; a Sul (rua x = 216) liga a Porto Sul.
+- 🚌 Rodoviária com 5 plataformas: Circular (1), Vila Serra (7), Porto Sul (8), Leste (3) e Aeroporto (2). As intermunicipais usam os ônibus executivos e de dois andares.
+- Rodoviárias de Vila Serra e Porto Sul: cobertura na praça da estação, com bancos e placa. A linha intermunicipal para nelas e dá uma volta pelo centro da cidade.
+- Três linhas circulares novas, que passam na calçada leste da Rodoviária (ponto "Rodoviária") e rodam sem parar:
+  - 4 · Oeste e Serviços: Prefeitura, Autoescola, Hospital, Bombeiros, Estação Sul e Banco.
+  - 5 · Estações e Trabalho: Estação Norte, Mercado, Estação Sul e Central de Reciclagem.
+  - 6 · Territórios: praças de território NO e SE e Território Oeste.
+- 🟨 Faixa amarela:
+  - Ônibus: agora só pela faixa da direita do caminho da linha, sem cortar calçada.
+  - Autoescola: a prova segue um percurso pelas ruas. Fora da faixa da direita por mais de 1 s, subir na calçada ou não parar no ponto (prova D) é infração; 3 infrações ou 3 batidas reprovam.
+  - Pilotos: no chão, a faixa leva pela taxiway até a cabeceira. No ar, mostra a aproximação, a descida e a pista do aeroporto de destino (o mais perto, escolhido na decolagem). Um painel no alto dá as instruções: altura, velocidade máxima, alinhamento e a hora de tocar em POUSAR.
+- Sem SQL nesta versão.
