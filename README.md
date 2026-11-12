@@ -790,3 +790,32 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
   - `classico_ronco`: acelerada curta.
 - Parado, toca a marcha lenta. Conforme acelera, entra o ronco alto e o tom sobe com a velocidade. Pisar no acelerador devagar dá uma acelerada de vez em quando (no máximo uma a cada 5 s).
 - A concessionária mostra o Clássico V8 laranja junto com os outros.
+
+## Versão 13/11 · sons dos motores (20261113i)
+
+- Sons novos dos motores, cortados dos áudios enviados. Cada veículo tem:
+  - `_partida`: ligando;
+  - `_lenta`: marcha lenta, em laço;
+  - `_alto`: rotação alta, em laço;
+  - `_ronco`: acelerada curta (os caminhões não têm).
+- Qual som cada veículo usa:
+
+| Veículos | Som |
+|---|---|
+| Popular e autoescola | V8 de NASCAR |
+| Esportivo e Presidencial | Lamborghini |
+| SUV e viatura | Viper |
+| Jipe | jipe do Exército |
+| Van e ambulância | pickup |
+| Caminhões (autoescola, lixo, bombeiros, Exército, empresas) e tanque (mais grave) | caminhão |
+| Todos os ônibus | os dois áudios de ônibus (partida, lenta e arrancada de um; andando do outro) |
+| Avião grande | turbina de F-16 |
+| Avião pequeno | motor de dois tempos |
+| Avião médio | o mesmo motor de dois tempos, dobrado em estéreo (desencontrado e um pouco mais grave) |
+
+- O Clássico V8 continua com o som dele.
+- **Seu veículo:** parado toca a marcha lenta; acelerando entra a rotação alta e o tom sobe com a velocidade. Pisar no acelerador devagar dá uma acelerada de vez em quando.
+- **Ônibus NPC:** fazem marcha lenta no ponto e dão a arrancada ao sair.
+- **Outros jogadores:** o motor pega quando o veículo deles aparece perto; parados, fazem marcha lenta; andando, rotação alta.
+- **Aviões:** só quem está fora ouve. No chão por perto é a marcha lenta; no ar é a rotação alta, que some com a distância.
+- Os sons novos só são baixados quando tocam pela primeira vez. Os sons antigos de motor deixaram de ser baixados.

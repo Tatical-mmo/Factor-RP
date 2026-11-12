@@ -1228,7 +1228,7 @@ function entrarCarro(v) {
   modoVolante(true);
   if (jogador.armado) alternarArma();
   jogador.carro = { id: v.d.id, modelo: v.d.modelo, cor: v.d.cor, vel: 0, mesh: v.mesh, salvar: 20, voa: !!civico.CARROS[v.d.modelo]?.voa, alt: 0, raio: v.d.modelo === 'helicoptero' ? 2.2 : undefined };
-  if (!jogador.carro.voa) sons.tocar(jogador.carro.modelo === 'classico' ? 'classico_partida' : 'carro_partida', { vol: jogador.carro.modelo === 'classico' ? 0.75 : 0.6 });
+  if (!jogador.carro.voa) somPartida(jogador.carro);
   jogador.pos.set(v.mesh.position.x, v.mesh.position.y, v.mesh.position.z); jogador.yaw = v.mesh.rotation.y; jogador.alvo = null;
   jogador.avatar.raiz.visible = false;
   aviso(`${civico.CARROS[v.d.modelo]?.nome || 'Carro'}: use o controle para dirigir. Toque em Sair para estacionar.`, 3.5);
@@ -2358,7 +2358,13 @@ function atualizarRemotos(dt) {
     }
     if (a.cv) {   // dirigindo: mostra o carro no lugar do personagem
       const [cid, mod, cor] = String(a.cv).split('|');
-      if (!r.carro || r.carroId !== cid) { if (r.carro) scene.remove(r.carro); r.carro = civico.modeloCarro(mod, cor); r.carroId = cid; r.carroModelo = mod; r.carro.position.set(a.x, a.y, a.z); scene.add(r.carro); }
+      if (!r.carro || r.carroId !== cid) {
+        if (r.carro) scene.remove(r.carro); r.carro = civico.modeloCarro(mod, cor); r.carroId = cid; r.carroModelo = mod; r.carro.position.set(a.x, a.y, a.z); scene.add(r.carro);
+        // o motor dele pegando, se for perto (o avião só se estiver no chão)
+        const d = Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z), av = /^aviao_/.test(mod), pf = perfilSom(mod);
+        if (av && (a.y || 0) - alturaChao(a.x, a.z) < 1 && d < 150) sons.tocar(`${SOM_AVIAO[mod.slice(6)]}_partida`, { vol: 0.8, dist: d, raio: 150 });
+        else if (pf && d < 60) sons.tocar(`${pf.p}_partida`, { vol: 0.6, dist: d, raio: 60, velocidade: pf.tom });
+      }
       const kc = Math.min(1, dt * 10);
       r.carro.position.x += (a.x - r.carro.position.x) * kc; r.carro.position.y += (a.y - r.carro.position.y) * kc; r.carro.position.z += (a.z - r.carro.position.z) * kc;
       r.carro.rotation.y = suavizarAngulo(r.carro.rotation.y, a.r, dt * 10);
@@ -3797,34 +3803,47 @@ function atualizarSons() {
   sons.atualizar();
 }
 // motor de cada tipo de veículo: o meu (tom sobe com a velocidade), dos outros jogadores e das empresas por perto
-const SOM_MOTOR = { popular: 'carro_geral', suv: 'carro_geral', viatura: 'carro_geral', presidencial: 'carro_geral', ambulancia: 'carro_geral',
-  esportivo: 'carro_esportivo', classico: 'classico_alto', militar: 'motor_jipe', exercito_caminhao: 'caminhao_andando', bombeiros: 'caminhao_andando', tanque: 'caminhao_andando',
-  caminhao: 'caminhao_andando', van: 'van', lixo: 'caminhao_andando', caminhao_lixo: 'caminhao_andando', autoescola: 'carro_geral', caminhao_escola: 'caminhao_andando' };
+const SOM_AVIAO = { grande: 'aviaoG', medio: 'aviaoM', pequeno: 'aviaoP' };
+// som de motor de cada veículo: marcha lenta, rotação alta (os dois em laço), partida e uma acelerada curta (carros e
+// ônibus; caminhões não têm). O tom sobe com a velocidade; o tanque usa o caminhão mais grave.
+const PERFIL_SOM = {
+  popular: 'popular', autoescola: 'popular', esportivo: 'esportivo', presidencial: 'esportivo', suv: 'suv', viatura: 'suv',
+  militar: 'jipe', van: 'van', ambulancia: 'van', classico: 'classico',
+  caminhao: 'caminhao', caminhao_escola: 'caminhao', caminhao_lixo: 'caminhao', lixo: 'caminhao', bombeiros: 'caminhao', exercito_caminhao: 'caminhao', tanque: 'caminhao',
+};
+function perfilSom(modelo) {
+  if (!modelo) return null;
+  if (/^onibus/.test(modelo)) return { p: 'onibus', ronco: true, tom: 1 };
+  const p = PERFIL_SOM[modelo]; if (!p) return null;
+  return { p, ronco: p !== 'caminhao', tom: modelo === 'tanque' ? 0.78 : 1 };
+}
+const perfilDoCarro = (c) => perfilSom(c.caminhao ? (c.tipo || 'caminhao') : c.modelo) || perfilSom(c.servico);
+function somPartida(c, op = {}) { const pf = c && perfilDoCarro(c); sons.tocar(pf ? `${pf.p}_partida` : 'carro_partida', { vol: pf ? 0.7 : 0.6, velocidade: pf?.tom || 1, ...op }); }
 function somMotores(dist) {
   const c = jogador.carro;
   if (c && !c.voa) {
-    const mod = c.caminhao ? (c.tipo || 'caminhao') : (c.servico || c.modelo), nome = SOM_MOTOR[mod];
-    if (mod === 'classico') {   // V8: marcha lenta parada, ronco alto conforme acelera, e uma acelerada de vez em quando
-      const max = c.max || civico.CARROS.classico.vel, k = THREE.MathUtils.clamp(Math.abs(c.vel || 0) / max, 0, 1), pe = pedais.acel || teclas.has('w') || teclas.has('arrowup');
-      const alto = THREE.MathUtils.smoothstep(k + (pe ? 0.25 : 0), 0.08, 0.55);
-      sons.continuo('classico_lenta', 0.5 * (1 - alto), 1 + 0.35 * k);
-      sons.continuo('classico_alto', 0.15 + 0.5 * alto, 0.72 + 0.45 * k);
-      const agora = performance.now();
-      if (pe && !c.peAntes && k < 0.3 && agora - (c.ultRonco || 0) > 5000) { c.ultRonco = agora; sons.tocar('classico_ronco', { vol: 0.6 }); }
-      c.peAntes = pe;
-    } else if (nome) {
+    const pf = perfilDoCarro(c);
+    if (pf) {   // parado: marcha lenta; acelerando: entra a rotação alta e o tom sobe; pisar devagar dá uma acelerada
       const max = c.max || civico.CARROS[c.modelo]?.vel || 11, k = THREE.MathUtils.clamp(Math.abs(c.vel || 0) / max, 0, 1);
-      const base = mod === 'tanque' ? 0.65 : nome === 'carro_esportivo' ? 0.8 : 0.85;
-      sons.continuo(nome, 0.22 + 0.33 * k, base + (nome === 'carro_esportivo' ? 0.5 : 0.55) * k);
+      const pe = pedais.acel || teclas.has('w') || teclas.has('arrowup') || (Math.abs(joy.y) > 0.3 && !TOQUE);
+      const alto = THREE.MathUtils.smoothstep(k + (pe ? 0.25 : 0), 0.08, 0.55);
+      sons.continuo(`${pf.p}_lenta`, 0.5 * (1 - alto), (1 + 0.35 * k) * pf.tom);
+      sons.continuo(`${pf.p}_alto`, 0.15 + 0.5 * alto, (0.72 + 0.45 * k) * pf.tom);
+      const agora = performance.now();
+      if (pf.ronco && pe && !c.peAntes && k < (pf.p === 'onibus' ? 0.12 : 0.3) && agora - (c.ultRonco || 0) > (pf.p === 'onibus' ? 9000 : 5000)) { c.ultRonco = agora; sons.tocar(`${pf.p}_ronco`, { vol: 0.6 }); }
+      c.peAntes = pe;
     }
   }
+  // outros jogadores: andando = rotação alta, parado perto = marcha lenta
   for (const r of remotos.values()) {
-    if (!r.carro || civico.CARROS[r.carroModelo]?.voa || !andando(r.carro)) continue;
-    const nome = SOM_MOTOR[r.carroModelo]; if (nome) sons.continuo(nome, 0.4 * sons.perto(dist(r.carro), 45));
+    if (!r.carro || civico.CARROS[r.carroModelo]?.voa) continue;
+    const pf = perfilSom(r.carroModelo); if (!pf) continue;
+    const d = dist(r.carro);
+    if (andando(r.carro)) sons.continuo(`${pf.p}_alto`, 0.4 * sons.perto(d, 45), 0.85 * pf.tom); else sons.continuo(`${pf.p}_lenta`, 0.3 * sons.perto(d, 25), pf.tom);
   }
   for (const v of caminhoes.values()) {
     if (v.d.tipo === 'helicoptero' || !v.obj?.visible || jogador.carro?.caminhao === v.d.id || !andando(v.obj)) continue;
-    sons.continuo(v.d.tipo === 'van' ? 'van' : 'caminhao_andando', 0.35 * sons.perto(dist(v.obj), 45));
+    sons.continuo(v.d.tipo === 'van' ? 'van_alto' : 'caminhao_alto', 0.35 * sons.perto(dist(v.obj), 45), 0.9);
   }
 }
 // cidade grande ao fundo e passarinhos nas cidades menores, nas praças e na mata (somem com chuva)
@@ -7844,9 +7863,14 @@ function atualizarOnibus(dt) {
   animarRota(dt);
   atualizarFiscal(dt, t);
   // motor: o seu (dirigindo ou de passageiro) ou o do sistema que passa perto
-  let vol = jogador.carro?.servico === 'onibus' || jogador.onibus ? 0.5 : 0;
-  for (const b of onibusNpc) if (b.ativo && !b.parado) vol = Math.max(vol, (1 - Math.hypot(b.x - jogador.pos.x, b.z - jogador.pos.z) / 55) * 0.6);
-  sons.continuo('onibus_grande', Math.max(0, vol));
+  // (o ônibus que você dirige toca em somMotores)
+  if (jogador.onibus) { const b = onibusNpc.find((x) => x.ativo && x.L === jogador.onibus.L && x.m === jogador.onibus.m); sons.continuo(b?.parado ? 'onibus_lenta' : 'onibus_alto', 0.45); }
+  for (const b of onibusNpc) {
+    if (!b.ativo) continue;
+    const d = Math.hypot(b.x - jogador.pos.x, b.z - jogador.pos.z);
+    if (b.parado) sons.continuo('onibus_lenta', 0.4 * sons.perto(d, 30)); else sons.continuo('onibus_alto', 0.55 * sons.perto(d, 55));
+    if (b.parado !== b.paradoAntes) { if (b.paradoAntes && d < 50) sons.tocar('onibus_ronco', { vol: 0.55, dist: d, raio: 50 }); b.paradoAntes = b.parado; }   // arrancada ao sair do ponto
+  }
 }
 // ônibus do sistema empurram quem está no caminho (três círculos ao longo do comprimento)
 function colidirOnibus(p, raio) {
@@ -8377,7 +8401,7 @@ function atualizarColeta(dt) {
     if (!S.npc) continue;
     S.npc.position.set(q.x, alturaChao(q.x, q.z), q.z); S.npc.rotation.y = q.ang;
     S.npc.visible = ativo && perto && !jogador.dentroCasa;
-    if (S.npc.visible) sons.continuo('caminhao_andando', 0.45 * sons.perto(Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z), 50));
+    if (S.npc.visible) sons.continuo(e.lixeira ? 'caminhao_lenta' : 'caminhao_alto', 0.45 * sons.perto(Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z), 50), 0.9);
     if (S.npc.visible || S.garis.length) posicionarGaris(S, S.npc, e.lixeira ? e.f : null, e.lixeira ? lixReal(e.lixeira) : null, S.npc.visible && Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) < 160, dt);
   }
   for (const l of LIXEIRAS) if (l.cheio) l.cheio.visible = lixeiraCheia(l, t);
@@ -8876,7 +8900,7 @@ function testarVeiculo(modelo) {
   jogador.alvo = null; jogador.avatar.raiz.visible = false;
   document.body.classList.toggle('tanque', modelo === 'tanque');
   if (modelo === 'tanque' && TOQUE) $('btTiro').classList.remove('oculto');
-  if (!C.voa) sons.tocar(modelo === 'classico' ? 'classico_partida' : 'carro_partida', { vol: modelo === 'classico' ? 0.75 : 0.6 });
+  if (!C.voa) somPartida(jogador.carro);
   aviso(`🧪 Testando: ${C.nome}. Saia do veículo para guardá-lo.`, 3);
 }
 function entrarAviao(porte, parado = aviaoLivre(porte)) {
@@ -9089,8 +9113,13 @@ function atualizarAviacao(dt) {
   // luzes da pista à noite e farol da torre
   if (matLuzPista) { matLuzPista.emissiveIntensity = 0.2 + noiteAtual * 2.5; matLuzTaxi.emissiveIntensity = 0.2 + noiteAtual * 2.2; }
   if (farolTorre) { farolTorre.rotation.y += dt * 2.4; farolTorre.material.emissiveIntensity = 0.5 + noiteAtual * 2.5; }
-  const vols = { grande: 0, medio: 0, pequeno: 0 };
-  const ouvir = (porte, x, z, y) => { if (y > 3) vols[porte] = Math.max(vols[porte], 1 - Math.hypot(x - jogador.pos.x, z - jogador.pos.z) / (porte === 'pequeno' ? 180 : 260)); };
+  // no ar: rotação alta (some com a distância); no chão por perto: marcha lenta (taxiando, no portão, na cabeceira)
+  const vols = { grande: [0, 0], medio: [0, 0], pequeno: [0, 0] };
+  const ouvir = (porte, x, z, y) => {
+    const d = Math.hypot(x - jogador.pos.x, z - jogador.pos.z), v = vols[porte];
+    if (y > 3) v[1] = Math.max(v[1], 1 - d / (porte === 'pequeno' ? 180 : porte === 'medio' ? 220 : 260));
+    else { v[0] = Math.max(v[0], 1 - d / (porte === 'pequeno' ? 70 : 100)); v[1] = Math.max(v[1], 0.35 * (1 - d / 140)); }
+  };
   npcAvioes.forEach((n, idx) => {
     const v = vooNpc(seg, n.tab, n.tab.desloc || 0);
     // falas do rádio quando o avião muda de fase (iguais para todos, saem do horário)
@@ -9112,10 +9141,11 @@ function atualizarAviacao(dt) {
   const dentro = jogador.voo || jogador.carro?.aviao || (jogador.passageiro?.piloto && /^aviao_/.test(remotos.get(jogador.passageiro.piloto)?.carroModelo || ''));
   for (const r of remotos.values()) if (r.carro && /^aviao_/.test(r.carroModelo || '')) ouvir(r.carroModelo.slice(6), r.carro.position.x, r.carro.position.z, r.carro.position.y - alturaChao(r.carro.position.x, r.carro.position.z));
   // o ronco do avião é para quem está do lado de fora: dentro (piloto ou passageiro) fica em silêncio
-  sons.continuo('aviao_dentro', 0);
-  sons.continuo('aviao_fora', dentro ? 0 : Math.max(0, vols.grande) * 0.85);
-  sons.continuo('aviao_medio', dentro ? 0 : Math.max(0, vols.medio) * 0.8);
-  sons.continuo('aviao_pequeno', dentro ? 0 : Math.max(0, vols.pequeno) * 0.8);
+  for (const [porte, [lenta, alto]] of Object.entries(vols)) {
+    const p = SOM_AVIAO[porte];
+    sons.continuo(`${p}_lenta`, dentro ? 0 : Math.max(0, lenta) * 0.7);
+    sons.continuo(`${p}_alto`, dentro ? 0 : Math.max(0, alto) * 0.85);
+  }
 }
 function contextoAviacao() {
   if (jogador.carro || jogador.voo) return null;
