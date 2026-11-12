@@ -42,6 +42,7 @@ const escolher = (a) => a[Math.floor(rnd() * a.length)];
 const edificios = [];      // { x, z, w, d, h, y, cor, tipo, rot, telha, det:[] }
 const detalhes = [];       // caixas no telhado: { ed, dx, dz, w, h, d }
 const arvores = [];        // [x, z, escala]
+export const PROPS = { banco: [], hidrante: [], semaforo: [] };   // [x, z, ângulo] dos objetos de rua em 3D (GLB)
 const calcadas = [];       // [x, z, w, d, y]
 const gramados = [];       // [x, z, w, d]
 const ruas = [];           // [x, z, w, d, vertical]
@@ -356,6 +357,10 @@ function quadra(bx, bz, estilo, faixa = [2, 6], y = 0.18) {
     gramados.push([bx, bz, meio, meio]);
     for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + rnd() * 0.3; arvore(bx + Math.cos(a) * entre(9, 15), bz + Math.sin(a) * entre(9, 15), entre(0.9, 1.3)); }
     arvore(bx, bz, 1.5);
+    for (let k = 0; k < 4; k++) {   // bancos de praça virados para a árvore do meio
+      const a = k / 4 * Math.PI * 2 + Math.PI / 4, x = bx + Math.cos(a) * 5.2, z = bz + Math.sin(a) * 5.2;
+      PROPS.banco.push([x, z, Math.atan2(bx - x, bz - z)]); addCol({ tipo: 'circ', x, z, r: 0.8 });
+    }
     return;
   }
   if (estilo === 'torre') {
@@ -992,4 +997,32 @@ export function atualizar(dt) {
   if (MAT?.agua.normalMap) { MAT.agua.normalMap.offset.x += dt * 0.004; MAT.agua.normalMap.offset.y += dt * 0.0025; }
 }
 
-export function finalizar() { montarMobiliario(); montarMalhas(); }
+// semáforos nos cruzamentos do centro e hidrantes nas esquinas dos quarteirões do centro
+function planejarProps() {
+  for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
+    const x = ruaC(i), z = ruaC(j), d = RW / 2 + 0.9;
+    for (const [sx, sz] of [[1, 1], [-1, -1]]) {
+      const px = x + sx * d, pz = z + sz * d;
+      PROPS.semaforo.push([px, pz, Math.atan2(x - px, z - pz)]); addCol({ tipo: 'circ', x: px, z: pz, r: 0.25 });
+    }
+  }
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+    const bx = quadC(i), bz = quadC(j), d = QB / 2 - 1.1;
+    for (const [sx, sz] of [[1, -1], [-1, 1]]) { const px = bx + sx * d, pz = bz + sz * d; PROPS.hidrante.push([px, pz, sx > 0 ? 0 : Math.PI]); addCol({ tipo: 'circ', x: px, z: pz, r: 0.3 }); }
+  }
+}
+// recebe o modelo leve (GLB) e espalha cópias com uma InstancedMesh só (um desenho para todos)
+const ALTURA_PROP = { banco: 0.9, hidrante: 0.85, semaforo: 4.4 };
+export function montarProps(nome, cenaGlb, scene) {
+  const lista = PROPS[nome]; if (!lista?.length) return;
+  let malha = null; cenaGlb.traverse((o) => { if (!malha && o.isMesh) malha = o; }); if (!malha) return;
+  const g = malha.geometry.clone(); malha.updateWorldMatrix(true, false); g.applyMatrix4(malha.matrixWorld);
+  g.computeBoundingBox(); const b = g.boundingBox, alt = b.max.y - b.min.y || 1, esc = ALTURA_PROP[nome] / alt;
+  g.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2); g.scale(esc, esc, esc);
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: nome === 'semaforo' ? 0.3 : 0.05 });
+  const im = new THREE.InstancedMesh(g, mat, lista.length);
+  lista.forEach(([x, z, a], k) => { _q.setFromAxisAngle(_v.set(0, 1, 0), a); _m.compose(_v.set(x, alturaChaoMundo(x, z), z), _q, _e.set(1, 1, 1)); im.setMatrixAt(k, _m); });
+  im.castShadow = nome !== 'hidrante'; im.receiveShadow = true; scene.add(im);
+}
+const alturaChaoMundo = (x, z) => { for (const [cx, cz, w, d, y] of calcadas) if (Math.abs(x - cx) <= w / 2 && Math.abs(z - cz) <= d / 2) return y; return 0.18; };
+export function finalizar() { planejarProps(); montarMobiliario(); montarMalhas(); }

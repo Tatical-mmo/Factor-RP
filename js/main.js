@@ -2006,6 +2006,8 @@ async function iniciarJogo(perfil) {
   carregarClima();
   montarCargueiro(); montarBueiros(); montarEsconderijos();
   mundo.finalizar();
+  // objetos de rua em 3D (leves): bancos de praça, hidrantes e semáforos — carregam em segundo plano
+  for (const n of ['banco', 'hidrante', 'semaforo']) Promise.resolve(carregarGLB(`assets/modelos/prop_${n}.glb`)).then((g) => { if (g?.scene) mundo.montarProps(n, g.scene, scene); }).catch(() => {});
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
   civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n] });
