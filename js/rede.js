@@ -86,6 +86,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'bueiro' }, ({ payload }) => eventos.bueiro?.(payload));
   canal.on('broadcast', { event: 'carroRua' }, ({ payload }) => eventos.carroRua?.(payload));
   canal.on('broadcast', { event: 'onibusSeq' }, ({ payload }) => eventos.onibusSeq?.(payload));
+  canal.on('broadcast', { event: 'denuncia' }, ({ payload }) => eventos.denuncia?.(payload));
   canal.on('broadcast', { event: 'reset' }, ({ payload }) => eventos.reset?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {

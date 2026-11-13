@@ -1091,3 +1091,13 @@ Sem SQL e sem arquivo novo. Mudam `js/main.js`, `js/civico.js`, `js/servicos.js`
   - Quando o ônibus da linha para, sobem uma por vez pela porta da frente.
   - Às vezes alguém desce, anda pela calçada e entra numa casa.
   - Isso só aparece perto de você, com até 14 pessoas ao mesmo tempo, para não pesar o celular.
+
+## Versão 13/11 · saque, vans e passageiros (20261113zd)
+**SQL novo: `supabase/71_saque_prejuizo.sql`**. Mudam `js/main.js`, `js/rede.js`, `js/civico.js` e `index.html`.
+- **Passageiros de verdade**: cada saída de ônibus tem a sua lotação. Quem sobe no ponto entra na conta e quem desce sai dela; na rodoviária desce todo mundo. No sequestro, desce quem estava dentro.
+- **Denúncia para todos**: quando o pedestre assaltado chama a polícia, os policiais e a PRF on-line recebem o chamado com a rua e o rastreio do local. Quem está perto vê o aviso.
+- **Saque em qualquer lugar**: com o caminhão ou a van sequestrada parados, o botão **Saquear** descarrega a carga onde o clã quiser. Ela vai para o estoque do clã, ou para a mochila de quem não tem clã.
+- **Prejuízo do veículo queimado**: se o veículo da empresa queimou (fogo de mais de 90 s), ele volta para a garagem e a empresa paga 8.000 de conserto. O dono recebe o aviso.
+- **Vans NPC**: 4 vans de entrega rodam pela cidade e podem ser sequestradas (botão extra **🔫 Sequestrar**). O motorista desce e foge.
+  - Largada, a van pode ser incendiada, e alguém pode tocar em **Dirigir** para pegar de novo.
+  - Parada por 7 min, ela volta para a rota.
