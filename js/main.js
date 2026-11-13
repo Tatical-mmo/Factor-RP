@@ -1279,7 +1279,8 @@ function sairCarro() {
     const v = caminhoes.get(c.caminhao);
     if (v) v.d = { ...v.d, motorista: null, pos_x: jogador.pos.x, pos_z: jogador.pos.z, ang: jogador.yaw, ...(v.d.sequestrado ? {} : { status: 'parado' }) };
     sairCarroLocal();
-    aviso(c.sequestrado ? 'Você largou o veículo roubado. Parado por 5 min, ele volta para o dono.' : 'O robô motorista levou o veículo de volta para a garagem.', 3.5);
+    if (c.sequestrado) ultimoLargado = { ref: 'cam:' + c.caminhao, ate: agoraServidor() + 90000 };
+    aviso(c.sequestrado ? 'Você largou o veículo roubado. Dá para pôr fogo nele (Incendiar). Parado por 7 min, ele volta para o dono.' : 'O robô motorista levou o veículo de volta para a garagem.', 3.5);
     return;
   }
   if (c.seqOnibus) { largarOnibusSeq(c); return; }
@@ -7197,6 +7198,7 @@ const veiculoEmChamas = (ref) => servicos.listaIncendios().some((f) => f.ref ===
 function veiculoPorRef(ref) {
   const [t, k] = ref.split(':');
   if (t === 'rua') { const l = largadosRua.get(+k); return l ? { mesh: l.mesh, x: l.x, z: l.z, l } : null; }
+  if (t === 'cam') { const c = caminhoes.get(+k); return c?.obj && c.d.status === 'dirigido' && !c.d.motorista ? { mesh: c.obj, x: c.obj.position.x, z: c.obj.position.z, l: c } : null; }
   if (t === 'seq') { const s = seqOnibus.get(+k); return s?.mesh ? { mesh: s.mesh, x: s.mesh.position.x, z: s.mesh.position.z, l: s } : null; }
   return null;
 }
@@ -7205,7 +7207,48 @@ function contextoCrime() {
   if (jogador.carregando) return null;
   const vi = veiculoParaIncendiar(); if (vi) return ['pôr fogo no veículo (crime de clã)', '🔥 Incendiar', () => incendiarVeiculo(vi)];
   const ob = onibusParaSequestrar(); if (ob) return ['sequestrar o ônibus (crime de clã)', '🔫 Sequestrar', () => sequestrarOnibus(ob)];
+  const ve = veiculoEmpresaParaSequestrar(); if (ve) return [`sequestrar ${ve.d.tipo === 'van' ? 'a van' : 'o caminhão'} (crime de clã)`, '🔫 Sequestrar', () => sequestrarVeiculoEmpresa(ve)];
   return null;
+}
+// caminhão ou van de empresa fazendo entrega, com você na frente apontando a arma
+function veiculoEmpresaParaSequestrar() {
+  if (!jogador.cla || !jogador.armado || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.onibus || jogador.morto || sequestrando || taxi) return null;
+  if (jogador.perfil?.policial || jogador.perfil?.prf) return null;
+  for (const c of caminhoes.values()) {
+    if (!c.obj?.visible || c.d.status !== 'em_rota' || c.d.roubado || c.d.tipo === 'helicoptero') continue;
+    const comp = c.d.tipo === 'van' ? 5 : 9, a = c.obj.rotation.y, fx = Math.sin(a), fz = Math.cos(a);
+    const dx = jogador.pos.x - c.obj.position.x, dz = jogador.pos.z - c.obj.position.z, f = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx);
+    if (f < comp / 2 - 0.5 || f > comp / 2 + 9 || lat > 2.4) continue;
+    if (Math.cos(jogador.yaw - Math.atan2(-dx, -dz)) < 0.6) continue;
+    return c;
+  }
+  return null;
+}
+async function sequestrarVeiculoEmpresa(c) {
+  if (sequestrando) return; sequestrando = true;
+  const x = c.obj.position.x, z = c.obj.position.z, ang = c.obj.rotation.y, tipo = c.d.tipo || 'caminhao';
+  virarPara(x, z); jogador.alvo = null;
+  try {
+    const carga = await rede.veiculos.sequestrar(c.d.id, x, z, ang);
+    c.d = { ...c.d, status: 'dirigido', motorista: jogador.perfil.id, sequestrado: true, roubado: true, pos_x: x, pos_z: z, ang };
+    const espera = fugirDoVeiculo(x, z, ang, tipo === 'van' ? 5 : 9, 1, true);   // o robô motorista desce e foge
+    jogador.trava = espera / 1000;
+    aviso(`🔫 ${NOME_VEICULO[tipo] || 'Veículo'} sequestrado! O robô motorista está descendo…`, 3);
+    setTimeout(() => {
+      if (jogador.morto || jogador.carro || Math.hypot(x - jogador.pos.x, z - jogador.pos.z) > 25) { rede.veiculos.sair(c.d.id, x, z, ang).catch(() => {}); return; }
+      dirigirVeiculoEmpresa(c, carga);
+    }, espera);
+  } catch (e) { aviso(e.message, 3); }
+  finally { sequestrando = false; }
+}
+function dirigirVeiculoEmpresa(c, carga) {
+  const tipo = c.d.tipo || 'caminhao';
+  if (jogador.armado) alternarArma();
+  modoVolante(true);
+  jogador.carro = { caminhao: c.d.id, tipo, modelo: tipo, cor: '#ffffff', vel: 0, mesh: c.obj, salvar: 1.5, desde: performance.now(), sequestrado: true, carga, max: tipo === 'van' ? 12 : 10 };
+  jogador.pos.set(c.obj.position.x, alturaChao(c.obj.position.x, c.obj.position.z), c.obj.position.z); jogador.yaw = c.obj.rotation.y; jogador.alvo = null;
+  jogador.avatar.raiz.visible = false;
+  aviso(carga > 0 ? `🚚 Agora é você no volante, com ${carga} caixas. Leve até o território do clã ou a sua casa e toque em Descarregar.` : '🚚 Agora é você no volante. O veículo está vazio.', 5);
 }
 function acaoCrime() { const c = contextoCrime(); if (c) c[2](); }
 function veiculoParaIncendiar() {
@@ -7216,10 +7259,10 @@ function veiculoParaIncendiar() {
 }
 async function incendiarVeiculo(v) {
   if (incendiando) return; incendiando = true;
-  const modelo = v.mesh.userData.modelo, porte = /onibus|caminhao|bombeiros/.test(modelo || '') ? 2 : 1;
+  const modelo = v.mesh.userData.modelo || (v.l?.d?.tipo), porte = /onibus|caminhao|bombeiros/.test(modelo || '') || v.ref.startsWith('cam:') && v.l?.d?.tipo !== 'van' ? 2 : 1;
   virarPara(v.x, v.z); jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 0.9, fade: 0.1 }); jogador.trava = 1.2;
   try {
-    await rede.incendiarVeiculo(v.ref, v.x, v.z, civico.CARROS[modelo]?.nome || 'Veículo', porte);
+    await rede.incendiarVeiculo(v.ref, v.x, v.z, civico.CARROS[modelo]?.nome || NOME_VEICULO[modelo] || 'Veículo', porte);
     ultimoLargado = null; servicos.recarregarFogo();
     aviso('🔥 Fogo no veículo! Ele vai queimar aos poucos. Você está procurado.', 4);
   } catch (e) { aviso(e.message, 3); }
@@ -7237,12 +7280,19 @@ function atualizarQueimados(dt) {
     if (v.l) v.l.queima = Math.max(v.l.queima || 0, q);
     pintarQueimado(v.mesh, v.l ? v.l.queima : q);
   }
+  // o veículo da empresa voltou para o dono (garagem): sai novo, sem a pintura de queimado
+  for (const c of caminhoes.values()) if (c.obj?.userData.queimado && c.d.status !== 'dirigido') { limparQueimado(c.obj); c.queima = 0; }
+}
+function limparQueimado(mesh) {
+  mesh.traverse((o) => { if (o.userData.matSemQueima) { o.material = o.userData.matSemQueima; delete o.userData.matSemQueima; delete o.userData.matQueima; } });
+  mesh.userData.queimado = false;
 }
 function pintarQueimado(mesh, q) {
   if (!(q > 0)) return;
   mesh.traverse((o) => {
     if (!o.isMesh || !o.material) return;
-    if (!o.userData.matQueima) { o.userData.matQueima = Array.isArray(o.material) ? o.material.map((m) => m.clone()) : o.material.clone(); o.material = o.userData.matQueima; for (const m of [].concat(o.material)) m.userData.cor0 = m.color?.clone(); }
+    if (!o.userData.matQueima) { o.userData.matSemQueima = o.material; o.userData.matQueima = Array.isArray(o.material) ? o.material.map((m) => m.clone()) : o.material.clone(); o.material = o.userData.matQueima; for (const m of [].concat(o.material)) m.userData.cor0 = m.color?.clone(); }
+    mesh.userData.queimado = true;
     for (const m of [].concat(o.material)) if (m.userData.cor0) { m.color.copy(m.userData.cor0).multiplyScalar(1 - 0.9 * q); if (m.map && q > 0.85) m.map = null, m.needsUpdate = true; }
   });
 }

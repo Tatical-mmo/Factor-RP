@@ -1064,3 +1064,14 @@ Sem SQL e sem arquivo novo. Mudam `js/main.js`, `js/civico.js`, `js/servicos.js`
 - Parado 7 minutos sem ninguém mexer, o ônibus some e a saída volta para a linha.
 - **Ônibus longe**: viraram um marcador vazio, que só monta o modelo quando chega perto. Isso deixa a abertura do jogo mais leve.
 - **Erro na tela**: se algo quebrar ao abrir, o erro aparece numa caixa vermelha embaixo. Toque nela para fechar. Mande um print dela se acontecer.
+
+## Versão 13/11 · sequestro de caminhão e van (20261113zb) · etapa 2 (parte 2) e etapa 3 (saque)
+**SQL novo: `supabase/69_sequestro_caminhao.sql`**. Mudam `js/main.js`, `js/rede.js` e `index.html`.
+- **Sequestrar caminhão ou van de empresa em entrega**: o membro de clã armado fica na frente do veículo, olhando para ele, e usa o botão extra **🔫 Sequestrar**.
+  - O robô motorista desce e foge correndo, e quem sequestrou assume o volante na hora, sem precisar bater até zerar a vida.
+  - O pedido da empresa perde as caixas, e o dono recebe o aviso.
+  - Conta como crime, com no máximo 1 sequestro por minuto (somando ônibus e caminhão).
+- **Saque**: com carga, leve até o território do seu clã ou a sua casa e toque em **Descarregar**. As caixas vão para o estoque do clã e o robô leva o veículo de volta para a garagem do dono.
+- **Largado**: dá para pôr fogo (🔥 Incendiar). Caminhão é porte grande (2 caminhões de bombeiro); van é porte pequeno.
+- Parado por **7 min** (antes eram 5), o veículo volta para a garagem do dono, já sem a pintura de queimado.
+- O roubo antigo (bater até zerar a vida e o robô levar a carga) continua funcionando.
