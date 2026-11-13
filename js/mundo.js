@@ -57,6 +57,13 @@ const chaves = (x0, z0, x1, z1) => {
   for (let i = Math.floor(x0 / CEL); i <= Math.floor(x1 / CEL); i++) for (let j = Math.floor(z0 / CEL); j <= Math.floor(z1 / CEL); j++) r.push(i + ',' + j);
   return r;
 };
+// topo do prédio (ou casa/galpão) que cobre este ponto, em metros; 0 se não tem prédio (aviões e helicópteros)
+export function topoPredio(x, z) {
+  const l = gradeEd.get(Math.floor(x / CEL) + ',' + Math.floor(z / CEL)); if (!l) return 0;
+  let h = 0;
+  for (const i of l) { const e = edificios[i]; if (e && Math.abs(x - e.x) <= e.w / 2 && Math.abs(z - e.z) <= e.d / 2) h = Math.max(h, (e.y || 0) + e.h); }
+  return h;
+}
 export function addCol(c) {
   const [x0, z0, x1, z1] = c.tipo === 'circ' ? [c.x - c.r, c.z - c.r, c.x + c.r, c.z + c.r] : [c.x0, c.z0, c.x1, c.z1];
   for (const k of chaves(x0, z0, x1, z1)) { if (!grade.has(k)) grade.set(k, []); grade.get(k).push(c); }

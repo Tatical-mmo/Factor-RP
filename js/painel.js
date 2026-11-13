@@ -223,6 +223,9 @@ async function abaCidade() {
     <p class="dica">Ligado, a cada 2 minutos pode acontecer um assalto de NPC numa loja (com a chance abaixo). O ladrão foge pelas ruas por até 3 minutos; Polícia, PRF e Exército em serviço recebem o alerta e prendem chegando perto (+300).</p>
     <div class="botoes"><label><input type="checkbox" id="cCrimes" ${cf.crimes_npc ? 'checked' : ''}> Ligado</label></div>
     <div class="botoes"><span style="flex:1">Chance de ocorrência por ciclo</span><input id="cChance" type="range" min="0" max="100" step="5" value="${cf.chance_crime}" style="flex:1"><b id="cChanceN" style="min-width:44px;text-align:center">${cf.chance_crime}%</b></div>
+    <div class="sub">🏥 Tempo para renascer no hospital</div>
+    <p class="dica">Quem morre e não é atendido (pela ambulância ou por um médico jogador) renasce dentro do hospital depois desse tempo. Atendido antes, levanta no mesmo lugar na hora.</p>
+    <div class="botoes"><input id="cResp" type="range" min="15" max="300" step="5" value="${cf.respawn_seg ?? 90}" style="flex:1"><b id="cRespN" style="min-width:52px;text-align:center">${cf.respawn_seg ?? 90} s</b></div>
     <div class="botoes"><button id="cSalvar">Salvar</button></div>
     <div class="sub">👔 Farda</div>
     <p class="dica">Ajuste o tamanho e a posição do colete e do capacete/boné de cada corporação, uma por uma, vendo no seu personagem. Ao salvar, vale para todos.</p>
@@ -230,8 +233,12 @@ async function abaCidade() {
   $('cFarda').onclick = () => { fechar(); ctx.ajustarFarda?.(); };
   $('cPol').oninput = () => { $('cPolN').textContent = $('cPol').value; };
   $('cChance').oninput = () => { $('cChanceN').textContent = $('cChance').value + '%'; };
+  $('cResp').oninput = () => { $('cRespN').textContent = $('cResp').value + ' s'; };
   $('cSalvar').onclick = async () => {
-    try { await rede.configJogo.salvar(Number($('cPol').value), $('cCrimes').checked, Number($('cChance').value)); ctx.configMudou?.(); msg('Configuração salva. Vale para todos em alguns segundos.'); } catch (e) { msg(/admin_config|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 50a_reset_config.sql no SQL Editor do Supabase.' : e.message, false); }
+    try {
+      await rede.configJogo.salvar(Number($('cPol').value), $('cCrimes').checked, Number($('cChance').value));
+      try { await rede.configJogo.salvarRespawn(Number($('cResp').value)); } catch (e) { if (/admin_respawn|schema cache|does not exist/i.test(e.message || '')) { msg('Rode o 63_heli_respawn.sql no SQL Editor do Supabase para salvar o tempo de renascer.', false); return; } throw e; }
+      ctx.configMudou?.(); msg('Configuração salva. Vale para todos em alguns segundos.'); } catch (e) { msg(/admin_config|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 50a_reset_config.sql no SQL Editor do Supabase.' : e.message, false); }
   };
 }
 // ------------------------------------------------------------ carreiras públicas (só o administrador)

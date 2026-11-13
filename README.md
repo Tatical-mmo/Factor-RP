@@ -858,3 +858,28 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - **Revisão no avião:** perto do avião, o piloto escolhe entre pilotar ou chamar o mecânico NPC do hangar, que cobra 2.000 (pequeno), 4.000 (médio) ou 8.000 (grande); metade vai para a prefeitura.
 - **Profissão nova: mecânico de aviões.** Entra pelo mecânico NPC do hangar, sem requisito além da ficha limpa. Faz a revisão de graça para o piloto e ganha +300 por revisão. A carreira vai de Ajudante, Mecânico e Mecânico Chefe até Inspetor de Aeronaves.
 - O helicóptero segue só as regras de queda, sem revisão.
+
+## Versão 13/11 · helicóptero novo (20261113l)
+
+**Rode no Supabase: `supabase/63_heli_respawn.sql`** (depois do 62b).
+
+- **Travamento corrigido:** depois de uma explosão de avião ou helicóptero o jogo congelava; era um erro na pose do motorista sentado. O laço do jogo agora não para mais: se algum erro escapar, aparece um aviso e o jogo segue.
+- **Helicóptero com controle novo:**
+  - o analógico amarelo leva para a frente (ou de ré, devagar) e vira o nariz para os lados;
+  - os pedais viram **⬆️ SUBIR** e **⬇️ DESCER**, devagar;
+  - solto, ele fica parado no ar;
+  - no PC: W/S frente e ré, A/D virar, R sobe, F desce;
+  - descendo em cima de prédio ou obstáculo, ele para a 1,5 m ("lugar ocupado") em vez de explodir.
+- **Avião:** a inclinação na curva estava invertida; agora a asa do lado da curva abaixa.
+- **Prédios:**
+  - avião ou helicóptero abaixo do telhado de um prédio bate e cai, com as regras de queda;
+  - alarme "⚠️ PRÉDIO À FRENTE — SUBA!" quando há prédio no caminho dos próximos 3 s;
+  - o piloto automático olha à frente e sobe para passar por cima dos prédios. Na decolagem ele sobe reto até passar da altura dos prédios em volta e só depois vira.
+- **Pouso automático nas pistas de Vila Serra e Porto Sul:** a pista começa perto da beira do mapa, então o piloto automático chega pelo lado (perna do vento), passa da cabeceira, faz a curva de 180° e pousa no mesmo sentido da decolagem.
+- **Revisão do helicóptero a cada 7 voos** (tabela `helis_revisao`): vale para os helicópteros comprados e o do Exército.
+  - Pousado perto do mecânico do hangar do Aeroporto da Metrópole, aparece o botão **🔧 REVISÃO** (5.000).
+  - Um jogador mecânico revisa helicópteros comprados em qualquer lugar e ganha +300.
+  - Sem revisão, o motor pode falhar e o helicóptero cai a 7 m/s; dá para ejetar com o paraquedas.
+- **Renascer:** quem morre e não é atendido renasce dentro do hospital depois de **90 s**. A ambulância ou um médico que chegam antes levantam a pessoa no mesmo lugar, na hora.
+  - O tempo fica no painel do admin, em **Configurações da cidade → 🏥 Tempo para renascer no hospital** (15 s a 5 min).
+  - Na tela aparece a contagem até renascer.

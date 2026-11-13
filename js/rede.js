@@ -181,7 +181,8 @@ function traduzirRpc(m) {
     'nenhuma caixa embalada': 'Essa caixa não foi embalada por você.',
     'entrega rapida demais': 'Entrega rápida demais. Tente de novo em instantes.',
     'moedas insuficientes': 'Moedas insuficientes.',
-    'aviao ja revisado': 'Esse avião já está revisado.',
+    'aviao ja revisado': 'Já está revisado.',
+    'helicoptero invalido': 'Helicóptero inválido.',
     'so mecanicos': 'Só mecânicos fazem a revisão.',
     'aviao invalido': 'Avião inválido.',
     'espere um pouco': 'Espere um pouco.',
@@ -400,6 +401,7 @@ export const qg = {
 export const configJogo = {
   async ler() { const { data, error } = await sb.from('config_jogo').select('*').eq('id', 1).maybeSingle(); if (error) throw error; return data; },
   salvar: (policia, crimes, chance) => rpc('admin_config', { p_policia: policia, p_crimes: crimes, p_chance: chance }),
+  salvarRespawn: (seg) => rpc('admin_respawn', { p_seg: seg }),
   presos: async (desde) => (await sel(sb.from('bandidos_presos').select('ciclo').gte('ciclo', desde))) || [],
   prenderBandido: (ciclo) => rpc('prender_bandido', { p_ciclo: ciclo }),
   salvarFarda: (farda) => rpc('admin_farda', { p_farda: farda }),
@@ -794,4 +796,7 @@ export const aviacao = {
   frota: () => sel(sb.from('avioes_frota').select('*').order('id')),
   voo: (aviao) => rpc('voo_frota', { p_aviao: aviao }),
   revisar: (aviao, mecanico) => rpc('revisar_aviao', { p_aviao: aviao, p_mecanico: !!mecanico }),
+  helis: () => sel(sb.from('helis_revisao').select('*')),
+  vooHeli: (chave) => rpc('voo_heli', { p_chave: chave }),
+  revisarHeli: (chave, mecanico) => rpc('revisar_heli', { p_chave: chave, p_mecanico: !!mecanico }),
 };
