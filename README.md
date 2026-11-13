@@ -1003,3 +1003,12 @@ Sem SQL novo. **Modelos novos em `assets/modelos/`:** `onibus_apache.glb`, `onib
 - **📜 Créditos** no menu ☰: os modelos do Apache e do Busscar são do Sketchfab, com licença **CC-BY 4.0**, que exige o crédito:
   - "Caio Apache Vip IV" por lael.eugenio — https://sketchfab.com/3d-models/caio-apache-vip-iv-9d368d4f432b40a18f8882563043ee04
   - "Busscar Ecoss MB OF-1721 - FULL" por QCY — https://sketchfab.com/3d-models/busscar-ecoss-mb-of-1721-full-db6df9e45e17418c9f191f81af27bbcf
+
+## Versão 13/11 · ônibus de viagem e caminhão (20261113u)
+Sem SQL novo. **Modelos trocados em `assets/modelos/`:** `onibus_executivo2.glb`, `onibus_dois_andares.glb` e `caminhao.glb`.
+- **Rodoviário amarelo** (no lugar do `onibus_executivo2`): 14 m e três eixos. Reduzido de 29 MB para 1,2 MB.
+- **Dois andares azul** (no lugar do `onibus_dois_andares`): 14 m e quatro eixos. Reduzido de 54 MB para 1,5 MB.
+- **Os nomes das empresas foram trocados por "FATOR RP"**: adesivos por cima dos letreiros nas laterais, na frente (letreiro luminoso) e na traseira. Esses dois ônibus mantêm a pintura original (não pegam a cor da linha).
+- **Linhas 7 Vila Serra e 8 Porto Sul** (as mais longe) agora usam só esses dois ônibus de viagem. A linha 2 Aeroporto fica com o executivo.
+- **Caminhão baú** (no lugar do `caminhao`): cabine amarela e baú branco, de 87 MB para 1,8 MB. É o caminhão das transportadoras e também o da autoescola. Ganhou cabine na primeira pessoa.
+- Rodas que giram e cabines medidas em cada modelo novo. A fila e a espera nos pontos usam 14 m para os ônibus de viagem.

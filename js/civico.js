@@ -174,7 +174,7 @@ function bloco(g, m, w, h, d, x, y, z) {
 
 export function iniciar(contexto) { ctx = contexto; }
 const GLB_CARRO = { tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', classico: 'carro_classico', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', caminhao_escola: 'caminhao', caminhao_lixo: 'caminhao_lixo', onibus_urbano: 'onibus_urbano', onibus_executivo: 'onibus_executivo', onibus_executivo2: 'onibus_executivo2', onibus_dois_andares: 'onibus_dois_andares', onibus_apache: 'onibus_apache', onibus_busscar: 'onibus_busscar', onibus_articulado: 'onibus_articulado', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande' };
-const SEM_TINTA = new Set(['aviao_pequeno', 'aviao_medio', 'aviao_grande', 'tanque', 'presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
+const SEM_TINTA = new Set(['onibus_executivo2', 'onibus_dois_andares', 'aviao_pequeno', 'aviao_medio', 'aviao_grande', 'tanque', 'presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
 export function montarPrefeitura() {
@@ -386,8 +386,8 @@ export function removerTriangulos(g, dentro, marca) {
 // limpo (medido em cada modelo: altura y, z a partir de onde é frente, meia largura hx)
 const PARA_BRISA = {
   onibus_grande: { y: [1.4, 2.8], z: 4.6, hx: 1.31 }, onibus_urbano: { y: [1.12, 3.0], z: 5.1, hx: 1.26 },
-  onibus_executivo: { y: [1.3, 3.5], z: 5.1, hx: 1.26 }, onibus_executivo2: { y: [1.3, 3.5], z: 5.1, hx: 1.26 },
-  onibus_dois_andares: { y: [1.2, 3.1], z: 5.35, hx: 1.26 }, onibus_pequeno: { y: [1.75, 2.75], z: 2.6, hx: 1.16 },
+  onibus_executivo: { y: [1.3, 3.5], z: 5.1, hx: 1.26 },
+  onibus_pequeno: { y: [1.75, 2.75], z: 2.6, hx: 1.16 },
   caminhao_lixo: { y: [2.2, 3.25], z: 3.6, hx: 1.21 },
 };
 let matVidro = null;
@@ -433,14 +433,14 @@ export const RODAS = {
   exercito_jipe: { estilo: 'militar', eixos: [[-1.08, 0.46], [1.34, 0.46]], cy: 0.45, xo: 0.97, xi: 0.59 },
   ambulancia: { estilo: 'suv', eixos: [[-1.58, 0.47], [1.78, 0.47]], cy: 0.47, xo: 1.4, xi: 0.94 },
   caminhao_bombeiros: { estilo: 'pesado', eixos: [[-2.35, 0.6], [2.45, 0.6]], cy: 0.6, xo: 1.76, xi: 1.21 },
-  caminhao: { estilo: 'pesado', eixos: [[-1.75, 0.5], [2.15, 0.5]], cy: 0.5, xo: 1.35, xi: 0.95 },
+  caminhao: { estilo: 'pesado', eixos: [[-2.72, 0.48], [-1.71, 0.48], [3.41, 0.49]], cy: 0.49, xo: 1.18, xi: 0.8 },
   caminhao_lixo: { estilo: 'pesado', eixos: [[-1.95, 0.55], [2.92, 0.53]], cy: 0.54, xo: 0.96, xi: 0.72 },
   exercito_caminhao: { estilo: 'militar', eixos: [[-2.15, 0.55], [-1.0, 0.55], [2.45, 0.55]], cy: 0.53, xo: 1.29, xi: 0.95 },
   onibus_grande: { estilo: 'pesado', eixos: [[-2.55, 0.53], [3.3, 0.53]], cy: 0.52, xo: 1.2, xi: 0.85 },
   onibus_urbano: { estilo: 'pesado', eixos: [[-2.7, 0.52], [3.7, 0.52]], cy: 0.53, xo: 1.27, xi: 0.78 },
   onibus_executivo: { estilo: 'pesado', eixos: [[-2.42, 0.53], [3.3, 0.53]], cy: 0.53, xo: 1.17, xi: 0.78 },
-  onibus_executivo2: { estilo: 'pesado', eixos: [[-2.85, 0.55], [3.1, 0.55]], cy: 0.55, xo: 1.12, xi: 0.79 },
-  onibus_dois_andares: { estilo: 'pesado', eixos: [[-3.8, 0.48], [-2.78, 0.48], [2.68, 0.48], [3.75, 0.48]], cy: 0.48, xo: 1.14, xi: 0.81 },
+  onibus_executivo2: { estilo: 'pesado', eixos: [[-3.47, 0.55], [-2.13, 0.55], [4.3, 0.56]], cy: 0.56, xo: 1.22, xi: 0.84 },
+  onibus_dois_andares: { estilo: 'pesado', eixos: [[-4.13, 0.47], [-2.78, 0.47], [3.03, 0.47], [4.36, 0.47]], cy: 0.47, xo: 1.23, xi: 0.84 },
   onibus_apache: { estilo: 'pesado', eixos: [[-2.13, 0.56], [3.37, 0.56]], cy: 0.57, xo: 1.22, xi: 0.84 },
   onibus_busscar: { estilo: 'pesado', eixos: [[-2.27, 0.5], [3.16, 0.5]], cy: 0.51, xo: 1.2, xi: 0.84 },
   onibus_articulado: { estilo: 'pesado', eixos: [[-5.25, 0.52], [-3.9, 0.52], [1.8, 0.52], [6.6, 0.52]], cy: 0.53, xo: 1.23, xi: 0.84 },

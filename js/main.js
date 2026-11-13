@@ -5486,15 +5486,15 @@ const CABINE = {
   carro_presidencial: { olho: [1.58, 0.6], capo: [1.28, 1.35], cor: '#2b2b36' },
   ambulancia: { olho: [2.2, 1.5], capo: [1.55, 2.25], x: 0.5, cor: '#e5e5e5' },
   caminhao_bombeiros: { olho: [2.6, 2.9], capo: [1.9, 3.6], x: 0.75, cor: '#cc3333' },
-  caminhao: { olho: [2.55, 1.3], x: 0.65, interior: 1 },
+  caminhao: { olho: [1.82, 2.75], capo: [1.45, 3.45], x: 0.55, cor: '#f2b705', teto: 0.24 },
   caminhao_lixo: { olho: [2.55, 3.15], capo: [1.85, 3.85], x: 0.6, cor: '#cfcfcf' },
   exercito_caminhao: { olho: [2.4, 2.2], x: 0.6, interior: 1 },
   tanque: { olho: [3.05, -0.6], nada: 1 },
   onibus_grande: { olho: [2.2, 4.6], capo: [1.15, 5.4], x: 0.7 },
   onibus_urbano: { olho: [2.25, 5.0], capo: [1.05, 5.75], x: 0.7 },
   onibus_executivo: { olho: [2.35, 4.9], capo: [1.2, 5.6], x: 0.7 },
-  onibus_executivo2: { olho: [2.3, 4.9], capo: [1.2, 5.7], x: 0.7 },
-  onibus_dois_andares: { olho: [2.1, 5.2], capo: [1.0, 5.9], x: 0.7 },
+  onibus_executivo2: { olho: [2.4, 6.05], capo: [1.75, 6.88], x: 0.7, cor: '#fcd605' },
+  onibus_dois_andares: { olho: [1.85, 5.9], capo: [1.0, 6.7], x: 0.7, cor: '#0fb9dd' },
   onibus_apache: { olho: [2.2, 5.0], capo: [1.15, 5.8], x: 0.7, cor: '#4b5157' },
   onibus_articulado: { olho: [2.25, 8.3], capo: [1.1, 9.05], x: 0.7, cor: '#6ccf3a' },
   onibus_busscar: { olho: [2.4, 4.35], x: 0.8, interior: 1 },
@@ -7808,7 +7808,7 @@ const RODO = { x: 135, z: -243, x0: 113, x1: 157, z0: -265, z1: -221, baia: -230
 // cinco plataformas na Rodoviária (oeste → leste). As linhas "circulares" não param na plataforma: passam na calçada
 // do lado leste da rodoviária (ponto Rodoviária) e rodam sem parar o dia todo.
 const PLAT = [117.5, 126.1, 134.7, 143.3, 151.9];
-const URB = ['onibus_urbano', 'onibus_apache', 'onibus_busscar', 'onibus_apache'], EXEC = ['onibus_executivo2', 'onibus_dois_andares', 'onibus_executivo'];
+const URB = ['onibus_urbano', 'onibus_apache', 'onibus_busscar', 'onibus_apache'], EXEC = ['onibus_executivo2', 'onibus_dois_andares'];   // os de viagem vão para as cidades vizinhas
 const ROD = [162, -238, 'Rodoviária', 's'];   // ponto das circulares, na calçada leste da rodoviária
 const LINHAS = [
   { id: 1, nome: 'Linha 1 · Circular', curto: 'Circular', cor: '#1f6fd1', faixa: PLAT[0], k: 3, fase: 0, modelos: ['onibus_articulado', 'onibus_apache', 'onibus_busscar'],
@@ -7823,7 +7823,7 @@ const LINHAS = [
   { id: 3, nome: 'Linha 3 · Leste', curto: 'Leste', cor: '#2e9e57', faixa: PLAT[3], k: 3, fase: 14, modelos: ['onibus_urbano', 'onibus_articulado', 'onibus_busscar'],
     rua: [[PLAT[3], -216], [270, -216], [270, 162], [108, 162], [108, -270], [PLAT[3], -270]],
     paradas: [[270, -90, 'Zona Leste'], [190, 162, 'Cemitério'], [108, 27, null], [108, -180, 'Banco']] },
-  { id: 2, nome: 'Linha 2 · Aeroporto', curto: 'Aeroporto', cor: '#e8891c', faixa: PLAT[4], k: 3, fase: 7, modelos: ['onibus_executivo', 'onibus_dois_andares', 'onibus_executivo2'],
+  { id: 2, nome: 'Linha 2 · Aeroporto', curto: 'Aeroporto', cor: '#e8891c', faixa: PLAT[4], k: 3, fase: 7, modelos: ['onibus_executivo'],
     rua: [[PLAT[4], -216], [162, -216], [162, -668], [400, -668], [400, -688], [162, -688], [162, -270], [PLAT[4], -270]],
     paradas: [[162, -470, 'Av. do Aeroporto', 'n'], [270, -688, '✈️ Aeroporto · Terminal'], [162, -420, 'Av. do Aeroporto', 's']] },
   // circulares (sem plataforma): começam e terminam na calçada leste da rodoviária
@@ -7934,7 +7934,7 @@ const estadoBus = new Map(), pontosOcupados = [], pontosAntes = [], juncaoAntes 
 let paradasMontadas = false, minhaVolta = null, placasRodo = [];
 // modelo do ônibus de cada saída: as linhas alternam entre os modelos (o mesmo ônibus físico mantém o modelo)
 // comprimento de cada ônibus (o articulado tem 18,6 m): a fila e a espera nos pontos usam o tamanho de verdade
-const COMP_ONIBUS = (mod) => (mod === 'onibus_articulado' ? 18.6 : 12);
+const COMP_ONIBUS = (mod) => (mod === 'onibus_articulado' ? 18.6 : mod === 'onibus_executivo2' || mod === 'onibus_dois_andares' ? 14 : 12);
 const passoFila = (L) => (L.passoFila ??= Math.max(...L.modelos.map(COMP_ONIBUS)) + 2);
 function modeloSaida(L, m) { const lista = L.modelos.filter((x) => x === 'onibus' || modelos[x]); return lista.length ? lista[(((m % L.k) + L.k) % L.k) % lista.length] : 'onibus'; }
 function corpoOnibus(cor, modelo = 'onibus') { return civico.modeloCarro(modelo, cor); }
