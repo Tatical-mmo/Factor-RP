@@ -967,3 +967,14 @@ Sem SQL novo. **Arquivo novo: `js/semaforos.js`.** Confira se ele foi para a pas
   - nuvens fofas, com base larga e "couve-flor" mais alta no meio (antes pareciam discos voadores);
   - o raio agora é um tubo com brilho, cai na frente de quem está olhando e dura um pouco mais. Assim dá para ver na primeira pessoa; antes era uma linha de 1 pixel que sumia na tela do celular;
   - estrelas e lua trazidas para dentro do alcance da câmera (antes ficavam longe demais e não apareciam).
+
+## Versão 13/11 · cabines e para-brisas (20261113q)
+Sem SQL novo. **Arquivo novo: `js/cabine.js`.** Confira se ele foi para a pasta `js/`; sem ele o jogo não passa do login.
+- **Cabine completa na primeira pessoa** para esportivo antigo, SUV, viatura, presidencial, ambulância, bombeiros, lixo e todos os ônibus (o popular, o Clássico V8 e os caminhões continuam com o interior do próprio modelo):
+  - a cabine fica presa no veículo, então olhando para o lado aparecem a porta, a janela, o retrovisor de fora e o banco do passageiro;
+  - colunas, teto e portas na cor do veículo; forro claro, quebra-sóis e retrovisor interno;
+  - painel até o assoalho (não aparece mais roda por baixo), com velocímetro e conta-giros, saídas de ar, rádio e console com câmbio;
+  - o volante gira quando você vira;
+  - nos ônibus: espelhos grandes, letreiro, catraca, mesa do cobrador, balaústres e porta de vidro.
+- **Jipe**: a câmera fica mais para a frente e mais baixa, junto do volante.
+- **Para-brisas**: nos 6 ônibus e no caminhão de lixo, a parte manchada da textura virou um vidro escuro e limpo, com brilho.

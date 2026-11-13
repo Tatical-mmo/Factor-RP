@@ -25,6 +25,7 @@ import * as voz from './voz.js';
 import * as clima from './clima.js';
 import * as ceu from './ceu.js';
 import * as semaforos from './semaforos.js';
+import { pecasCabine } from './cabine.js';
 import * as jornal from './jornal.js';
 import * as visual from './visual.js';
 import { nivelTexto } from './empresa.js';
@@ -5478,14 +5479,14 @@ const _rcOlho = new THREE.Raycaster();
 const CABINE = {
   carro_popular: { olho: [1.38, -0.05], interior: 1 },
   carro_classico: { olho: [1.28, -0.3], interior: 1 },
-  exercito_jipe: { olho: [1.74, -0.26], interior: 1 },
-  carro_suv: { olho: [1.72, 0.25], capo: [1.38, 1.25] },
-  carro_esportivo: { olho: [1.07, -0.35], capo: [0.92, 0.65] },
-  carro_presidencial: { olho: [1.58, 0.6], capo: [1.28, 1.35] },
-  ambulancia: { olho: [2.2, 1.5], capo: [1.55, 2.25], x: 0.5 },
-  caminhao_bombeiros: { olho: [2.6, 2.9], capo: [1.9, 3.6], x: 0.75 },
+  exercito_jipe: { olho: [1.64, -0.04], interior: 1 },
+  carro_suv: { olho: [1.72, 0.25], capo: [1.38, 1.25], cor: '#e56600' },
+  carro_esportivo: { olho: [1.07, -0.35], capo: [0.92, 0.65], cor: '#b20019' },
+  carro_presidencial: { olho: [1.58, 0.6], capo: [1.28, 1.35], cor: '#2b2b36' },
+  ambulancia: { olho: [2.2, 1.5], capo: [1.55, 2.25], x: 0.5, cor: '#e5e5e5' },
+  caminhao_bombeiros: { olho: [2.6, 2.9], capo: [1.9, 3.6], x: 0.75, cor: '#cc3333' },
   caminhao: { olho: [2.55, 1.3], x: 0.65, interior: 1 },
-  caminhao_lixo: { olho: [2.55, 3.15], capo: [1.85, 3.85], x: 0.6 },
+  caminhao_lixo: { olho: [2.55, 3.15], capo: [1.85, 3.85], x: 0.6, cor: '#cfcfcf' },
   exercito_caminhao: { olho: [2.4, 2.2], x: 0.6, interior: 1 },
   tanque: { olho: [3.05, -0.6], nada: 1 },
   onibus_grande: { olho: [2.2, 4.6], capo: [1.15, 5.4], x: 0.7 },
@@ -5564,29 +5565,22 @@ const cabines = {};
 function cabineVeiculo(mesh, tipo) {
   const nome = mesh.userData.glb, T = CABINE[nome];
   if (!T || !mesh.userData.olho) return cabine(tipo);
-  if (cabines[nome]) return cabines[nome];
-  const g = new THREE.Group(); g.visible = false; camP.add(g); cabines[nome] = g;
+  if (mesh.userData.cabine) return mesh.userData.cabine;
+  // a cabine fica presa no veículo (no olho do motorista): olhando para o lado aparecem a porta, a janela e o retrovisor
+  const g = new THREE.Group(); g.visible = false; mesh.add(g); mesh.userData.cabine = g; cabines[mesh.uuid] = g;
+  g.position.copy(mesh.userData.olho); g.rotation.y = Math.PI;   // peças: frente = -z
   if (T.interior || T.nada || !T.capo) return g;
-  const mat = (cor) => new THREE.MeshBasicMaterial({ color: cor, depthTest: false, depthWrite: false, fog: false });
-  const escuro = mat('#1a1d21'), cinza = mat('#2e3339'), borracha = mat('#101214'), vidro = mat('#0b0f12');
-  const caixa = (m, w, h, d, x, y, z, rx = 0, rz = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.rotation.set(rx, 0, rz); o.renderOrder = 20; g.add(o); return o; };
-  const b = caixaDoModelo(mesh), o = mesh.userData.olho, cx = (b.min.x + b.max.x) / 2, meia = (b.max.x - b.min.x) * (nome.startsWith('onibus') ? 0.48 : 0.43);
-  const eL = Math.max(0.25, cx + meia - o.x), eR = Math.max(0.6, o.x - (cx - meia));   // até a parede da esquerda / da direita
-  const grande = !nome.startsWith('carro');
-  const dz = Math.max(0.35, T.capo[1] - o.z), dy = T.capo[0] - o.y, teto = Math.min(b.max.y, o.y + (grande ? 0.75 : 0.4)) - o.y - 0.04;
-  const d = 0.6, topo = Math.max(d * dy / dz + 0.008, -0.36);   // topo do painel na linha da base do para-brisa (nunca tampa mais que o pé da tela)
-  caixa(escuro, eL + eR, 1.2, 0.04, (eR - eL) / 2, topo - 0.6, -d);                      // painel (até as duas portas)
-  caixa(cinza, eL + eR, 0.025, 0.12, (eR - eL) / 2, topo, -d - 0.04);                    // borda de cima do painel
-  // colunas do para-brisa (da base, junto do capô, até o teto, inclinadas para trás)
-  const zb = -dz, yb = dy, zt = -dz * (grande ? 0.85 : 0.45), yt = teto, comp = Math.hypot(zt - zb, yt - yb), inc = Math.atan2(zt - zb, yt - yb);
-  for (const x of [-eL + 0.04, eR - 0.05]) caixa(cinza, grande ? 0.12 : 0.09, comp, 0.08, x, (yb + yt) / 2, (zb + zt) / 2, inc);
-  caixa(cinza, eL + eR, grande ? 0.1 : 0.06, 0.05, (eR - eL) / 2, teto, zt);              // borda do teto
-  if (!grande) caixa(vidro, 0.2, 0.055, 0.02, (eR - eL) / 2, teto - 0.08, zt + 0.02).renderOrder = 21;   // retrovisor (no meio do carro: à direita do motorista)
-  if (!grande) caixa(escuro, 0.22, 0.5, 0.3, Math.min(0.42, eR * 0.45), topo - 0.37, -0.45).renderOrder = 21;   // console entre os bancos
-  // volante na frente do motorista
-  const rv = nome.startsWith('onibus') ? 0.25 : grande ? 0.23 : 0.19, yv = Math.max(topo - 0.02, -0.4) - rv * 0.55, zv = -0.5, inclV = nome.startsWith('onibus') ? -1.0 : -0.45;
-  const v = new THREE.Mesh(new THREE.TorusGeometry(rv, rv * 0.12, 8, 28), borracha); v.position.set(0, yv, zv); v.rotation.x = inclV; v.renderOrder = 22; g.add(v);
-  caixa(borracha, rv * 1.6, rv * 0.14, 0.03, 0, yv, zv, inclV).renderOrder = 22;
+  const cor = mesh.userData.modelo === 'viatura' ? '#41507a' : T.cor;   // a viatura usa o modelo do SUV pintado de azul
+  const { pecas, volante } = pecasCabine(nome, caixaDoModelo(mesh), mesh.userData.olho, { ...T, cor });
+  const mats = {}, mat = (c) => (mats[c] ||= new THREE.MeshBasicMaterial({ color: c, depthTest: false, depthWrite: false, fog: false }));
+  const gv = new THREE.Group(); gv.position.set(...volante.centro); gv.rotation.x = volante.incl; g.add(gv);
+  const giro = new THREE.Group(); gv.add(giro); g.userData.volante = giro;
+  for (const p of pecas) {
+    const geo = p.t === 'caixa' ? new THREE.BoxGeometry(...p.s) : p.t === 'cil' ? new THREE.CylinderGeometry(p.rt, p.rb, p.h, 14) : new THREE.TorusGeometry(p.R, p.e, 8, 28);
+    // um pouco de sombra pelo lado da peça (MeshBasic não tem luz): faces de cima mais claras
+    const m = new THREE.Mesh(geo, mat(p.c)); m.position.set(...p.p); m.rotation.set(...p.r); m.renderOrder = p.o;
+    (p.volante ? giro : g).add(m);
+  }
   return g;
 }
 function cabine(tipo) {
@@ -5642,7 +5636,8 @@ function atualizarCamera3D(dt) {
     if (v) {   // dentro do veículo: olha para a frente dele (dá para virar a cabeça arrastando; volta sozinho)
       const tc = tipoCabine(); olho = olhoDoVeiculo(v, tc); if (olhar.arrastou <= 0) olhar.veic *= Math.max(0, 1 - dt * 2);
       const cb = tc === 'aviao' || tc === 'heli' ? cabine(tc) : cabineVeiculo(v, tc);
-      for (const g of Object.values(cabines)) g.visible = g === cb && Math.abs(olhar.veic) < 1.2;
+      for (const g of Object.values(cabines)) g.visible = g === cb && (g.parent !== camP || Math.abs(olhar.veic) < 1.2);   // a do veículo fica presa nele
+      if (cb?.userData.volante) cb.userData.volante.rotation.z = -(jogador.carro?.volante || 0) * 1.8;
       // a visão acompanha o veículo com suavidade e olha um pouco para dentro da curva (onde você vai passar)
       const alvoYaw = v.rotation.y - (jogador.carro?.volante || 0) * 0.22 + olhar.veic;
       olhar.yawVeic = olhar.yawVeic === undefined ? alvoYaw : olhar.yawVeic + Math.atan2(Math.sin(alvoYaw - olhar.yawVeic), Math.cos(alvoYaw - olhar.yawVeic)) * Math.min(1, dt * 6);

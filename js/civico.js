@@ -379,6 +379,44 @@ export function removerTriangulos(g, dentro, marca) {
     geo.setIndex(fica); geo.userData[marca] = true;
   });
 }
+// para-brisas com a textura manchada (pontos brancos): os triângulos da frente nessa faixa viram um vidro escuro e
+// limpo (medido em cada modelo: altura y, z a partir de onde é frente, meia largura hx)
+const PARA_BRISA = {
+  onibus_grande: { y: [1.4, 2.8], z: 4.6, hx: 1.31 }, onibus_urbano: { y: [1.12, 3.0], z: 5.1, hx: 1.26 },
+  onibus_executivo: { y: [1.3, 3.5], z: 5.1, hx: 1.26 }, onibus_executivo2: { y: [1.3, 3.5], z: 5.1, hx: 1.26 },
+  onibus_dois_andares: { y: [1.2, 3.1], z: 5.35, hx: 1.26 }, onibus_pequeno: { y: [1.75, 2.75], z: 2.6, hx: 1.16 },
+  caminhao_lixo: { y: [2.2, 3.25], z: 3.6, hx: 1.21 },
+};
+let matVidro = null;
+function paraBrisaLimpo(g, glb) {
+  const R = PARA_BRISA[glb]; if (!R) return;
+  matVidro ||= new THREE.MeshStandardMaterial({ color: '#17222b', metalness: 0.65, roughness: 0.14 });
+  g.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), m = new THREE.Matrix4();
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+  const malhas = []; g.traverse((o) => { if (o.isMesh && o.geometry?.index && !o.userData.vidro) malhas.push(o); });
+  for (const o of malhas) {
+    const geo = o.geometry;
+    if (!geo.userData.paraBrisa) {   // a divisão é feita uma vez por modelo (a geometria é a mesma em todas as cópias)
+      const pos = geo.attributes.position, idx = geo.index, fica = [], vidro = [];
+      m.multiplyMatrices(inv, o.matrixWorld);
+      for (let t = 0; t < idx.count; t += 3) {
+        const i0 = idx.getX(t), i1 = idx.getX(t + 1), i2 = idx.getX(t + 2);
+        a.fromBufferAttribute(pos, i0).applyMatrix4(m); b.fromBufferAttribute(pos, i1).applyMatrix4(m); c.fromBufferAttribute(pos, i2).applyMatrix4(m);
+        n.crossVectors(e1.subVectors(b, a), e2.subVectors(c, a)).normalize();
+        const cy = (a.y + b.y + c.y) / 3, cz = (a.z + b.z + c.z) / 3, cx = (a.x + b.x + c.x) / 3;
+        const ok = n.z > 0.35 && cz > R.z && cy > R.y[0] && cy < R.y[1] && Math.abs(cx) < R.hx;
+        (ok ? vidro : fica).push(i0, i1, i2);
+      }
+      geo.userData.paraBrisa = { vidro: null };
+      if (vidro.length) {
+        const gv = new THREE.BufferGeometry(); for (const k of Object.keys(geo.attributes)) gv.setAttribute(k, geo.attributes[k]); gv.setIndex(vidro);
+        geo.userData.paraBrisa.vidro = gv; geo.setIndex(fica);
+      }
+    }
+    const gv = geo.userData.paraBrisa.vidro;
+    if (gv) { const mv = new THREE.Mesh(gv, matVidro); mv.userData.vidro = true; mv.castShadow = o.castShadow; o.add(mv); }
+  }
+}
 // jipe: os vidros do para-brisa são opacos no modelo e tapavam a vista do motorista; fica só a moldura
 const VIDRO_JIPE = (x, y, z) => Math.abs(x) > 0.055 && Math.abs(x) < 0.8 && y > 1.5 && y < 2.01 && z > 0.35 && z < 0.95;
 // rodas que giram: posição de cada eixo medida no modelo (z, raio), altura do centro (cy) e as faces de fora/dentro
@@ -468,11 +506,12 @@ function modeloCarroBase(modelo, cor) {
   if (cacheCarro.has(chave)) return cacheCarro.get(chave).clone();
   const base = ctx?.modelo?.(GLB_CARRO[modelo]);
   if (base) {   // modelo 3D: pinta de leve com a cor escolhida (o presidencial fica como é)
-    const g = base.clone(true); g.userData.glb = GLB_CARRO[modelo];
+    const g = base.clone(true); g.userData.glb = GLB_CARRO[modelo]; g.userData.modelo = modelo;
     if (modelo === 'militar') removerTriangulos(g, VIDRO_JIPE, 'semVidro');
     if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
     else if (SEM_TINTA.has(modelo)) { const sr = { ambulancia: [3.4, 0.9], bombeiros: [3.15, 2.5] }[modelo]; if (sr) sirene(g, sr); }
     else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), modelo.startsWith('onibus') ? 0.38 : modelo === 'caminhao_lixo' ? 0.12 : 0.45); } });
+    try { paraBrisaLimpo(g, GLB_CARRO[modelo]); } catch (e) { console.warn('para-brisa:', modelo, e); }
     try { montarRodas(g, GLB_CARRO[modelo]); } catch (e) { console.warn('rodas:', modelo, e); }   // depois da pintura: as rodas e o chassi têm cor própria
     adicionarLuzes(g, modelo);
     cacheCarro.set(chave, g);
