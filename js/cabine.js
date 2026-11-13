@@ -21,10 +21,10 @@ export function pecasCabine(nome, caixaModelo, olho, T) {
   const cx = (b.min.x + b.max.x) / 2, meia = (b.max.x - b.min.x) * (onibus ? 0.48 : 0.43);
   const eL = Math.max(0.3, cx + meia - o.x), eR = Math.max(0.6, o.x - (cx - meia)), W = eL + eR, xc = (eR - eL) / 2;
   const dz = Math.max(0.35, T.capo[1] - o.z), dy = T.capo[0] - o.y;
-  const teto = Math.min(b.max.y, o.y + (onibus ? 0.62 : grande ? 0.75 : alto ? 0.48 : 0.4)) - o.y - 0.04;
+  const teto = T.teto ?? (Math.min(b.max.y, o.y + (onibus ? 0.62 : grande ? 0.75 : alto ? 0.48 : 0.4)) - o.y - 0.04);
   const d = onibus ? 0.78 : grande ? 0.7 : 0.62;                                   // frente do painel
-  const topo = Math.max(d * dy / dz + 0.008, -0.36);                               // topo do painel na linha do capô
-  const zt = -dz * (onibus ? 0.97 : grande ? 0.86 : alto ? 0.55 : 0.45);            // topo do para-brisa
+  const topo = Math.max(d * dy / dz + 0.008, -0.36) + (T.painel || 0);           // topo do painel na linha do capô (T.painel: ajuste por modelo)
+  const zt = -dz * (T.zt ?? (onibus ? 0.97 : grande ? 0.86 : alto ? 0.55 : 0.45));           // topo do para-brisa
   const yw = topo + (onibus ? -0.12 : grande ? 0.02 : 0.03);                        // linha da janela lateral
   const zFr = Math.min(-dz * (onibus ? 0.98 : 0.9), -(d + 0.6)), zTr = onibus ? 1.6 : 0.95, Lp = zTr - zFr, zPm = (zFr + zTr) / 2;   // portas
   const piso = onibus ? -1.35 : grande ? -1.3 : -1.05;
@@ -49,8 +49,9 @@ export function pecasCabine(nome, caixaModelo, olho, T) {
       continue;
     }
     caixa([0.06, yw - piso, Lp], [x, (yw + piso) / 2, zPm], C.porta, 20);                             // painel da porta
-    caixa([0.11, 0.05, Lp], [x - s * 0.02, yw, zPm], cor, 20);                                         // soleira da janela
-    caixa([0.1, 0.07, Lp], [x - s * 0.01, teto - 0.03, zPm], cor, 20);                                 // borda do teto
+    // soleira e borda do teto só entre a coluna do para-brisa e a traseira (não passam do vidro para cima do capô)
+    { const z0 = -dz * 0.98, L = zTr - z0; caixa([0.11, 0.05, L], [x - s * 0.02, yw, (z0 + zTr) / 2], cor, 20); }   // soleira da janela
+    { const z0 = zt, L = zTr - z0; caixa([0.1, 0.07, L], [x - s * 0.01, teto - 0.03, (z0 + zTr) / 2], cor, 20); }   // borda do teto
     if (!onibus) caixa([0.1, teto - yw, 0.14], [x, (yw + teto) / 2, zTr - 0.18], cor, 20);            // coluna do meio
     else for (const z of [0.15, 1.35]) caixa([0.09, teto - yw, 0.12], [x, (yw + teto) / 2, z], cor, 20);   // montantes das janelas
     caixa([0.08, 0.05, 0.45], [x - s * 0.07, yw - 0.3, 0.1], C.painel2, 21);                          // apoio de braço

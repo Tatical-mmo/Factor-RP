@@ -978,3 +978,14 @@ Sem SQL novo. **Arquivo novo: `js/cabine.js`.** Confira se ele foi para a pasta 
   - nos ônibus: espelhos grandes, letreiro, catraca, mesa do cobrador, balaústres e porta de vidro.
 - **Jipe**: a câmera fica mais para a frente e mais baixa, junto do volante.
 - **Para-brisas**: nos 6 ônibus e no caminhão de lixo, a parte manchada da textura virou um vidro escuro e limpo, com brilho.
+
+## Versão 13/11 · sons e painel (20261113r)
+Sem SQL novo. Substitua também os sons em `assets/sons/`.
+- **Ônibus**: o som de motor parado tinha um chiado de freio a ar que repetia em loop. Foi recortado de novo, de um trecho só com o motor em marcha lenta (`onibus_lenta.mp3`). O chiado do meio do som de aceleração também saiu (`onibus_alto.mp3`).
+- **Esportivo antigo**: som novo do V6 que você mandou (`esportivo_partida`, `_lenta`, `_ronco`, `_alto`).
+- **Presidencial**: som próprio, grave e suave como uma limusine. É o V8 do Hellcat abafado e mais baixo (`presidencial_partida`, `_lenta`, `_ronco`, `_alto`).
+- **Esportivo antigo na primeira pessoa**: o painel desceu 16 cm e o teto subiu, então a rua aparece inteira.
+
+## Versão 13/11 · cabines sem barras (20261113s)
+Sem SQL novo.
+- **Cabines na primeira pessoa**: a soleira da janela e a borda do teto (faixas na cor do carro) passavam da coluna do para-brisa e apareciam como barras indo para frente, por cima do capô. Agora vão só da coluna para trás. A porta continua até o painel, então a roda segue escondida.
