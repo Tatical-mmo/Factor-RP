@@ -152,6 +152,9 @@ export const CARROS = {
   onibus_executivo: { nome: 'Ônibus executivo', preco: 0, vel: 12 },
   onibus_executivo2: { nome: 'Ônibus executivo', preco: 0, vel: 12 },
   onibus_dois_andares: { nome: 'Ônibus de dois andares', preco: 0, vel: 12 },
+  onibus_apache: { nome: 'Ônibus urbano (Apache)', preco: 0, vel: 12 },
+  onibus_busscar: { nome: 'Ônibus urbano (Busscar)', preco: 0, vel: 12 },
+  onibus_articulado: { nome: 'Ônibus articulado', preco: 0, vel: 11 },
   aviao_pequeno: { nome: 'Avião pequeno', preco: 0, vel: 40, voa: true },
   aviao_medio: { nome: 'Avião médio', preco: 0, vel: 52, voa: true },
   aviao_grande: { nome: 'Avião grande', preco: 0, vel: 64, voa: true },
@@ -170,7 +173,7 @@ function bloco(g, m, w, h, d, x, y, z) {
 }
 
 export function iniciar(contexto) { ctx = contexto; }
-const GLB_CARRO = { tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', classico: 'carro_classico', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', caminhao_escola: 'caminhao', caminhao_lixo: 'caminhao_lixo', onibus_urbano: 'onibus_urbano', onibus_executivo: 'onibus_executivo', onibus_executivo2: 'onibus_executivo2', onibus_dois_andares: 'onibus_dois_andares', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande' };
+const GLB_CARRO = { tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', classico: 'carro_classico', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', caminhao_escola: 'caminhao', caminhao_lixo: 'caminhao_lixo', onibus_urbano: 'onibus_urbano', onibus_executivo: 'onibus_executivo', onibus_executivo2: 'onibus_executivo2', onibus_dois_andares: 'onibus_dois_andares', onibus_apache: 'onibus_apache', onibus_busscar: 'onibus_busscar', onibus_articulado: 'onibus_articulado', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande' };
 const SEM_TINTA = new Set(['aviao_pequeno', 'aviao_medio', 'aviao_grande', 'tanque', 'presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
@@ -438,6 +441,9 @@ export const RODAS = {
   onibus_executivo: { estilo: 'pesado', eixos: [[-2.42, 0.53], [3.3, 0.53]], cy: 0.53, xo: 1.17, xi: 0.78 },
   onibus_executivo2: { estilo: 'pesado', eixos: [[-2.85, 0.55], [3.1, 0.55]], cy: 0.55, xo: 1.12, xi: 0.79 },
   onibus_dois_andares: { estilo: 'pesado', eixos: [[-3.8, 0.48], [-2.78, 0.48], [2.68, 0.48], [3.75, 0.48]], cy: 0.48, xo: 1.14, xi: 0.81 },
+  onibus_apache: { estilo: 'pesado', eixos: [[-2.13, 0.56], [3.37, 0.56]], cy: 0.57, xo: 1.22, xi: 0.84 },
+  onibus_busscar: { estilo: 'pesado', eixos: [[-2.27, 0.5], [3.16, 0.5]], cy: 0.51, xo: 1.2, xi: 0.84 },
+  onibus_articulado: { estilo: 'pesado', eixos: [[-5.25, 0.52], [-3.9, 0.52], [1.8, 0.52], [6.6, 0.52]], cy: 0.53, xo: 1.23, xi: 0.84 },
 };
 const LARG_RODA = { classico: 0.32, carro: 0.30, esporte: 0.32, suv: 0.36, pesado: 0.30, militar: 0.38 };
 const comRodas = new Set();
@@ -473,8 +479,10 @@ function montarRodas(g, nome) {
   const grupo = new THREE.Group(); grupo.name = 'rodas'; g.add(grupo);
   matChassi ||= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0.1, side: THREE.DoubleSide });
   const ch = new THREE.Mesh(geoChassi(nome, R, b), matChassi); ch.name = 'chassi'; grupo.add(ch);
+  const tras = g.getObjectByName('traseira'); if (tras) ch.visible = false;   // articulado: o chassi inteiriço apareceria na curva
   for (const [z, r] of eixos) for (const sg of [1, -1]) {
     const piv = new THREE.Object3D(); piv.position.set(sg * (xo + xi) / 2, cy, z); piv.userData.dianteira = z === zf && eixos.length > 1; grupo.add(piv);
+    if (tras && z < tras.position.z) { piv.userData.traseira = true; piv.userData.p0 = piv.position.clone(); }
     const rd = base.clone(true); rd.scale.set(sg * (xo - xi) / (2 * W), r, r); rd.userData.raio = r; piv.add(rd);
   }
 }
@@ -488,6 +496,8 @@ export function atualizarRodas(dt, cam) {
     m.getWorldPosition(_pR); const d = _pR.distanceTo(cam), perto = d < 45;
     if (gr.userData.perto !== perto) { gr.userData.perto = perto; gr.traverse((o) => { if (o.name === 'perto') o.visible = perto; else if (o.name === 'longe') o.visible = !perto; }); }
     const u = m.userData, ry = m.rotation.y;
+    if (u.sanfona === undefined) { const tr = m.getObjectByName('traseira'); u.sanfona = tr ? { tr, sa: m.getObjectByName('sanfona') } : null; }
+    if (u.sanfona) dobrarSanfona(m, u, gr);
     if (!u.ultR) { u.ultR = _pR.clone(); u.ultY = ry; continue; }
     const dx = _pR.x - u.ultR.x, dz = _pR.z - u.ultR.z; u.ultR.copy(_pR);
     const dyaw = Math.atan2(Math.sin(ry - u.ultY), Math.cos(ry - u.ultY)); u.ultY = ry;
@@ -496,6 +506,23 @@ export function atualizarRodas(dt, cam) {
     const alvo = Math.abs(anda) > 0.004 ? THREE.MathUtils.clamp(Math.atan(dyaw * 2.6 / anda), -0.55, 0.55) : (u.esterco || 0);
     u.esterco = (u.esterco || 0) + (alvo - (u.esterco || 0)) * Math.min(1, dt * 8);
     for (const piv of gr.children) { if (piv.name === 'chassi') continue; const rd = piv.children[0]; if (rd) rd.rotation.x += anda / (rd.userData.raio || 0.4); if (piv.userData.dianteira) piv.rotation.y = u.esterco; }
+  }
+}
+// articulado: a parte de trás é puxada pela junta (como um reboque) e dobra na sanfona; a sanfona gira a metade
+const _jS = new THREE.Vector3();
+function dobrarSanfona(m, u, gr) {
+  const { tr, sa } = u.sanfona, J = tr.position.z, Lr = 4.6, ry = m.rotation.y, s = Math.sin(ry), c = Math.cos(ry);
+  _jS.set(m.position.x + s * J, 0, m.position.z + c * J);   // junta no mundo
+  let p = u.trasR;
+  if (!p || Math.hypot(p.x - _jS.x, p.z - _jS.z) > Lr + 3) p = u.trasR = new THREE.Vector3(_jS.x - s * Lr, 0, _jS.z - c * Lr);
+  let dx = _jS.x - p.x, dz = _jS.z - p.z; const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
+  p.set(_jS.x - dx * Lr, 0, _jS.z - dz * Lr);
+  const rel = THREE.MathUtils.clamp(Math.atan2(Math.sin(Math.atan2(dx, dz) - ry), Math.cos(Math.atan2(dx, dz) - ry)), -0.75, 0.75);
+  tr.rotation.y = rel; if (sa) sa.rotation.y = rel / 2;
+  const cr = Math.cos(rel), sr = Math.sin(rel);
+  for (const piv of gr.children) if (piv.userData.traseira) {
+    const q = piv.userData.p0, lx = q.x, lz = q.z - J;
+    piv.position.set(lx * cr + lz * sr, q.y, J - lx * sr + lz * cr); piv.rotation.y = rel;
   }
 }
 // carros: frente em +Z, chão em y = 0

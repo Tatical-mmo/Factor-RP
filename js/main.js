@@ -2280,6 +2280,7 @@ async function iniciarJogo(perfil) {
   $('btMenu').onclick = () => $('menuBar').classList.toggle('aberto');
   $('menuItens').addEventListener('click', (e) => { if (e.target.closest('button') && e.target.closest('button').id !== 'btMenu') $('menuBar').classList.remove('aberto'); });
   $('btCamera').onclick = () => { trocarCamera(); $('menuBar').classList.remove('aberto'); };
+  $('btCreditos').onclick = () => { creditos(); $('menuBar').classList.remove('aberto'); };
   $('btSom').onclick = () => { const l = sons.alternar(); $('btSom').firstChild.textContent = l ? '🔊' : '🔇'; };
   $('btSom').firstChild.textContent = sons.estaLigado() ? '🔊' : '🔇';
   sons.preparar();
@@ -3461,7 +3462,7 @@ function corposNaRua() {
   for (const n of npcs) r.push({ x: n.av.raiz.position.x, z: n.av.raiz.position.z, r: 0.45, npc: n.policia ? n : null, civilRef: n });
   for (const v of viaturas) r.push({ o: v.obj, x: v.obj.position.x, z: v.obj.position.z, r: 1.8 });
   for (const v of rondasBombeiros) if (v.obj.visible) r.push({ o: v.obj, x: v.obj.position.x, z: v.obj.position.z, r: 1.9 });
-  for (const b of onibusNpc) if (b.vivo) { const fx = Math.sin(b.ang), fz = Math.cos(b.ang); for (const k of [-4, 0, 4]) r.push({ o: b.mesh, x: b.x + fx * k, z: b.z + fz * k, r: 1.3 }); }
+  for (const b of onibusNpc) if (b.vivo) { const fx = Math.sin(b.ang), fz = Math.cos(b.ang), h = (b.comp || 12) / 2 - 2; for (let k = -h; k <= h + 0.01; k += h / Math.ceil(h / 4)) r.push({ o: b.mesh, x: b.x + fx * k, z: b.z + fz * k, r: 1.3 }); }
   for (const S of SETORES) if (S.npc?.visible) r.push({ o: S.npc, x: S.npc.position.x, z: S.npc.position.z, r: 1.6 });
   if (jogador.avatar && !jogador.carro && !jogador.passageiro && !jogador.onibus && !jogador.voo && !jogador.dentroCasa && !jogador.paraquedas) r.push({ x: jogador.pos.x, z: jogador.pos.z, r: 0.45, eu: true });
   if (jogador.carro && !jogador.carro.voa && !jogador.carro.taxi) r.push({ o: jogador.carro.mesh, x: jogador.pos.x, z: jogador.pos.z, r: 1.6 });
@@ -3917,7 +3918,7 @@ const SOM_AVIAO = { grande: 'aviaoG', medio: 'aviaoM', pequeno: 'aviaoP' };
 // som de motor de cada veículo: marcha lenta, rotação alta (os dois em laço), partida e uma acelerada curta (carros e
 // ônibus; caminhões não têm). O tom sobe com a velocidade; o tanque usa o caminhão mais grave.
 const PERFIL_SOM = {
-  popular: 'popular', autoescola: 'popular', esportivo: 'esportivo', presidencial: 'esportivo', suv: 'suv', viatura: 'suv',
+  popular: 'popular', autoescola: 'popular', esportivo: 'esportivo', presidencial: 'presidencial', suv: 'suv', viatura: 'suv',
   militar: 'jipe', van: 'van', ambulancia: 'van', classico: 'classico',
   caminhao: 'caminhao', caminhao_escola: 'caminhao', caminhao_lixo: 'caminhao', lixo: 'caminhao', bombeiros: 'caminhao', exercito_caminhao: 'caminhao', tanque: 'caminhao',
 };
@@ -5481,7 +5482,7 @@ const CABINE = {
   carro_classico: { olho: [1.28, -0.3], interior: 1 },
   exercito_jipe: { olho: [1.64, -0.04], interior: 1 },
   carro_suv: { olho: [1.72, 0.25], capo: [1.38, 1.25], cor: '#e56600' },
-  carro_esportivo: { olho: [1.07, -0.35], capo: [0.92, 0.65], cor: '#b20019' },
+  carro_esportivo: { olho: [1.07, -0.35], capo: [0.92, 0.65], cor: '#b20019', painel: -0.16, teto: 0.5, zt: 0.3 },   // capô baixo: painel mais baixo para ver a rua
   carro_presidencial: { olho: [1.58, 0.6], capo: [1.28, 1.35], cor: '#2b2b36' },
   ambulancia: { olho: [2.2, 1.5], capo: [1.55, 2.25], x: 0.5, cor: '#e5e5e5' },
   caminhao_bombeiros: { olho: [2.6, 2.9], capo: [1.9, 3.6], x: 0.75, cor: '#cc3333' },
@@ -5494,6 +5495,9 @@ const CABINE = {
   onibus_executivo: { olho: [2.35, 4.9], capo: [1.2, 5.6], x: 0.7 },
   onibus_executivo2: { olho: [2.3, 4.9], capo: [1.2, 5.7], x: 0.7 },
   onibus_dois_andares: { olho: [2.1, 5.2], capo: [1.0, 5.9], x: 0.7 },
+  onibus_apache: { olho: [2.2, 5.0], capo: [1.15, 5.8], x: 0.7, cor: '#4b5157' },
+  onibus_articulado: { olho: [2.25, 8.3], capo: [1.1, 9.05], x: 0.7, cor: '#6ccf3a' },
+  onibus_busscar: { olho: [2.4, 4.35], x: 0.8, interior: 1 },
 };
 function caixaDoModelo(mesh) {
   if (!mesh.userData.caixa) {
@@ -6414,6 +6418,15 @@ function npcAlgemado(n, dt) {
 }
 
 // ---------------------------------------------------------------- janela de escolha simples (contrabandista)
+// créditos dos modelos 3D com licença CC-BY 4.0 (a licença pede o nome do autor e o link da obra)
+const CREDITOS = [
+  ['Caio Apache Vip IV', 'lael.eugenio', 'https://sketchfab.com/3d-models/caio-apache-vip-iv-9d368d4f432b40a18f8882563043ee04'],
+  ['Busscar Ecoss MB OF-1721 - FULL', 'QCY', 'https://sketchfab.com/3d-models/busscar-ecoss-mb-of-1721-full-db6df9e45e17418c9f191f81af27bbcf'],
+];
+function creditos() {
+  escolher('📜 Créditos', 'Modelos 3D usados no jogo sob a licença Creative Commons CC-BY 4.0 (creativecommons.org/licenses/by/4.0). Os modelos foram reduzidos e adaptados para o jogo (tamanho, rodas e cabine). Toque para abrir a página original.',
+    CREDITOS.map(([obra, autor, url]) => ({ rotulo: `🚌 "${obra}" · por ${autor} (Sketchfab)`, fn: () => window.open(url, '_blank', 'noopener') })));
+}
 function escolher(titulo, texto, opcoes) {
   let el = $('escolhaJanela');
   if (!el) {
@@ -7795,10 +7808,10 @@ const RODO = { x: 135, z: -243, x0: 113, x1: 157, z0: -265, z1: -221, baia: -230
 // cinco plataformas na Rodoviária (oeste → leste). As linhas "circulares" não param na plataforma: passam na calçada
 // do lado leste da rodoviária (ponto Rodoviária) e rodam sem parar o dia todo.
 const PLAT = [117.5, 126.1, 134.7, 143.3, 151.9];
-const URB = ['onibus_urbano', 'onibus'], EXEC = ['onibus_executivo2', 'onibus_dois_andares', 'onibus_executivo'];
+const URB = ['onibus_urbano', 'onibus_apache', 'onibus_busscar', 'onibus_apache'], EXEC = ['onibus_executivo2', 'onibus_dois_andares', 'onibus_executivo'];
 const ROD = [162, -238, 'Rodoviária', 's'];   // ponto das circulares, na calçada leste da rodoviária
 const LINHAS = [
-  { id: 1, nome: 'Linha 1 · Circular', curto: 'Circular', cor: '#1f6fd1', faixa: PLAT[0], k: 3, fase: 0, modelos: ['onibus', 'onibus_urbano'],
+  { id: 1, nome: 'Linha 1 · Circular', curto: 'Circular', cor: '#1f6fd1', faixa: PLAT[0], k: 3, fase: 0, modelos: ['onibus_articulado', 'onibus_apache', 'onibus_busscar'],
     rua: [[PLAT[0], -216], [108, -216], [108, -54], [-108, -54], [-108, 54], [108, 54], [108, -270], [PLAT[0], -270]],
     paradas: [[108, -150, 'Concessionária', 's'], [-27, -54, null], [-108, -27, null], [27, 54, null], [108, -110, 'Banco', 'n']] },
   { id: 7, nome: 'Linha 7 · Vila Serra', curto: 'Vila Serra', cor: '#6d4c9f', faixa: PLAT[1], k: 4, fase: 3, modelos: EXEC, inter: true,
@@ -7807,7 +7820,7 @@ const LINHAS = [
   { id: 8, nome: 'Linha 8 · Porto Sul', curto: 'Porto Sul', cor: '#1a8fb0', faixa: PLAT[2], k: 4, fase: 10, modelos: EXEC, inter: true,
     rua: [[PLAT[2], -216], [216, -216], [216, 945], [-81, 945], [-81, 999], [81, 999], [81, 945], [216, 945], [216, -270], [PLAT[2], -270]],
     paradas: [[216, 300, 'Av. Leste', 's'], [216, 600, 'Rodovia Sul', 's'], [70, 945, '🚌 Rodoviária de Porto Sul', 'o'], [0, 999, 'Porto Sul · Centro', 'l'], [216, 560, 'Rodovia Sul', 'n'], [216, 250, 'Av. Leste', 'n']] },
-  { id: 3, nome: 'Linha 3 · Leste', curto: 'Leste', cor: '#2e9e57', faixa: PLAT[3], k: 3, fase: 14, modelos: ['onibus_urbano', 'onibus'],
+  { id: 3, nome: 'Linha 3 · Leste', curto: 'Leste', cor: '#2e9e57', faixa: PLAT[3], k: 3, fase: 14, modelos: ['onibus_urbano', 'onibus_articulado', 'onibus_busscar'],
     rua: [[PLAT[3], -216], [270, -216], [270, 162], [108, 162], [108, -270], [PLAT[3], -270]],
     paradas: [[270, -90, 'Zona Leste'], [190, 162, 'Cemitério'], [108, 27, null], [108, -180, 'Banco']] },
   { id: 2, nome: 'Linha 2 · Aeroporto', curto: 'Aeroporto', cor: '#e8891c', faixa: PLAT[4], k: 3, fase: 7, modelos: ['onibus_executivo', 'onibus_dois_andares', 'onibus_executivo2'],
@@ -7920,6 +7933,9 @@ const onibusNpc = [];               // { mesh, L, m, x, z, ang, parado, ativo }
 const estadoBus = new Map(), pontosOcupados = [], pontosAntes = [], juncaoAntes = [], juncaoAgora = [];        // 'linha.saída' -> { atraso, sVis, bloq, fantasma }: atraso local de quem esperou no trânsito
 let paradasMontadas = false, minhaVolta = null, placasRodo = [];
 // modelo do ônibus de cada saída: as linhas alternam entre os modelos (o mesmo ônibus físico mantém o modelo)
+// comprimento de cada ônibus (o articulado tem 18,6 m): a fila e a espera nos pontos usam o tamanho de verdade
+const COMP_ONIBUS = (mod) => (mod === 'onibus_articulado' ? 18.6 : 12);
+const passoFila = (L) => (L.passoFila ??= Math.max(...L.modelos.map(COMP_ONIBUS)) + 2);
 function modeloSaida(L, m) { const lista = L.modelos.filter((x) => x === 'onibus' || modelos[x]); return lista.length ? lista[(((m % L.k) + L.k) % L.k) % lista.length] : 'onibus'; }
 function corpoOnibus(cor, modelo = 'onibus') { return civico.modeloCarro(modelo, cor); }
 function abrigo(x, z, ang, nome, cor) {
@@ -8077,7 +8093,8 @@ function atualizarOnibus(dt) {
           const sp = L.pontos[pi].s, q0 = pontoCaminho(L, sp);
           const outro = pontosOcupados.find((o) => o.dono !== chB && Math.hypot(o.x - q0.x, o.z - q0.z) < 10);
           if (outro) {   // ocupado: fica 13 m antes do ponto, esperando
-            for (let i = 0; i < 80 && e && e.rota && e.s > sp - 13; i++) { st.atraso += 0.5; e = estadoSaida(L, m, t - st.atraso); }
+            const recuo = COMP_ONIBUS(modeloSaida(L, m)) / 2 + 10.3;   // atrás de quem está no ponto (cabe até um articulado)
+            for (let i = 0; i < 80 && e && e.rota && e.s > sp - recuo; i++) { st.atraso += 0.5; e = estadoSaida(L, m, t - st.atraso); }
             if (!e) continue;
           } else if (e.parado) pontosOcupados.push({ x: q0.x, z: q0.z, dono: chB });
         }
@@ -8101,14 +8118,14 @@ function atualizarOnibus(dt) {
         // chegando: para atrás do último da fila (a fila do quadro anterior), sem encostar nele
         if (e.rota && e.s > L.sFila - 60) {
           let nq = 0; for (const [k2, s2] of estadoBus) if (k2 !== chB && k2.startsWith(L.id + '.') && s2.filaAtiva) nq++;
-          const lim = L.sFila - 14 * nq;
+          const lim = L.sFila - passoFila(L) * nq;
           if (e.s > lim) { st.atraso += dt; e = { ...e, s: Math.max(lim, 0), parado: true, chegando: true }; }
         }
         if (e.baia) { if (pl.baia) { e = { s: L.sFila, fila: true, parado: true }; st.atraso += dt; } else pl.baia = true; }   // segura na fila (o horário dele espera)
         if (e.fila) {
           st.filaDesde ??= t; let idx = 0;
           for (const [k2, s2] of estadoBus) if (k2 !== chB && k2.startsWith(L.id + '.') && s2.filaDesde !== undefined && s2.filaAtiva && (s2.filaDesde < st.filaDesde || (s2.filaDesde === st.filaDesde && k2 < chB))) idx++;
-          e = { ...e, s: L.sFila - 14 * idx }; st.filaAtiva = true; pl.fila++;
+          e = { ...e, s: L.sFila - passoFila(L) * idx }; st.filaAtiva = true; pl.fila++;
         } else { st.filaDesde = undefined; st.filaAtiva = false; }
       }
       // fila e plataforma: anda até a posição nova devagar (sem pular de lugar)
@@ -8119,7 +8136,7 @@ function atualizarOnibus(dt) {
       if (longe) continue;
       const mod = modeloSaida(L, m), chave = `${L.id}|${mod}`, i = usados.get(chave) || 0; usados.set(chave, i + 1);
       const doTipo = onibusNpc.filter((x) => x.chave === chave);   // reaproveita os ônibus da mesma linha e modelo
-      let b = doTipo[i]; if (!b) { b = { mesh: corpoOnibus(L.cor, mod), L, mod, chave }; scene.add(b.mesh); onibusNpc.push(b); }
+      let b = doTipo[i]; if (!b) { b = { mesh: corpoOnibus(L.cor, mod), L, mod, chave, comp: COMP_ONIBUS(mod) }; scene.add(b.mesh); onibusNpc.push(b); }
       b.m = m; b.x = q.x; b.z = q.z; b.ang = q.ang; b.parado = e.parado; b.ativo = true; b.e = e; b.chB = chB;
       b.mesh.position.set(q.x, alturaChao(q.x, q.z), q.z); b.mesh.rotation.y = q.ang; b.mesh.visible = !jogador.dentroCasa;
       // respeita quem está na frente: com um veículo parado à frente, espera (o horário dele atrasa um pouco)
@@ -8129,7 +8146,7 @@ function atualizarOnibus(dt) {
         const fx = Math.sin(b.ang), fz = Math.cos(b.ang);
         const term = !L.circular && e.s > L.sFila - 60;
         st.ignorar = new Set([b.mesh, ...onibusNpc.filter((x) => x.vivo && x !== b && ((term && x.L === L && (x.e?.fila || x.e?.baia)) || (x.chB > chB && Math.hypot(x.x - b.x, x.z - b.z) < 9 && Math.abs((x.x - b.x) * fx + (x.z - b.z) * fz) < 1.5))).map((x) => x.mesh)]);
-        frearAtras(st, b.mesh, dt, 13, b.x, b.z, b.ang, 70);
+        frearAtras(st, b.mesh, dt, b.comp / 2 + 7, b.x, b.z, b.ang, 70);
       }
     }
   }

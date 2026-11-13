@@ -989,3 +989,17 @@ Sem SQL novo. Substitua também os sons em `assets/sons/`.
 ## Versão 13/11 · cabines sem barras (20261113s)
 Sem SQL novo.
 - **Cabines na primeira pessoa**: a soleira da janela e a borda do teto (faixas na cor do carro) passavam da coluna do para-brisa e apareciam como barras indo para frente, por cima do capô. Agora vão só da coluna para trás. A porta continua até o painel, então a roda segue escondida.
+
+## Versão 13/11 · ônibus urbanos novos (20261113t)
+Sem SQL novo. **Modelos novos em `assets/modelos/`:** `onibus_apache.glb`, `onibus_busscar.glb` e `onibus_articulado.glb`.
+- **Caio Apache Vip IV**: tirei a caixa gigante escondida e as rodas pesadas (o modelo foi de 134 mil para 30 mil triângulos, 1,1 MB). A cor muda conforme a linha. Cabine feita no jogo.
+- **Busscar Ecoss**: reduzido de 28 MB para 3,7 MB. Usa o **interior de verdade** na primeira pessoa (painel, volante, catraca, balaústres).
+- **Articulado** (18,6 m, no lugar do ônibus básico): reduzido de 91 MB para 2,7 MB. **Dobra na sanfona**: a parte de trás é puxada pela junta como um reboque, a sanfona gira a metade, e as rodas de trás acompanham. Isso vale para os NPCs e quando você dirige.
+- **Linhas:**
+  - 1 Circular: articulado, Apache e Busscar;
+  - 3 Leste: urbano, articulado e Busscar;
+  - 4, 5 e 6 (circulares): urbano, Apache e Busscar.
+- A fila da plataforma e a espera nos pontos agora usam o comprimento de cada ônibus, então o articulado não encosta em ninguém.
+- **📜 Créditos** no menu ☰: os modelos do Apache e do Busscar são do Sketchfab, com licença **CC-BY 4.0**, que exige o crédito:
+  - "Caio Apache Vip IV" por lael.eugenio — https://sketchfab.com/3d-models/caio-apache-vip-iv-9d368d4f432b40a18f8882563043ee04
+  - "Busscar Ecoss MB OF-1721 - FULL" por QCY — https://sketchfab.com/3d-models/busscar-ecoss-mb-of-1721-full-db6df9e45e17418c9f191f81af27bbcf
