@@ -158,5 +158,7 @@ export function atualizar(dt, seg, ciclo, centro, luzes) {
   sons.continuo('nevasca', neve ? 0.55 * f : 0);
 }
 const COR_CHUVA = new THREE.Color('#5a6470'), COR_NEVE = new THREE.Color('#c8d2dc'), COR_CLARAO = new THREE.Color('#e8eeff');
-function relampago() { clarao = 0.42; }
+let aoRelampago = null;
+export const ouvirRelampago = (fn) => { aoRelampago = fn; };
+function relampago() { clarao = 0.42; aoRelampago?.(); }
 export const fatorTempo = () => (tipo === 'limpo' ? 0 : forca);
