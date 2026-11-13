@@ -7522,6 +7522,14 @@ let tempoQueima = 0;
 function atualizarQueimados(dt) {
   if ((tempoQueima -= dt) > 0) return; tempoQueima = 0.5;
   const agora = agoraServidor();
+  // carro de vaga que pegou fogo (explosão do lado): sai da vaga e vira um carro de verdade ali mesmo, para queimar
+  for (const f of servicos.listaIncendios()) {
+    if (f.tipo !== 'veiculo' || !f.ref?.startsWith('rua:')) continue;
+    const k = +f.ref.slice(4), c = mundo.carroRua(k); if (!c || largadosRua.has(k)) continue;
+    mundo.tirarCarroRua(k, true);
+    const mesh = civico.modeloCarro(MODELO_RUA[c.tipo] || 'popular', c.cor); mesh.position.set(c.x, alturaChao(c.x, c.z), c.z); mesh.rotation.y = c.rot; scene.add(mesh);
+    largadosRua.set(k, { mesh, x: c.x, z: c.z, r: c.rot, ate: Date.parse(f.inicio) + 360000 });   // depois de ~6 min volta uma vaga nova
+  }
   for (const f of servicos.listaIncendios()) {
     if (f.tipo !== 'veiculo' || !f.ref) continue;
     const v = veiculoPorRef(f.ref); if (!v) continue;
@@ -7619,6 +7627,7 @@ function explosaoVeiculo(f, agoraMesmo) {
   const alvos = [];
   const add = (ref, o, nome, porte) => { if (!o || ref === f.ref || veiculoEmChamas(ref)) return; const px = o.position.x, pz = o.position.z; if (Math.hypot(px - x, pz - z) <= 8) alvos.push({ ref, x: px, z: pz, nome, porte }); };
   for (const [k2, l] of largadosRua) add('rua:' + k2, l.mesh, 'Carro', 1);
+  for (const k2 of mundo.carrosRuaRaio(x, z, 8)) { const c = mundo.carroRua(k2); if (!largadosRua.has(k2) && !veiculoEmChamas('rua:' + k2)) alvos.push({ ref: 'rua:' + k2, x: c.x, z: c.z, nome: 'Carro', porte: 1 }); }   // estacionados na vaga
   for (const [id, s] of seqOnibus) if (s.mesh) add('seq:' + id, s.mesh, 'Ônibus', 2);
   for (const c of caminhoes.values()) if (c.d.status === 'dirigido' && !c.d.motorista) add('cam:' + c.d.id, c.obj, NOME_VEICULO[c.d.tipo] || 'Caminhão', c.d.tipo === 'van' ? 1 : 2);
   for (const vn of vansNpc) if (vn.roubada && jogador.carro?.vanNpc !== vn) add('van:' + vn.id, vn.obj, 'Van', 1);

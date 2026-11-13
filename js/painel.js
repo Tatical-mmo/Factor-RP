@@ -290,13 +290,19 @@ async function blocoCarreiras(j) {
 const MOTIVO_TXT = { ofensa: 'Ofensa', assedio: 'Assédio/ameaça', trapaca: 'Trapaça', nome: 'Nome impróprio', voz: 'Chat de voz', outro: 'Outro' };
 async function abaDenuncias() {
   const c = $('painelConteudo'); c.textContent = 'Carregando…';
-  let l; try { l = await rede.painel.denuncias(); } catch (e) { c.textContent = e.message; return; }
-  c.innerHTML = `<p class="dica">Denúncias abertas feitas pelos jogadores. Abra o jogador para agir (banir, prender, algemar…) e marque como resolvida.</p>
+  let l, fl = []; try { l = await rede.painel.denuncias(); fl = await rede.painel.faltas().catch(() => []); } catch (e) { c.textContent = e.message; return; }
+  // anti-trapaça: faltas registradas pelo servidor (3 pontos em 10 min = ban automático)
+  const porJog = new Map(); for (const f of fl) { const k = f.jogador; if (!porJog.has(k)) porJog.set(k, { nome: f.perfil?.nome || '?', itens: [] }); porJog.get(k).itens.push(f); }
+  const blocoFaltas = `<div class="sub">🚨 Anti-trapaça</div>${porJog.size ? [...porJog.entries()].map(([id, j]) => `<div class="linha item" style="flex-direction:column;align-items:stretch"><span><b>${esc(j.nome)}</b> · ${j.itens.length} falta(s)</span>
+      ${j.itens.slice(0, 4).map((f) => `<small>${new Date(f.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${esc(f.motivo)} (peso ${f.peso})</small>`).join('')}
+      <div class="botoes"><button data-abrir="${id}">Abrir</button><button data-perdoar="${id}">Perdoar e desbanir</button></div></div>`).join('') : '<p class="dica">Nenhuma falta registrada.</p>'}<div class="sub">Denúncias</div>`;
+  c.innerHTML = blocoFaltas + `<p class="dica">Denúncias abertas feitas pelos jogadores. Abra o jogador para agir (banir, prender, algemar…) e marque como resolvida.</p>
     ${l.length ? l.map((d) => `<div class="linha item" style="flex-direction:column;align-items:stretch"><span><b>${esc(d.alvo_nome)}</b> · ${MOTIVO_TXT[d.motivo] || d.motivo}${d.vezes > 1 ? ` · <i class="tag ruim">${d.vezes} denúncias</i>` : ''}</span>
       ${d.detalhes ? `<small style="white-space:pre-wrap">${esc(d.detalhes)}</small>` : ''}<small>por ${esc(d.autor_nome)} · ${new Date(d.criada_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small>
       <div class="botoes">${ctx.online().some((o) => o.id === d.alvo) ? `<button data-averiguar="${d.alvo}" data-nome="${esc(d.alvo_nome)}">👁️ Averiguar</button>` : '<small>offline</small>'}<button data-abrir="${d.alvo}">Abrir jogador</button><button data-resolver="${d.id}">Resolvida ✓</button></div></div>`).join('') : '<p class="vazio">Nenhuma denúncia aberta. 🎉</p>'}`;
   c.querySelectorAll('[data-averiguar]').forEach((b) => { b.onclick = () => { fechar(); ctx.averiguar(b.dataset.averiguar, b.dataset.nome); }; });
   c.querySelectorAll('[data-abrir]').forEach((b) => { b.onclick = () => { aba = 'jogadores'; selecionado = b.dataset.abrir; desenhar(); }; });
+  c.querySelectorAll('[data-perdoar]').forEach((b) => { b.onclick = async () => { try { await rede.painel.perdoarFaltas(b.dataset.perdoar); msg('Faltas apagadas e jogador desbanido (se o ban foi automático).'); abaDenuncias(); } catch (e) { msg(e.message, false); } }; });
   c.querySelectorAll('[data-resolver]').forEach((b) => { b.onclick = async () => { try { await rede.painel.resolverDenuncia(Number(b.dataset.resolver)); msg('Denúncia resolvida.'); abaDenuncias(); } catch (e) { msg(e.message, false); } }; });
 }
 // ------------------------------------------------------------ tempo (chuva, tempestade, neve)

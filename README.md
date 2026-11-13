@@ -1140,3 +1140,7 @@ Sem SQL e sem arquivo novo. Mudam `js/main.js`, `js/civico.js`, `js/servicos.js`
   - Quem está a até 6 m perde 50 de vida; quem está a até 10 m perde 20.
   - O fogo pula para os veículos parados a até 8 m (largados, sequestrados, viatura ou van roubada, caminhão de rações largado e carros dos jogadores), e eles também podem explodir.
 - **Carro de jogador queimado**: fica preto e não anda. O dono paga **5.000** de conserto na **concessionária** (botão 🔧 Consertar em "Seus carros").
+
+## Versão 13/11 · fogo nos carros das vagas (20261113zg)
+Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
+- A explosão também incendeia os **carros estacionados nas vagas da rua** a até 8 m, além dos carros dos jogadores e dos veículos largados. O carro sai da vaga e queima ali mesmo, e também pode explodir. Uns 6 min depois a vaga volta com um carro novo.

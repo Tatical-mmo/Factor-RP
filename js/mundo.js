@@ -1057,6 +1057,8 @@ export function carroRuaPerto(x, z, r = 3.2) {
   return melhor;
 }
 export const carroRua = (k) => estacionados?.carros[k] || null;
+// carros estacionados nas vagas a até r metros (os que ainda estão na vaga)
+export function carrosRuaRaio(x, z, r) { const l = []; estacionados?.carros.forEach((c, k) => { if (!c.fora && Math.hypot(c.x - x, c.z - z) <= r) l.push(k); }); return l; }
 export function tirarCarroRua(k, fora) {
   const E = estacionados, c = E?.carros[k]; if (!c || !!c.fora === !!fora) return;
   c.fora = !!fora;

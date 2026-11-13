@@ -4,8 +4,11 @@ import { createClient } from '@supabase/supabase-js';
 export const SUPABASE_URL = 'https://uqiiztzdkjyewhdikabd.supabase.co';
 export const SUPABASE_CHAVE = 'sb_publishable_diSzJqF0E4FLIALaI5UQLg_JUGJehS3';
 
+// assinatura do jogo: o banco recusa pedidos sem ela (veja supabase/74a e 74b). Troque aqui e na tabela seguranca juntos.
+const ASSINATURA = 'fr-7c41e9a2';
 export const sb = createClient(SUPABASE_URL, SUPABASE_CHAVE, {
   auth: { persistSession: true, autoRefreshToken: true },
+  global: { headers: { 'x-fator': ASSINATURA } },
   realtime: { params: { eventsPerSecond: 20 } },
 });
 
@@ -156,6 +159,8 @@ function traduzirRpc(m) {
     'o carro nao precisa de conserto': 'O carro não precisa de conserto.',
     'sem explosao': 'Não houve explosão.',
     'longe da explosao': 'Longe da explosão.',
+    'atualize o jogo': 'Saiu uma versão nova do jogo: recarregue a página.',
+    'conta banida': 'Esta conta foi banida.',
     'so transportadoras': 'Só transportadoras disputam a licitação.',
     'precisa nivel 5': 'A transportadora precisa ser nível 5 ou mais.',
     'lance invalido': 'Lance entre 10.000 e 5.000.000.',
@@ -476,6 +481,8 @@ export const painel = {
   bueiroSecreto: () => rpc('admin_bueiro_secreto'),
   sortearBueiro: () => rpc('admin_sortear_bueiro'),
   denuncias: () => rpc('admin_denuncias'),
+  faltas: () => sel(sb.from('faltas').select('*, perfil:perfis!faltas_jogador_fkey(nome)').order('em', { ascending: false }).limit(80)),
+  perdoarFaltas: (id) => rpc('perdoar_faltas', { p_jogador: id }),
   resolverDenuncia: (id) => rpc('admin_resolver_denuncia', { p_id: id }),
   carreiras: (id) => rpc('admin_carreiras', { p_jogador: id }),
   promover: (id, carreira, nivel) => rpc('admin_promover', { p_jogador: id, p_carreira: carreira, p_nivel: nivel }),
