@@ -1065,7 +1065,7 @@ function acaoContexto() {
   if (perto(civico.PREFEITURA.porta, 3.2)) { entrarPublico('prefeitura', salaPrefeitura, civico.PREFEITURA.porta, '🏛️ Prefeitura: gabinete, urna, outdoors e sala de imprensa.'); return; }
   if (perto(civico.PREFEITURA.prf, 3.2)) { entrarPublico('prf', () => salaDelegacia('prf', 1000, 'Posto da PRF', '#2b4fa8'), civico.PREFEITURA.prf, '🚔 Posto da PRF: balcão, procurados e estande de tiro.'); return; }
   if (perto(civico.CONCESSIONARIA.balcao, 3.2)) { abrirConcessionaria(); return; }
-  const carro = meuCarroProximo(); if (carro && !jogador.carregando) { entrarCarro(carro); return; }
+  const carro = meuCarroProximo(); if (carro && !jogador.carregando) { if (carro.d.queimado || veiculoEmChamas('car:' + carro.d.id)) { aviso('🔥 Seu carro queimou: pague o conserto (5.000) na concessionária.', 3.5); return; } entrarCarro(carro); return; }
   { const so = onibusSeqPerto(); if (so !== null) { pegarOnibusSeq(so); return; } }
   { const va = viaturaAbandonadaPerto(); if (va) { roubarViatura(va); return; } }
   { const cj = contextoComprador(); if (cj) { cj[2](); return; } }
@@ -3487,6 +3487,7 @@ function corposNaRua() {
   for (const n of npcs) r.push({ x: n.av.raiz.position.x, z: n.av.raiz.position.z, r: 0.45, npc: n.policia ? n : null, civilRef: n });
   for (const v of viaturas) r.push({ o: v.obj, x: v.obj.position.x, z: v.obj.position.z, r: 1.8 });
   for (const v of rondasBombeiros) if (v.obj.visible) r.push({ o: v.obj, x: v.obj.position.x, z: v.obj.position.z, r: 1.9 });
+  for (const k of obstrucoes) r.push({ o: k.marca, x: k.x, z: k.z, r: k.r });   // veículo em chamas ou carcaça: ninguém passa
   for (const v of vansNpc) if (v.obj.visible && jogador.carro?.vanNpc !== v) r.push({ o: v.obj, x: v.obj.position.x, z: v.obj.position.z, r: 1.7 });
   for (const b of onibusNpc) if (b.vivo) { const fx = Math.sin(b.ang), fz = Math.cos(b.ang), h = (b.comp || 12) / 2 - 2; for (let k = -h; k <= h + 0.01; k += h / Math.ceil(h / 4)) r.push({ o: b.mesh, x: b.x + fx * k, z: b.z + fz * k, r: 1.3 }); }
   for (const S of SETORES) if (S.npc?.visible) r.push({ o: S.npc, x: S.npc.position.x, z: S.npc.position.z, r: 1.6 });
@@ -3508,7 +3509,7 @@ function frearAtras(st, o, dt, dist = 9, x = o.position.x, z = o.position.z, ang
   let bloq;
   if (longe && (st.prox = (st.prox || 0) - dt) > 0) bloq = st.ultimo;
   else { st.prox = 0.5; bloq = st.ultimo = st.fantasma <= 0 && obstaculoAFrente(x, z, ang, st.ignorar || o, dist, o); }
-  if (bloq) { st.atraso = Math.min(120, (st.atraso || 0) + dt); st.bloq = (st.bloq || 0) + dt; if (st.bloq > paciencia) { st.fantasma = 2; st.bloq = 0; } }
+  if (bloq) { st.atraso = Math.min(120, (st.atraso || 0) + dt); if (!bloq.fogo) st.bloq = (st.bloq || 0) + dt; if (st.bloq > paciencia) { st.fantasma = 2; st.bloq = 0; } }   // veículo em chamas: espera de verdade, nunca atravessa
   else { st.bloq = 0; st.atraso = Math.max(0, (st.atraso || 0) - dt * (longe ? 1 : 0.35)); }
   return st.atraso;
 }
@@ -6125,7 +6126,7 @@ function quadroJogo() {
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
-  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
+  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
   enviarEstado(dt);
@@ -7348,6 +7349,7 @@ function veiculoPorRef(ref) {
   const [t, k] = ref.split(':');
   if (t === 'rua') { const l = largadosRua.get(+k); return l ? { mesh: l.mesh, x: l.x, z: l.z, l } : null; }
   if (t === 'cam') { const c = caminhoes.get(+k); return c?.obj && c.d.status === 'dirigido' && !c.d.motorista ? { mesh: c.obj, x: c.obj.position.x, z: c.obj.position.z, l: c } : null; }
+  if (t === 'car') { const v = carrosMundo.get(+k); return v?.mesh && jogador.carro?.id !== v.d.id ? { mesh: v.mesh, x: v.mesh.position.x, z: v.mesh.position.z, l: v } : null; }
   if (t === 'juj') { const v = viagensJuj.get(+k); return v?.mesh && v.d.status === 'sequestrada' && v.d.largado ? { mesh: v.mesh, x: v.mesh.position.x, z: v.mesh.position.z, l: v } : null; }
   if (t === 'van') { const v = vansNpc.find((x) => x.id === +k); return v?.roubada && jogador.carro?.vanNpc !== v ? { mesh: v.obj, x: v.obj.position.x, z: v.obj.position.z, l: v } : null; }
   if (t === 'via') { const v = viaturas.find((x) => x.id === +k); return v?.roubada && jogador.carro?.viatura !== v ? { mesh: v.obj, x: v.obj.position.x, z: v.obj.position.z, l: v } : null; }
@@ -7543,6 +7545,108 @@ function pintarQueimado(mesh, q) {
     for (const m of [].concat(o.material)) if (m.userData.cor0) { m.color.copy(m.userData.cor0).multiplyScalar(1 - 0.9 * q); if (m.map && q > 0.85) m.map = null, m.needsUpdate = true; }
   });
 }
+// ================================================================= rua obstruída e explosão de veículo em chamas
+// Veículo pegando fogo (e a carcaça depois) fecha a faixa: os NPCs param, ninguém passa por dentro, e os caminhos
+// (serviços, viaturas, rações) desviam pela rua mais perto. Ônibus que ainda não entrou no trecho contorna a quadra.
+// Sem ninguém apagar, explode (carro/van 75 s, ônibus/caminhão 100 s), machuca quem está perto e o fogo pula para
+// veículos parados a até 8 m — que também podem explodir.
+const obstrucoes = [];          // { x, z, r, marca, ref }
+const carcacas = new Map();     // ref -> { x, z, r } (fogo acabou, a carcaça continua ali)
+const explodidos = new Set(), pedidoExplosao = new Map(), marcasFogo = new Map();
+let chaveBloq = '', tempoBloq = 0, desvioSeq = 0;
+function atualizarObstrucoes(dt) {
+  if ((tempoBloq -= dt) > 0) return; tempoBloq = 1;
+  const lista = [];
+  for (const f of servicos.listaIncendios()) if (f.tipo === 'veiculo') {
+    const r = f.porte >= 2 ? 4 : 2.6, v = f.ref && veiculoPorRef(f.ref), x = v ? v.x : f.x, z = v ? v.z : f.z;
+    lista.push({ x, z, r, ref: f.ref }); if (f.ref) carcacas.set(f.ref, { x, z, r });
+  }
+  for (const [ref, k] of carcacas) {   // carcaça: some quando o veículo sai dali (volta para a vaga, o dono, a rota…)
+    if (lista.some((l) => l.ref === ref)) continue;
+    const v = veiculoPorRef(ref);
+    if (!v || !(v.l?.queima > 0.3 || v.mesh?.userData.queimado) || Math.hypot(v.x - k.x, v.z - k.z) > 3) { carcacas.delete(ref); continue; }
+    lista.push({ ...k, ref });
+  }
+  obstrucoes.length = 0; for (const k of lista) { if (!marcasFogo.has(k.ref)) marcasFogo.set(k.ref, { fogo: k.ref }); obstrucoes.push({ ...k, marca: marcasFogo.get(k.ref) }); }
+  const chave = lista.map((k) => `${k.ref}@${Math.round(k.x)},${Math.round(k.z)}`).sort().join('|');
+  if (chave === chaveBloq) return;
+  chaveBloq = chave;
+  mundo.definirBloqueios(lista.map((k) => ({ x: k.x, z: k.z, r: k.r })));
+  montarDesvios(lista);
+  for (const v of viaturas) v.recalc = 0;   // perseguição refaz o caminho
+  for (const v of viagensJuj.values()) v.desvio = null;
+}
+// para cada linha de ônibus: trecho em volta do bloqueio [s1, s2] e o caminho alternativo pelas ruas
+function montarDesvios(lista) {
+  for (const L of LINHAS) {
+    L.desvios = [];
+    if (!L.L) continue;
+    for (const k of lista) {
+      let sb = null, dm = 6;
+      for (let s = 0; s < L.L; s += 2) { const q = pontoCaminho(L, s), d = Math.hypot(q.x - k.x, q.z - k.z); if (d < dm) { dm = d; sb = s; } }
+      if (sb === null) continue;
+      const s1 = Math.max(0, sb - 32), s2 = Math.min(L.L, sb + 32);
+      const a = pontoCaminho(L, s1), b = pontoCaminho(L, s2), rota = servicos.rotaRuas({ x: a.x, z: a.z }, { x: b.x, z: b.z });
+      if (!rota || rota.total > 450 || rota.pts.some((p, i) => i > 0 && mundo.distTrecho(k, rota.pts[i - 1], p) < k.r + 2)) continue;   // sem volta possível: espera
+      L.desvios.push({ id: ++desvioSeq, s1, s2, rota });
+    }
+  }
+}
+function explosoesDeFogo() {
+  const agora = agoraServidor(), t = performance.now();
+  for (const f of servicos.listaIncendios()) {
+    if (f.tipo !== 'veiculo' || explodidos.has(f.id)) continue;
+    const quando = Date.parse(f.inicio) + (f.porte >= 2 ? 100000 : 75000);
+    if (f.explodiu_em) { explosaoVeiculo(f, agora - Date.parse(f.explodiu_em) < 15000); continue; }
+    if (agora < quando || Math.hypot(f.x - jogador.pos.x, f.z - jogador.pos.z) > 250 || t < (pedidoExplosao.get(f.id) || 0)) continue;
+    pedidoExplosao.set(f.id, t + 4000);
+    rede.explodirIncendio(f.id).then((ok) => { if (ok) { f.explodiu_em = new Date(agoraServidor()).toISOString(); explosaoVeiculo(f, true); } }).catch(() => {});
+  }
+}
+function explosaoVeiculo(f, agoraMesmo) {
+  if (explodidos.has(f.id)) return; explodidos.add(f.id);
+  if (!agoraMesmo) return;   // chegou depois: só a carcaça
+  const v = f.ref && veiculoPorRef(f.ref), x = v ? v.x : f.x, z = v ? v.z : f.z, k = f.porte >= 2 ? 1.8 : 1.3;
+  efeitoExplosao(x, alturaChao(x, z), z, k, false);
+  if (v?.l) v.l.queima = 1; if (v?.mesh) pintarQueimado(v.mesh, 1);
+  const d = Math.hypot(x - jogador.pos.x, z - jogador.pos.z);
+  if (!jogador.morto && !jogador.dentroCasa && !jogador.perfil?.imortal) {
+    if (d < 6) { danoLocal(50); aviso('💥 Um veículo explodiu do seu lado!', 3); } else if (d < 10) { danoLocal(20); aviso('💥 Explosão perto de você!', 2.5); }
+  }
+  if (d < 40) tremor = Math.max(tremor, 0.6);
+  if (d > 160) return;
+  // o fogo pula para os veículos parados perto
+  const alvos = [];
+  const add = (ref, o, nome, porte) => { if (!o || ref === f.ref || veiculoEmChamas(ref)) return; const px = o.position.x, pz = o.position.z; if (Math.hypot(px - x, pz - z) <= 8) alvos.push({ ref, x: px, z: pz, nome, porte }); };
+  for (const [k2, l] of largadosRua) add('rua:' + k2, l.mesh, 'Carro', 1);
+  for (const [id, s] of seqOnibus) if (s.mesh) add('seq:' + id, s.mesh, 'Ônibus', 2);
+  for (const c of caminhoes.values()) if (c.d.status === 'dirigido' && !c.d.motorista) add('cam:' + c.d.id, c.obj, NOME_VEICULO[c.d.tipo] || 'Caminhão', c.d.tipo === 'van' ? 1 : 2);
+  for (const vn of vansNpc) if (vn.roubada && jogador.carro?.vanNpc !== vn) add('van:' + vn.id, vn.obj, 'Van', 1);
+  for (const vi of viaturas) if (vi.roubada && jogador.carro?.viatura !== vi) add('via:' + vi.id, vi.obj, 'Viatura', 1);
+  for (const vj of viagensJuj.values()) if (vj.mesh && vj.d.status === 'sequestrada' && vj.d.largado) add('juj:' + vj.d.id, vj.mesh, 'Caminhão de rações', 2);
+  for (const c of carrosMundo.values()) if (c.mesh.visible && jogador.carro?.id !== c.d.id && !c.d.queimado) add('car:' + c.d.id, c.mesh, civico.CARROS[c.d.modelo]?.nome || 'Carro', 1);
+  for (const a of alvos) rede.propagarFogo(f.id, a.ref, a.x, a.z, a.nome, a.porte).then((id) => { if (id) servicos.recarregarFogo(); if (a.ref.startsWith('car:')) { const c = carrosMundo.get(+a.ref.slice(4)); if (c) c.d = { ...c.d, queimado: true }; } }).catch(() => {});
+}
+// carros de jogador queimados ficam pretos até o conserto
+function pintarCarrosQueimados() {
+  for (const c of carrosMundo.values()) {
+    if (c.d.queimado && !c.mesh.userData.queimado) pintarQueimado(c.mesh, 1);
+    else if (!c.d.queimado && c.mesh.userData.queimado && !veiculoEmChamas('car:' + c.d.id)) limparQueimado(c.mesh);
+  }
+}
+// caminhão de rações: refaz o caminho que falta se uma rua do trajeto fechou (chega na mesma hora)
+function desvioJujuba(v, agora) {
+  if (v.desvio !== null && v.desvio !== undefined) return v.desvio;
+  v.desvio = false;
+  if (!mundo.bloqueiosRua().length || !v.mesh) return false;
+  const ini = Date.parse(v.d.partida), fim = Date.parse(v.d.chegada), f = Math.min(1, Math.max(0, (agora - ini) / Math.max(1, fim - ini)));
+  const s0 = f * v.rota.total, resto = v.rota.pts.filter((p, i) => i > 0);
+  const passa = mundo.bloqueiosRua().some((k) => resto.some((p) => Math.hypot(p.x - k.x, p.z - k.z) < k.r + 6));
+  if (!passa || f >= 1) return false;
+  const de = servicos.pontoNaRota(v.rota, s0), nova = servicos.rotaRuas({ x: de.x, z: de.z }, destinoJujuba(v.d.corp), 2.5);
+  if (nova) v.desvio = { rota: nova, t0: agora };
+  return v.desvio;
+}
 // ================================================================= jujubas (ração militar)
 // Efeito de 5 min (mais rápido, soco mais forte, +20% de vida aos poucos), caminhões de rações saindo do Quartel
 // (Porto Sul) para a corporação, sequestro, placa do valor no quartel e o comprador ilegal de Vila Serra.
@@ -7596,8 +7700,8 @@ function atualizarJujubas(dt) {
     if (!v.mesh) continue;
     const d = v.d;
     if (d.status === 'em_rota') {
-      const ini = Date.parse(d.partida), fim = Date.parse(d.chegada), f = Math.min(1, Math.max(0, (agora - ini) / Math.max(1, fim - ini)));
-      const p = servicos.pontoNaRota(v.rota, f * v.rota.total);
+      const dv = desvioJujuba(v, agora), ini = dv ? dv.t0 : Date.parse(d.partida), fim = Date.parse(d.chegada), f = Math.min(1, Math.max(0, (agora - ini) / Math.max(1, fim - ini)));
+      const p = dv ? servicos.pontoNaRota(dv.rota, f * dv.rota.total) : servicos.pontoNaRota(v.rota, f * v.rota.total);
       v.mesh.position.set(p.x, alturaChao(p.x, p.z), p.z); v.mesh.rotation.y = suavizarAngulo(v.mesh.rotation.y, p.ang, dt * 6); v.mesh.visible = true;
     } else if (d.largado && d.x != null) { v.mesh.position.set(d.x, alturaChao(d.x, d.z), d.z); v.mesh.rotation.y = d.ang || 0; v.mesh.visible = true; }
     else v.mesh.visible = false;   // alguém está dirigindo: aparece pelo carro dele
@@ -8708,7 +8812,7 @@ function pontoCaminhoExt(L, s) {
 }
 // curvas: quem anda pela rua é desenhado pelos dois eixos (eixos.js)
 function marcarEixos() {
-  for (const b of onibusNpc) if (b.ativo && b.mesh.visible && b.e) eixos.marcar(b.mesh, pontoCaminhoExt(b.L, b.e.s + civico.eixosDe(b.mesh).zf));
+  for (const b of onibusNpc) if (b.ativo && b.mesh.visible && b.e) eixos.marcar(b.mesh, b.desviando ? null : pontoCaminhoExt(b.L, b.e.s + civico.eixosDe(b.mesh).zf));
   for (const S of SETORES) if (S.npc?.visible && S.sAtual !== undefined) eixos.marcar(S.npc, pontoCaminhoExt(S.cam, S.sAtual + civico.eixosDe(S.npc).zf));
   for (const o of servicos.veiculosNpc()) eixos.marcar(o);
   for (const v of viaturas) if (v.obj.visible) eixos.marcar(v.obj);
@@ -9048,13 +9152,23 @@ function atualizarOnibus(dt) {
       }
       st.gV = st.mAnt === m && st.sAnt !== undefined && e.s >= st.sAnt && e.s - st.sAnt < 40 && dt > 0 ? (e.s - st.sAnt) / dt : st.mAnt === m ? 0 : 12;
       st.sAnt = e.s; st.mAnt = m;
+      // rua fechada por veículo em chamas: quem entra no trecho depois do bloqueio contorna pela quadra ao lado
+      { const dv = L.desvios?.find((d) => e.rota && e.s > d.s1 && e.s < d.s2);
+        if (dv) {
+          if (st.desvio !== dv.id && (st.mAnt !== m || st.sAnt === undefined || st.sAnt <= dv.s1 + 1 || st.desvioAntes)) st.desvio = dv.id;
+          if (st.desvio === dv.id) {
+            const pd = servicos.pontoNaRota(dv.rota, (e.s - dv.s1) / (dv.s2 - dv.s1) * dv.rota.total); q = { x: pd.x, z: pd.z, ang: pd.ang };
+            st.atraso += dt * Math.max(0, 1 - (dv.s2 - dv.s1) / dv.rota.total);   // a volta é mais longa: o horário espera, na velocidade de sempre
+          }
+        } else st.desvio = null;
+        st.desvioAntes = !!dv && st.desvio === dv?.id; }
       const longe = Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) > 320 && !(jogador.onibus && jogador.onibus.L === L && jogador.onibus.m === m);
       const mod = modeloSaida(L, m), chave = `${L.id}|${mod}`, i = usados.get(chave) || 0; usados.set(chave, i + 1);
       const doTipo = onibusNpc.filter((x) => x.chave === chave);   // reaproveita os ônibus da mesma linha e modelo
       // longe da câmera o ônibus é só um marcador vazio (não monta o modelo): monta de verdade quando chega perto
       let b = doTipo[i]; if (!b) { b = { mesh: longe ? new THREE.Group() : corpoOnibus(L.cor, mod), leve: longe, L, mod, chave, comp: COMP_ONIBUS(mod) }; scene.add(b.mesh); onibusNpc.push(b); }
       else if (b.leve && !longe) { scene.remove(b.mesh); b.mesh = corpoOnibus(L.cor, mod); b.leve = false; scene.add(b.mesh); }
-      b.m = m; b.x = q.x; b.z = q.z; b.ang = q.ang; b.parado = e.parado; b.ativo = true; b.e = e; b.chB = chB;
+      b.m = m; b.x = q.x; b.z = q.z; b.ang = q.ang; b.parado = e.parado; b.ativo = true; b.e = e; b.chB = chB; b.desviando = !!st.desvio;
       b.mesh.position.set(q.x, alturaChao(q.x, q.z), q.z); b.mesh.rotation.y = q.ang; b.mesh.visible = !jogador.dentroCasa && !longe;   // longe: não desenha, mas continua respeitando os outros
       // respeita quem está na frente: com um veículo parado à frente, espera (o horário dele atrasa um pouco)
       if (!e.parado && !e.fila) {

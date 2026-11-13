@@ -1123,3 +1123,20 @@ Sem SQL e sem arquivo novo. Mudam `js/main.js`, `js/civico.js`, `js/servicos.js`
 - **Comprador ilegal (Seu Tonho)**: tem um armazém ao lado da loja de Vila Serra.
   - Compra a carga sequestrada por 9 moedas cada jujuba (45.000 por 5.000) e revende aos membros de clã por 500 cada.
   - Fecha o armazém (porta abaixada, placa FECHADO) quando tem Exército, Polícia ou PRF por perto.
+
+## Versão 13/11 · rua obstruída e explosões (20261113zf)
+**SQL novo: `supabase/73_fogo_explosao.sql`**. Mudam `js/main.js`, `js/mundo.js`, `js/rede.js`, `js/governo.js` e `index.html`.
+- **Rua obstruída**: um veículo pegando fogo (e a carcaça depois) fecha a faixa.
+  - Os NPCs param antes e nunca atravessam, nem depois da espera longa.
+  - Quem dirige bate nele como numa parede.
+  - A obstrução some quando o veículo sai dali.
+- **Desvio**: o mapa de ruas marca o trecho como fechado.
+  - Caminhões dos serviços, viaturas e o caminhão de rações recalculam o caminho pela rua mais perto.
+  - O ônibus que ainda não entrou no trecho contorna pela quadra ao lado, na velocidade normal (o horário espera a volta mais longa), e retoma a linha depois.
+  - Quem já estava dentro espera.
+  - O caminhão dos bombeiros continua chegando até o fogo.
+- **Explosão**: se ninguém apagar, o carro e a van explodem aos 75 s de fogo e o ônibus e o caminhão aos 100 s. Não explode se o fogo já tiver caído abaixo de 40% (bombeiros apagando).
+  - A explosão deixa clarão, tremor e carcaça.
+  - Quem está a até 6 m perde 50 de vida; quem está a até 10 m perde 20.
+  - O fogo pula para os veículos parados a até 8 m (largados, sequestrados, viatura ou van roubada, caminhão de rações largado e carros dos jogadores), e eles também podem explodir.
+- **Carro de jogador queimado**: fica preto e não anda. O dono paga **5.000** de conserto na **concessionária** (botão 🔧 Consertar em "Seus carros").

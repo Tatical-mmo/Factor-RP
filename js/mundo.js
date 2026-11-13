@@ -1202,24 +1202,41 @@ function entrada(x, z) {
   m.viz = [[L[k - 1], Math.abs(m.u - us[k - 1])], [L[k], Math.abs(us[k] - m.u)]];
   return m;
 }
+// ruas fechadas por veículo em chamas (ou carcaça): os caminhos desviam. Perto da saída e da chegada não conta
+// (o caminhão dos bombeiros precisa chegar no fogo; quem já está ali sai).
+let bloqueios = [];
+export function definirBloqueios(l) { bloqueios = l || []; }
+export const bloqueiosRua = () => bloqueios;
+export const distTrecho = (k, p, q) => distSeg(k, p, q);
+function distSeg(k, p, q) {
+  const dx = q.x - p.x, dz = q.z - p.z, L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((k.x - p.x) * dx + (k.z - p.z) * dz) / L2));
+  return Math.hypot(k.x - p.x - dx * t, k.z - p.z - dz * t);
+}
+function trechoFechado(p, q, a, b) {
+  for (const k of bloqueios) {
+    if (Math.hypot(k.x - a.x, k.z - a.z) < 15 || Math.hypot(k.x - b.x, k.z - b.z) < 15) continue;
+    if (distSeg(k, p, q) < (k.r || 3) + 3) return true;
+  }
+  return false;
+}
 // caminho pelas ruas de a até o meio-fio mais perto de b: [{x,z}, ...] (null se não houver ligação)
 export function caminhoRuas(a, b) {
   if (!ruas.length) return null;
   if (!grafo) montarGrafo();
   const ea = entrada(a.x, a.z), eb = entrada(b.x, b.z);
   if (!ea || !eb || ea.d > 80 || eb.d > 80) return null;
-  if (ea.s === eb.s) return [{ x: a.x, z: a.z }, { x: ea.x, z: ea.z }, { x: eb.x, z: eb.z }];
+  if (ea.s === eb.s && !(bloqueios.length && trechoFechado(ea, eb, a, b))) return [{ x: a.x, z: a.z }, { x: ea.x, z: ea.z }, { x: eb.x, z: eb.z }];
   // Dijkstra simples (poucos nós)
   const dist = new Map(), ant = new Map(), fila = [];
-  for (const [n, d] of ea.viz) { if (!(dist.get(n) <= d)) { dist.set(n, d); ant.set(n, null); fila.push(n); } }
-  const fim = new Map(eb.viz.map(([n, d]) => [n, d]));
+  for (const [n, d] of ea.viz) { if (bloqueios.length && trechoFechado(ea, n, a, b)) continue; if (!(dist.get(n) <= d)) { dist.set(n, d); ant.set(n, null); fila.push(n); } }
+  const fim = new Map(eb.viz.filter(([n]) => !(bloqueios.length && trechoFechado(n, eb, a, b))).map(([n, d]) => [n, d]));
   let melhor = null, dmelhor = Infinity;
   while (fila.length) {
     let i = 0; for (let k = 1; k < fila.length; k++) if (dist.get(fila[k]) < dist.get(fila[i])) i = k;
     const n = fila.splice(i, 1)[0], dn = dist.get(n);
     if (dn >= dmelhor) break;
     if (fim.has(n) && dn + fim.get(n) < dmelhor) { dmelhor = dn + fim.get(n); melhor = n; }
-    for (const [q, d] of n.viz) { const nd = dn + d; if (!(dist.get(q) <= nd)) { if (!dist.has(q)) fila.push(q); dist.set(q, nd); ant.set(q, n); } }
+    for (const [q, d] of n.viz) { if (bloqueios.length && trechoFechado(n, q, a, b)) continue; const nd = dn + d; if (!(dist.get(q) <= nd)) { if (!dist.has(q)) fila.push(q); dist.set(q, nd); ant.set(q, n); } }
   }
   if (!melhor) return null;
   const meio = []; for (let n = melhor; n; n = ant.get(n)) meio.unshift({ x: n.x, z: n.z });

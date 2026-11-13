@@ -152,6 +152,10 @@ function traduzirRpc(m) {
     'ja existe um pedido': 'Já existe um pedido de reposição em andamento.',
     'armazem cheio': 'O armazém já está cheio.',
     'empresa invalida': 'Escolha uma transportadora sua.',
+    'esse carro nao e seu': 'Esse carro não é seu.',
+    'o carro nao precisa de conserto': 'O carro não precisa de conserto.',
+    'sem explosao': 'Não houve explosão.',
+    'longe da explosao': 'Longe da explosão.',
     'so transportadoras': 'Só transportadoras disputam a licitação.',
     'precisa nivel 5': 'A transportadora precisa ser nível 5 ou mais.',
     'lance invalido': 'Lance entre 10.000 e 5.000.000.',
@@ -397,6 +401,9 @@ export const onibusSeq = {
   pegar: (id) => rpc('pegar_onibus_sequestrado', { p_id: id }),
 };
 export const assaltarNpc = () => rpc('assaltar_npc');
+export const explodirIncendio = (id) => rpc('explodir_incendio', { p_incendio: id });
+export const propagarFogo = (origem, ref, x, z, nome, porte) => rpc('propagar_fogo', { p_origem: origem, p_ref: ref, p_x: x, p_z: z, p_nome: nome, p_porte: porte });
+export const consertarCarro = (id) => rpc('consertar_carro', { p_carro: id });
 export const incendiarVeiculo = (ref, x, z, nome, porte) => rpc('incendiar_veiculo', { p_ref: ref, p_x: x, p_z: z, p_nome: nome, p_porte: porte });
 export const cativeiro = {
   capturar: (alvo, local) => rpc('capturar_refem', { p_alvo: alvo, p_local: local }),

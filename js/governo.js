@@ -173,11 +173,12 @@ async function telaCarros(c) {
       <span class="bts"><button data-carro="${m}">Comprar</button></span></div>`).join('')}</div>
     <div class="sub">Seus carros</div>
     <div class="lista">${meus.length ? meus.map((k) => `<div class="linha item"><span class="nm"><b style="color:${esc(k.cor)}">■</b> <b>${CARROS[k.modelo]?.nome}</b><small>${k.modelo === 'presidencial' ? 'do cargo de prefeito' : `vende por ${num(CARROS[k.modelo].preco / 2)}`}</small></span>
-      <span class="bts">${k.modelo === 'presidencial' ? '' : `<button data-vender="${k.id}">Vender</button>`}</span></div>`).join('') : '<span class="vazio">Nenhum carro.</span>'}</div>`;
+      <span class="bts">${k.queimado ? `<button data-consertar="${k.id}">🔧 Consertar (5.000)</button>` : ''}${k.modelo === 'presidencial' ? '' : `<button data-vender="${k.id}">Vender</button>`}</span></div>`).join('') : '<span class="vazio">Nenhum carro.</span>'}</div>`;
   let cor = CORES_CARRO[0];
   c.querySelectorAll('[data-cor]').forEach((b) => { b.onclick = () => { cor = b.dataset.cor; c.querySelectorAll('[data-cor]').forEach((x) => x.classList.toggle('sel', x === b)); }; });
   c.querySelectorAll('[data-carro]').forEach((b) => { b.onclick = () => confirmar(b, () => executar(() => rede.carros.comprar(b.dataset.carro, cor), 'Carro comprado! Ele está estacionado na frente da loja.')); });
   c.querySelectorAll('[data-vender]').forEach((b) => { b.onclick = () => confirmar(b, () => executar(() => rede.carros.vender(Number(b.dataset.vender)), (v) => `Vendido por ${num(v)}.`)); });
+  c.querySelectorAll('[data-consertar]').forEach((b) => { b.onclick = () => confirmar(b, () => executar(() => rede.consertarCarro(Number(b.dataset.consertar)), 'Carro consertado: pode dirigir de novo.')); });
 }
 
 // ---------------------------------------------------------------- banco, empregos, hospital e bombeiros
