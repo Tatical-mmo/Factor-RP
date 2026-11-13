@@ -1075,3 +1075,19 @@ Sem SQL e sem arquivo novo. Mudam `js/main.js`, `js/civico.js`, `js/servicos.js`
 - **Largado**: dá para pôr fogo (🔥 Incendiar). Caminhão é porte grande (2 caminhões de bombeiro); van é porte pequeno.
 - Parado por **7 min** (antes eram 5), o veículo volta para a garagem do dono, já sem a pintura de queimado.
 - O roubo antigo (bater até zerar a vida e o robô levar a carga) continua funcionando.
+
+## Versão 13/11 · crimes de clã completos (20261113zc) · etapas 4, 5 e 6
+**SQL novo: `supabase/70_assalto_npc.sql`**. Mudam `js/main.js`, `js/rede.js` e `index.html`.
+- **Viatura que encosta (etapa 4)**: na perseguição, se você sai da pista (terreno, entre prédios), a viatura encosta no fim da rua e descem 2 policiais robôs que seguem a pé.
+  - Encostam em você: você é preso. Se você se afasta 60 m, pega um carro e vai para a rua, ou passa 1 min e meio, eles voltam para a viatura.
+  - Enquanto estão fora, a viatura fica destrancada e o botão de ação mostra **Roubar** (conta como crime).
+  - Se voltam e a viatura sumiu, chamam reforço: outra viatura vem atrás de você.
+  - A viatura roubada e largada pode ser incendiada; em 3 min a polícia recolhe.
+- **Assalto a pedestre NPC (etapa 5)**: armado, perto de um pedestre e virado para ele, use o botão extra **💰 Assaltar**. Ele levanta as mãos, entrega de 50 a 300 moedas e sai correndo.
+  - Em 40% das vezes ele chama a polícia, e uma viatura vem atrás de você.
+  - Conta como crime, com no máximo 1 assalto a cada 3 min.
+- **Gente nos pontos e na rodoviária (etapa 6)**:
+  - Quanto mais tempo sem ônibus, mais gente espera no ponto (até 3; na plataforma, até 4). Elas ficam olhando para a rua.
+  - Quando o ônibus da linha para, sobem uma por vez pela porta da frente.
+  - Às vezes alguém desce, anda pela calçada e entra numa casa.
+  - Isso só aparece perto de você, com até 14 pessoas ao mesmo tempo, para não pesar o celular.

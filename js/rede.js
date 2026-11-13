@@ -142,6 +142,8 @@ function traduzirRpc(m) {
     'so patente maior prende': 'Só uma patente maior pode mandar para a prisão militar.',
     'so membros de cla': 'Só membros de clã fazem isso.',
     'esse veiculo nao esta em entrega': 'Esse veículo não está fazendo entrega.',
+    'policial nao assalta': 'Policial em serviço não assalta.',
+    'aguarde para assaltar': 'Espere uns minutos antes de assaltar outra pessoa.',
     'policial nao sequestra': 'Policial em serviço não sequestra.',
     'aguarde para sequestrar': 'Espere um minuto antes de sequestrar outro veículo.',
     'onibus ja sequestrado': 'Esse ônibus já foi sequestrado.',
@@ -375,6 +377,7 @@ export const onibusSeq = {
   mover: (id, x, z, ang, largado) => rpc('mover_onibus_sequestrado', { p_id: id, p_x: x, p_z: z, p_ang: ang, p_largado: largado }),
   pegar: (id) => rpc('pegar_onibus_sequestrado', { p_id: id }),
 };
+export const assaltarNpc = () => rpc('assaltar_npc');
 export const incendiarVeiculo = (ref, x, z, nome, porte) => rpc('incendiar_veiculo', { p_ref: ref, p_x: x, p_z: z, p_nome: nome, p_porte: porte });
 export const cativeiro = {
   capturar: (alvo, local) => rpc('capturar_refem', { p_alvo: alvo, p_local: local }),
