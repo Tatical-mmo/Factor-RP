@@ -581,6 +581,10 @@ export const banco = {
   sacar: (v) => rpc('banco_sacar', { p_valor: v }),
   emprestimo: (v) => rpc('banco_emprestimo', { p_valor: v }),
   pagar: (v) => rpc('banco_pagar', { p_valor: v }),
+  financiamento: () => rpc('fin_estado'),
+  financiar: (v, n) => rpc('fin_contratar', { p_valor: v, p_n: n }),
+  pagarFin: (modo, v = 0) => rpc('fin_pagar', { p_modo: modo, p_valor: v }),
+  cobrarFin: () => rpc('fin_processar'),
 };
 export const saude = {
   entrar: (prof) => rpc('entrar_profissao', { p_profissao: prof }),
@@ -591,6 +595,7 @@ export const saude = {
   incendios: () => sel(sb.from('incendios').select('*').eq('status', 'ativo').order('id')),
   processar: () => rpc('processar_incendios'),
   apagar: (id) => rpc('apagar_incendio', { p_incendio: id }),
+  npcApagar: (id) => rpc('npc_apagar', { p_incendio: id }),
 };
 export const metas = {
   minhas: () => rpc('minhas_metas'),

@@ -883,3 +883,50 @@ Rode no SQL Editor: `33_arma_dourada.sql`.
 - **Renascer:** quem morre e não é atendido renasce dentro do hospital depois de **90 s**. A ambulância ou um médico que chegam antes levantam a pessoa no mesmo lugar, na hora.
   - O tempo fica no painel do admin, em **Configurações da cidade → 🏥 Tempo para renascer no hospital** (15 s a 5 min).
   - Na tela aparece a contagem até renascer.
+
+## Versão 13/11 · céu, trânsito e bombeiros (20261113m)
+Rode o SQL **`supabase/64_bombeiros_queda.sql`** no Supabase.
+- **Céu** (`js/ceu.js`):
+  - nuvens que mudam com o clima: poucas e brancas no sol, muitas e escuras na chuva e na tempestade;
+  - raio desenhado no céu a cada relâmpago da tempestade;
+  - estrelas e lua à noite.
+- **Veículos se respeitam:**
+  - ônibus, viaturas, caminhões de lixo, bombeiros e ambulâncias param atrás de quem está parado na frente, inclusive de você e do seu carro;
+  - o horário deles atrasa um pouco e depois é recuperado;
+  - se ficarem travados muito tempo num cruzamento, um passa, para não travar a cidade.
+- **Rodoviária:**
+  - os ônibus fazem fila para entrar na plataforma, um atrás do outro, e só encostam quando a baia fica livre;
+  - nos pontos divididos entre linhas, quem chega depois espera atrás;
+  - as linhas circulares 4, 5 e 6 entram na esquina da rodoviária uma de cada vez.
+- **Bombeiros:**
+  - **3 caminhões dos bombeiros fazem ronda** pela cidade o tempo todo;
+  - num incêndio, o caminhão da ronda mais perto vai atender, e os outros saem do quartel;
+  - **queda de avião**: fogo de 30 jatos e 3 caminhões; **queda de helicóptero**: 20 jatos e 2 caminhões; casa e empresa continuam com 10 jatos e 1 caminhão;
+  - os caminhões NPC **apagam de verdade**: o fogo vai baixando até sumir (queda: de 45 s a 150 s; casa e empresa: de 80 s a 180 s, com a taxa de sempre);
+  - um bombeiro jogador que ajuda apaga bem antes e ganha os +400.
+- **Segurança do jogo:** se acontecer um erro num quadro, o jogo não congela mais. Aparece um aviso pedindo print.
+
+## Versão 13/11 · financiamento no banco (20261113n)
+Rode **`supabase/65a_financiamento.sql`** e depois **`supabase/65b_financiamento.sql`** no Supabase.
+- **Financiamento parcelado** no Banco Central (tabela Price, parcelas iguais):
+  - o jogador escolhe o valor e o número de parcelas, e vê a simulação antes de confirmar;
+  - **mais parcelas = mais juros** (+0,1% por parcela);
+  - uma parcela a cada **64 min**, cobrada sozinha da poupança e depois da carteira (o jogo cobra de minuto em minuto, e o banco também cobra ao abrir);
+  - dá para adiantar uma parcela ou quitar tudo com desconto dos juros que ainda não correram.
+- **Níveis de crédito:**
+
+  | Nível | Limite | Juros base | Máx. de parcelas |
+  |---|---|---|---|
+  | 1 | 10.000 | 2,2% | 10× |
+  | 2 | 25.000 | 2,0% | 12× |
+  | 3 | 50.000 | 1,8% | 20× |
+  | 4 | 100.000 | 1,6% | 24× |
+  | 5 | 200.000 | 1,4% | 30× |
+
+  - Juros por parcela = base + 0,1% × (parcelas − 2).
+  - Quitou sem atrasar e usou pelo menos metade do prazo: sobe 1 nível.
+- **Inadimplência:**
+  - parcela não paga: multa de 2% e INADIMPLENTE;
+  - o atraso cresce 3% a cada 64 min, e o banco tira da poupança e de metade da carteira;
+  - depois de acertar, volta ao nível 1 com +2% de juros e precisa de 2 financiamentos em dia para subir cada nível até o 3.
+- O empréstimo à vista antigo continua, mas não dá para ter os dois ao mesmo tempo.

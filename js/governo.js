@@ -175,8 +175,30 @@ const SERVICOS = {
   mecanico: ['🔧 Oficina do hangar', telaMecanico],
 };
 
+// parcela da tabela Price (igual ao servidor)
+const parcelaPrice = (v, n, i) => Math.ceil(v * i / (1 - Math.pow(1 + i, -n)));
+const taxaFin = (f, n) => Math.round((f.cond.base + 0.1 * (n - 2) + f.extra) * 100) / 10000;
+function blocoFinanciamento(f) {
+  const estrelas = '★'.repeat(f.nivel) + '☆'.repeat(5 - f.nivel);
+  const topo = `<div class="sub">Financiamento parcelado</div>
+    <p class="dica">Seu crédito: <b>${estrelas}</b> (nível ${f.nivel}) · até <b>${num(f.cond.limite)}</b> em até <b>${f.cond.max}×</b>.
+    Uma parcela a cada <b>64 min</b>, cobrada da poupança e depois da carteira. Mais parcelas = mais juros.
+    ${f.restrito ? '<br>⚠️ Crédito restrito por atraso: +2% de juros e são 2 financiamentos em dia para subir cada nível.' : '<br>Quitou sem atrasar (e usou pelo menos metade do prazo)? Seu crédito sobe de nível.'}</p>`;
+  const x = f.fin;
+  if (!x) return topo + `<div class="botoes"><input id="fValor" type="number" min="1000" max="${f.cond.limite}" placeholder="Valor" inputmode="numeric">
+      <select id="fN">${Array.from({ length: f.cond.max - 1 }, (_, k) => k + 2).map((n) => `<option value="${n}"${n === Math.min(10, f.cond.max) ? ' selected' : ''}>${n}×</option>`).join('')}</select></div>
+    <p class="dica" id="fSim">Digite o valor para ver a simulação.</p>
+    <div class="botoes"><button id="fPegar">Financiar</button></div>`;
+  const prox = Math.max(0, Math.round((Date.parse(x.proxima) - Date.now()) / 60000));
+  return topo + `<div class="cartoes"><div><small>Parcelas</small><b>${x.pagas}/${x.n}</b></div><div><small>Parcela</small><b>${num(x.parcela)}</b></div>
+      <div><small>Juros</small><b>${(x.taxa * 100).toFixed(1).replace('.', ',')}%</b></div><div><small>Em atraso</small><b>${num(x.atraso)}</b></div></div>
+    ${x.inadimplente ? `<p class="aviso-item">⚠️ INADIMPLENTE: o atraso cresce 3% a cada 64 min e o banco tira da poupança e de metade da carteira. Acerte para voltar a ter crédito.</p>
+      <div class="botoes"><input id="fAtr" type="number" min="1" value="${x.atraso}" inputmode="numeric"><button id="fPagAtr">Pagar atraso</button></div>`
+    : `<p class="dica">${x.pagas < x.n ? `Próxima parcela em ${prox} min.` : ''} Quitar hoje (sem os juros que ainda não correram): <b>${num(x.quitar)}</b>.</p>
+      <div class="botoes">${x.pagas < x.n ? '<button id="fAdiantar">Adiantar 1 parcela</button>' : ''}<button id="fQuitar">Quitar tudo</button></div>`}`;
+}
 async function telaBanco(c) {
-  const b = await rede.banco.estado();
+  const [b, f] = await Promise.all([rede.banco.estado(), rede.banco.financiamento().catch(() => null)]);
   const faltam = b.vence_ciclo != null ? b.vence_ciclo - b.ciclo : null;
   c.innerHTML = `<div class="cartoes"><div><small>Carteira</small><b>${num(b.carteira)}</b></div><div><small>Poupança</small><b>${num(b.saldo)}</b></div>
       <div><small>Rendeu até hoje</small><b>${num(b.rendeu)}</b></div><div><small>Dívida</small><b>${num(b.divida)}</b></div></div>
@@ -188,12 +210,26 @@ async function telaBanco(c) {
     ${b.divida > 0 ? `<p class="dica">Você deve <b>${num(b.divida)}</b>${faltam != null ? (faltam > 0 ? `, vence em ${faltam} ciclo${faltam === 1 ? '' : 's'}` : ', já venceu') : ''}.</p>
       <div class="botoes"><input id="bPag" type="number" min="1" value="${b.divida}" inputmode="numeric"><button id="bPagar">Pagar</button></div>`
     : `<p class="dica">De 500 a ${num(b.limite)}, com <b>10% de juros</b> e prazo de 3 ciclos. Depois do prazo o banco cobra sozinho.</p>
-      <div class="botoes"><input id="bEmp" type="number" min="500" max="${b.limite}" placeholder="Valor" inputmode="numeric"><button id="bPegar">Pegar empréstimo</button></div>`}`;
+      <div class="botoes"><input id="bEmp" type="number" min="500" max="${b.limite}" placeholder="Valor" inputmode="numeric"><button id="bPegar">Pegar empréstimo</button></div>`}
+    ${f ? blocoFinanciamento(f) : ''}`;
   const on = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
   on('bDep', () => { const v = inteiro('bValor'); if (v > 0) executar(() => rede.banco.depositar(v), `Depositado: ${num(v)}.`); });
   on('bSaq', () => { const v = inteiro('bValor'); if (v > 0) executar(() => rede.banco.sacar(v), `Sacado: ${num(v)}.`); });
   on('bPagar', () => { const v = inteiro('bPag'); if (v > 0) executar(() => rede.banco.pagar(v), (r) => (r > 0 ? `Pago. Ainda deve ${num(r)}.` : 'Empréstimo quitado!')); });
   on('bPegar', () => { const v = inteiro('bEmp'); if (v > 0) executar(() => rede.banco.emprestimo(v), (t) => `Você recebeu ${num(v)}. Vai pagar ${num(t)}.`); });
+  if (!f) return;
+  const sim = () => {
+    const el = $('fSim'); if (!el) return;
+    const v = inteiro('fValor'), n = Number($('fN').value), i = taxaFin(f, n);
+    if (v < 1000 || v > f.cond.limite) { el.innerHTML = `Valor de 1.000 a ${num(f.cond.limite)}.`; return; }
+    const p = parcelaPrice(v, n, i);
+    el.innerHTML = `${n}× de <b>${num(p)}</b> (juros de ${(i * 100).toFixed(1).replace('.', ',')}% por parcela) · total <b>${num(p * n)}</b>, juros ${num(p * n - v)}. A primeira vence em 64 min.`;
+  };
+  if ($('fValor')) { $('fValor').oninput = sim; $('fN').onchange = sim; }
+  on('fPegar', (ev) => { const v = inteiro('fValor'), n = Number($('fN').value); if (v > 0) confirmar(ev.currentTarget, () => executar(() => rede.banco.financiar(v, n), (p) => `🏦 Você recebeu ${num(v)}: ${n}× de ${num(p)}, uma a cada 64 min.`)); });
+  on('fPagAtr', () => { const v = inteiro('fAtr'); if (v > 0) executar(() => rede.banco.pagarFin('atraso', v), 'Atraso pago.'); });
+  on('fAdiantar', () => executar(() => rede.banco.pagarFin('parcela'), (r) => (r > 0 ? `Parcela adiantada. Faltam ${r}.` : '🏦 Financiamento quitado!')));
+  on('fQuitar', (ev) => confirmar(ev.currentTarget, () => executar(() => rede.banco.pagarFin('quitar'), '🏦 Financiamento quitado!')));
 }
 
 // serviço público: polícia, PRF, hospital, bombeiros e jornal (ficha limpa; entra na hora)

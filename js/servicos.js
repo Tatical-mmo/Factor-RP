@@ -34,6 +34,18 @@ export function iniciar(contexto) {
 }
 
 export const listaIncendios = () => incendios;
+// vida que sobra: os caminhões NPC vão apagando com o tempo (mesma conta do servidor, vida_incendio)
+// queda de aeronave: baixa de 45 s até 150 s · casa/empresa: de 80 s até 180 s
+export function vidaFogo(f) {
+  const queda = f.tipo === 'queda', desde = (ctx.agora() - Date.parse(f.inicio)) / 1000, max = f.vida_max || 10;
+  const k = Math.min(1, Math.max(0, (desde - (queda ? 45 : 80)) / (queda ? 105 : 100)));
+  return Math.max(0, Math.min(f.vida, Math.ceil(max * (1 - k))));
+}
+// caminhões que saem para cada fogo: avião 3, helicóptero 2, casa/empresa 1 (avião sai antes)
+const caminhoesDoFogo = (f) => (f.tipo !== 'queda' ? 1 : /avi/i.test(f.nome) ? 3 : 2);
+const saidaDoFogo = (f) => (f.tipo === 'queda' ? 15 : 60);
+// caminhão da ronda que foi atender (some da ronda até voltar)
+export function rondasOcupadas() { const r = new Set(); for (const n of npcs.values()) if (n.ronda !== undefined) r.add(n.ronda); return r; }
 export const guerrasAtivas = () => guerras;
 
 // nomes dos clãs em guerra com o meu clã agora (para a etiqueta INIMIGO)
@@ -72,13 +84,19 @@ function criarFoco(f) {
 }
 
 const corTmp = new THREE.Color();
+const pedidoNpc = new Map();
 function atualizarFocos(dt) {
   const t = performance.now() / 1000, ativos = new Set();
+  // os caminhões NPC terminaram: o fogo some e o servidor confere (no máximo um pedido a cada 5 s por fogo)
+  for (const f of incendios) if (vidaFogo(f) <= 0 && !(t < (pedidoNpc.get(f.id) || 0))) {
+    pedidoNpc.set(f.id, t + 5);
+    rede.saude.npcApagar(f.id).then((ok) => { if (ok) incendios = incendios.filter((x) => x.id !== f.id); }).catch(() => {});
+  }
   for (const f of incendios) {
     ativos.add(f.id);
     let o = focos.get(f.id);
     if (!o) { o = criarFoco(f); focos.set(f.id, o); }
-    const forca = 0.3 + 0.7 * Math.max(0, f.vida) / 10, raio = 2.4 * forca;
+    const forca = 0.3 + 0.7 * vidaFogo(f) / 10, raio = 2.4 * forca;
     for (const c of o.chamas) {
       const u = c.userData; u.vida += dt / u.dur;
       if (u.vida >= 1) { u.vida = 0; const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * raio; u.x0 = Math.cos(a) * r; u.z0 = Math.sin(a) * r; u.sobe = (3 + Math.random() * 3) * forca; }
@@ -229,16 +247,18 @@ export function pontoNaRota(r, s) {
   const a = r.pts[r.pts.length - 2] || r.pts[0], b = r.pts[r.pts.length - 1];
   return { x: b.x, z: b.z, ang: Math.atan2(b.x - a.x, b.z - a.z), fim: true };
 }
-function novoNpc(chave, modelo, base, destino, atraso, vel, parar) {
+function novoNpc(chave, modelo, base, destino, atraso, vel, parar, ronda) {
   const obj = civico.modeloCarro(modelo, '#ffffff');
   obj.visible = false; ctx.scene.add(obj);
   obj.userData.sireneDe = modelo === 'ambulancia' ? 'sirene_ambulancia' : modelo === 'bombeiros' ? 'sirene_bombeiros' : null;
-  const n = { obj, modelo, base, rota: rotaRuas(base, destino, parar), t0: performance.now() + atraso * 1000, vel, volta: null, chegou: false, atraso: 0 };
+  const n = { obj, modelo, base, rota: rotaRuas(base, destino, parar), t0: performance.now() + atraso * 1000, vel, volta: null, chegou: false, atraso: 0, ronda };
+  if (ronda !== undefined) { obj.position.set(base.x, ctx.altura(base.x, base.z), base.z); obj.rotation.y = base.ang || 0; }
   npcs.set(chave, n); return n;
 }
 function voltarNpc(chave) {
   const n = npcs.get(chave); if (!n || n.volta) return;
-  n.volta = rotaRuas({ x: n.obj.position.x, z: n.obj.position.z }, n.base); n.t1 = performance.now(); n.atraso = 0;
+  const casa = n.ronda !== undefined ? ctx.posRonda?.(n.ronda) || n.base : n.base;
+  n.volta = rotaRuas({ x: n.obj.position.x, z: n.obj.position.z }, casa); n.t1 = performance.now(); n.atraso = 0;
   if (!n.obj.visible) { ctx.scene.remove(n.obj); npcs.delete(chave); }
 }
 function atualizarNpcs(dt) {
@@ -260,18 +280,24 @@ function atualizarNpcs(dt) {
   }
 }
 const suave = (a, b, k) => { let d = b - a; d = Math.atan2(Math.sin(d), Math.cos(d)); return a + d * Math.min(1, k); };
-// bombeiros NPC: saem 60 s depois do início do fogo e jogam água até a prefeitura apagar (3 min)
+// bombeiros NPC: o caminhão da ronda mais perto vai primeiro; os outros saem do quartel, um atrás do outro.
+// Chegando, jogam água e o fogo vai baixando (vidaFogo) até apagar.
 function npcsDeFogo(dt) {
   const agora = ctx.agora(), ativos = new Set();
   for (const f of incendios) {
-    const chave = 'fogo' + f.id; ativos.add(chave);
-    const desde = (agora - Date.parse(f.inicio)) / 1000;
-    if (desde < 60) continue;
-    let n = npcs.get(chave);
-    if (!n) n = novoNpc(chave, 'bombeiros', civico.BOMBEIROS.vaga, f, 0, 16, 9);
-    if (n.chegou && !n.volta) {
-      n.jato = (n.jato || 0) - dt;
-      if (n.jato <= 0) { n.jato = 0.35; esguichar(f, new THREE.Vector3(n.obj.position.x, n.obj.position.y + 4, n.obj.position.z), 6); }
+    const desde = (agora - Date.parse(f.inicio)) / 1000, qtd = caminhoesDoFogo(f);
+    for (let i = 0; i < qtd; i++) {
+      const chave = `fogo${f.id}.${i}`; ativos.add(chave);
+      if (desde < saidaDoFogo(f) + i * 4) continue;
+      let n = npcs.get(chave);
+      if (!n) {
+        const r = i === 0 ? ctx.rondaPerto?.(f.x, f.z, rondasOcupadas()) : null;   // { i, x, z, ang }
+        n = r ? novoNpc(chave, 'bombeiros', r, f, 0, 16, 9, r.i) : novoNpc(chave, 'bombeiros', civico.BOMBEIROS.vaga, f, 0, 16, 9 + (r === null && i === 0 ? 0 : i * 12));
+      }
+      if (n.chegou && !n.volta) {
+        n.jato = (n.jato || 0) - dt;
+        if (n.jato <= 0) { n.jato = 0.35; esguichar(f, new THREE.Vector3(n.obj.position.x, n.obj.position.y + 4, n.obj.position.z), 6); }
+      }
     }
   }
   for (const chave of npcs.keys()) if (chave.startsWith('fogo') && !ativos.has(chave)) voltarNpc(chave);
@@ -293,7 +319,7 @@ export function atualizar(dt) {
   tempoFogo -= dt; tempoProc -= dt; tempoPonto -= dt; tempoGuerra -= dt; esperaPonto -= dt;
   if (tempoFogo <= 0) { tempoFogo = 6; carregarFogo(); }
   if (tempoGuerra <= 0) { tempoGuerra = 15; carregarGuerras(); }
-  if (tempoProc <= 0) { tempoProc = 60; rede.saude.processar().catch(() => {}); rede.guerra.processar().catch(() => {}); }
+  if (tempoProc <= 0) { tempoProc = 60; rede.saude.processar().catch(() => {}); rede.banco.cobrarFin().catch(() => {}); rede.guerra.processar().catch(() => {}); }
   if (tempoPonto <= 0) { tempoPonto = 60; baterPonto(); }
   atualizarFocos(dt);
   npcsDeFogo(dt);
