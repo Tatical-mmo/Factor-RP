@@ -1012,3 +1012,8 @@ Sem SQL novo. **Modelos trocados em `assets/modelos/`:** `onibus_executivo2.glb`
 - **Linhas 7 Vila Serra e 8 Porto Sul** (as mais longe) agora usam só esses dois ônibus de viagem. A linha 2 Aeroporto fica com o executivo.
 - **Caminhão baú** (no lugar do `caminhao`): cabine amarela e baú branco, de 87 MB para 1,8 MB. É o caminhão das transportadoras e também o da autoescola. Ganhou cabine na primeira pessoa.
 - Rodas que giram e cabines medidas em cada modelo novo. A fila e a espera nos pontos usam 14 m para os ônibus de viagem.
+
+## Versão 13/11 · modelos sem rachaduras (20261113v)
+Sem SQL e sem código novo: só os modelos em `assets/modelos/` (`onibus_apache`, `onibus_busscar`, `onibus_articulado`, `onibus_executivo2`, `onibus_dois_andares`, `caminhao`).
+- **Rachaduras**: na redução dos modelos, os dois lados de cada costura da textura iam para pontos diferentes e abriam frestas na lataria. Agora os dois lados vão para o mesmo ponto e a malha fica fechada.
+- **Caminhão por dentro**: as paredes da cabine vistas de dentro (as manchas amarelas) foram tiradas. Pela janela agora se vê a rua. Por fora a cabine continua igual.
