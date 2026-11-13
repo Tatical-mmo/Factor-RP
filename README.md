@@ -1101,3 +1101,25 @@ Sem SQL e sem arquivo novo. Mudam `js/main.js`, `js/civico.js`, `js/servicos.js`
 - **Vans NPC**: 4 vans de entrega rodam pela cidade e podem ser sequestradas (botão extra **🔫 Sequestrar**). O motorista desce e foge.
   - Largada, a van pode ser incendiada, e alguém pode tocar em **Dirigir** para pegar de novo.
   - Parada por 7 min, ela volta para a rota.
+
+## Versão 13/11 · rações do Exército (20261113ze)
+**SQL novos: `supabase/72a_jujubas.sql` e `supabase/72b_jujubas_transporte.sql`** (rode os dois, nessa ordem). **Arquivo novo: `js/racoes.js`**. Mudam `js/main.js`, `js/rede.js`, `js/loja.js` e `index.html`.
+- **Jujuba (ração militar)**: na mochila, **Usar ração**. Por exatos 5 min você fica 10% mais rápido, o soco bate 30% mais forte (ganha a briga de quem não comeu) e recupera 20% da vida aos poucos.
+- **Armazéns**: Polícia, PRF e Bombeiros têm um armazém cada, de até 10.000.
+  - No balcão da corporação, o botão extra **🍬 Rações** abre o armazém.
+  - Cada membro pega 5 por vez, com espera de 5 min.
+  - Quando o estoque fica baixo, qualquer membro pede reposição.
+- **Central do Exército** (no balcão do Quartel, botão **🍬 Rações**): mostra o estoque dos 3 armazéns em tempo real e os pedidos. Para cada pedido dá para mandar **o que falta** ou **1 caminhão cheio**, com até 5.000 por caminhão.
+- **Licitação** (no balcão do Quartel, botão **📄 Licitação**):
+  - Transportadoras nível 5 ou mais dão lances, e ganha o menor.
+  - Quando a licitação fecha (10 min), o valor do contrato vai na hora para o caixa da vencedora.
+  - O contrato vale 5 caminhões, e cada caminhão despachado paga mais o valor atual (50.000).
+  - Depois dos 5 caminhões abre uma licitação nova. O administrador muda o valor na mesma janela.
+- **Placa no Quartel**: mostra o valor atual por caminhão e é refeita quando ele muda.
+- **Caminhão de rações**: sai do Quartel (Porto Sul), pega a rodovia e entra na cidade até a corporação, com hora de chegada igual para todos.
+  - Membro de clã armado, na frente dele, pode **🔫 Sequestrar**. O motorista foge e o pedido volta a ficar aberto para o Exército mandar outro.
+  - Trava: essa carga não dá para saquear para o clã.
+  - Largado e parado por 7 min, a carga se perde.
+- **Comprador ilegal (Seu Tonho)**: tem um armazém ao lado da loja de Vila Serra.
+  - Compra a carga sequestrada por 9 moedas cada jujuba (45.000 por 5.000) e revende aos membros de clã por 500 cada.
+  - Fecha o armazém (porta abaixada, placa FECHADO) quando tem Exército, Polícia ou PRF por perto.

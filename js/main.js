@@ -26,6 +26,7 @@ import * as clima from './clima.js';
 import * as ceu from './ceu.js';
 import * as semaforos from './semaforos.js';
 import * as eixos from './eixos.js';
+import * as racoes from './racoes.js';
 import { pecasCabine } from './cabine.js';
 import * as jornal from './jornal.js';
 import * as visual from './visual.js';
@@ -1009,6 +1010,7 @@ function acaoContexto() {
   if (jogador.carro) {
     const a = acaoNoVeiculo();
     if (a?.[0] === 'descarregar') descarregarRoubo();
+    else if (a?.[0] === 'comprador') contextoComprador()?.[2]();
     else if (a?.[0] === 'jato') servicos.apagar(servicos.fogoProximo(15) || servicos.listaIncendios()[0]);
     else if (a?.[0] === 'socorrer') socorrerFerido(feridoProximo(7));
     else sairCarro();
@@ -1066,6 +1068,8 @@ function acaoContexto() {
   const carro = meuCarroProximo(); if (carro && !jogador.carregando) { entrarCarro(carro); return; }
   { const so = onibusSeqPerto(); if (so !== null) { pegarOnibusSeq(so); return; } }
   { const va = viaturaAbandonadaPerto(); if (va) { roubarViatura(va); return; } }
+  { const cj = contextoComprador(); if (cj) { cj[2](); return; } }
+  { const jl = jujubaLargadaPerto(); if (jl) { rede.jujuba.pegarSeq(jl.d.id).then((q) => dirigirJujuba(jl, q)).catch((e) => aviso(e.message, 3)); return; } }
   { const vl = vanLargadaPerto(); if (vl) { entrarCarro({ d: { id: 'vnpc' + vl.id, modelo: 'van', cor: '#f2f2ee' }, mesh: vl.obj }); jogador.carro.vanNpc = vl; jogador.carro.salvar = 1e9; vl.largadaAte = 0; return; } }
   { const cr = carroRuaProximo(); if (cr !== null && !jogador.carregando) { roubarCarroRua(cr); return; } }
   const alheio = carroAlheioProximo(); if (alheio && !jogador.carregando) { if (jogador.perfil.policial || jogador.perfil.prf) recuperarCarro(alheio); else arrombarCarro(alheio); return; }
@@ -1288,6 +1292,7 @@ function sairCarro() {
   if (c.seqOnibus) { largarOnibusSeq(c); return; }
   if (c.viatura) { largarViatura(c); return; }
   if (c.vanNpc) { largarVanNpc(c); return; }
+  if (c.jujuba) { largarJujuba(c); return; }
   if (c.rua !== undefined) { largarCarroRua(c); return; }
   jogador.carro = null; modoVolante(false);
   c.mesh.position.copy(jogador.pos); c.mesh.rotation.y = jogador.yaw;
@@ -2243,7 +2248,7 @@ async function iniciarJogo(perfil) {
   criarNPCs(id);
   conectarMultiplayer(perfil);
   rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando, inventario: recarregarInventario });
-  iniciarLoja({ perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, curar: usarRemedio, vida: () => jogador.vida,
+  iniciarLoja({ usarJujuba: () => usarJujuba(), perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, curar: usarRemedio, vida: () => jogador.vida,
     casaId: () => (typeof jogador.dentroCasa === 'number' ? jogador.dentroCasa : null),
     meuTerreno: () => { const d = casasMundo.get(portaAberta)?.d; return d?.tipo === 'terreno' && d.dono === jogador.perfil.id ? d : null; },
     portaAtual: () => { const d = casasMundo.get(portaAberta)?.d; return moraEm(d) ? d : null; },
@@ -2252,6 +2257,8 @@ async function iniciarJogo(perfil) {
     agora: agoraServidor,
     entrarMoradia: (d) => entrarEmCasa(d),
     casaVendida: () => { tempoSocial = 0; if (jogador.dentroCasa) sairDeCasa(); } });
+  racoes.iniciarRacoes({ perfil: () => jogador.perfil, agora: () => agoraServidor(), mudou: (e) => racoesMudou(e), duracaoViagem: (corp) => duracaoViagemJujuba(corp),
+    minhasTransportadoras: async () => (await rede.listarEmpresas()).filter((e) => e.dono === jogador.perfil.id && e.tipo === 'transportadora') });
   iniciarEmpresa({
     perfil: () => jogador.perfil, agora: agoraServidor,
     definirEmprego: (id) => { emprego = id; },
@@ -3180,7 +3187,7 @@ function aplicarDanoRemoto(id, valor) {
 function golpeSoco() {
   const f = new THREE.Vector3(Math.sin(jogador.yaw), 0, Math.cos(jogador.yaw));
   if (golpeNoBoneco(f)) return;
-  const forca = Math.round(10 * fatorForca());
+  const forca = Math.round(10 * fatorForca() * (racaoAtiva() ? 1.3 : 1));   // com a ração militar o soco ganha da briga
   for (const n of npcs) {
     if (!n.policia) continue;
     const d = new THREE.Vector3().subVectors(n.av.raiz.position, jogador.pos); d.y = 0;
@@ -3416,6 +3423,7 @@ function entrarServico(sv) {
 function acaoNoVeiculo() {
   const c = jogador.carro;
   if (podeDescarregar()) return ['descarregar', `saquear as ${c.carga} caixas aqui`, 'Saquear'];
+  if (c.jujuba) { const cj = contextoComprador(); if (cj) return ['comprador', cj[0], cj[1]]; }
   if (c.servico === 'bombeiros' && Math.abs(c.vel) < 2 && (servicos.estaApagando() || servicos.fogoProximo(15))) return ['jato', servicos.estaApagando() ? 'jogando água (toque para parar)' : 'jogar água no fogo (+400)', 'Jato'];
   if (c.servico === 'ambulancia' && Math.abs(c.vel) < 2 && feridoProximo(7)) return ['socorrer', 'socorrer o ferido (+250)', 'Socorrer'];
   return null;
@@ -5579,6 +5587,7 @@ function atualizarJogador(dt) {
     let vel = 0;
     if (forca > 0.15) {
       vel = j.carregando ? VELOCIDADE.carregando : j.armado ? VELOCIDADE.armado : correr ? VELOCIDADE.correr : VELOCIDADE.andar;
+      if (racaoAtiva()) vel *= 1.1;
       if (joy.ativo && !correr) vel *= THREE.MathUtils.clamp(forca * 1.3, 0.5, 1);
       vel *= fatorVelocidade();
       j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 12);
@@ -6001,6 +6010,8 @@ function contexto() {
   if (meuCarroProximo() && !jogador.carregando) return [meuCarroProximo().d.ladrao ? 'dirigir o carro roubado' : 'dirigir o seu carro', 'Dirigir'];
   if (onibusSeqPerto() !== null) return ['dirigir o ônibus sequestrado pelo seu clã', 'Dirigir'];
   if (viaturaAbandonadaPerto()) return ['roubar a viatura abandonada (crime)', 'Roubar'];
+  { const cj = contextoComprador(); if (cj) return [cj[0], cj[1]]; }
+  if (jujubaLargadaPerto()) return ['dirigir o caminhão de rações sequestrado', 'Dirigir'];
   if (vanLargadaPerto()) return ['dirigir a van sequestrada', 'Dirigir'];
   { const cr = carroRuaProximo(); if (cr !== null && !jogador.carregando) return ['arrombar o carro estacionado (crime)', 'Arrombar']; }
   { const ca = carroAlheioProximo(); if (ca && !jogador.carregando) return jogador.perfil?.policial || jogador.perfil?.prf ? ['devolver o carro roubado ao dono (+300)', 'Recuperar'] : ['arrombar o carro e sair dirigindo (crime)', 'Arrombar']; }
@@ -6114,7 +6125,7 @@ function quadroJogo() {
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
-  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
+  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
   enviarEstado(dt);
@@ -7337,6 +7348,7 @@ function veiculoPorRef(ref) {
   const [t, k] = ref.split(':');
   if (t === 'rua') { const l = largadosRua.get(+k); return l ? { mesh: l.mesh, x: l.x, z: l.z, l } : null; }
   if (t === 'cam') { const c = caminhoes.get(+k); return c?.obj && c.d.status === 'dirigido' && !c.d.motorista ? { mesh: c.obj, x: c.obj.position.x, z: c.obj.position.z, l: c } : null; }
+  if (t === 'juj') { const v = viagensJuj.get(+k); return v?.mesh && v.d.status === 'sequestrada' && v.d.largado ? { mesh: v.mesh, x: v.mesh.position.x, z: v.mesh.position.z, l: v } : null; }
   if (t === 'van') { const v = vansNpc.find((x) => x.id === +k); return v?.roubada && jogador.carro?.vanNpc !== v ? { mesh: v.obj, x: v.obj.position.x, z: v.obj.position.z, l: v } : null; }
   if (t === 'via') { const v = viaturas.find((x) => x.id === +k); return v?.roubada && jogador.carro?.viatura !== v ? { mesh: v.obj, x: v.obj.position.x, z: v.obj.position.z, l: v } : null; }
   if (t === 'seq') { const s = seqOnibus.get(+k); return s?.mesh ? { mesh: s.mesh, x: s.mesh.position.x, z: s.mesh.position.z, l: s } : null; }
@@ -7345,6 +7357,8 @@ function veiculoPorRef(ref) {
 // botão extra dos crimes de clã (ao lado do botão de ação, que continua com Entrar/Arrombar/Dirigir)
 function contextoCrime() {
   if (jogador.carregando) return null;
+  { const r = contextoRacoes(); if (r) return r; }
+  { const jj = jujubaParaSequestrar(); if (jj) return ['sequestrar o caminhão de rações (crime de clã)', '🔫 Sequestrar', () => sequestrarJujuba(jj)]; }
   const vi = veiculoParaIncendiar(); if (vi) return ['pôr fogo no veículo (crime de clã)', '🔥 Incendiar', () => incendiarVeiculo(vi)];
   const ob = onibusParaSequestrar(); if (ob) return ['sequestrar o ônibus (crime de clã)', '🔫 Sequestrar', () => sequestrarOnibus(ob)];
   const pn = pedestreParaAssaltar(); if (pn) return ['assaltar o pedestre (crime)', '💰 Assaltar', () => assaltarPedestre(pn)];
@@ -7471,6 +7485,18 @@ function dirigirVeiculoEmpresa(c, carga) {
   jogador.avatar.raiz.visible = false;
   aviso(carga > 0 ? `🚚 Agora é você no volante, com ${carga} caixas. Leve até o território do clã ou a sua casa e toque em Descarregar.` : '🚚 Agora é você no volante. O veículo está vazio.', 5);
 }
+// pontos dos armazéns de rações (balcão de cada corporação) e da central do Exército
+function pontoRacoes() {
+  const k = racoes.corpDe(jogador.perfil);
+  return k === 'policia' ? pontos.delegacia : k === 'prf' ? civico.PREFEITURA.prf : k === 'bombeiros' ? civico.BOMBEIROS.balcao : null;
+}
+function contextoRacoes() {
+  if (jogador.carro || jogador.dentroCasa || jogador.morto) return null;
+  const pr = pontoRacoes();
+  if (pr && perto(pr, 4)) return ['armazém de rações (jujubas)', '🍬 Rações', () => racoes.abrir('armazem')];
+  if (perto(civico.EXERCITO.balcao, 4)) return militar() ? ['central de rações: estoques e pedidos', '🍬 Rações', () => racoes.abrir('central')] : ['licitação do transporte de rações', '📄 Licitação', () => racoes.abrir('licitacao')];
+  return null;
+}
 function acaoCrime() { const c = contextoCrime(); if (c) c[2](); }
 function veiculoParaIncendiar() {
   if (!jogador.cla || !ultimoLargado || agoraServidor() > ultimoLargado.ate || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.morto) return null;
@@ -7516,6 +7542,175 @@ function pintarQueimado(mesh, q) {
     mesh.userData.queimado = true;
     for (const m of [].concat(o.material)) if (m.userData.cor0) { m.color.copy(m.userData.cor0).multiplyScalar(1 - 0.9 * q); if (m.map && q > 0.85) m.map = null, m.needsUpdate = true; }
   });
+}
+// ================================================================= jujubas (ração militar)
+// Efeito de 5 min (mais rápido, soco mais forte, +20% de vida aos poucos), caminhões de rações saindo do Quartel
+// (Porto Sul) para a corporação, sequestro, placa do valor no quartel e o comprador ilegal de Vila Serra.
+const COMPRADOR = { x: 64, z: -972, porta: { x: 64, z: -962.5 } };
+const viagensJuj = new Map();   // id -> { d, rota, mesh }
+let placaRacoes = null, valorPlaca = 0, compradorMontado = null, tempoJujPos = 0, jujubaAvisou = 0;
+const racaoAtiva = () => Math.max(jogador.jujubaAte || 0, Date.parse(jogador.perfil?.jujuba_ate || 0) || 0) > agoraServidor();
+async function usarJujuba() {
+  const ate = await rede.jujuba.usar();
+  jogador.jujubaAte = Date.parse(ate); jujubaAvisou = 0;
+  aviso('🍬 Ração militar: 5 minutos mais rápido, mais forte no soco e recuperando vida.', 4);
+  return true;
+}
+const destinoJujuba = (corp) => (corp === 'policia' ? pontos.delegacia : corp === 'prf' ? civico.PREFEITURA.prf : civico.BOMBEIROS.balcao) || { x: 0, z: 0 };
+// caminho do Quartel até a corporação: sai de Porto Sul pela rodovia e entra na cidade pelas ruas
+function rotaJujuba(corp) {
+  const ini = [{ x: mundo.QUARTEL.portao.x - 6, z: mundo.QUARTEL.portao.z }, { x: mundo.QUARTEL.portao.x - 6, z: 945 }, { x: 216, z: 945 }, { x: 216, z: 641 }];
+  const cidade = servicos.rotaRuas({ x: 216, z: 641 }, destinoJujuba(corp), 2.5);
+  const pts = [...ini, ...(cidade?.pts || [destinoJujuba(corp)]).slice(1)];
+  let total = 0; for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
+  return { pts, total };
+}
+function duracaoViagemJujuba(corp) { return Math.round(rotaJujuba(corp).total / 9); }
+function racoesMudou(e) {
+  // placa com o valor por caminhão na frente do Quartel (refeita quando o valor muda)
+  if (e.valor !== valorPlaca) {
+    if (placaRacoes) scene.remove(placaRacoes);
+    placaRacoes = textoSprite(`🍬 Transporte de rações: ${e.valor.toLocaleString('pt-BR')} por caminhão`, { escala: 0.9, fundo: 'rgba(62,78,40,.95)' });
+    placaRacoes.position.set(mundo.QUARTEL.portao.x - 3, 4.2, mundo.QUARTEL.portao.z + 4); scene.add(placaRacoes);
+    if (valorPlaca && Math.hypot(mundo.QUARTEL.portao.x - jogador.pos.x, mundo.QUARTEL.portao.z - jogador.pos.z) < 80) aviso(`🎖️ Novo valor do transporte de rações: ${e.valor.toLocaleString('pt-BR')} por caminhão.`, 4);
+    valorPlaca = e.valor;
+  }
+  const vivos = new Set();
+  for (const d of e.viagens) {
+    vivos.add(d.id);
+    let v = viagensJuj.get(d.id);
+    if (!v) { v = { d, rota: rotaJujuba(d.corp), mesh: null }; viagensJuj.set(d.id, v); }
+    v.d = d;
+    if (!v.mesh && jogador.carro?.jujuba !== d.id) { v.mesh = civico.modeloCarro('exercito_caminhao', '#556b2f'); scene.add(v.mesh); }
+  }
+  for (const [id, v] of viagensJuj) if (!vivos.has(id) && jogador.carro?.jujuba !== id) { if (v.mesh) scene.remove(v.mesh); viagensJuj.delete(id); }
+}
+function atualizarJujubas(dt) {
+  // ração: cura 20% em 5 min e avisa quando acaba
+  if (racaoAtiva()) {
+    if (!jogador.morto && jogador.vida < 100) { jogador.vida = Math.min(100, jogador.vida + 20 / 300 * dt); if (Math.random() < dt) desenharFome(); }
+    jujubaAvisou = 1;
+  } else if (jujubaAvisou === 1) { jujubaAvisou = 2; aviso('🍬 O efeito da ração acabou.', 3); }
+  const agora = agoraServidor();
+  for (const [id, v] of viagensJuj) {
+    if (!v.mesh) continue;
+    const d = v.d;
+    if (d.status === 'em_rota') {
+      const ini = Date.parse(d.partida), fim = Date.parse(d.chegada), f = Math.min(1, Math.max(0, (agora - ini) / Math.max(1, fim - ini)));
+      const p = servicos.pontoNaRota(v.rota, f * v.rota.total);
+      v.mesh.position.set(p.x, alturaChao(p.x, p.z), p.z); v.mesh.rotation.y = suavizarAngulo(v.mesh.rotation.y, p.ang, dt * 6); v.mesh.visible = true;
+    } else if (d.largado && d.x != null) { v.mesh.position.set(d.x, alturaChao(d.x, d.z), d.z); v.mesh.rotation.y = d.ang || 0; v.mesh.visible = true; }
+    else v.mesh.visible = false;   // alguém está dirigindo: aparece pelo carro dele
+  }
+  // quem está com o caminhão sequestrado avisa a posição de vez em quando
+  if (jogador.carro?.jujuba && (tempoJujPos -= dt) <= 0) { tempoJujPos = 20; rede.jujuba.mover(jogador.carro.jujuba, jogador.pos.x, jogador.pos.z, jogador.yaw, false).catch(() => {}); }
+  montarComprador();
+}
+function jujubaParaSequestrar() {
+  if (!jogador.cla || !jogador.armado || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.onibus || jogador.morto || sequestrando) return null;
+  if (jogador.perfil?.policial || jogador.perfil?.prf || militar()) return null;
+  for (const v of viagensJuj.values()) {
+    if (v.d.status !== 'em_rota' || !v.mesh?.visible) continue;
+    const a = v.mesh.rotation.y, fx = Math.sin(a), fz = Math.cos(a), dx = jogador.pos.x - v.mesh.position.x, dz = jogador.pos.z - v.mesh.position.z;
+    const f = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx);
+    if (f < 3 || f > 14 || lat > 2.6) continue;
+    if (Math.cos(jogador.yaw - Math.atan2(-dx, -dz)) < 0.6) continue;
+    return v;
+  }
+  return null;
+}
+async function sequestrarJujuba(v) {
+  if (sequestrando) return; sequestrando = true;
+  const x = v.mesh.position.x, z = v.mesh.position.z, ang = v.mesh.rotation.y;
+  virarPara(x, z); jogador.alvo = null;
+  try {
+    const qtd = await rede.jujuba.sequestrar(v.d.id, x, z, ang);
+    v.d = { ...v.d, status: 'sequestrada', x, z, ang, largado: true, motorista: jogador.perfil.id };
+    const espera = fugirDoVeiculo(x, z, ang, 8, 1);
+    jogador.trava = espera / 1000;
+    aviso(`🔫 Caminhão de rações sequestrado (${qtd} jujubas)! O motorista está descendo…`, 3);
+    setTimeout(() => {
+      if (jogador.morto || jogador.carro || Math.hypot(x - jogador.pos.x, z - jogador.pos.z) > 25) { rede.jujuba.mover(v.d.id, x, z, ang, true).catch(() => {}); return; }
+      dirigirJujuba(v, qtd);
+    }, espera);
+  } catch (e) { aviso(e.message, 3); }
+  finally { sequestrando = false; }
+}
+function dirigirJujuba(v, qtd) {
+  v.d = { ...v.d, largado: false };
+  entrarCarro({ d: { id: 'juj' + v.d.id, modelo: 'exercito_caminhao', cor: '#556b2f' }, mesh: v.mesh });
+  jogador.carro.jujuba = v.d.id; jogador.carro.salvar = 1e9; jogador.carro.cargaJuj = qtd || v.d.qtd;
+  v.mesh = null;
+  aviso('🚚 Carga de rações do Exército: não dá para guardar no clã. Só o comprador do armazém de Vila Serra (ao lado da loja) compra.', 5);
+}
+function largarJujuba(c) {
+  const v = viagensJuj.get(c.jujuba);
+  jogador.carro = null; modoVolante(false);
+  const x = jogador.pos.x, z = jogador.pos.z, r = jogador.yaw;
+  c.mesh.position.set(x, alturaChao(x, z), z); c.mesh.rotation.y = r;
+  if (v) { v.mesh = c.mesh; v.d = { ...v.d, x, z, ang: r, largado: true }; }
+  rede.jujuba.mover(c.jujuba, x, z, r, true).catch(() => {});
+  ultimoLargado = { ref: 'juj:' + c.jujuba, ate: agoraServidor() + 90000 };
+  jogador.pos.x += Math.cos(r) * 2.2; jogador.pos.z += -Math.sin(r) * 2.2; resolverColisao(jogador.pos, jogador.raio);
+  jogador.avatar.raiz.visible = true;
+  aviso('Caminhão de rações largado. Parado 7 min, a carga se perde.', 3);
+}
+// comprador ilegal: armazém ao lado da loja de Vila Serra. Fecha quando vê Exército, Polícia ou PRF por perto.
+function oficialPerto() {
+  const ofi = (m) => m && (m.policial || m.prf || m.profissao === 'exercito');
+  if ((jogador.perfil?.policial || jogador.perfil?.prf || jogador.perfil?.profissao === 'exercito') && Math.hypot(COMPRADOR.x - jogador.pos.x, COMPRADOR.z - jogador.pos.z) < 45) return true;
+  for (const r of remotos.values()) if (ofi(r.meta) && r.av?.raiz && Math.hypot(r.av.raiz.position.x - COMPRADOR.x, r.av.raiz.position.z - COMPRADOR.z) < 45) return true;
+  return false;
+}
+function montarComprador() {
+  const perto = Math.hypot(COMPRADOR.x - jogador.pos.x, COMPRADOR.z - jogador.pos.z) < 160;
+  if (!perto) return;
+  if (!compradorMontado) {
+    const g = new THREE.Group(), m = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });
+    const galpao = new THREE.Mesh(new THREE.BoxGeometry(12, 5, 12), m('#8a7f6a')); galpao.position.set(0, 2.6, 0); g.add(galpao);
+    const teto = new THREE.Mesh(new THREE.BoxGeometry(12.6, 0.4, 12.6), m('#5d5446')); teto.position.set(0, 5.2, 0); g.add(teto);
+    const porta = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, 0.2), m('#3d3a35')); porta.position.set(0, 1.9, 6.05); g.add(porta);
+    g.position.set(COMPRADOR.x, alturaChao(COMPRADOR.x, COMPRADOR.z), COMPRADOR.z); scene.add(g);
+    const placa = textoSprite('📦 Armazém do Seu Tonho', { escala: 0.7, fundo: 'rgba(90,70,40,.92)' }); placa.position.set(COMPRADOR.x, 6.6, COMPRADOR.z + 6.3); scene.add(placa);
+    compradorMontado = { g, porta, aberto: null, placaFechado: null };
+    criarAvatar('personagens', 'Bandit_Brave').then((av) => { av.raiz.position.set(COMPRADOR.porta.x + 2, alturaChao(COMPRADOR.x, COMPRADOR.z), COMPRADOR.porta.z); av.raiz.rotation.y = 0; scene.add(av.raiz); av.tocar('idle'); compradorMontado.av = av; }).catch(() => {});
+  }
+  const aberto = !oficialPerto();
+  if (aberto !== compradorMontado.aberto) {
+    compradorMontado.aberto = aberto;
+    compradorMontado.porta.position.y = aberto ? 4.4 : 1.9;   // porta de enrolar: sobe quando abre
+    if (compradorMontado.av) compradorMontado.av.raiz.visible = aberto;
+    if (!compradorMontado.placaFechado) { const f = textoSprite('FECHADO', { escala: 0.6, fundo: 'rgba(150,30,20,.92)' }); f.position.set(COMPRADOR.x, 3.6, COMPRADOR.z + 6.4); scene.add(f); compradorMontado.placaFechado = f; }
+    compradorMontado.placaFechado.visible = !aberto;
+  }
+  if (compradorMontado.av?.raiz.visible) compradorMontado.av.mixer.update(1 / 60);
+}
+function contextoComprador() {
+  if (!compradorMontado || jogador.dentroCasa || jogador.morto) return null;
+  const c = jogador.carro;
+  if (c?.jujuba && Math.hypot(COMPRADOR.porta.x - jogador.pos.x, COMPRADOR.porta.z - jogador.pos.z) < 20 && Math.abs(c.vel) < 2) {
+    if (!compradorMontado.aberto) return ['o armazém está fechado (tem oficial por perto)', 'Fechado', () => aviso('O Seu Tonho fechou o armazém: tem oficial por perto.', 3)];
+    return [`vender a carga ao comprador (${((c.cargaJuj || 0) * 9).toLocaleString('pt-BR')} moedas)`, 'Vender', () => venderJujuba()];
+  }
+  if (c || !perto(COMPRADOR.porta, 3.5)) return null;
+  if (!compradorMontado.aberto) return ['o armazém está fechado', 'Fechado', () => aviso('O Seu Tonho fechou o armazém: tem oficial por perto.', 3)];
+  if (!jogador.cla) return ['"Só faço negócio com gente de clã."', 'Armazém', () => aviso('"Só faço negócio com gente de clã."', 3)];
+  return ['comprar jujubas do comprador (500 cada)', 'Comprar', () => racoes.abrir('comprador')];
+}
+async function venderJujuba() {
+  const c = jogador.carro; if (!c?.jujuba || ocupado) return; ocupado = true;
+  try {
+    const valor = await rede.jujuba.vender(c.jujuba, jogador.pos.x, jogador.pos.z);
+    sairCarroLocal(); if (c.mesh) scene.remove(c.mesh); viagensJuj.delete(c.jujuba);
+    aviso(`💰 O Seu Tonho comprou a carga: +${valor.toLocaleString('pt-BR')} moedas.`, 4);
+  } catch (e) { aviso(e.message, 3); }
+  finally { ocupado = false; }
+}
+// pegar de novo o caminhão de rações largado (mesmo clã)
+function jujubaLargadaPerto() {
+  if (jogador.carro || !jogador.cla || jogador.dentroCasa || jogador.morto) return null;
+  for (const v of viagensJuj.values()) if (v.mesh && v.d.status === 'sequestrada' && v.d.largado && v.d.cla === jogador.cla && !veiculoEmChamas('juj:' + v.d.id) && Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z) < 4.5) return v;
+  return null;
 }
 // ================================================================= passageiros NPC (pontos e rodoviária)
 // Gente esperando no ponto (mais gente quanto mais tempo sem ônibus), que sobe quando o ônibus da linha para,

@@ -145,6 +145,24 @@ function traduzirRpc(m) {
     'esse veiculo nao esta em entrega': 'Esse veículo não está fazendo entrega.',
     'policial nao assalta': 'Policial em serviço não assalta.',
     'aguarde para assaltar': 'Espere uns minutos antes de assaltar outra pessoa.',
+    'so policia prf e bombeiros': 'Só Polícia, PRF e Bombeiros em serviço usam esse armazém.',
+    'aguarde para pegar jujubas': 'Você já pegou rações há pouco. Espere 5 minutos.',
+    'armazem vazio': 'O armazém está vazio: peça reposição ao Exército.',
+    'a racao ainda esta fazendo efeito': 'A ração ainda está fazendo efeito.',
+    'ja existe um pedido': 'Já existe um pedido de reposição em andamento.',
+    'armazem cheio': 'O armazém já está cheio.',
+    'empresa invalida': 'Escolha uma transportadora sua.',
+    'so transportadoras': 'Só transportadoras disputam a licitação.',
+    'precisa nivel 5': 'A transportadora precisa ser nível 5 ou mais.',
+    'lance invalido': 'Lance entre 10.000 e 5.000.000.',
+    'contrato em andamento': 'Já há um contrato em andamento. A próxima licitação abre quando ele acabar.',
+    'so o exercito': 'Só o Exército despacha as rações.',
+    'pedido ja atendido': 'Esse pedido já foi atendido.',
+    'longe do comprador': 'Leve o caminhão até o armazém do comprador em Vila Serra.',
+    'o comprador nao tem tudo isso': 'O comprador não tem essa quantidade.',
+    'loja fechada': 'A loja está fechada.',
+    'quantidade invalida': 'Quantidade inválida.',
+    'esse veiculo ja foi embora': 'Esse veículo já foi embora.',
     'policial nao sequestra': 'Policial em serviço não sequestra.',
     'aguarde para sequestrar': 'Espere um minuto antes de sequestrar outro veículo.',
     'onibus ja sequestrado': 'Esse ônibus já foi sequestrado.',
@@ -834,4 +852,32 @@ export const aviacao = {
   helis: () => sel(sb.from('helis_revisao').select('*')),
   vooHeli: (chave) => rpc('voo_heli', { p_chave: chave }),
   revisarHeli: (chave, mecanico) => rpc('revisar_heli', { p_chave: chave, p_mecanico: !!mecanico }),
+};
+
+// ---------------------------------------------------------------- jujubas (ração militar), licitação e comprador ilegal
+export const jujuba = {
+  estado: async () => {
+    const [armazens, pedidos, viagens, lic, cfg, mer] = await Promise.all([
+      sel(sb.from('jujuba_armazens').select('*')),
+      sel(sb.from('jujuba_pedidos').select('*').in('status', ['aberto', 'despachado']).order('id')),
+      sel(sb.from('jujuba_viagens').select('*').in('status', ['em_rota', 'sequestrada']).order('id')),
+      sel(sb.from('licitacoes').select('*').in('status', ['aberta', 'vigente']).order('id', { ascending: false }).limit(1)),
+      sel(sb.from('jujuba_config').select('*')),
+      sel(sb.from('jujuba_mercado').select('*')),
+    ]);
+    return { armazens, pedidos, viagens, licitacao: lic[0] || null, valor: cfg[0]?.valor_caminhao || 50000, mercado: mer[0]?.estoque || 0 };
+  },
+  lances: (lic) => sel(sb.from('licitacao_lances').select('empresa, valor, em').eq('licitacao', lic).order('valor')),
+  processar: () => rpc('processar_jujubas'),
+  pegar: () => rpc('pegar_jujubas'),
+  usar: () => rpc('usar_jujuba'),
+  pedir: () => rpc('pedir_jujubas'),
+  lance: (empresa, valor) => rpc('dar_lance', { p_empresa: empresa, p_valor: valor }),
+  valor: (v) => rpc('valor_caminhao_jujuba', { p_valor: v }),
+  despachar: (pedido, modo, segundos) => rpc('despachar_jujubas', { p_pedido: pedido, p_modo: modo, p_segundos: segundos }),
+  sequestrar: (id, x, z, ang) => rpc('sequestrar_jujubas', { p_viagem: id, p_x: x, p_z: z, p_ang: ang }),
+  mover: (id, x, z, ang, largado) => rpc('mover_jujubas', { p_viagem: id, p_x: x, p_z: z, p_ang: ang, p_largado: largado }),
+  pegarSeq: (id) => rpc('pegar_jujubas_seq', { p_viagem: id }),
+  vender: (id, x, z) => rpc('vender_jujubas', { p_viagem: id, p_x: x, p_z: z }),
+  comprar: (q) => rpc('comprar_jujubas', { p_qtd: q }),
 };

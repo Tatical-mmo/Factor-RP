@@ -4,7 +4,7 @@ import { PERSONAGENS, PERSONAGENS_GRATIS, PERSONAGENS_EVENTO, PRECO_PERSONAGEM, 
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const ICONES = { sucata: '⚙️', chocolate: '🍫', cereal: '🥣', remedio: '💊', desbloqueio: '🔓', parafuso: '🔩' };
+const ICONES = { jujuba: '🍬', sucata: '⚙️', chocolate: '🍫', cereal: '🥣', remedio: '💊', desbloqueio: '🔓', parafuso: '🔩' };
 
 let ctx = null;
 let precos = [];
@@ -195,12 +195,13 @@ function desenhar() {
       <div class="lista">${itens.length ? itens.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${inv[p.item]} na mochila</small></span>
-          <span class="bts">${p.fome ? `<button data-comer="${p.item}">Comer</button>` : ''}${p.item === 'remedio' ? '<button data-curar="1">Usar (+50 vida)</button>' : ''}</span></div>`).join('') : '<span class="vazio">Mochila vazia. Colete sucata no ferro-velho ou compre na loja.</span>'}</div>`;
+          <span class="bts">${p.fome ? `<button data-comer="${p.item}">Comer</button>` : ''}${p.item === 'remedio' ? '<button data-curar="1">Usar (+50 vida)</button>' : ''}${p.item === 'jujuba' ? '<button data-jujuba="1">Usar ração (5 min)</button>' : ''}</span></div>`).join('') : '<span class="vazio">Mochila vazia. Colete sucata no ferro-velho ou compre na loja.</span>'}</div>`;
     $('mVisual').onclick = () => abrir('visual');
     $('mMercado').onclick = () => abrir('mercado');
     c.querySelectorAll('[data-curar]').forEach((b) => {
       b.onclick = () => executar(async () => { if (!(await ctx.curar())) throw new Error('Sua vida já está cheia.'); }, 'Remédio usado: +50 de vida.');
     });
+    c.querySelectorAll('[data-jujuba]').forEach((b) => { b.onclick = () => executar(() => ctx.usarJujuba(), 'Ração militar ativa por 5 minutos.'); });
     c.querySelectorAll('[data-comer]').forEach((b) => {
       b.onclick = () => executar(async () => { const f = await rede.economia.consumir(b.dataset.comer); ctx.definirFome(Number(f)); return f; }, (f) => `Fome agora: ${Math.round(f)}%.`);
     });
