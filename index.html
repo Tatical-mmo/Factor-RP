@@ -189,6 +189,7 @@
   body.dirigindo.tanque #btTiro { display:block; }
   body.averiguando #toque, body.averiguando #btFalar { display:none !important; }
   #btAlgema { font-size:12px; line-height:1.1; background:rgba(120,90,20,.8); }
+  #btCrime { font-size:12px; line-height:1.1; background:rgba(150,30,20,.88); }
   #btFalar { pointer-events:auto; position:fixed; left:12px; bottom:200px; z-index:30; width:58px; height:58px; border-radius:50%; border:2px solid rgba(255,255,255,.6); background:rgba(20,30,45,.75); color:#fff; font-size:26px; touch-action:none; user-select:none; -webkit-user-select:none; }
   #btFalar.falando { background:rgba(200,40,40,.85); border-color:#fff; transform:scale(1.08); }
   #btFalar.oculto { display:none; }
@@ -253,34 +254,47 @@
 <meta name="apple-mobile-web-app-title" content="Fator RP">
 <link rel="apple-touch-icon" href="assets/icones/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="assets/icones/icone-192.png">
+<script>
+// se algo quebrar ao abrir, mostra o erro na tela (assim dá para mandar um print e saber o que foi)
+(function () {
+  const mostrar = (msg) => {
+    let d = document.getElementById('erroTela');
+    if (!d) { d = document.createElement('div'); d.id = 'erroTela'; d.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;background:rgba(150,20,20,.95);color:#fff;font:12px/1.35 monospace;padding:8px 10px;border-radius:8px;white-space:pre-wrap;max-height:40vh;overflow:auto'; d.onclick = () => d.remove(); (document.body || document.documentElement).appendChild(d); }
+    if (d.childElementCount < 4) { const p = document.createElement('div'); p.textContent = '⚠️ ' + msg; d.appendChild(p); }
+  };
+  window.addEventListener('error', (e) => mostrar((e.message || 'erro') + (e.filename ? ' · ' + e.filename.split('/').pop().split('?')[0] + ':' + e.lineno : '') + (e.target && e.target.src && !e.message ? ' · não carregou ' + e.target.src.split('/').pop() : '')), true);
+  const t0 = Date.now();
+  window.addEventListener('unhandledrejection', (e) => Date.now() - t0 < 25000 && mostrar(String(e.reason && (e.reason.stack || e.reason.message) || e.reason).slice(0, 300)));
+})();
+</script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261113z",
-  "./js/mundo.js": "./js/mundo.js?v=20261113z",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261113z",
-  "./js/cla.js": "./js/cla.js?v=20261113z",
-  "./js/config.js": "./js/config.js?v=20261113z",
-  "./js/empresa.js": "./js/empresa.js?v=20261113z",
-  "./js/loja.js": "./js/loja.js?v=20261113z",
-  "./js/painel.js": "./js/painel.js?v=20261113z",
-  "./js/rede.js": "./js/rede.js?v=20261113z",
-  "./js/sedes.js": "./js/sedes.js?v=20261113z",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261113z",
-  "./js/civico.js": "./js/civico.js?v=20261113z",
-  "./js/governo.js": "./js/governo.js?v=20261113z",
-  "./js/servicos.js": "./js/servicos.js?v=20261113z",
-  "./js/sons.js": "./js/sons.js?v=20261113z",
-  "./js/voz.js": "./js/voz.js?v=20261113z",
-  "./js/clima.js": "./js/clima.js?v=20261113z",
-  "./js/ceu.js": "./js/ceu.js?v=20261113z",
-  "./js/semaforos.js": "./js/semaforos.js?v=20261113z",
-  "./js/cabine.js": "./js/cabine.js?v=20261113z",
-  "./js/eixos.js": "./js/eixos.js?v=20261113z",
-  "./js/jornal.js": "./js/jornal.js?v=20261113z",
-  "./js/visual.js": "./js/visual.js?v=20261113z"
+  "./js/main.js": "./js/main.js?v=20261113za",
+  "./js/mundo.js": "./js/mundo.js?v=20261113za",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261113za",
+  "./js/cla.js": "./js/cla.js?v=20261113za",
+  "./js/config.js": "./js/config.js?v=20261113za",
+  "./js/empresa.js": "./js/empresa.js?v=20261113za",
+  "./js/loja.js": "./js/loja.js?v=20261113za",
+  "./js/painel.js": "./js/painel.js?v=20261113za",
+  "./js/rede.js": "./js/rede.js?v=20261113za",
+  "./js/sedes.js": "./js/sedes.js?v=20261113za",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261113za",
+  "./js/civico.js": "./js/civico.js?v=20261113za",
+  "./js/governo.js": "./js/governo.js?v=20261113za",
+  "./js/servicos.js": "./js/servicos.js?v=20261113za",
+  "./js/sons.js": "./js/sons.js?v=20261113za",
+  "./js/voz.js": "./js/voz.js?v=20261113za",
+  "./js/clima.js": "./js/clima.js?v=20261113za",
+  "./js/ceu.js": "./js/ceu.js?v=20261113za",
+  "./js/semaforos.js": "./js/semaforos.js?v=20261113za",
+  "./js/cabine.js": "./js/cabine.js?v=20261113za",
+  "./js/eixos.js": "./js/eixos.js?v=20261113za",
+  "./js/jornal.js": "./js/jornal.js?v=20261113za",
+  "./js/visual.js": "./js/visual.js?v=20261113za"
 } }
 </script>
 </head>
@@ -421,6 +435,7 @@
     <button class="bt" id="btArma">Arma</button>
     <button class="bt" id="btTiro">Atirar</button>
     <button class="bt oculto" id="btAlgema">🔗 Algemar</button>
+    <button class="bt oculto" id="btCrime">🔥 Incendiar</button>
   </div>
   <div id="girar"><button class="bt" id="btGiraE">⟲</button><button class="bt" id="btGiraD">⟳</button></div>
   <div id="volante">
@@ -431,7 +446,7 @@
 </div>
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 13/11 · fogo em veículo</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 13/11 · sequestro de ônibus</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

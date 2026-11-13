@@ -85,6 +85,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'lixo' }, ({ payload }) => eventos.lixo?.(payload));
   canal.on('broadcast', { event: 'bueiro' }, ({ payload }) => eventos.bueiro?.(payload));
   canal.on('broadcast', { event: 'carroRua' }, ({ payload }) => eventos.carroRua?.(payload));
+  canal.on('broadcast', { event: 'onibusSeq' }, ({ payload }) => eventos.onibusSeq?.(payload));
   canal.on('broadcast', { event: 'reset' }, ({ payload }) => eventos.reset?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
@@ -140,6 +141,13 @@ function traduzirRpc(m) {
     'outro agente ja prendeu': 'Outro agente já prendeu esse ladrão.',
     'so patente maior prende': 'Só uma patente maior pode mandar para a prisão militar.',
     'so membros de cla': 'Só membros de clã fazem isso.',
+    'policial nao sequestra': 'Policial em serviço não sequestra.',
+    'aguarde para sequestrar': 'Espere um minuto antes de sequestrar outro ônibus.',
+    'onibus ja sequestrado': 'Esse ônibus já foi sequestrado.',
+    'voce ja esta com um onibus': 'Você já está com um ônibus sequestrado.',
+    'esse onibus ja foi embora': 'Esse ônibus já foi embora.',
+    'so o cla que sequestrou': 'Só o clã que sequestrou pega esse ônibus.',
+    'esse onibus nao esta com voce': 'Esse ônibus não está com você.',
     'aguarde para incendiar': 'Espere um pouco antes de pôr fogo em outro veículo.',
     'ja esta pegando fogo': 'Esse veículo já está pegando fogo.',
     'fogo grande so bombeiros': 'O fogo já cresceu: agora só os bombeiros apagam.',
@@ -360,6 +368,12 @@ function traduzirRpc(m) {
   return t[m] || m;
 }
 export const roubarCarroRua = () => rpc('roubar_carro_rua');
+export const onibusSeq = {
+  ativos: () => rpc('onibus_sequestrados_ativos'),
+  sequestrar: (linha, saida, modelo, cor, x, z, ang) => rpc('sequestrar_onibus', { p_linha: linha, p_saida: saida, p_modelo: modelo, p_cor: cor, p_x: x, p_z: z, p_ang: ang }),
+  mover: (id, x, z, ang, largado) => rpc('mover_onibus_sequestrado', { p_id: id, p_x: x, p_z: z, p_ang: ang, p_largado: largado }),
+  pegar: (id) => rpc('pegar_onibus_sequestrado', { p_id: id }),
+};
 export const incendiarVeiculo = (ref, x, z, nome, porte) => rpc('incendiar_veiculo', { p_ref: ref, p_x: x, p_z: z, p_nome: nome, p_porte: porte });
 export const cativeiro = {
   capturar: (alvo, local) => rpc('capturar_refem', { p_alvo: alvo, p_local: local }),

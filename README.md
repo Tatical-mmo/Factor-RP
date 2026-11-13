@@ -1052,3 +1052,15 @@ Sem SQL e sem arquivo novo. Mudam `js/main.js`, `js/civico.js`, `js/servicos.js`
   - Depois disso, só os bombeiros. Os caminhões NPC saem em 10 s: 1 para carro e van, 2 para ônibus e caminhão. Eles apagam de 40 s até 150 s. O bombeiro jogador que ajuda ganha +400.
 - Carro em chamas ou queimado não pode ser arrombado.
 - As próximas etapas (sequestro de ônibus, caminhão e van; saque; viatura abandonada; assalto a NPC; NPCs nos pontos) usam este mesmo fogo.
+
+## Versão 13/11 · sequestro de ônibus (20261113za) · etapa 2 dos crimes de clã (parte 1)
+**SQL novo: `supabase/68_sequestro_onibus.sql`** (o 67 já precisa ter rodado). Mudam `js/main.js`, `js/rede.js`, `js/sons.js` e `index.html`. Também vão os sons que não tinham chegado ao repositório: `assets/sons/esportivo_*` (esportivo antigo, V6 novo), `assets/sons/presidencial_*` e `assets/sons/onibus_alto`/`onibus_lenta` (sem o chiado de freio parado).
+- **Botão extra de crime** (vermelho, ao lado do botão de ação; no PC, a tecla C): **🔥 Incendiar** e **🔫 Sequestrar** aparecem nele, e o botão de ação continua com Arrombar, Entrar e Dirigir.
+- **Sequestrar ônibus**: o membro de clã armado fica na frente do ônibus, a até 9 m, olhando para ele.
+  - O motorista NPC desce e foge correndo. Os passageiros descem um a um, a cada 0,75 s, e fogem também.
+  - Depois disso quem sequestrou assume a direção. A saída some da linha para todos, e quem estava de passageiro desce.
+  - Conta como crime, com no máximo 1 sequestro por minuto.
+- **Ônibus largado**: quem largou pode tocar em Incendiar (o fogo é de porte grande, então saem 2 caminhões de bombeiro). Alguém do mesmo clã pode tocar em Dirigir para pegar de novo.
+- Parado 7 minutos sem ninguém mexer, o ônibus some e a saída volta para a linha.
+- **Ônibus longe**: viraram um marcador vazio, que só monta o modelo quando chega perto. Isso deixa a abertura do jogo mais leve.
+- **Erro na tela**: se algo quebrar ao abrir, o erro aparece numa caixa vermelha embaixo. Toque nela para fechar. Mande um print dela se acontecer.

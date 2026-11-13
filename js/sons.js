@@ -9,7 +9,7 @@ const ARQUIVOS = ['sirene_bombeiros', 'sirene_ambulancia', 'sirene_policia', 'he
   'carro_partida', 'passaros'];
 const SOB_DEMANDA = ['cidade_ambiente', 'chuva', 'tempestade', 'nevasca', 'aviao_fora', 'aviao_dentro', 'aviao_pequeno', 'aviao_medio', 'onibus_grande', 'onibus_pequeno',
   // motores novos (laços de marcha lenta e de rotação alta), baixados quando tocam pela primeira vez
-  ...['classico', 'popular', 'esportivo', 'suv', 'jipe', 'van', 'caminhao', 'onibus', 'aviaoG', 'aviaoM', 'aviaoP'].flatMap((p) => [`${p}_lenta`, `${p}_alto`])];
+  ...['classico', 'popular', 'esportivo', 'presidencial', 'suv', 'jipe', 'van', 'caminhao', 'onibus', 'aviaoG', 'aviaoM', 'aviaoP'].flatMap((p) => [`${p}_lenta`, `${p}_alto`])];
 const CONTINUOS = ['sirene_bombeiros', 'sirene_ambulancia', 'sirene_policia', 'helicoptero_baixo', 'helicoptero_alto', 'trem_andando',
   'passaros', ...SOB_DEMANDA];
 let ac = null, mestre = null, ligado = true;
