@@ -36,14 +36,21 @@ export function iniciar(contexto) {
 export const listaIncendios = () => incendios;
 // vida que sobra: os caminhões NPC vão apagando com o tempo (mesma conta do servidor, vida_incendio)
 // queda de aeronave: baixa de 45 s até 150 s · casa/empresa: de 80 s até 180 s
+// veículo: baixa de 40 s até 150 s
+const desdeFogo = (f) => (ctx.agora() - Date.parse(f.inicio)) / 1000;
 export function vidaFogo(f) {
-  const queda = f.tipo === 'queda', desde = (ctx.agora() - Date.parse(f.inicio)) / 1000, max = f.vida_max || 10;
-  const k = Math.min(1, Math.max(0, (desde - (queda ? 45 : 80)) / (queda ? 105 : 100)));
+  const desde = desdeFogo(f), max = f.vida_max || 10;
+  const [ini, dur] = f.tipo === 'queda' ? [45, 105] : f.tipo === 'veiculo' ? [40, 110] : [80, 100];
+  const k = Math.min(1, Math.max(0, (desde - ini) / dur));
   return Math.max(0, Math.min(f.vida, Math.ceil(max * (1 - k))));
 }
-// caminhões que saem para cada fogo: avião 3, helicóptero 2, casa/empresa 1 (avião sai antes)
-const caminhoesDoFogo = (f) => (f.tipo !== 'queda' ? 1 : /avi/i.test(f.nome) ? 3 : 2);
-const saidaDoFogo = (f) => (f.tipo === 'queda' ? 15 : 60);
+// fogo de veículo nos primeiros 20 s: ainda pequeno, qualquer um abafa
+export const fogoNoComeco = (f) => f.tipo === 'veiculo' && desdeFogo(f) < 20;
+// o quanto o fogo do veículo já cresceu (0 = chama pequena, 1 = veículo todo em chamas, ~90 s)
+export const crescimentoFogo = (f) => (f.tipo === 'veiculo' ? Math.min(1, 0.12 + desdeFogo(f) / 90) : 1);
+// caminhões que saem para cada fogo: avião 3, helicóptero 2, ônibus/caminhão 2, casa/empresa/carro 1 (avião e veículo saem antes)
+const caminhoesDoFogo = (f) => (f.tipo === 'veiculo' ? (f.porte >= 2 ? 2 : 1) : f.tipo !== 'queda' ? 1 : /avi/i.test(f.nome) ? 3 : 2);
+const saidaDoFogo = (f) => (f.tipo === 'queda' ? 15 : f.tipo === 'veiculo' ? 10 : 60);
 // caminhão da ronda que foi atender (some da ronda até voltar)
 export function rondasOcupadas() { const r = new Set(); for (const n of npcs.values()) if (n.ronda !== undefined) r.add(n.ronda); return r; }
 export const guerrasAtivas = () => guerras;
@@ -77,7 +84,8 @@ function criarFoco(f) {
   brilho.position.y = 0.06; g.add(brilho);
   const queimado = new THREE.Mesh(new THREE.CircleGeometry(3.2, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#1a1410', transparent: true, opacity: 0.6, depthWrite: false }));
   queimado.position.y = 0.04; g.add(queimado);
-  const placa = ctx.textoSprite(`🔥 FOGO · ${f.nome}`, { escala: 0.8, fundo: 'rgba(190,60,10,.92)' }); placa.position.y = 8; g.add(placa);
+  const placa = ctx.textoSprite(`🔥 FOGO · ${f.nome}`, { escala: 0.8, fundo: 'rgba(190,60,10,.92)' }); placa.position.y = f.tipo === 'veiculo' ? 5.5 : 8; g.add(placa);
+  if (f.tipo === 'veiculo') { const k = f.porte >= 2 ? 0.75 : 0.45; brilho.scale.setScalar(k); queimado.scale.setScalar(k * 1.3); }
   g.position.set(f.x, ctx.altura(f.x, f.z), f.z);
   ctx.scene.add(g);
   return { g, chamas, fumacas, brilho };
@@ -96,7 +104,9 @@ function atualizarFocos(dt) {
     ativos.add(f.id);
     let o = focos.get(f.id);
     if (!o) { o = criarFoco(f); focos.set(f.id, o); }
-    const forca = 0.3 + 0.7 * vidaFogo(f) / 10, raio = 2.4 * forca;
+    const cresce = crescimentoFogo(f), forca = f.tipo === 'veiculo' ? Math.max(0.12, cresce * Math.min(1, vidaFogo(f) / (f.vida_max || 12) + 0.15)) * (f.porte >= 2 ? 1.15 : 0.85) : 0.3 + 0.7 * vidaFogo(f) / 10;
+    const raio = (f.tipo === 'veiculo' ? (f.porte >= 2 ? 3.2 : 1.6) : 2.4) * forca;
+    for (let k = 0; k < o.chamas.length; k++) o.chamas[k].visible = f.tipo !== 'veiculo' || k < 6 + cresce * (o.chamas.length - 6);
     for (const c of o.chamas) {
       const u = c.userData; u.vida += dt / u.dur;
       if (u.vida >= 1) { u.vida = 0; const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * raio; u.x0 = Math.cos(a) * r; u.z0 = Math.sin(a) * r; u.sobe = (3 + Math.random() * 3) * forca; }
@@ -139,6 +149,7 @@ export function fogoProximo(raio = ctx?.alcanceJato?.() ? ctx.alcanceJato() - 1 
   return melhor;
 }
 export const estaApagando = () => !!apagando;
+export const recarregarFogo = () => carregarFogo();
 
 // segura o jato: 1 por segundo enquanto estiver perto, até apagar
 export function apagar(f) {
@@ -161,9 +172,9 @@ async function passoApagar(dt) {
     f.vida = v;
     if (v <= 0) {
       apagando = null; incendios = incendios.filter((x) => x.id !== f.id);
-      ctx.aviso(ctx.perfil()?.profissao === 'bombeiro' ? '🚒 Fogo apagado! +400 moedas' : '🚒 Fogo apagado!', 4);
+      ctx.aviso(ctx.perfil()?.profissao === 'bombeiro' ? '🚒 Fogo apagado! +400 moedas' : f.tipo === 'veiculo' ? '🧯 Você abafou o fogo a tempo!' : '🚒 Fogo apagado!', 4);
       if (ctx.rastreio()?.nome?.startsWith('🔥')) ctx.rastrear(null);
-    } else ctx.aviso(`Apagando… ${v} jatos restantes`, 1.2);
+    } else ctx.aviso(f.tipo === 'veiculo' && ctx.perfil()?.profissao !== 'bombeiro' ? `Abafando… falta pouco (${v})` : `Apagando… ${v} jatos restantes`, 1.2);
   } catch (e) { apagando = null; ctx.aviso(e.message); }
 }
 

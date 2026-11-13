@@ -1042,3 +1042,13 @@ Sem SQL e sem arquivo novo. Mudam `js/main.js`, `js/civico.js`, `js/servicos.js`
   - Os veículos do sistema (ônibus, viaturas, bombeiros, lixo, ambulâncias e caminhões chamados) também saem devagar depois de cada parada ou espera. O tempo perdido arrancando vira atraso, como no trânsito, e o horário é recuperado depois. Todos os aparelhos continuam vendo igual.
   - Na fila e na plataforma da rodoviária o ônibus arranca devagar, anda no máximo 5 m/s e freia chegando na vaga.
 - **Saída da rodoviária**: o ônibus da plataforma só espera quem está andando na rua, e não mais quem está entrando na plataforma atrás dele. Isso travava os dois por mais de um minuto. Quem já pôs o bico na rua termina de sair.
+
+## Versão 13/11 · fogo em veículo (20261113z) · etapa 1 dos crimes de clã
+**SQL novo: `supabase/67_incendio_veiculo.sql`** (rode antes de subir o jogo). Mudam `js/main.js`, `js/servicos.js`, `js/rede.js` e `index.html`.
+- **Incendiar**: quem é de clã, logo depois de largar um veículo (por enquanto o carro roubado da rua), tem 90 s para tocar em **Incendiar** perto dele. Conta como crime (fica procurado). Dá para incendiar no máximo 1 veículo a cada 45 s.
+- **O fogo cresce**: começa com uma chama pequena, vai aumentando, e o veículo escurece até virar uma carcaça preta, em uns 90 s.
+- **Apagar**:
+  - Nos primeiros 20 s, qualquer jogador perto toca em **Abafar** (umas 3 abafadas).
+  - Depois disso, só os bombeiros. Os caminhões NPC saem em 10 s: 1 para carro e van, 2 para ônibus e caminhão. Eles apagam de 40 s até 150 s. O bombeiro jogador que ajuda ganha +400.
+- Carro em chamas ou queimado não pode ser arrombado.
+- As próximas etapas (sequestro de ônibus, caminhão e van; saque; viatura abandonada; assalto a NPC; NPCs nos pontos) usam este mesmo fogo.

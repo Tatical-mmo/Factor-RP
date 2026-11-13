@@ -140,6 +140,11 @@ function traduzirRpc(m) {
     'outro agente ja prendeu': 'Outro agente já prendeu esse ladrão.',
     'so patente maior prende': 'Só uma patente maior pode mandar para a prisão militar.',
     'so membros de cla': 'Só membros de clã fazem isso.',
+    'aguarde para incendiar': 'Espere um pouco antes de pôr fogo em outro veículo.',
+    'ja esta pegando fogo': 'Esse veículo já está pegando fogo.',
+    'fogo grande so bombeiros': 'O fogo já cresceu: agora só os bombeiros apagam.',
+    'policial nao incendeia': 'Policial em serviço não põe fogo em veículo.',
+    'veiculo invalido': 'Veículo inválido.',
     'esconderijo invalido': 'Esconderijo inválido.',
     'ele e do seu cla': 'Ele é do seu clã.',
     'ele ja esta preso': 'Ele já está preso.',
@@ -355,6 +360,7 @@ function traduzirRpc(m) {
   return t[m] || m;
 }
 export const roubarCarroRua = () => rpc('roubar_carro_rua');
+export const incendiarVeiculo = (ref, x, z, nome, porte) => rpc('incendiar_veiculo', { p_ref: ref, p_x: x, p_z: z, p_nome: nome, p_porte: porte });
 export const cativeiro = {
   capturar: (alvo, local) => rpc('capturar_refem', { p_alvo: alvo, p_local: local }),
   libertar: (alvo) => rpc('libertar_refem', { p_alvo: alvo }),

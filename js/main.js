@@ -1032,7 +1032,11 @@ function acaoContexto() {
   if (pertoContratante()) { abrirMissoes(); return; }
   if (jogador.perfil.prf) { const alvo = eleitoralProximo(2.4); if (alvo) { prenderEleitoral(alvo); return; } }
   if (jogador.perfil.profissao === 'medico') { const fer = feridoProximo(2.8); if (fer) { socorrerFerido(fer); return; } }
-  const fogo = servicos.fogoProximo(9); if (fogo && !jogador.carregando) { servicos.apagar(fogo); return; }
+  const fogo = servicos.fogoProximo(9);
+  if (fogo && !jogador.carregando) {
+    if (fogo.tipo === 'veiculo' && jogador.perfil.profissao !== 'bombeiro' && !servicos.fogoNoComeco(fogo)) { aviso('🔥 O fogo já cresceu: só os bombeiros conseguem apagar.', 3); return; }
+    servicos.apagar(fogo); return;
+  }
   { const a = algemadoParaSoltar(); if (a) { soltarAlgemado(a); return; } }
   { const b = bandidoPerto(); if (b) { prenderBandido(b); return; } }
   { const r = refemPerto(); if (r) { libertarRefem(r); return; } }
@@ -1059,6 +1063,7 @@ function acaoContexto() {
   if (perto(civico.PREFEITURA.prf, 3.2)) { entrarPublico('prf', () => salaDelegacia('prf', 1000, 'Posto da PRF', '#2b4fa8'), civico.PREFEITURA.prf, '🚔 Posto da PRF: balcão, procurados e estande de tiro.'); return; }
   if (perto(civico.CONCESSIONARIA.balcao, 3.2)) { abrirConcessionaria(); return; }
   const carro = meuCarroProximo(); if (carro && !jogador.carregando) { entrarCarro(carro); return; }
+  { const vi = veiculoParaIncendiar(); if (vi && !jogador.carregando) { incendiarVeiculo(vi); return; } }
   { const cr = carroRuaProximo(); if (cr !== null && !jogador.carregando) { roubarCarroRua(cr); return; } }
   const alheio = carroAlheioProximo(); if (alheio && !jogador.carregando) { if (jogador.perfil.policial || jogador.perfil.prf) recuperarCarro(alheio); else arrombarCarro(alheio); return; }
   if (taxi?.modo === 'roubo' && taxi.fase === 'esperando' && Math.hypot(taxi.c.obj.position.x - jogador.pos.x, taxi.c.obj.position.z - jogador.pos.z) < 8) { embarcarTaxi(); return; }
@@ -5831,7 +5836,12 @@ function contexto() {
   if (jogador.perfil?.prf && eleitoralProximo(2.4)) return ['prender por crime eleitoral (PRF)', 'Prender'];
   if (jogador.perfil?.profissao === 'medico' && feridoProximo(2.8)) return ['socorrer o ferido (+250)', 'Socorrer'];
   if (servicos.estaApagando()) return ['jogando água no fogo (toque para parar)', 'Parar'];
-  if (servicos.fogoProximo(9) && !jogador.carregando) return [jogador.perfil?.profissao === 'bombeiro' ? 'apagar o incêndio (+400)' : 'apagar o fogo (só o dono ou bombeiros)', 'Apagar'];
+  { const f = servicos.fogoProximo(9);
+    if (f && !jogador.carregando) {
+      if (jogador.perfil?.profissao === 'bombeiro') return ['apagar o incêndio (+400)', 'Apagar'];
+      if (f.tipo === 'veiculo') return servicos.fogoNoComeco(f) ? ['abafar o fogo do veículo antes que cresça', 'Abafar'] : ['fogo grande: só os bombeiros apagam', 'Fogo'];
+      return ['apagar o fogo (só o dono ou bombeiros)', 'Apagar'];
+    } }
   if (perto(civico.BANCO.balcao, 3.2)) return ['banco: poupança e empréstimo', 'Banco'];
   if (perto(civico.BANCO.empregos, 3.2)) return ['agência de empregos: vagas nas empresas', 'Vagas'];
   if (perto(civico.HOSPITAL.balcao, 3.2)) return ['hospital: tratamento e plantão médico', 'Hospital'];
@@ -5849,6 +5859,7 @@ function contexto() {
   if (perto(civico.PREFEITURA.prf, 3.2)) return ['entrar no posto da PRF', 'PRF'];
   if (perto(civico.CONCESSIONARIA.balcao, 3.2)) return ['comprar carro', 'Carros'];
   if (meuCarroProximo() && !jogador.carregando) return [meuCarroProximo().d.ladrao ? 'dirigir o carro roubado' : 'dirigir o seu carro', 'Dirigir'];
+  if (veiculoParaIncendiar() && !jogador.carregando) return ['pôr fogo no veículo (crime de clã)', 'Incendiar'];
   { const cr = carroRuaProximo(); if (cr !== null && !jogador.carregando) return ['arrombar o carro estacionado (crime)', 'Arrombar']; }
   { const ca = carroAlheioProximo(); if (ca && !jogador.carregando) return jogador.perfil?.policial || jogador.perfil?.prf ? ['devolver o carro roubado ao dono (+300)', 'Recuperar'] : ['arrombar o carro e sair dirigindo (crime)', 'Arrombar']; }
   if (taxi?.modo === 'roubo' && taxi.fase === 'esperando' && Math.hypot(taxi.c.obj.position.x - jogador.pos.x, taxi.c.obj.position.z - jogador.pos.z) < 8) return ['RENDER MOTORISTA: ele leva a carga para o seu território ou casa', 'Render'];
@@ -5961,7 +5972,7 @@ function quadroJogo() {
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
-  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
+  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
   enviarEstado(dt);
@@ -7123,7 +7134,7 @@ let roubandoRua = false;
 function carroRuaProximo() {
   if (jogador.carro || jogador.trem || jogador.dentroCasa || jogador.passageiro) return null;
   let melhor = null, md = 3.2;
-  for (const [k, l] of largadosRua) { const d = Math.hypot(l.x - jogador.pos.x, l.z - jogador.pos.z); if (d < md) { md = d; melhor = k; } }
+  for (const [k, l] of largadosRua) { if (l.queima > 0 || veiculoEmChamas('rua:' + k)) continue; const d = Math.hypot(l.x - jogador.pos.x, l.z - jogador.pos.z); if (d < md) { md = d; melhor = k; } }
   if (melhor !== null) return melhor;
   return mundo.carroRuaPerto(jogador.pos.x, jogador.pos.z, 3.2);
 }
@@ -7158,6 +7169,7 @@ function largarCarroRua(c) {
   c.mesh.position.set(x, alturaChao(x, z), z); c.mesh.rotation.y = r;
   largadosRua.set(c.rua, { mesh: c.mesh, x, z, r, ate: agoraServidor() + 300000 });
   conexao?.enviar('carroRua', { k: c.rua, tipo: 'largado', x, z, r, ate: agoraServidor() + 300000 });
+  ultimoLargado = { ref: 'rua:' + c.rua, ate: agoraServidor() + 90000 };
   const lx = Math.cos(r) * 1.8, lz = -Math.sin(r) * 1.8;
   jogador.pos.x += lx; jogador.pos.z += lz; resolverColisao(jogador.pos, jogador.raio);
   jogador.avatar.raiz.visible = true;
@@ -7172,6 +7184,55 @@ function receberCarroRua(m) {
     const mesh = civico.modeloCarro(MODELO_RUA[c.tipo] || 'popular', c.cor); mesh.position.set(m.x, alturaChao(m.x, m.z), m.z); mesh.rotation.y = m.r; scene.add(mesh);
     largadosRua.set(m.k, { mesh, x: m.x, z: m.z, r: m.r, ate: m.ate || agoraServidor() + 300000 });
   }
+}
+// ================================================================= fogo em veículo (clãs)
+// Quem é de clã larga o veículo e, no primeiro minuto e meio, pode pôr fogo nele. O fogo começa pequeno e cresce
+// até queimar tudo (~90 s): no começo qualquer um abafa; depois só os bombeiros (1 ou 2 caminhões, pelo tamanho).
+let ultimoLargado = null, incendiando = false;
+const veiculoEmChamas = (ref) => servicos.listaIncendios().some((f) => f.ref === ref);
+// veículos que podem pegar fogo, pela referência ('rua:12' …): { mesh, x, z }
+function veiculoPorRef(ref) {
+  const [t, k] = ref.split(':');
+  if (t === 'rua') { const l = largadosRua.get(+k); return l ? { mesh: l.mesh, x: l.x, z: l.z, l } : null; }
+  return null;
+}
+function veiculoParaIncendiar() {
+  if (!jogador.cla || !ultimoLargado || agoraServidor() > ultimoLargado.ate || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.morto) return null;
+  if (jogador.perfil?.policial || jogador.perfil?.prf || veiculoEmChamas(ultimoLargado.ref)) return null;
+  const v = veiculoPorRef(ultimoLargado.ref); if (!v || v.l?.queima > 0) return null;
+  return Math.hypot(v.x - jogador.pos.x, v.z - jogador.pos.z) < 5 ? { ...v, ref: ultimoLargado.ref } : null;
+}
+async function incendiarVeiculo(v) {
+  if (incendiando) return; incendiando = true;
+  const modelo = v.mesh.userData.modelo, porte = /onibus|caminhao|bombeiros/.test(modelo || '') ? 2 : 1;
+  virarPara(v.x, v.z); jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 0.9, fade: 0.1 }); jogador.trava = 1.2;
+  try {
+    await rede.incendiarVeiculo(v.ref, v.x, v.z, civico.CARROS[modelo]?.nome || 'Veículo', porte);
+    ultimoLargado = null; servicos.recarregarFogo();
+    aviso('🔥 Fogo no veículo! Ele vai queimar aos poucos. Você está procurado.', 4);
+  } catch (e) { aviso(e.message, 3); }
+  finally { incendiando = false; }
+}
+// o veículo vai escurecendo enquanto queima (de 20 s até ~90 s, todo preto: carcaça)
+let tempoQueima = 0;
+function atualizarQueimados(dt) {
+  if ((tempoQueima -= dt) > 0) return; tempoQueima = 0.5;
+  const agora = agoraServidor();
+  for (const f of servicos.listaIncendios()) {
+    if (f.tipo !== 'veiculo' || !f.ref) continue;
+    const v = veiculoPorRef(f.ref); if (!v) continue;
+    const q = Math.min(1, Math.max(0, ((agora - Date.parse(f.inicio)) / 1000 - 20) / 70));
+    if (v.l) v.l.queima = Math.max(v.l.queima || 0, q);
+    pintarQueimado(v.mesh, v.l ? v.l.queima : q);
+  }
+}
+function pintarQueimado(mesh, q) {
+  if (!(q > 0)) return;
+  mesh.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    if (!o.userData.matQueima) { o.userData.matQueima = Array.isArray(o.material) ? o.material.map((m) => m.clone()) : o.material.clone(); o.material = o.userData.matQueima; for (const m of [].concat(o.material)) m.userData.cor0 = m.color?.clone(); }
+    for (const m of [].concat(o.material)) if (m.userData.cor0) { m.color.copy(m.userData.cor0).multiplyScalar(1 - 0.9 * q); if (m.map && q > 0.85) m.map = null, m.needsUpdate = true; }
+  });
 }
 let tempoCarrosRua = 0;
 function atualizarCarrosRua() {
