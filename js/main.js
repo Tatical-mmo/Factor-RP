@@ -10161,6 +10161,7 @@ function desenharAeroNoMapa(g, a) {
 const radioLinhas = [];
 function radio(quem, texto) {
   radioLinhas.push({ quem, texto, t: performance.now() }); while (radioLinhas.length > 4) radioLinhas.shift();
+  if (emVoo() && (quem === 'torre' || /arremet/i.test(texto))) vooFlash = performance.now() + 3500;   // a torre falou: a barra abre um instante
   sons.radio?.(); desenharRadio();
 }
 function desenharRadio() {
@@ -10172,6 +10173,7 @@ function desenharRadio() {
   }
   const agora = performance.now();
   for (let k = radioLinhas.length - 1; k >= 0; k--) if (agora - radioLinhas[k].t > 14000) radioLinhas.splice(k, 1);
+  if (emVoo()) { el.innerHTML = ''; desenharBarraVoo(); return; }   // no avião o rádio sai na barra do topo
   el.innerHTML = radioLinhas.map((l) => `<div style="background:rgba(14,22,34,.82);border-left:3px solid ${l.quem === 'torre' ? '#7dff8a' : '#ffd23e'};border-radius:7px;padding:4px 8px;opacity:${Math.min(1, (14000 - (agora - l.t)) / 2000)}">📻 ${esc(l.texto)}</div>`).join('');
 }
 // quem escuta: quem está na torre (rádio da Metrópole) e quem está num avião perto do aeroporto (pousando ou decolando)
@@ -10670,10 +10672,37 @@ function destinoVoo(origem, porte) {
   return (m || origem).id;
 }
 let guiaVoo = false, tempoGuia = 0;
+// barra de voo: fina, no topo, e dá para minimizar (a escolha fica salva no aparelho)
+let vooTxt = '', vooFlash = 0, vooMin = (() => { try { return localStorage.getItem('fr_voo_min') === '1'; } catch { return false; } })();
+function emVoo() { return !!(jogador.carro?.aviao || jogador.voo); }
 function painelVoo(txt) {
+  if (txt && /^🛫 Autorizado/.test(txt) && !/^🛫 Autorizado/.test(vooTxt)) vooFlash = performance.now() + 3500;   // autorização: abre um instante
+  vooTxt = txt || ''; desenharBarraVoo();
+}
+function desenharBarraVoo() {
   let el = $('instrucaoVoo');
-  if (!el) { el = document.createElement('div'); el.id = 'instrucaoVoo'; el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 22vh);max-width:min(88vw,460px);z-index:9;pointer-events:none;font:700 13px system-ui;color:#fff;background:rgba(14,22,34,.85);border:2px solid #ffd23e;border-radius:10px;padding:6px 10px;text-align:center'; document.body.appendChild(el); }
-  el.style.display = txt ? 'block' : 'none'; if (txt) el.textContent = txt;
+  if (!el) {
+    el = document.createElement('div'); el.id = 'instrucaoVoo';
+    el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);z-index:9;font:700 12px system-ui;color:#fff;background:rgba(14,22,34,.78);border:1.5px solid #ffd23e;border-radius:9px;padding:3px 8px;display:flex;align-items:flex-start;gap:6px;cursor:pointer;user-select:none;-webkit-user-select:none';
+    el.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); vooMin = !vooMin; vooFlash = 0; try { localStorage.setItem('fr_voo_min', vooMin ? '1' : '0'); } catch {} desenharBarraVoo(); });
+    document.body.appendChild(el);
+  }
+  const ultimo = radioLinhas[radioLinhas.length - 1], agora = performance.now();
+  const temRadio = ultimo && agora - ultimo.t < 14000;
+  if (!vooTxt && !(emVoo() && temRadio)) { el.style.display = 'none'; return; }
+  const retrato = innerHeight > innerWidth, aberto = !vooMin || agora < vooFlash;
+  el.style.display = 'flex';
+  el.style.top = retrato ? 'calc(env(safe-area-inset-top,0px) + 23vh)' : 'calc(env(safe-area-inset-top,0px) + 50px)';
+  el.style.maxWidth = aberto ? (retrato ? '94vw' : 'min(34vw,440px)') : (retrato ? '70vw' : 'min(26vw,300px)');
+  el.style.opacity = aberto ? '1' : '.85';
+  const curto = vooTxt.replace(/^🤖 Piloto automático · /, '🤖 ');
+  const linha = (t, extra = '') => `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis${extra}">${t}</div>`;
+  let corpo = '';
+  if (aberto) {
+    if (vooTxt) corpo += aberto && vooTxt.length > 70 ? `<div style="line-height:1.25">${esc(curto)}</div>` : linha(esc(curto));
+    if (emVoo() && temRadio) corpo += linha(`📻 ${esc(ultimo.texto)}`, `;font-weight:600;color:${ultimo.quem === 'torre' ? '#9dffa6' : '#ffe27a'};margin-top:1px`);
+  } else corpo = linha(esc(curto || `📻 ${ultimo.texto}`));
+  el.innerHTML = `<div style="min-width:0;flex:1">${corpo}</div><div style="opacity:.8;font-size:11px;padding-top:1px">${aberto ? '▴' : '▾'}</div>`;
 }
 function guiarPiloto(dt) {
   const c = jogador.carro;

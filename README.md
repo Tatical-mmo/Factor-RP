@@ -1182,3 +1182,11 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Armazém novo**: galpão de tijolo com telhado de zinco em duas águas, porta de enrolar de metal, toldo, lâmpada, janelas com grade, caixotes, palete e balcão. As árvores da frente foram tiradas, e o galpão agora tem colisão.
 - **Seu Tonho**: fica atrás do balcão, de frente para a rua, com o nome em cima. Ele some quando a loja fecha porque há Exército, Polícia ou PRF a menos de 45 m.
 - **Ônibus e veículo em chamas**: nenhum ônibus passa pelo fogo. Eles param antes ou desviam, e os que estão saindo da rodoviária também esperam.
+
+## Versão 13/11 · barra de voo (20261113zj)
+
+- No avião, as instruções de voo e o piloto automático ficam numa barra fina no topo da tela, e não mais no meio.
+- O rádio também aparece dentro dessa barra, só a última mensagem, sem empilhar na tela.
+- Tocar na barra minimiza ou abre. Minimizada, ela vira uma pílula pequena de uma linha. A escolha fica salva no aparelho.
+- Quando a torre fala, ou na autorização de decolagem e na arremetida, a barra abre por uns 3 segundos, mesmo minimizada.
+- Fora do avião o rádio e os avisos continuam como antes.
