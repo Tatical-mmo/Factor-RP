@@ -2343,7 +2343,7 @@ async function iniciarJogo(perfil) {
     climaAgora: () => clima.atual(), climaConfig: () => clima.config(),
     online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta.nome })),
     averiguar: (id, nome) => iniciarAveriguar(id, nome),
-    resetFeito: () => { conexao?.enviar('reset', {}); setTimeout(() => location.reload(), 2500); },
+    resetFeito: () => { conexao?.enviar('reset', { de: jogador.perfil.id }); setTimeout(() => location.reload(), 2500); },
     configMudou: () => { tempoConfig = 0; },
     posicaoDe: (id) => { const r = remotos.get(id); return r?.av?.raiz.visible ? r.av.raiz.position : (r?.alvo || null); },
     minhaPosicao: () => jogador.pos,
@@ -2415,7 +2415,7 @@ function conectarMultiplayer(perfil) {
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
     tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1),
     explosao: (e) => receberExplosao(e),
-    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: () => { aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },
+    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m),
     meta: () => metaPresenca(),
   });
@@ -4386,6 +4386,7 @@ function receberAtropelo(d) {
   if (jogador.perfil.imortal || jogador.pena > 0) return;
   const r = remotos.get(d.de), pl = r && (r.carro?.position || r.av?.raiz.position);
   if (!pl || Math.hypot(pl.x - jogador.pos.x, pl.z - jogador.pos.z) > 12) return;
+  if (!golpePlausivel(d.de)) return;
   if (jogador.carro) sairCarro();
   jogador.vida -= absorverEscudo(Math.max(0, Math.min(100, Number(d.v) || 0))); jogador.ultimoAgressor = d.de;
   desenharFome();
@@ -4398,11 +4399,20 @@ function checarTrem() {
   if (j.morto || j.trem || j.dentroCasa || j.passageiro || j.carro?.voa || !j.avatar || j.pena > 0 || j.perfil?.imortal) return;
   if (ferrovia.atropela(j.pos, j.carro ? 1.2 : 0.35)) { if (j.carro) acidenteVeiculo(j.carro, '🚆💥 O trem acertou o veículo!'); j.vida = 0; j.ultimoAgressor = null; desenharFome(); aviso('🚆 Você foi atropelado pelo trem!', 4); morrerLocal(); }
 }
+// cada atacante acerta no máximo 8 vezes por segundo (mais que isso é mensagem forjada no canal)
+const golpesRecebidos = new Map();
+function golpePlausivel(de) {
+  const t = performance.now(), g = golpesRecebidos.get(de) || { t, n: 0 };
+  if (t - g.t > 1000) { g.t = t; g.n = 0; }
+  g.n++; golpesRecebidos.set(de, g);
+  return g.n <= 8;
+}
 function receberDano(d) {
   if (d.alvo !== jogador.perfil?.id || jogador.morto || !jogador.avatar) return;
   if (jogador.perfil.imortal || jogador.pena > 0) return;
   const r = remotos.get(d.de);
   if (!r?.av || r.av.raiz.position.distanceTo(jogador.pos) > 30) return;     // golpe de longe demais: ignora
+  if (!golpePlausivel(d.de)) return;                                           // rápido demais para ser de verdade
   const v = Math.max(0, Math.min(80, Number(d.v) || 0)) * (1 - bonusTreino('luta'));   // treino de luta: defesa
   jogador.vida -= absorverEscudo(v); jogador.ultimoAgressor = d.de;
   desenharFome();

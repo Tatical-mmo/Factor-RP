@@ -1144,3 +1144,33 @@ Sem SQL e sem arquivo novo. Mudam `js/main.js`, `js/civico.js`, `js/servicos.js`
 ## Versão 13/11 · fogo nos carros das vagas (20261113zg)
 Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - A explosão também incendeia os **carros estacionados nas vagas da rua** a até 8 m, além dos carros dos jogadores e dos veículos largados. O carro sai da vaga e queima ali mesmo, e também pode explodir. Uns 6 min depois a vaga volta com um carro novo.
+
+## Versão 13/11 · anti-trapaça e auditoria (20261113zh)
+**SQL novos: `supabase/74a_antitrapaca.sql`, `74b_ligar_assinatura.sql`, `74c_auditoria.sql` e `74d_auditoria_leitura.sql`.** Mudam `js/rede.js`, `js/main.js`, `js/painel.js` e `index.html`.
+
+**Ordem (importante):**
+1. Suba este pacote e espere o jogo atualizar (abra e confira a versão 20261113zh).
+2. Rode o **74a** e depois o **74c**.
+3. Jogue um pouco e confira se está tudo normal.
+4. Rode o **74b**, que liga a exigência da assinatura.
+5. Rode o **74d**, que só lê e não muda nada, e mande o resultado.
+
+**Emergência:** se o jogo parar de responder depois do 74a, rode isto para desligar a vigia:
+`alter role authenticator reset pgrst.db_pre_request; notify pgrst, 'reload config';`
+
+- **Vigia** (74a): roda antes de todo pedido ao banco.
+  - Pedido sem a assinatura do jogo é recusado (depois do 74b).
+  - Mais de 30 pedidos por segundo conta 1 falta, e acima de 60 o pedido é recusado.
+  - Conta banida só consegue ler.
+- **Armadilhas**: funções com nomes tentadores que o jogo nunca chama (`admin_dar_moedas`, `admin_definir_cargo`, `liberar_vip`, `dar_item_gratis`, `zerar_pena`, `modo_imortal`). Quem chama é banido na hora.
+- **Ban automático**: 3 pontos de falta em 10 min. Admin nunca é banido automaticamente.
+  - No painel, em **Denúncias → 🚨 Anti-trapaça**, aparecem as faltas de cada jogador, com o botão **Perdoar e desbanir**.
+- **Assinatura**: o jogo manda o cabeçalho `x-fator` em todo pedido. Para trocar a assinatura, mude em `js/rede.js` (ASSINATURA) e na tabela `seguranca` (assinaturas) juntos.
+- **Auditoria** (74c):
+  - A função de log do painel (`registrar`) podia ser chamada por qualquer jogador; agora não pode mais.
+  - Funções internas (dar item, avisar, devolver veículo…) foram fechadas de vez.
+  - 17 funções do jogo deixaram de aceitar chamada de quem não fez login.
+  - Na venda da carga de rações, o servidor confere se deu tempo de levar o caminhão até o comprador. Quem teleporta leva falta.
+- **No jogo**:
+  - Golpes e atropelos que chegam rápido demais do mesmo jogador (mais de 8 por segundo) são ignorados.
+  - O aviso de "mapa resetado" só recarrega a página se veio de um admin on-line.
