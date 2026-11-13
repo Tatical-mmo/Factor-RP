@@ -25,6 +25,7 @@ import * as voz from './voz.js';
 import * as clima from './clima.js';
 import * as ceu from './ceu.js';
 import * as semaforos from './semaforos.js';
+import * as eixos from './eixos.js';
 import { pecasCabine } from './cabine.js';
 import * as jornal from './jornal.js';
 import * as visual from './visual.js';
@@ -3471,23 +3472,33 @@ function corposNaRua() {
 }
 // veículo do sistema que segue um horário: se tem alguém parado na frente, ele espera (o atraso cresce) e depois
 // recupera devagar. Se ficar travado muito tempo (cruzamento), passa uma vez sem esperar, para não travar tudo.
-function frearAtras(st, o, dt, dist = 9, x = o.position.x, z = o.position.z, ang = o.rotation.y, paciencia = 25) {
+function frearAtras(st, o, dt, dist = 9, x = o.position.x, z = o.position.z, ang = o.rotation.y, paciencia = 40) {
   st.fantasma = Math.max(0, (st.fantasma || 0) - dt);
-  // longe de quem joga ninguém vê: não para em nada e recupera o horário depressa
-  const f = foco(); if (Math.abs(x - f.x) + Math.abs(z - f.z) > 260) { st.bloq = 0; st.atraso = Math.max(0, (st.atraso || 0) - dt * 3); return st.atraso; }
   // sinal vermelho à frente: espera na faixa (não conta para a "paciência" de travamento)
-  if (!st.sirene && semaforos.sinalAFrente(x, z, ang, Math.min(dist, 10))) { st.atraso = Math.min(120, (st.atraso || 0) + dt); return st.atraso; }
-  const bloq = st.fantasma <= 0 && obstaculoAFrente(x, z, ang, st.ignorar || o, dist);
-  if (bloq) { st.atraso = Math.min(120, (st.atraso || 0) + dt); st.bloq = (st.bloq || 0) + dt; if (st.bloq > paciencia) { st.fantasma = 3; st.bloq = 0; } }
-  else { st.bloq = 0; st.atraso = Math.max(0, (st.atraso || 0) - dt * 0.35); }
+  // (medido do bico do veículo: um ônibus comprido não para com a frente já dentro do cruzamento)
+  const meio = Math.max(0, dist - 7), bx = x + Math.sin(ang) * meio, bz = z + Math.cos(ang) * meio;
+  if (!st.sirene && semaforos.sinalAFrente(bx, bz, ang, meio > 0 ? 5 : Math.min(dist, 10))) { st.atraso = Math.min(120, (st.atraso || 0) + dt); return st.atraso; }
+  // longe de quem joga a checagem é mais espaçada (meio segundo), mas continua: ninguém "entra" no outro fora da vista
+  const f = foco(), longe = Math.abs(x - f.x) + Math.abs(z - f.z) > 260;
+  let bloq;
+  if (longe && (st.prox = (st.prox || 0) - dt) > 0) bloq = st.ultimo;
+  else { st.prox = 0.5; bloq = st.ultimo = st.fantasma <= 0 && obstaculoAFrente(x, z, ang, st.ignorar || o, dist, o); }
+  if (bloq) { st.atraso = Math.min(120, (st.atraso || 0) + dt); st.bloq = (st.bloq || 0) + dt; if (st.bloq > paciencia) { st.fantasma = 2; st.bloq = 0; } }
+  else { st.bloq = 0; st.atraso = Math.max(0, (st.atraso || 0) - dt * (longe ? 1 : 0.35)); }
   return st.atraso;
 }
-function obstaculoAFrente(x, z, ang, ignorar, dist = 7.5) {
+// quem tem a vez quando dois estão um dentro do outro: regra fixa (o id), igual para todos os aparelhos
+const temAVez = (eu, outro) => !outro || (eu?.uuid || '') < (outro.uuid || '');
+function obstaculoAFrente(x, z, ang, ignorar, dist = 7.5, eu = null) {
   const fx = Math.sin(ang), fz = Math.cos(ang);
   for (const o of corposNaRua()) {
     if (ignorar && (o.o === ignorar || ignorar.has?.(o.o))) continue;
-    const dx = o.x - x, dz = o.z - z, f = dx * fx + dz * fz;
-    if (f > 0.5 && f < dist && Math.abs(dx * fz - dz * fx) < 1.5 + o.r) return true;
+    const dx = o.x - x, dz = o.z - z, f = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx);
+    if (f > 0.5 && f < dist && lat < 1.5 + o.r) {
+      return o.o || true;
+    }
+    // em cima do outro (os dois no mesmo lugar): um deles para até abrir espaço, senão andam juntos "invisíveis"
+    if (eu && o.o && f > -1 && f <= 0.5 && lat < 1 && !temAVez(eu, o.o)) return o.o;
   }
   return false;
 }
@@ -4687,7 +4698,23 @@ async function criarPoliciaNPC() {
   rede.robos.listar().then((l) => { for (const r of l) aoRobo(r); }).catch(() => {});
 }
 // percurso fechado (volta da quadra) e ponto nele pelo relógio do servidor: todos veem o robô no mesmo lugar
-function laco(pts) {
+// arredonda as esquinas de um caminho fechado (curva de até r metros), para ninguém virar "no canto"
+function arredondarLaco(pts, rmax = 8) {
+  const n = pts.length; if (n < 3) return pts;
+  const r = [];
+  for (let i = 0; i < n; i++) {
+    const a = pts[(i + n - 1) % n], p = pts[i], b = pts[(i + 1) % n];
+    const l1 = Math.hypot(p[0] - a[0], p[1] - a[1]), l2 = Math.hypot(b[0] - p[0], b[1] - p[1]);
+    if (l1 < 0.01 || l2 < 0.01) { r.push(p); continue; }
+    const d1 = [(p[0] - a[0]) / l1, (p[1] - a[1]) / l1], d2 = [(b[0] - p[0]) / l2, (b[1] - p[1]) / l2];
+    if (Math.abs(d1[0] * d2[1] - d1[1] * d2[0]) < 0.05 && d1[0] * d2[0] + d1[1] * d2[1] > 0) { r.push(p); continue; }
+    const rr = Math.min(rmax, l1 * 0.45, l2 * 0.45), q0 = [p[0] - d1[0] * rr, p[1] - d1[1] * rr], q2 = [p[0] + d2[0] * rr, p[1] + d2[1] * rr];
+    for (let k = 0; k <= 6; k++) { const t = k / 6, u = 1 - t; r.push([u * u * q0[0] + 2 * u * t * p[0] + t * t * q2[0], u * u * q0[1] + 2 * u * t * p[1] + t * t * q2[1]]); }
+  }
+  return r;
+}
+function laco(pts, curva = false) {
+  if (curva) pts = arredondarLaco(pts);
   let total = 0; const seg = [];
   for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length], d = Math.hypot(b[0] - a[0], b[1] - a[1]); seg.push([a, b, d]); total += d; }
   return { seg, total };
@@ -4745,7 +4772,7 @@ function criarViaturas() {
     const cantos = [[ruaC(a), ruaC(b)], [ruaC(c), ruaC(b)], [ruaC(c), ruaC(d)], [ruaC(a), ruaC(d)]];
     const pts = cantos.map(([x, z], i) => { const nx = cantos[(i + 1) % 4][0] - x, nz = cantos[(i + 1) % 4][1] - z, l = Math.hypot(nx, nz); return [x - nz / l * faixa, z + nx / l * faixa]; });
     const obj = civico.modeloCarro('viatura', '#ffffff'); scene.add(obj);
-    viaturas.push({ id: 13 + k, obj, laco: laco(pts), vel: 7, fase: k * 120, perseguindo: false });
+    viaturas.push({ id: 13 + k, obj, laco: laco(pts, true), vel: 7, fase: k * 120, perseguindo: false });
   });
 }
 // caminhões dos bombeiros fazendo ronda pela cidade (o mais perto de um incêndio vai atender)
@@ -4756,7 +4783,7 @@ function criarRondasBombeiros() {
     const cantos = [[ruaC(a), ruaC(b)], [ruaC(c), ruaC(b)], [ruaC(c), ruaC(d)], [ruaC(a), ruaC(d)]];
     const pts = cantos.map(([x, z], i) => { const nx = cantos[(i + 1) % 4][0] - x, nz = cantos[(i + 1) % 4][1] - z, l = Math.hypot(nx, nz); return [x - nz / l * faixa, z + nx / l * faixa]; });
     const obj = civico.modeloCarro('bombeiros', '#ffffff'); scene.add(obj);
-    rondasBombeiros.push({ obj, laco: laco(pts), vel: 6.5, fase: k * 170 + 40, st: { atraso: 0 } });
+    rondasBombeiros.push({ obj, laco: laco(pts, true), vel: 6.5, fase: k * 170 + 40, st: { atraso: 0 } });
   });
 }
 const posRonda = (i) => { const v = rondasBombeiros[i]; return v && { x: v.obj.position.x, z: v.obj.position.z, ang: v.obj.rotation.y }; };
@@ -5480,23 +5507,23 @@ const _rcOlho = new THREE.Raycaster();
 const CABINE = {
   carro_popular: { olho: [1.38, -0.05], interior: 1 },
   carro_classico: { olho: [1.28, -0.3], interior: 1 },
-  exercito_jipe: { olho: [1.64, -0.04], interior: 1 },
-  carro_suv: { olho: [1.72, 0.25], capo: [1.38, 1.25], cor: '#e56600' },
-  carro_esportivo: { olho: [1.07, -0.35], capo: [0.92, 0.65], cor: '#b20019', painel: -0.16, teto: 0.5, zt: 0.3 },   // capô baixo: painel mais baixo para ver a rua
-  carro_presidencial: { olho: [1.58, 0.6], capo: [1.28, 1.35], cor: '#2b2b36' },
-  ambulancia: { olho: [2.2, 1.5], capo: [1.55, 2.25], x: 0.5, cor: '#e5e5e5' },
-  caminhao_bombeiros: { olho: [2.6, 2.9], capo: [1.9, 3.6], x: 0.75, cor: '#cc3333' },
-  caminhao: { olho: [1.82, 2.75], capo: [1.45, 3.45], x: 0.55, cor: '#f2b705', teto: 0.24 },
-  caminhao_lixo: { olho: [2.55, 3.15], capo: [1.85, 3.85], x: 0.6, cor: '#cfcfcf' },
+  exercito_jipe: { olho: [1.64, -0.04], interior: 1 , int: 'int_jipe'},
+  carro_suv: { olho: [1.72, 0.25], capo: [1.38, 1.25], cor: '#e56600' , int: 'int_carro'},
+  carro_esportivo: { olho: [1.07, -0.35], capo: [0.92, 0.65], cor: '#b20019', painel: -0.16, teto: 0.5, zt: 0.3 , int: 'int_carro'},   // capô baixo: painel mais baixo para ver a rua
+  carro_presidencial: { olho: [1.58, 0.6], capo: [1.28, 1.35], cor: '#2b2b36' , int: 'int_carro'},
+  ambulancia: { olho: [2.2, 1.5], capo: [1.55, 2.25], x: 0.5, cor: '#e5e5e5' , int: 'int_van'},
+  caminhao_bombeiros: { olho: [2.6, 2.9], capo: [1.9, 3.6], x: 0.75, cor: '#cc3333' , int: 'int_caminhao'},
+  caminhao: { olho: [1.82, 2.75], capo: [1.45, 3.45], x: 0.55, cor: '#f2b705', teto: 0.24 , int: 'int_caminhao'},
+  caminhao_lixo: { olho: [2.55, 3.15], capo: [1.85, 3.85], x: 0.6, cor: '#cfcfcf' , int: 'int_caminhao'},
   exercito_caminhao: { olho: [2.4, 2.2], x: 0.6, interior: 1 },
   tanque: { olho: [3.05, -0.6], nada: 1 },
-  onibus_grande: { olho: [2.2, 4.6], capo: [1.15, 5.4], x: 0.7 },
-  onibus_urbano: { olho: [2.25, 5.0], capo: [1.05, 5.75], x: 0.7 },
-  onibus_executivo: { olho: [2.35, 4.9], capo: [1.2, 5.6], x: 0.7 },
-  onibus_executivo2: { olho: [2.4, 6.05], capo: [1.75, 6.88], x: 0.7, cor: '#fcd605' },
-  onibus_dois_andares: { olho: [1.85, 5.9], capo: [1.0, 6.7], x: 0.7, cor: '#0fb9dd' },
-  onibus_apache: { olho: [2.2, 5.0], capo: [1.15, 5.8], x: 0.7, cor: '#4b5157' },
-  onibus_articulado: { olho: [2.25, 8.3], capo: [1.1, 9.05], x: 0.7, cor: '#6ccf3a' },
+  onibus_grande: { olho: [2.2, 4.6], capo: [1.15, 5.4], x: 0.7 , int: 'int_onibus'},
+  onibus_urbano: { olho: [2.25, 5.0], capo: [1.05, 5.75], x: 0.7 , int: 'int_onibus'},
+  onibus_executivo: { olho: [2.35, 4.9], capo: [1.2, 5.6], x: 0.7 , int: 'int_rodoviario'},
+  onibus_executivo2: { olho: [2.4, 6.05], capo: [1.75, 6.88], x: 0.7, cor: '#fcd605' , int: 'int_rodoviario'},
+  onibus_dois_andares: { olho: [1.85, 5.9], capo: [1.0, 6.7], x: 0.7, cor: '#0fb9dd' , int: 'int_rodoviario'},
+  onibus_apache: { olho: [2.2, 5.0], capo: [1.15, 5.8], x: 0.7, cor: '#4b5157' , int: 'int_onibus'},
+  onibus_articulado: { olho: [2.25, 8.3], capo: [1.1, 9.05], x: 0.7, cor: '#6ccf3a' , int: 'int_onibus'},
   onibus_busscar: { olho: [2.4, 4.35], x: 0.8, interior: 1 },
 };
 function caixaDoModelo(mesh) {
@@ -5566,6 +5593,30 @@ const cabines = {};
 // moldura do motorista feita para cada modelo: o painel começa logo abaixo do capô (o capô do próprio veículo aparece
 // pelo para-brisa), o volante fica na frente do motorista (lado esquerdo) e o resto do painel, o console e o
 // retrovisor ficam para a direita, onde está o resto do carro
+// interiores 3D gerados (cabine de verdade): o modelo, o ponto do olho do motorista nele e a largura
+const INTERIORES = {
+  int_onibus: { olho: [0.7, 1.15, -1.15] }, int_rodoviario: { olho: [0.95, 1.22, -1.15] }, int_caminhao: { olho: [0.55, 0.92, -1.25] },
+  int_van: { olho: [0.5, 1.0, -1.0] }, int_carro: { olho: [0.38, 0.9, -1.1] }, int_jipe: { olho: [0.36, 1.0, -1.75] },
+};
+// a cabine 3D é desenhada por cima do mundo, numa cena só dela (limpa a profundidade antes): não briga com a lataria
+const cenaCabine = new THREE.Scene();
+const luzCabH = new THREE.HemisphereLight('#ffffff', '#5a5a5a', 1.25), luzCabD = new THREE.DirectionalLight('#ffffff', 0.9);
+luzCabD.position.set(0.4, 1, 0.3); cenaCabine.add(luzCabH, luzCabD);
+let cabine3D = null;   // { g, mesh } ativa neste quadro
+function interiorDoVeiculo(mesh) {
+  const T = CABINE[mesh.userData.glb]; if (!T?.int || !INTERIORES[T.int] || !mesh.userData.olho) return null;
+  const I = INTERIORES[T.int];
+  if (mesh.userData.int3d !== undefined) return mesh.userData.int3d;
+  mesh.userData.int3d = null;   // carregando
+  carregarGLB(`assets/modelos/${T.int}.glb`).then((gl) => {
+    const g = gl.scene.clone(true); g.matrixAutoUpdate = false;
+    g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.fog = false; o.material.side = THREE.DoubleSide; o.frustumCulled = false; } });
+    const esc = T.intEsc || 1, e = I.olho, ol = mesh.userData.olho;
+    g.userData.local = new THREE.Matrix4().makeTranslation(ol.x, ol.y, ol.z).multiply(new THREE.Matrix4().makeScale(esc, esc, esc)).multiply(new THREE.Matrix4().makeTranslation(-e[0], -e[1], -e[2]));
+    g.visible = false; cenaCabine.add(g); mesh.userData.int3d = g;
+  }).catch(() => {});
+  return null;
+}
 function cabineVeiculo(mesh, tipo) {
   const nome = mesh.userData.glb, T = CABINE[nome];
   if (!T || !mesh.userData.olho) return cabine(tipo);
@@ -5640,7 +5691,9 @@ function atualizarCamera3D(dt) {
     if (v) {   // dentro do veículo: olha para a frente dele (dá para virar a cabeça arrastando; volta sozinho)
       const tc = tipoCabine(); olho = olhoDoVeiculo(v, tc); if (olhar.arrastou <= 0) olhar.veic *= Math.max(0, 1 - dt * 2);
       const cb = tc === 'aviao' || tc === 'heli' ? cabine(tc) : cabineVeiculo(v, tc);
-      for (const g of Object.values(cabines)) g.visible = g === cb && (g.parent !== camP || Math.abs(olhar.veic) < 1.2);   // a do veículo fica presa nele
+      const int3 = interiorDoVeiculo(v);
+      for (const g of Object.values(cabines)) g.visible = !int3 && g === cb && (g.parent !== camP || Math.abs(olhar.veic) < 1.2);   // a do veículo fica presa nele
+      if (int3) { v.updateMatrixWorld(); int3.matrix.multiplyMatrices(v.matrixWorld, int3.userData.local); int3.visible = true; cabine3D = int3; }
       if (cb?.userData.volante) cb.userData.volante.rotation.z = -(jogador.carro?.volante || 0) * 1.8;
       // a visão acompanha o veículo com suavidade e olha um pouco para dentro da curva (onde você vai passar)
       const alvoYaw = v.rotation.y - (jogador.carro?.volante || 0) * 0.22 + olhar.veic;
@@ -5872,6 +5925,7 @@ function quadro() {
 }
 function quadroJogo() {
   const dt = Math.min(relogio.getDelta(), 0.05);
+  eixos.restaurar();   // a lógica do quadro usa a posição de sempre; o desenho das curvas volta no fim
   ferrovia.atualizar(agoraServidor() / 1000);
   atualizarCeu(agoraServidor() / 1000);
   ceu.atualizar(dt, camAtiva, noiteAtual, clima.atual(), clima.fatorTempo(), camAtiva === camP, SOL_DIR);
@@ -5903,7 +5957,7 @@ function quadroJogo() {
   atualizarRemotos(dt);
   voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
-  atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
+  atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
@@ -5917,6 +5971,13 @@ function quadroJogo() {
   mundo.molhar(molhadoAtual);
   visual.ajustar(noiteAtual, molhadoAtual);
   visual.render(camAtiva);
+  // cabine 3D por cima (só na primeira pessoa, dentro do veículo)
+  for (const o of cenaCabine.children) if (o.isGroup || o.type === 'Group' || o.isObject3D && o.userData.local) o.visible = o === cabine3D;
+  if (cabine3D && camAtiva === camP) {
+    luzCabH.intensity = 0.45 + 0.85 * (1 - noiteAtual); luzCabD.intensity = 0.25 + 0.7 * (1 - noiteAtual);
+    renderer.autoClear = false; renderer.clearDepth(); renderer.render(cenaCabine, camAtiva); renderer.autoClear = true;
+  }
+  cabine3D = null;
 }
 
 // ---------------------------------------------------------------- aperto de mão
@@ -7859,7 +7920,7 @@ function montarCaminho(L) {
     const a = bruto[i - 1], p = bruto[i], b = bruto[i + 1], d1 = dir(a, p), d2 = dir(p, b);
     const l1 = Math.hypot(p[0] - a[0], p[1] - a[1]), l2 = Math.hypot(b[0] - p[0], b[1] - p[1]);
     if (Math.abs(d1[0] * d2[1] - d1[1] * d2[0]) < 0.05 && d1[0] * d2[0] + d1[1] * d2[1] > 0) { pts.push(p); continue; }
-    const r = Math.min(7, l1 * 0.45, l2 * 0.45), q0 = [p[0] - d1[0] * r, p[1] - d1[1] * r], q2 = [p[0] + d2[0] * r, p[1] + d2[1] * r];
+    const r = Math.min(9, l1 * 0.45, l2 * 0.45), q0 = [p[0] - d1[0] * r, p[1] - d1[1] * r], q2 = [p[0] + d2[0] * r, p[1] + d2[1] * r];
     for (let k = 0; k <= 6; k++) { const t = k / 6, u = 1 - t; pts.push([u * u * q0[0] + 2 * u * t * p[0] + t * t * q2[0], u * u * q0[1] + 2 * u * t * p[1] + t * t * q2[1]]); }
   }
   pts.push(bruto[bruto.length - 1]);
@@ -7871,6 +7932,20 @@ function pontoCaminho(L, s) {
   let lo = 0, hi = L.acum.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (L.acum[m] <= s) lo = m; else hi = m; }
   const a = L.pts[lo], b = L.pts[hi], d = L.acum[hi] - L.acum[lo] || 1, k = (s - L.acum[lo]) / d;
   return { x: a[0] + (b[0] - a[0]) * k, z: a[1] + (b[1] - a[1]) * k, ang: Math.atan2(b[0] - a[0], b[1] - a[1]) };
+}
+function pontoCaminhoExt(L, s) {
+  if (L.circular && L.L) s = ((s % L.L) + L.L) % L.L;
+  const q = pontoCaminho(L, s), fora = s > L.L ? s - L.L : s < 0 ? s : 0;
+  if (fora) { q.x += Math.sin(q.ang) * fora; q.z += Math.cos(q.ang) * fora; }
+  return q;
+}
+// curvas: quem anda pela rua é desenhado pelos dois eixos (eixos.js)
+function marcarEixos() {
+  for (const b of onibusNpc) if (b.ativo && b.mesh.visible && b.e) eixos.marcar(b.mesh, pontoCaminhoExt(b.L, b.e.s + civico.eixosDe(b.mesh).zf));
+  for (const S of SETORES) if (S.npc?.visible && S.sAtual !== undefined) eixos.marcar(S.npc, pontoCaminhoExt(S.cam, S.sAtual + civico.eixosDe(S.npc).zf));
+  for (const o of servicos.veiculosNpc()) eixos.marcar(o);
+  for (const v of viaturas) if (v.obj.visible) eixos.marcar(v.obj);
+  for (const v of rondasBombeiros) if (v.obj.visible) eixos.marcar(v.obj);
 }
 // paradas: o ponto da rua vira o trecho do caminho que passa com a calçada à direita
 function montarParadasLinha(L) {
@@ -8131,7 +8206,22 @@ function atualizarOnibus(dt) {
       // fila e plataforma: anda até a posição nova devagar (sem pular de lugar)
       if (e.fila || e.baia) { st.sVis = st.sVis === undefined ? e.s : st.sVis + THREE.MathUtils.clamp(e.s - st.sVis, -6 * dt, 6 * dt); e.s = st.sVis; } else st.sVis = e.s;
       if (saidasOcupadas.has(`${L.id}.${m}`) || (minhaVolta && minhaVolta.L === L && minhaVolta.m === m)) continue;
-      const q = pontoCaminho(L, e.s);
+      let q = pontoCaminho(L, e.s);
+      // nunca dentro de outro ônibus no mesmo sentido (fila de linhas diferentes, saída de ponto, volta do horário):
+      // se encostou em quem está na frente, este fica para trás até abrir espaço
+      if (e.rota && !e.fila && !e.baia) {
+        const cp = COMP_ONIBUS(modeloSaida(L, m));
+        for (let i = 0; i < 80; i++) {
+          const fx = Math.sin(q.ang), fz = Math.cos(q.ang);
+          const enc = onibusNpc.some((o) => o.vivo && o.chB !== chB && Math.cos(o.ang - q.ang) > 0.5 && (() => {
+            const dx = o.x - q.x, dz = o.z - q.z, d = dx * fx + dz * fz;
+            return Math.abs(dx * fz - dz * fx) < 2.2 && d < (cp + o.comp) / 2 + 1.5 && (d > 0.3 || (d > -0.3 && o.chB < chB));
+          })());
+          if (!enc) break;
+          if (e.chegando) { if (e.s < 1) break; e = { ...e, s: e.s - 0.5 }; q = pontoCaminho(L, e.s); continue; }   // já parado na chegada: só recua
+          st.atraso += 0.25; const e2 = estadoSaida(L, m, t - st.atraso); if (!e2 || !e2.rota) break; e = e2; q = pontoCaminho(L, e.s);
+        }
+      }
       const longe = Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) > 320 && !(jogador.onibus && jogador.onibus.L === L && jogador.onibus.m === m);
       if (longe) continue;
       const mod = modeloSaida(L, m), chave = `${L.id}|${mod}`, i = usados.get(chave) || 0; usados.set(chave, i + 1);
@@ -8698,7 +8788,7 @@ function atualizarColeta(dt) {
     if (ativo && e.lixeira) esvaziar(e.lixeira, t);   // o caminhão do sistema recolhe mesmo longe (todos veem igual)
     if (!S.npc && perto && modelos.caminhao_lixo) { S.npc = civico.modeloCarro('caminhao_lixo', '#ffffff'); S.npc.userData.giroflex = true; scene.add(S.npc); }
     if (!S.npc) continue;
-    S.npc.position.set(q.x, alturaChao(q.x, q.z), q.z); S.npc.rotation.y = q.ang;
+    S.npc.position.set(q.x, alturaChao(q.x, q.z), q.z); S.npc.rotation.y = q.ang; S.sAtual = e.s;
     if (S.npc.visible && !e.lixeira) frearAtras(S.st, S.npc, dt, 8);   // respeita quem está parado na frente
     S.npc.visible = ativo && perto && !jogador.dentroCasa;
     if (S.npc.visible) sons.continuo(e.lixeira ? 'caminhao_lenta' : 'caminhao_alto', 0.45 * sons.perto(Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z), 50), 0.9);

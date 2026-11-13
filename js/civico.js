@@ -487,6 +487,22 @@ function montarRodas(g, nome) {
   }
 }
 // gira as rodas pelo quanto cada veículo andou (serve para o seu, os NPCs e os outros jogadores) e vira as da frente
+// distância do centro do modelo até o eixo da frente (zf) e até o de trás (zr); com dois eixos juntos, o meio deles.
+// No articulado conta só a parte da frente (a de trás é um reboque, dobrada à parte).
+export function eixosDe(o) {
+  if (o.userData.eixos) return o.userData.eixos;
+  let glb = null; o.traverse((k) => { glb ||= k.userData?.glb; });
+  const R = RODAS[glb]; let e = { zf: 1.3, zr: -1.3 };
+  if (R && R.eixos.length > 1) {
+    const tras = o.getObjectByName('traseira'), zs = R.eixos.map((a) => a[0]).filter((z) => !tras || z > tras.position.z);
+    const hi = Math.max(...zs), lo = Math.min(...zs), meio = (hi + lo) / 2, media = (l) => l.reduce((a, b) => a + b, 0) / l.length;
+    const f = zs.filter((z) => z >= meio), t = zs.filter((z) => z < meio);
+    if (f.length && t.length) e = { zf: media(f), zr: media(t) };
+  }
+  const k = o.scale.z || 1; e = { zf: e.zf * k, zr: e.zr * k };
+  o.userData.eixos = e; return e;
+}
+
 // nas curvas; de longe usa a roda simples e não gira
 const _pR = new THREE.Vector3();
 export function atualizarRodas(dt, cam) {

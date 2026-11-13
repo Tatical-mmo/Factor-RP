@@ -223,8 +223,24 @@ export function rotaRuas(a, b, parar = 0) {
     const u = pts[pts.length - 1], w = pts[pts.length - 2], d = Math.hypot(u.x - w.x, u.z - w.z);
     if (d > parar + 0.5) pts[pts.length - 1] = { x: u.x + (w.x - u.x) / d * parar, z: u.z + (w.z - u.z) / d * parar }; else pts.pop();
   }
-  let total = 0; for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
-  return { pts, total };
+  const lisos = arredondar(pts);
+  let total = 0; for (let i = 1; i < lisos.length; i++) total += Math.hypot(lisos[i].x - lisos[i - 1].x, lisos[i].z - lisos[i - 1].z);
+  return { pts: lisos, total };
+}
+// esquinas viram curva (até 8 m), para o veículo não girar "no canto"
+function arredondar(pts, rmax = 8) {
+  if (pts.length < 3) return pts;
+  const r = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = pts[i - 1], p = pts[i], b = pts[i + 1], l1 = Math.hypot(p.x - a.x, p.z - a.z), l2 = Math.hypot(b.x - p.x, b.z - p.z);
+    if (l1 < 0.01 || l2 < 0.01) { r.push(p); continue; }
+    const d1 = { x: (p.x - a.x) / l1, z: (p.z - a.z) / l1 }, d2 = { x: (b.x - p.x) / l2, z: (b.z - p.z) / l2 };
+    if (Math.abs(d1.x * d2.z - d1.z * d2.x) < 0.05 && d1.x * d2.x + d1.z * d2.z > 0) { r.push(p); continue; }
+    const rr = Math.min(rmax, l1 * 0.45, l2 * 0.45), q0 = { x: p.x - d1.x * rr, z: p.z - d1.z * rr }, q2 = { x: p.x + d2.x * rr, z: p.z + d2.z * rr };
+    for (let k = 0; k <= 6; k++) { const t = k / 6, u = 1 - t; r.push({ x: u * u * q0.x + 2 * u * t * p.x + t * t * q2.x, z: u * u * q0.z + 2 * u * t * p.z + t * t * q2.z }); }
+  }
+  r.push(pts[pts.length - 1]);
+  return r;
 }
 // veículo guiado por robô anda na faixa da direita (não sobe na calçada nem anda no meio da rua)
 export function faixaDireita(pts, o = 2.4) {
