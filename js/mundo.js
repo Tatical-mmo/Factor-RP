@@ -184,9 +184,10 @@ uniform float uNoite; uniform sampler2D uTerreo;`)
     vec4 base = terreoF > 0.5 ? terreoTex : sampledDiffuseColor;
     float jan = smoothstep(0.04, 0.12, base.b - base.r) * (1.0 - vTopo);
     float h = fract(sin(dot(floor(vMapUv), vec2(12.9898, 78.233))) * 43758.5453);
-    float acesa = terreoF > 0.5 ? 1.0 : step(0.45, h);
-    vec3 cor = mix(vec3(1.0, 0.76, 0.42), vec3(0.72, 0.84, 1.0), step(0.86, h));
-    totalEmissiveRadiance += jan * acesa * uNoite * cor * (terreoF > 0.5 ? 1.3 : 1.05);
+    // vitrines: só parte acende e bem mais fraca (antes todas brilhavam forte e ofuscavam quem passava na rua)
+    float acesa = terreoF > 0.5 ? step(0.4, h) : step(0.45, h);
+    vec3 cor = terreoF > 0.5 ? vec3(1.0, 0.72, 0.4) : mix(vec3(1.0, 0.76, 0.42), vec3(0.72, 0.84, 1.0), step(0.86, h));
+    totalEmissiveRadiance += jan * acesa * uNoite * cor * (terreoF > 0.5 ? 0.45 : 0.7);
   }`);
     }
   };

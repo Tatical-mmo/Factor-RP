@@ -1033,3 +1033,12 @@ Sem SQL e sem arquivo novo; muda só `js/main.js` (e `index.html`). Este pacote 
 - **Rodoviária, ônibus indo para trás e para frente**: quem esperava a vez (esquina das circulares, ponto ocupado, saída da rodoviária) era recuado de meio em meio segundo, passava do ponto e voltava a andar. Isso virava um vai e vem de 5 a 8 m. Agora o ônibus para exatamente no limite e espera ali. No teste de 5 minutos, as voltas para trás caíram de 659 para 127, e as que sobraram são quase todas menores que 10 cm.
 - **Saindo da plataforma**: o ônibus só põe o bico para fora quando a rua está livre; quem vem pela rua tem a vez.
 - **Longe de você os ônibus também se respeitam**: antes, a mais de 320 m eles andavam só pelo horário e podiam chegar perto de você já um dentro do outro. Agora continuam freando e esperando mesmo sem aparecer na tela.
+
+## Versão 13/11 · arrancada e luzes (20261113y)
+Sem SQL e sem arquivo novo. Mudam `js/main.js`, `js/civico.js`, `js/servicos.js`, `js/mundo.js` e `index.html`.
+- **Luzes dos prédios**: as vitrines do térreo brilhavam forte (todas acesas, força 1,3) e ofuscavam a rua. Agora só parte delas acende, com luz quente e fraca (0,45). As janelas de cima também baixaram, de 1,05 para 0,7.
+- **Arrancada gradual**: cada veículo tem a sua aceleração. Ela é forte no começo e mais fraca perto da velocidade máxima. Tempos para chegar perto da máxima: esportivo e clássico 3 s; popular e viatura 5 s; ambulância e presidencial 5,5 s; SUV, jipe e van 6,5 s; caminhões, bombeiros e lixo 11 s; tanque e ônibus urbano 12 s; executivo 14 s; rodoviário e dois andares 15 s; articulado 16 s.
+  - Quem você dirige usa essa tabela, no lugar da aceleração igual para todos.
+  - Os veículos do sistema (ônibus, viaturas, bombeiros, lixo, ambulâncias e caminhões chamados) também saem devagar depois de cada parada ou espera. O tempo perdido arrancando vira atraso, como no trânsito, e o horário é recuperado depois. Todos os aparelhos continuam vendo igual.
+  - Na fila e na plataforma da rodoviária o ônibus arranca devagar, anda no máximo 5 m/s e freia chegando na vaga.
+- **Saída da rodoviária**: o ônibus da plataforma só espera quem está andando na rua, e não mais quem está entrando na plataforma atrás dele. Isso travava os dois por mais de um minuto. Quem já pôs o bico na rua termina de sair.

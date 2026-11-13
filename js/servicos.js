@@ -290,7 +290,15 @@ function atualizarNpcs(dt) {
       const o = n.obj.position, bloq = n.obj.visible && (ctx.obstaculo?.(o.x, o.z, n.obj.rotation.y, n.obj) || (n.volta && ctx.sinal?.(o.x, o.z, n.obj.rotation.y)));   // voltando (sem sirene) respeita o sinal
       n.atraso = bloq ? Math.min(30, n.atraso + dt) : Math.max(0, n.atraso - dt * 0.4);
     }
-    const r = n.volta || n.rota, s = ((agora - (n.volta ? n.t1 : n.t0)) / 1000 - n.atraso) * n.vel, p = pontoNaRota(r, s);
+    const r = n.volta || n.rota; let s = ((agora - (n.volta ? n.t1 : n.t0)) / 1000 - n.atraso) * n.vel;
+    // arrancada: sai devagar e vai ganhando velocidade (os pesados demoram mais); o que faltou vira atraso
+    if (n.rotaAnt === r && n.sAnt !== undefined && s > n.sAnt && s - n.sAnt < 40 && dt > 0) {
+      const v0 = n.v || 0, lim = n.sAnt + (v0 + civico.aceleracao(n.modelo, v0, n.vel) * dt) * dt;
+      if (s > lim) { n.atraso += (s - lim) / n.vel; s = lim; }
+      n.v = (s - n.sAnt) / dt;
+    } else n.v = n.rotaAnt === r ? 0 : n.v ?? 0;
+    n.sAnt = s; n.rotaAnt = r;
+    const p = pontoNaRota(r, s);
     if (n.volta && p.fim) { ctx.scene.remove(n.obj); npcs.delete(chave); continue; }
     n.obj.visible = true;
     n.obj.position.set(p.x, ctx.altura(p.x, p.z), p.z);

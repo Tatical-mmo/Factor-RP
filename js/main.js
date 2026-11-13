@@ -1306,7 +1306,7 @@ function dirigir(dt) {
   const acel = pedais.acel || teclas.has('w') || teclas.has('arrowup'), freio = pedais.freio || teclas.has('s') || teclas.has('arrowdown');
   const volante = (pedais.dir || teclas.has('d') || teclas.has('arrowright') ? 1 : 0) - (pedais.esq || teclas.has('a') || teclas.has('arrowleft') ? 1 : 0);
   // aceleração suave; freio firme; parado, o freio vira ré (devagar)
-  if (acel && !freio) c.vel = c.vel < 0 ? Math.min(0, c.vel + 10 * dt) : Math.min(max, c.vel + (c.vel < max * 0.5 ? 4.5 : 2.5) * dt);
+  if (acel && !freio) c.vel = c.vel < 0 ? Math.min(0, c.vel + 10 * dt) : Math.min(max, c.vel + civico.aceleracao(c.modelo, c.vel, max) * dt);   // cada veículo com a sua arrancada
   else if (freio) c.vel = c.vel > 0.3 ? Math.max(0, c.vel - 11 * dt) : c.voa ? 0 : Math.max(-Math.min(4, max * 0.35), c.vel - 3 * dt);   // helicóptero não tem ré
   else c.vel = c.vel > 0 ? Math.max(0, c.vel - 3 * dt) : Math.min(0, c.vel + 3 * dt);
   // volante com resposta gradual; vira menos quando está rápido (não roda no lugar)
@@ -4725,6 +4725,12 @@ function trajeto(pts) {
   for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1], d = Math.hypot(b[0] - a[0], b[1] - a[1]); seg.push([a, b, d]); total += d; }
   return { seg, total };
 }
+// laço com velocidade fixa: a posição que falta por causa da arrancada vira atraso (atraso += falta / vel)
+function arrancarLaco(st, u, vel, modelo, dt) {
+  const r = arrancar(st, u, dt, modelo, vel);
+  if (r < u) st.atraso += (u - r) / vel;
+  return r;
+}
 function pontoNoLaco(l, s) {
   s = ((s % l.total) + l.total) % l.total;
   for (const [a, b, d] of l.seg) { if (s <= d) { const f = s / d; return { x: a[0] + (b[0] - a[0]) * f, z: a[1] + (b[1] - a[1]) * f, ang: Math.atan2(b[0] - a[0], b[1] - a[1]) }; } s -= d; }
@@ -4798,7 +4804,7 @@ function atualizarRondasBombeiros(dt) {
     const o = v.obj; o.visible = !ocup.has(i); if (!o.visible) return;
     civico.atualizarSirenes(0, o);
     frearAtras(v.st, o, dt, 8);
-    const p = pontoNoLaco(v.laco, (agoraServidor() / 1000 - v.st.atraso) * v.vel + v.fase);
+    const p = pontoNoLaco(v.laco, arrancarLaco(v.st, (agoraServidor() / 1000 - v.st.atraso) * v.vel + v.fase, v.vel, 'bombeiros', dt));
     if (Math.hypot(p.x - o.position.x, p.z - o.position.z) > 25) o.position.set(p.x, alturaChao(p.x, p.z), p.z);
     else { o.position.x += (p.x - o.position.x) * Math.min(1, dt * 4); o.position.z += (p.z - o.position.z) * Math.min(1, dt * 4); o.position.y = alturaChao(o.position.x, o.position.z); }
     o.rotation.y = suavizarAngulo(o.rotation.y, p.ang, dt * 5);
@@ -4844,7 +4850,7 @@ function atualizarViaturas(dt) {
     } else if (v.perseguindo) v.perseguindo = false;
     if (v.estadoPub) publicarRobo(v, dt, o);
     v.st ||= { atraso: 0 }; frearAtras(v.st, o, dt, 8);
-    const p = pontoNoLaco(v.laco, (agoraServidor() / 1000 - v.st.atraso) * v.vel + v.fase);
+    const p = pontoNoLaco(v.laco, arrancarLaco(v.st, (agoraServidor() / 1000 - v.st.atraso) * v.vel + v.fase, v.vel, 'viatura', dt));
     if (Math.hypot(p.x - o.position.x, p.z - o.position.z) > 25) o.position.set(p.x, alturaChao(p.x, p.z), p.z);
     else { o.position.x += (p.x - o.position.x) * Math.min(1, dt * 4); o.position.z += (p.z - o.position.z) * Math.min(1, dt * 4); o.position.y = alturaChao(o.position.x, o.position.z); }
     o.rotation.y = suavizarAngulo(o.rotation.y, p.ang, dt * 5);
@@ -8142,6 +8148,25 @@ function rotuloSimples(texto, larg) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false })); s.scale.set(larg, larg * 96 / 512, 1); return s;
 }
 let tempoPlacas = 0;
+// o menor atraso (st.atraso) que deixa pos(atraso) <= alvo, por busca binária; null se já está
+function atrasoAte(st, pos, alvo) {
+  const ok = (a) => { const v = pos(a); return v === null || v <= alvo; };
+  if (ok(st.atraso)) return null;
+  let lo = st.atraso, hi = st.atraso + 1;
+  while (!ok(hi) && hi - st.atraso < 600) { lo = hi; hi = st.atraso + (hi - st.atraso) * 2; }
+  for (let i = 0; i < 18; i++) { const md = (lo + hi) / 2; if (ok(md)) hi = md; else lo = md; }
+  return hi;
+}
+// arrancada dos veículos do sistema: andam no máximo o que a aceleração do modelo deixa. O que faltou vira atraso,
+// como esperar no trânsito, e o horário é recuperado depois. s: onde o horário manda estar; devolve onde pode estar.
+function arrancar(st, s, dt, modelo, vmax) {
+  const s0 = st.gS;
+  if (s0 === undefined || s < s0 - 0.05 || s - s0 > 40 || dt <= 0) { st.gV = s0 === undefined ? vmax : 0; st.gS = s; return s; }   // começo, volta do laço ou pulo
+  const v = (st.gV || 0) + civico.aceleracao(modelo, st.gV || 0, vmax) * dt, lim = s0 + v * dt;
+  const r = Math.min(s, lim);
+  st.gV = Math.max(0, (r - s0) / dt); st.gS = r;
+  return r;
+}
 // o menor atraso que deixa o ônibus em s <= alvo (busca binária): ele chega exatamente no limite e espera ali.
 // Somar meio segundo de cada vez passava do ponto e o ônibus ficava indo para trás e para frente.
 function segurarAte(L, m, t, st, alvo) {
@@ -8217,14 +8242,24 @@ function atualizarOnibus(dt) {
         } else { st.filaDesde = undefined; st.filaAtiva = false; }
       }
       // fila e plataforma: anda até a posição nova devagar (sem pular de lugar)
-      if (e.fila || e.baia) { st.sVis = st.sVis === undefined ? e.s : st.sVis + THREE.MathUtils.clamp(e.s - st.sVis, -6 * dt, 6 * dt); e.s = st.sVis; } else st.sVis = e.s;
+      if (e.fila || e.baia) {   // arranca devagar, anda no máximo 5 m/s e freia chegando na vaga
+        if (st.sVis === undefined) { st.sVis = e.s; st.vVis = 0; }
+        else { const d = e.s - st.sVis, vm = Math.min(5, Math.sqrt(2 * 1.5 * Math.abs(d))), v = Math.min(vm, (st.vVis || 0) + 1.2 * dt), passo = Math.min(Math.abs(d), v * dt); st.sVis += Math.sign(d) * passo; st.vVis = dt > 0 ? passo / dt : 0; }
+        e.s = st.sVis;
+      } else { st.sVis = e.s; st.vVis = 0; }
       if (saidasOcupadas.has(`${L.id}.${m}`) || (minhaVolta && minhaVolta.L === L && minhaVolta.m === m)) continue;
       let q = pontoCaminho(L, e.s);
+      // arrancada: depois de esperar (ponto, sinal, trânsito) ele sai devagar e vai ganhando velocidade
+      if (e.rota && !e.fila && !e.baia && !e.chegando && st.mAnt === m && st.sAnt !== undefined && e.s > st.sAnt && e.s - st.sAnt < 40) {
+        const v0 = st.gV || 0, lim = st.sAnt + (v0 + civico.aceleracao(modeloSaida(L, m), v0, 15) * dt) * dt;
+        if (e.s > lim + 0.005) { e = segurarAte(L, m, t, st, lim) || e; q = pontoCaminho(L, e.s); }
+      }
       // saindo da rodoviária: espera a rua ficar livre antes de pôr o bico para fora (quem vem pela rua tem a vez)
       if (!L.circular && e.rota && !e.fila && !e.baia && e.s < 9) {
         const sa = st.mAnt === m ? st.sAnt : undefined, X = pontoCaminho(L, 9);
-        const vem = onibusNpc.some((o) => o.vivo && o.chB !== chB && Math.hypot(o.x - X.x, o.z - X.z) < 18 && !(o.L && !o.L.circular && o.e?.rota && o.e.s < 12));
-        if (vem) { const alvo = sa !== undefined ? Math.max(0.3, Math.min(sa, 8.9)) : 0.3; if (e.s > alvo) { e = segurarAte(L, m, t, st, alvo) || e; q = pontoCaminho(L, e.s); } }
+        const vem = onibusNpc.some((o) => o.vivo && o.chB !== chB && Math.hypot(o.x - X.x, o.z - X.z) < 25 && o.e?.rota && !o.e.parado && (o.L.circular || (o.e.s >= 12 && o.e.s < o.L.sFila - 60)));   // só quem está andando na rua (não quem está na plataforma ou na fila)
+        // só segura quem ainda não pôs o bico na rua; quem já saiu termina de sair (a rua espera por ele)
+        if (vem && (sa === undefined || sa < 2)) { const alvo = sa !== undefined ? Math.max(0.3, sa) : 0.3; if (e.s > alvo) { e = segurarAte(L, m, t, st, alvo) || e; q = pontoCaminho(L, e.s); } }
       }
       // nunca dentro de outro ônibus no mesmo sentido (fila de linhas diferentes, saída de ponto, volta do horário):
       // se ia encostar em quem está na frente, fica onde estava no quadro anterior (sem pular para trás) e o horário espera
@@ -8246,6 +8281,7 @@ function atualizarOnibus(dt) {
           q = pontoCaminho(L, e.s);
         }
       }
+      st.gV = st.mAnt === m && st.sAnt !== undefined && e.s >= st.sAnt && e.s - st.sAnt < 40 && dt > 0 ? (e.s - st.sAnt) / dt : st.mAnt === m ? 0 : 12;
       st.sAnt = e.s; st.mAnt = m;
       const longe = Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) > 320 && !(jogador.onibus && jogador.onibus.L === L && jogador.onibus.m === m);
       const mod = modeloSaida(L, m), chave = `${L.id}|${mod}`, i = usados.get(chave) || 0; usados.set(chave, i + 1);
@@ -8812,7 +8848,14 @@ function atualizarColeta(dt) {
   const t = agoraServidor() / 1000, ocupados = setoresComGari();
   for (const S of SETORES) {
     S.st ||= { atraso: 0 };
-    const e = caminhaoLixoNpc(S, t - S.st.atraso), q = pontoCaminho(S.cam, e.s), perto = Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) < 260;
+    let e = caminhaoLixoNpc(S, t - S.st.atraso);
+    // arrancada do caminhão de lixo (depois de cada lixeira e de cada espera)
+    if (!e.lixeira && S.sAntL !== undefined && e.s > S.sAntL && e.s - S.sAntL < 40) {
+      const v0 = S.st.gV || 0, lim = S.sAntL + (v0 + civico.aceleracao('caminhao_lixo', v0, 10) * dt) * dt;
+      if (e.s > lim + 0.005) { const a = atrasoAte(S.st, (x) => caminhaoLixoNpc(S, t - x).s, lim); if (a !== null) { S.st.atraso = a; e = caminhaoLixoNpc(S, t - a); } }
+    }
+    S.st.gV = S.sAntL !== undefined && e.s >= S.sAntL && e.s - S.sAntL < 40 && dt > 0 ? (e.s - S.sAntL) / dt : 0; S.sAntL = e.s;
+    const q = pontoCaminho(S.cam, e.s), perto = Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) < 260;
     const ativo = !ocupados.has(S.id);
     if (ativo && e.lixeira) esvaziar(e.lixeira, t);   // o caminhão do sistema recolhe mesmo longe (todos veem igual)
     if (!S.npc && perto && modelos.caminhao_lixo) { S.npc = civico.modeloCarro('caminhao_lixo', '#ffffff'); S.npc.userData.giroflex = true; scene.add(S.npc); }

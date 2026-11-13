@@ -159,6 +159,15 @@ export const CARROS = {
   aviao_medio: { nome: 'Avião médio', preco: 0, vel: 52, voa: true },
   aviao_grande: { nome: 'Avião grande', preco: 0, vel: 64, voa: true },
 };
+// arrancada: segundos para chegar perto da velocidade máxima. Os leves arrancam rápido; ônibus e caminhões, devagar.
+const ARRANCADA = { esportivo: 3, classico: 3, popular: 5, viatura: 5, ambulancia: 5.5, presidencial: 5.5, suv: 6.5, militar: 6.5, van: 6.5,
+  caminhao: 11, caminhao_escola: 11, caminhao_lixo: 11, bombeiros: 11, exercito_caminhao: 11, tanque: 12,
+  onibus: 12, onibus_urbano: 12, onibus_apache: 12, onibus_busscar: 12, onibus_executivo: 14, onibus_executivo2: 15, onibus_dois_andares: 15, onibus_articulado: 16 };
+// aceleração (m/s²) na velocidade v: forte no começo e mais fraca perto do máximo, como um motor de verdade
+export function aceleracao(modelo, v, max) {
+  const T = ARRANCADA[modelo] ?? 6, a0 = 1.21 * max / T, x = Math.min(1, Math.max(0, v / max));
+  return a0 * Math.max(0.2, 1 - 0.75 * x * x);
+}
 // quantos passageiros cada veículo leva (além do motorista); veículos do Exército só levam militares
 export const LUGARES = { tanque: 1, militar: 3, exercito_caminhao: 8, helicoptero_exercito: 6, helicoptero: 4, suv: 3, popular: 3, classico: 3, esportivo: 1, presidencial: 3 };
 // veículos abertos: o motorista aparece sentado (banco: altura e posição no modelo, motorista do lado esquerdo)
