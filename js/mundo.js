@@ -42,7 +42,8 @@ const escolher = (a) => a[Math.floor(rnd() * a.length)];
 const edificios = [];      // { x, z, w, d, h, y, cor, tipo, rot, telha, det:[] }
 const detalhes = [];       // caixas no telhado: { ed, dx, dz, w, h, d }
 const arvores = [];        // [x, z, escala]
-export const PROPS = { banco: [], hidrante: [], semaforo: [] };   // [x, z, ângulo] dos objetos de rua em 3D (GLB)
+export const PROPS = { banco: [], hidrante: [], semaforo: [] };
+export const CRUZAMENTOS = [];   // { x, z }: semáforos funcionando (js/semaforos.js), um poste em cada esquina   // [x, z, ângulo] dos objetos de rua em 3D (GLB)
 const calcadas = [];       // [x, z, w, d, y]
 const gramados = [];       // [x, z, w, d]
 const ruas = [];           // [x, z, w, d, vertical]
@@ -1116,11 +1117,11 @@ function planejarProps() {
   const d = RW / 2 + 0.9;
   for (let i = MI; i <= MA + 1; i++) for (let j = MI; j <= MA + 1; j++) {
     const x = ruaC(i), z = ruaC(j); if (!temV(i, z) || !temH(j, x)) continue;
-    for (const [sx, sz] of [[1, 1], [-1, -1]]) { const px = x + sx * d, pz = z + sz * d; PROPS.semaforo.push([px, pz, Math.atan2(x - px, z - pz)]); addCol({ tipo: 'circ', x: px, z: pz, r: 0.25 }); }
+    CRUZAMENTOS.push({ x, z }); for (const [sx, sz] of [[1, 1], [-1, -1], [1, -1], [-1, 1]]) addCol({ tipo: 'circ', x: x + sx * d, z: z + sz * d, r: 0.25 });
   }
   for (const c of CIDADES) for (const cx of CID.colunas) for (const rz of CID.ruas) {   // cidades
     const z = c.s * rz;
-    for (const [sx, sz] of [[1, 1], [-1, -1]]) { const px = cx + sx * d, pz = z + sz * d; PROPS.semaforo.push([px, pz, Math.atan2(cx - px, z - pz)]); addCol({ tipo: 'circ', x: px, z: pz, r: 0.25 }); }
+    CRUZAMENTOS.push({ x: cx, z }); for (const [sx, sz] of [[1, 1], [-1, -1], [1, -1], [-1, 1]]) addCol({ tipo: 'circ', x: cx + sx * d, z: z + sz * d, r: 0.25 });
   }
   // hidrantes: dois por quarteirão (metrópole e cidades)
   const hid = (bx, bz) => { const dd = QB / 2 - 1.1; for (const [sx, sz] of [[1, -1], [-1, 1]]) { const px = bx + sx * dd, pz = bz + sz * dd; PROPS.hidrante.push([px, pz, sx > 0 ? 0 : Math.PI]); addCol({ tipo: 'circ', x: px, z: pz, r: 0.3 }); } };
@@ -1153,6 +1154,7 @@ export function propsPerto(px, pz, dt) {
   }
 }
 const alturaChaoMundo = (x, z) => { for (const [cx, cz, w, d, y] of calcadas) if (Math.abs(x - cx) <= w / 2 && Math.abs(z - cz) <= d / 2) return y; return 0.18; };
+export const alturaCalcada = (x, z) => alturaChaoMundo(x, z);
 export function finalizar() { planejarProps(); montarMobiliario(); montarMalhas(); }
 
 // ---------------------------------------------------------------- ruas de verdade: "é rua?" e caminho só pelas ruas

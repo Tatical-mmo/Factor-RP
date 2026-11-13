@@ -271,7 +271,7 @@ function atualizarNpcs(dt) {
     if (agora < n.t0) continue;
     // trânsito: espera quem estiver na frente (o atraso é recuperado depois, um pouco mais rápido)
     if (n.obj.visible && !n.chegou || n.volta) {
-      const bloq = n.obj.visible && ctx.obstaculo?.(n.obj.position.x, n.obj.position.z, n.obj.rotation.y, n.obj);
+      const o = n.obj.position, bloq = n.obj.visible && (ctx.obstaculo?.(o.x, o.z, n.obj.rotation.y, n.obj) || (n.volta && ctx.sinal?.(o.x, o.z, n.obj.rotation.y)));   // voltando (sem sirene) respeita o sinal
       n.atraso = bloq ? Math.min(30, n.atraso + dt) : Math.max(0, n.atraso - dt * 0.4);
     }
     const r = n.volta || n.rota, s = ((agora - (n.volta ? n.t1 : n.t0)) / 1000 - n.atraso) * n.vel, p = pontoNaRota(r, s);
@@ -279,7 +279,7 @@ function atualizarNpcs(dt) {
     n.obj.visible = true;
     n.obj.position.set(p.x, ctx.altura(p.x, p.z), p.z);
     n.obj.rotation.y = suave(n.obj.rotation.y, p.ang, dt * 6);
-    civico.atualizarSirenes(t, n.obj);
+    civico.atualizarSirenes(n.volta ? 0 : t, n.obj);
     if (!n.volta && p.fim && !n.chegou) { n.chegou = true; n.aoChegar?.(); }
   }
 }

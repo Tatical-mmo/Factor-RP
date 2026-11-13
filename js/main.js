@@ -24,6 +24,7 @@ import * as sons from './sons.js';
 import * as voz from './voz.js';
 import * as clima from './clima.js';
 import * as ceu from './ceu.js';
+import * as semaforos from './semaforos.js';
 import * as jornal from './jornal.js';
 import * as visual from './visual.js';
 import { nivelTexto } from './empresa.js';
@@ -2152,14 +2153,15 @@ async function iniciarJogo(perfil) {
   sedes.iniciar({ scene, texturaCanvas, modelo: (n) => modelos[n] });
   mundo.montar({ scene, texturaCanvas, ruido, textoSprite, modelo: (n) => modelos[n], qualidade: () => visual.nivelAtual() });
   ferrovia.montar({ scene, textoSprite, modelo: (n) => modelos[n] });
-  ceu.iniciar(scene); clima.ouvirRelampago(() => ceu.raio(foco(), alturaChao));
+  ceu.iniciar(scene); clima.ouvirRelampago(() => ceu.raio(foco(), alturaChao, camAtiva === camP ? camP : null));
   clima.iniciar({ scene, alturaChao, naRua, mudou: (t) => { if (jogador.avatar) aviso(t === 'limpo' ? '☀️ O tempo abriu.' : { chuva: '🌧️ Começou a chover.', tempestade: '⛈️ Tempestade chegando! Fique atento aos raios.', neve: '❄️ Começou a nevar.' }[t], 3.5); } });
   carregarClima();
   montarCargueiro(); montarBueiros(); montarEsconderijos();
   prepararTransporte();
   mundo.finalizar();
+  semaforos.iniciar(scene, mundo.CRUZAMENTOS, (x, z) => mundo.alturaCalcada(x, z), () => agoraServidor() / 1000);
   // objetos de rua em 3D (leves): bancos de praça, hidrantes e semáforos — carregam em segundo plano
-  for (const n of ['banco', 'hidrante', 'semaforo']) Promise.resolve(carregarGLB(`assets/modelos/prop_${n}.glb`)).then((g) => { if (g?.scene) mundo.montarProps(n, g.scene, scene); }).catch(() => {});
+  for (const n of ['banco', 'hidrante']) Promise.resolve(carregarGLB(`assets/modelos/prop_${n}.glb`)).then((g) => { if (g?.scene) mundo.montarProps(n, g.scene, scene); }).catch(() => {});
   // prédios 3D (perto do jogador): carregam em segundo plano
   { const nomes = ['predio_casa1', 'predio_casa2', 'predio_sobrado', 'predio_residencial', 'predio_escritorio', 'predio_galpao'];
     Promise.all(nomes.map((n) => Promise.resolve(carregarGLB(`assets/modelos/${n}.glb`)).then((g) => [n, g?.scene]).catch(() => [n, null]))).then((l) => { const m = Object.fromEntries(l.filter(([, c]) => c)); if (Object.keys(m).length) mundo.ativarPredios3d(m); }); }
@@ -2239,7 +2241,7 @@ async function iniciarJogo(perfil) {
   iniciarLogistica();
   servicos.iniciar({
     scene, textoSprite, altura: alturaChao, jogador: () => jogador, perfil: () => jogador.perfil, aviso, agora: agoraServidor,
-    rastrear: (a) => rastrear(a), rastreio: () => rastreio, meuCla: () => jogador.cla, alcanceJato: () => (jogador.carro?.servico === 'bombeiros' ? 16 : 10), obstaculo: (x, z, a, o) => obstaculoAFrente(x, z, a, o), rondaPerto, posRonda, clas: () => [...clasCache.values()],
+    rastrear: (a) => rastrear(a), rastreio: () => rastreio, meuCla: () => jogador.cla, alcanceJato: () => (jogador.carro?.servico === 'bombeiros' ? 16 : 10), obstaculo: (x, z, a, o) => obstaculoAFrente(x, z, a, o), sinal: (x, z, a) => semaforos.sinalAFrente(x, z, a, 9), rondaPerto, posRonda, clas: () => [...clasCache.values()],
     guerrasMudaram: () => {
       atualizarCla();
       const novo = servicos.clasInimigos(jogador.cla, [...clasCache.values()]);
@@ -3469,6 +3471,10 @@ function corposNaRua() {
 // recupera devagar. Se ficar travado muito tempo (cruzamento), passa uma vez sem esperar, para não travar tudo.
 function frearAtras(st, o, dt, dist = 9, x = o.position.x, z = o.position.z, ang = o.rotation.y, paciencia = 25) {
   st.fantasma = Math.max(0, (st.fantasma || 0) - dt);
+  // longe de quem joga ninguém vê: não para em nada e recupera o horário depressa
+  const f = foco(); if (Math.abs(x - f.x) + Math.abs(z - f.z) > 260) { st.bloq = 0; st.atraso = Math.max(0, (st.atraso || 0) - dt * 3); return st.atraso; }
+  // sinal vermelho à frente: espera na faixa (não conta para a "paciência" de travamento)
+  if (!st.sirene && semaforos.sinalAFrente(x, z, ang, Math.min(dist, 10))) { st.atraso = Math.min(120, (st.atraso || 0) + dt); return st.atraso; }
   const bloq = st.fantasma <= 0 && obstaculoAFrente(x, z, ang, st.ignorar || o, dist);
   if (bloq) { st.atraso = Math.min(120, (st.atraso || 0) + dt); st.bloq = (st.bloq || 0) + dt; if (st.bloq > paciencia) { st.fantasma = 3; st.bloq = 0; } }
   else { st.bloq = 0; st.atraso = Math.max(0, (st.atraso || 0) - dt * 0.35); }
@@ -5875,7 +5881,7 @@ function quadroJogo() {
   mundo.atualizar(dt);
   mundo.carrosPerto(foco().x, foco().z, dt);
   mundo.arvoresPerto(foco().x, foco().z, dt);
-  mundo.propsPerto(foco().x, foco().z, dt);
+  mundo.propsPerto(foco().x, foco().z, dt); semaforos.atualizar(dt, foco().x, foco().z);
   mundo.predios3dPerto(foco().x, foco().z, dt);
   sedes.atualizar(dt);
   if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); checarTrem(); atualizarArmaPd(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }

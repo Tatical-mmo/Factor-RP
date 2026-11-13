@@ -950,3 +950,20 @@ Rode **`supabase/66a_prf_computador.sql`** e depois **`supabase/66b_prf_sigilo.s
   - se o destino foi um clã, é a prova: o prefeito é cassado e fica procurado (+3.000). Contra um ex-prefeito, ele fica procurado;
   - o antigo "Investigar documentos" (sorte de 35%) saiu.
 - **Prefeito · Obras e eventos (gastos legais):** obra pública, evento na praça ou bônus dividido entre os servidores em serviço (polícia, PRF, médicos e bombeiros). Também aparecem como transferência em sigilo, então a PRF precisa quebrar o sigilo para saber se foi legal.
+
+## Versão 13/11 · semáforos (20261113p)
+Sem SQL novo. **Arquivo novo: `js/semaforos.js`.** Confira se ele foi para a pasta `js/`; sem ele o jogo não passa do login.
+- **Semáforos brasileiros funcionando:**
+  - um poste por esquina, virado para quem chega, do outro lado do cruzamento e à direita;
+  - caixa preta em pé com anteparo, três luzes (vermelho em cima, amarelo, verde) e pala;
+  - estão nos 305 cruzamentos da Metrópole, de Vila Serra e de Porto Sul;
+  - ciclo de 28 s (verde 10 s, amarelo 3 s, 1 s de tudo vermelho), igual para todos pelo horário do servidor, com "onda verde" entre cruzamentos vizinhos;
+  - só os semáforos mais perto são desenhados, para ficar leve no celular.
+- **NPCs respeitam o sinal:**
+  - ônibus, viaturas em ronda, caminhões de lixo, bombeiros em ronda e os NPCs voltando de um chamado param antes da faixa no vermelho e no amarelo;
+  - emergência indo com sirene passa;
+  - longe de quem joga (onde ninguém vê) eles não param e recuperam o horário.
+- **Céu:**
+  - nuvens fofas, com base larga e "couve-flor" mais alta no meio (antes pareciam discos voadores);
+  - o raio agora é um tubo com brilho, cai na frente de quem está olhando e dura um pouco mais. Assim dá para ver na primeira pessoa; antes era uma linha de 1 pixel que sumia na tela do celular;
+  - estrelas e lua trazidas para dentro do alcance da câmera (antes ficavam longe demais e não apareciam).
