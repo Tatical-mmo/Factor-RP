@@ -1026,3 +1026,10 @@ Sem SQL novo. **Arquivo novo: `js/eixos.js`** (precisa estar no repositório, se
 - **Sem nome de empresa**: os adesivos saíram. Os nomes foram cobertos com a tinta da lataria em volta, e "FATOR RP" foi pintado direto na textura. No rodoviário amarelo fica nas laterais, no letreiro da frente e na traseira; no dois andares, nas laterais e na traseira.
 - **Menos rachaduras**: os modelos Meshy (articulado, rodoviário, dois andares e caminhão) agora usam textura 2048 e uma redução mais fina, então as bordas ficam mais limpas.
 - **Visão de dentro em 3D**: na primeira pessoa aparece o interior novo (painel, volante e bancos) do ônibus urbano, do ônibus de viagem, do caminhão, da van, do carro e do jipe. Os modelos são carregados só quando alguém entra no veículo.
+
+## Versão 13/11 · passageiro no ônibus e rodoviária (20261113x)
+Sem SQL e sem arquivo novo; muda só `js/main.js` (e `index.html`). Este pacote já traz tudo do 20261113w também (o `js/eixos.js`, os interiores e os modelos), então pode subir só ele.
+- **Passageiro dentro do ônibus**: o passageiro seguia o horário puro do ônibus. Quando o ônibus esperava (fila, ponto ocupado, sinal, trânsito), o passageiro ia na frente sozinho: o ônibus ficava para trás ("invisível") e a pessoa atravessava a cidade. Agora o passageiro anda colado no ônibus de verdade, e o sinal de descer também usa o horário com atraso.
+- **Rodoviária, ônibus indo para trás e para frente**: quem esperava a vez (esquina das circulares, ponto ocupado, saída da rodoviária) era recuado de meio em meio segundo, passava do ponto e voltava a andar. Isso virava um vai e vem de 5 a 8 m. Agora o ônibus para exatamente no limite e espera ali. No teste de 5 minutos, as voltas para trás caíram de 659 para 127, e as que sobraram são quase todas menores que 10 cm.
+- **Saindo da plataforma**: o ônibus só põe o bico para fora quando a rua está livre; quem vem pela rua tem a vez.
+- **Longe de você os ônibus também se respeitam**: antes, a mais de 320 m eles andavam só pelo horário e podiam chegar perto de você já um dentro do outro. Agora continuam freando e esperando mesmo sem aparecer na tela.
