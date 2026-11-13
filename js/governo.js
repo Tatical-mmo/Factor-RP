@@ -47,7 +47,7 @@ async function desenhar() {
     if (aba === 'prefeito') telaPrefeito(c, pf);
     else if (aba === 'eleicao') await telaEleicao(c, pf);
     else if (aba === 'outdoors') await telaOutdoors(c);
-    else telaPrf(c, pf);
+    else await telaPrf(c, pf);
     c.scrollTop = rolagem;
   } catch (e) { c.textContent = e.message; }
 }
@@ -71,8 +71,12 @@ function telaPrefeito(c, pf) {
       <div class="sub">Seguranças (podem algemar)</div>
       <p class="dica">Até 2 jogadores de confiança. Eles usam algemas como a polícia. Deixe o nome vazio para tirar.</p>
       ${[1, 2].map((k) => `<div class="botoes"><input id="gSeg${k}" placeholder="Nome do jogador" value="${esc(pf['seg' + k]?.nome || '')}"><button data-seg="${k}">Salvar ${k}º segurança</button></div>`).join('')}
+      <div class="sub">Obras e eventos (gastos legais do cofre)</div>
+      <p class="dica">Tudo o que você faz fica no computador da PRF. Transferências do cofre aparecem com o destino em sigilo bancário.</p>
+      <div class="form linha-form"><select id="gGastoTipo"><option value="obra">🏗️ Obra pública</option><option value="evento">🎉 Evento na praça</option><option value="bonus">🎖️ Bônus aos servidores em serviço</option></select>
+        <input id="gGasto" type="number" min="100" placeholder="Valor do cofre" inputmode="numeric"><button id="gGastoOk">Pagar do cofre</button></div>
       <div class="sub" style="color:#ff8a80">Favores a clãs (crime eleitoral)</div>
-      <p class="aviso-item">⚠️ Isto é ilegal. A PRF investiga a prefeitura e, se achar prova, você perde o mandato e vira procurado.</p>
+      <p class="aviso-item">⚠️ Isto é ilegal. A transferência fica no computador da PRF em sigilo bancário; se a PRF quebrar o sigilo, você perde o mandato e vira procurado.</p>
       <div class="form linha-form"><select id="gCla">${clas.map((k) => `<option value="${k.id}">${esc(k.nome)}</option>`).join('')}</select>
         <input id="gVerba" type="number" min="1" placeholder="Valor do cofre" inputmode="numeric"><button id="gVerbaOk">Repassar verba</button></div>
       <div class="form linha-form"><select id="gTerr">${terr.map((k) => `<option value="${k.id}">${esc(k.nome)}</option>`).join('')}</select><button id="gTerrOk">Entregar território ao clã</button></div>
@@ -80,6 +84,7 @@ function telaPrefeito(c, pf) {
   const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
   on('gSalOk', () => executar(() => rede.prefeitura.salarioPolicia(Math.floor(Number($('gSal').value))), 'Salário da polícia atualizado.'));
   c.querySelectorAll('[data-seg]').forEach((b) => { b.onclick = () => { const k = Number(b.dataset.seg), nome = $('gSeg' + k).value.trim(); executar(() => rede.algemas.seguranca(k, nome), nome ? `${nome} agora é seu segurança.` : 'Segurança removido.'); }; });
+  on('gGastoOk', () => { const tipo = $('gGastoTipo').value, v = Math.floor(Number($('gGasto').value)); if (v > 0) confirmar($('gGastoOk'), () => executar(() => rede.prefeitura.gasto(tipo, v), (r) => (tipo === 'bonus' ? `Bônus pago: ${num(r)} para cada servidor em serviço.` : `Pago do cofre: ${num(v)}.`))); });
   on('gVerbaOk', () => { const b = $('gVerbaOk'); confirmar(b, () => executar(() => rede.prefeitura.verba(Number($('gCla').value), Math.floor(Number($('gVerba').value))), 'Verba repassada... discretamente.')); });
   on('gTerrOk', () => { const b = $('gTerrOk'); confirmar(b, () => executar(() => rede.prefeitura.territorio($('gTerr').value, Number($('gCla').value)), 'Território entregue ao clã.')); });
   on('gRenuncia', () => { const b = $('gRenuncia'); confirmar(b, () => executar(() => rede.prefeitura.renunciar(), 'Você renunciou. A prefeitura está vaga.')); });
@@ -126,16 +131,38 @@ async function telaOutdoors(c) {
   });
 }
 
-function telaPrf(c, pf) {
+async function telaPrf(c, pf) {
   const eu = ctx.perfil();
-  c.innerHTML = `<p class="dica">A <b>PRF</b> é a polícia eleitoral: não obedece ao prefeito e paga <b>120 a cada 3 min</b> de serviço. Agentes investigam documentos aqui na prefeitura (a cada 90 s). Se acharem prova de favor a clãs, o prefeito é cassado e fica procurado: prender rende 2.000, e achar a prova rende 3.000.</p>
+  const topo = `<p class="dica">A <b>PRF</b> é a polícia eleitoral: não obedece ao prefeito e paga <b>120 a cada 3 min</b> de serviço. No <b>🖥️ computador da PRF</b> aparecem todos os gastos do prefeito. As transferências do cofre ficam em <b>sigilo bancário</b>: peça a quebra do sigilo (a Justiça leva 3 min e você precisa continuar em serviço; 1 pedido a cada 10 min). Se o dinheiro foi para um clã, o prefeito é cassado e vira procurado (+3.000).</p>
     <p class="dica">Quem tem crimes, é de clã, é policial ou é o prefeito não entra.</p>
-    <div class="botoes">${eu.prf ? '<button id="pInvest">🔍 Investigar documentos</button><button id="pSair" class="perigo">Sair de serviço</button>' : '<button id="pEntrar">Entrar em serviço na PRF</button>'}</div>
-    ${pf.prefeito ? '' : '<p class="dica">Sem prefeito no cargo agora: não há o que investigar.</p>'}`;
+    <div class="botoes">${eu.prf ? '<button id="pSair" class="perigo">Sair de serviço</button>' : '<button id="pEntrar">Entrar em serviço na PRF</button>'}</div>`;
+  let comp = '';
+  if (eu.prf) {
+    try {
+      const d = await rede.prf.computador(), agora = ctx.agora();
+      const prox = d.proximo_pedido && Date.parse(d.proximo_pedido) > agora ? Math.ceil((Date.parse(d.proximo_pedido) - agora) / 60000) : 0;
+      const hora = (t) => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      comp = `<div class="sub">🖥️ Computador da PRF · gastos do prefeito</div>
+        <p class="dica">Prefeito: <b>${esc(d.prefeito || 'vago')}</b> · Cofre: <b>${num(d.cofre)}</b>${prox ? ` · seu próximo pedido de quebra em ${prox} min` : ''}</p>
+        ${d.gastos.length ? `<div class="lista">${d.gastos.map((g) => {
+          let acao = '';
+          if (g.sigiloso && !g.destino) {
+            if (g.pedido) {
+              const falta = Math.ceil((Date.parse(g.pedido.pronto) - agora) / 1000);
+              acao = g.pedido.meu ? (falta > 0 ? `<small>⚖️ Justiça analisando… ${falta} s</small>` : `<button data-ver="${g.pedido.id}">📄 Ver resultado</button>`) : '<small>⚖️ outro agente pediu a quebra</small>';
+            } else acao = `<button data-quebrar="${g.id}"${prox ? ' disabled' : ''}>🔓 Quebrar sigilo</button>`;
+          }
+          return `<div class="linha item"><span class="ic">${g.sigiloso ? (g.destino ? '🔓' : '🔒') : '🧾'}</span><span class="nm"><b>${esc(g.descricao)}${g.valor ? ` · ${num(g.valor)}` : ''}</b><small>${hora(g.criado)} · ${esc(g.quem || '')} · ${g.sigiloso ? (g.destino ? `destino: ${esc(g.destino)}` : 'destino: SIGILO BANCÁRIO') : 'público'}</small></span><span class="bts">${acao}</span></div>`;
+        }).join('')}</div>` : '<p class="dica">Nenhum gasto registrado neste mandato.</p>'}`;
+    } catch (e) { comp = `<p class="aviso-item">${esc(e.message)}</p>`; }
+  }
+  c.innerHTML = topo + comp + (pf.prefeito ? '' : '<p class="dica">Sem prefeito no cargo agora.</p>');
   const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
   on('pEntrar', () => executar(() => rede.prf.entrar(), 'Você está em serviço na PRF.'));
   on('pSair', () => executar(() => rede.prf.sair(), (v) => `Saiu de serviço.${v ? ` +${num(v)}` : ''}`));
-  on('pInvest', () => executar(() => rede.prf.investigar(), (r) => r === 'cassado' ? '🚨 PROVA ENCONTRADA! O prefeito foi cassado e está procurado. +3.000' : r === 'sem prefeito' ? 'Não há prefeito no cargo.' : 'Nenhuma prova encontrada desta vez.'));
+  c.querySelectorAll('[data-quebrar]').forEach((b) => { b.onclick = () => confirmar(b, () => executar(() => rede.prf.pedirSigilo(Number(b.dataset.quebrar)), '⚖️ Pedido enviado à Justiça: resultado em 3 min. Fique em serviço.')); });
+  c.querySelectorAll('[data-ver]').forEach((b) => { b.onclick = () => executar(() => rede.prf.verSigilo(Number(b.dataset.ver)), (r) => (r.resultado === 'cassado' ? `🚨 PROVA! ${r.destino}. O prefeito foi cassado e está procurado. +3.000`
+    : r.resultado === 'ex-prefeito' ? `🚨 PROVA contra o ex-prefeito: ${r.destino}. Ele está procurado. +3.000` : r.resultado === 'ja provado' ? `Destino: ${r.destino} (o crime já tinha sido provado).` : `Tudo legal: ${r.destino}.`)); });
 }
 
 async function telaCarros(c) {

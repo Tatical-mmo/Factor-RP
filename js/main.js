@@ -23,6 +23,7 @@ import * as servicos from './servicos.js';
 import * as sons from './sons.js';
 import * as voz from './voz.js';
 import * as clima from './clima.js';
+import * as ceu from './ceu.js';
 import * as jornal from './jornal.js';
 import * as visual from './visual.js';
 import { nivelTexto } from './empresa.js';
@@ -1867,7 +1868,7 @@ function atualizarNPCs(dt) {
     n.av.raiz.rotation.y = suavizarAngulo(n.av.raiz.rotation.y, alvo.ang, dt * 6);
     n.av.mixer.update(dt);
   }
-  atualizarViaturas(dt);
+  atualizarViaturas(dt); atualizarRondasBombeiros(dt);
 }
 
 let caminhaoMovel = null;
@@ -2151,6 +2152,7 @@ async function iniciarJogo(perfil) {
   sedes.iniciar({ scene, texturaCanvas, modelo: (n) => modelos[n] });
   mundo.montar({ scene, texturaCanvas, ruido, textoSprite, modelo: (n) => modelos[n], qualidade: () => visual.nivelAtual() });
   ferrovia.montar({ scene, textoSprite, modelo: (n) => modelos[n] });
+  ceu.iniciar(scene); clima.ouvirRelampago(() => ceu.raio(foco(), alturaChao));
   clima.iniciar({ scene, alturaChao, naRua, mudou: (t) => { if (jogador.avatar) aviso(t === 'limpo' ? '☀️ O tempo abriu.' : { chuva: '🌧️ Começou a chover.', tempestade: '⛈️ Tempestade chegando! Fique atento aos raios.', neve: '❄️ Começou a nevar.' }[t], 3.5); } });
   carregarClima();
   montarCargueiro(); montarBueiros(); montarEsconderijos();
@@ -2237,7 +2239,7 @@ async function iniciarJogo(perfil) {
   iniciarLogistica();
   servicos.iniciar({
     scene, textoSprite, altura: alturaChao, jogador: () => jogador, perfil: () => jogador.perfil, aviso, agora: agoraServidor,
-    rastrear: (a) => rastrear(a), rastreio: () => rastreio, meuCla: () => jogador.cla, alcanceJato: () => (jogador.carro?.servico === 'bombeiros' ? 16 : 10), obstaculo: (x, z, a, o) => obstaculoAFrente(x, z, a, o), clas: () => [...clasCache.values()],
+    rastrear: (a) => rastrear(a), rastreio: () => rastreio, meuCla: () => jogador.cla, alcanceJato: () => (jogador.carro?.servico === 'bombeiros' ? 16 : 10), obstaculo: (x, z, a, o) => obstaculoAFrente(x, z, a, o), rondaPerto, posRonda, clas: () => [...clasCache.values()],
     guerrasMudaram: () => {
       atualizarCla();
       const novo = servicos.clasInimigos(jogador.cla, [...clasCache.values()]);
@@ -2317,6 +2319,7 @@ async function iniciarJogo(perfil) {
     teleportar,
     esconderArmaPd: () => rede.pd.esconder(jogador.pos.x, jogador.pos.z),
     locais: () => LOCAIS,
+    objetosNaRua: () => objetosNaRua(),
     veiculosTeste: () => Object.entries(civico.CARROS).map(([id, c]) => ({ id, nome: `${c.voa ? (id.startsWith('aviao') ? '✈️' : '🚁') : id.includes('onibus') ? '🚌' : id.includes('caminhao') || id === 'bombeiros' ? '🚚' : id === 'tanque' ? '🪖' : '🚗'} ${c.nome}${id === 'onibus_executivo2' ? ' 2' : ''}` })),
     testarVeiculo,
     bueiro: (k) => BUEIROS[k], irPara: (x, z) => { jogador.dentroCasa = null; teleportar(x, z); }, marcar: (a) => rastrear(a),
@@ -3454,15 +3457,27 @@ function corposNaRua() {
   if (caminhaoMovel) r.push({ o: caminhaoMovel.obj, x: caminhaoMovel.obj.position.x, z: caminhaoMovel.obj.position.z, r: 2 });
   for (const n of npcs) r.push({ x: n.av.raiz.position.x, z: n.av.raiz.position.z, r: 0.45, npc: n.policia ? n : null, civilRef: n });
   for (const v of viaturas) r.push({ o: v.obj, x: v.obj.position.x, z: v.obj.position.z, r: 1.8 });
-  if (jogador.avatar && !jogador.carro && !jogador.passageiro && !jogador.dentroCasa) r.push({ x: jogador.pos.x, z: jogador.pos.z, r: 0.45, eu: true });
+  for (const v of rondasBombeiros) if (v.obj.visible) r.push({ o: v.obj, x: v.obj.position.x, z: v.obj.position.z, r: 1.9 });
+  for (const b of onibusNpc) if (b.vivo) { const fx = Math.sin(b.ang), fz = Math.cos(b.ang); for (const k of [-4, 0, 4]) r.push({ o: b.mesh, x: b.x + fx * k, z: b.z + fz * k, r: 1.3 }); }
+  for (const S of SETORES) if (S.npc?.visible) r.push({ o: S.npc, x: S.npc.position.x, z: S.npc.position.z, r: 1.6 });
+  if (jogador.avatar && !jogador.carro && !jogador.passageiro && !jogador.onibus && !jogador.voo && !jogador.dentroCasa && !jogador.paraquedas) r.push({ x: jogador.pos.x, z: jogador.pos.z, r: 0.45, eu: true });
   if (jogador.carro && !jogador.carro.voa && !jogador.carro.taxi) r.push({ o: jogador.carro.mesh, x: jogador.pos.x, z: jogador.pos.z, r: 1.6 });
   corposCache = r; corposT = performance.now();
   return r;
 }
+// veículo do sistema que segue um horário: se tem alguém parado na frente, ele espera (o atraso cresce) e depois
+// recupera devagar. Se ficar travado muito tempo (cruzamento), passa uma vez sem esperar, para não travar tudo.
+function frearAtras(st, o, dt, dist = 9, x = o.position.x, z = o.position.z, ang = o.rotation.y, paciencia = 25) {
+  st.fantasma = Math.max(0, (st.fantasma || 0) - dt);
+  const bloq = st.fantasma <= 0 && obstaculoAFrente(x, z, ang, st.ignorar || o, dist);
+  if (bloq) { st.atraso = Math.min(120, (st.atraso || 0) + dt); st.bloq = (st.bloq || 0) + dt; if (st.bloq > paciencia) { st.fantasma = 3; st.bloq = 0; } }
+  else { st.bloq = 0; st.atraso = Math.max(0, (st.atraso || 0) - dt * 0.35); }
+  return st.atraso;
+}
 function obstaculoAFrente(x, z, ang, ignorar, dist = 7.5) {
   const fx = Math.sin(ang), fz = Math.cos(ang);
   for (const o of corposNaRua()) {
-    if (ignorar && o.o === ignorar) continue;
+    if (ignorar && (o.o === ignorar || ignorar.has?.(o.o))) continue;
     const dx = o.x - x, dz = o.z - z, f = dx * fx + dz * fz;
     if (f > 0.5 && f < dist && Math.abs(dx * fz - dz * fx) < 1.5 + o.r) return true;
   }
@@ -4660,7 +4675,7 @@ async function criarPoliciaNPC() {
       npcs.push(n); const pp = patrulha(n); av.raiz.position.set(pp.x, 0.18, pp.z);
     } catch { /* sem PRF NPC */ }
   }
-  criarViaturas();
+  criarViaturas(); criarRondasBombeiros();
   rede.robos.listar().then((l) => { for (const r of l) aoRobo(r); }).catch(() => {});
 }
 // percurso fechado (volta da quadra) e ponto nele pelo relógio do servidor: todos veem o robô no mesmo lugar
@@ -4725,6 +4740,35 @@ function criarViaturas() {
     viaturas.push({ id: 13 + k, obj, laco: laco(pts), vel: 7, fase: k * 120, perseguindo: false });
   });
 }
+// caminhões dos bombeiros fazendo ronda pela cidade (o mais perto de um incêndio vai atender)
+const rondasBombeiros = [];
+function criarRondasBombeiros() {
+  const faixa = 2.5;
+  [[-2, -2, 2, 2], [1, -3, 6, 2], [-3, 2, 2, 7]].forEach(([a, b, c, d], k) => {
+    const cantos = [[ruaC(a), ruaC(b)], [ruaC(c), ruaC(b)], [ruaC(c), ruaC(d)], [ruaC(a), ruaC(d)]];
+    const pts = cantos.map(([x, z], i) => { const nx = cantos[(i + 1) % 4][0] - x, nz = cantos[(i + 1) % 4][1] - z, l = Math.hypot(nx, nz); return [x - nz / l * faixa, z + nx / l * faixa]; });
+    const obj = civico.modeloCarro('bombeiros', '#ffffff'); scene.add(obj);
+    rondasBombeiros.push({ obj, laco: laco(pts), vel: 6.5, fase: k * 170 + 40, st: { atraso: 0 } });
+  });
+}
+const posRonda = (i) => { const v = rondasBombeiros[i]; return v && { x: v.obj.position.x, z: v.obj.position.z, ang: v.obj.rotation.y }; };
+function rondaPerto(x, z, ocupadas) {
+  let m = null, dm = Infinity;
+  rondasBombeiros.forEach((v, i) => { if (ocupadas.has(i)) return; const d = Math.hypot(v.obj.position.x - x, v.obj.position.z - z); if (d < dm) { dm = d; m = { i, ...posRonda(i) }; } });
+  return m;
+}
+function atualizarRondasBombeiros(dt) {
+  const ocup = servicos.rondasOcupadas();
+  rondasBombeiros.forEach((v, i) => {
+    const o = v.obj; o.visible = !ocup.has(i); if (!o.visible) return;
+    civico.atualizarSirenes(0, o);
+    frearAtras(v.st, o, dt, 8);
+    const p = pontoNoLaco(v.laco, (agoraServidor() / 1000 - v.st.atraso) * v.vel + v.fase);
+    if (Math.hypot(p.x - o.position.x, p.z - o.position.z) > 25) o.position.set(p.x, alturaChao(p.x, p.z), p.z);
+    else { o.position.x += (p.x - o.position.x) * Math.min(1, dt * 4); o.position.z += (p.z - o.position.z) * Math.min(1, dt * 4); o.position.y = alturaChao(o.position.x, o.position.z); }
+    o.rotation.y = suavizarAngulo(o.rotation.y, p.ang, dt * 5);
+  });
+}
 function atualizarViaturas(dt) {
   const t = performance.now() / 1000, j = jogador;
   const atacou = performance.now() - (j.atacouPolicia || -1e9) < 120000 && (j.perfil?.crimes || 0) > 0;
@@ -4764,7 +4808,8 @@ function atualizarViaturas(dt) {
       }
     } else if (v.perseguindo) v.perseguindo = false;
     if (v.estadoPub) publicarRobo(v, dt, o);
-    const p = pontoNoLaco(v.laco, agoraServidor() / 1000 * v.vel + v.fase);
+    v.st ||= { atraso: 0 }; frearAtras(v.st, o, dt, 8);
+    const p = pontoNoLaco(v.laco, (agoraServidor() / 1000 - v.st.atraso) * v.vel + v.fase);
     if (Math.hypot(p.x - o.position.x, p.z - o.position.z) > 25) o.position.set(p.x, alturaChao(p.x, p.z), p.z);
     else { o.position.x += (p.x - o.position.x) * Math.min(1, dt * 4); o.position.z += (p.z - o.position.z) * Math.min(1, dt * 4); o.position.y = alturaChao(o.position.x, o.position.z); }
     o.rotation.y = suavizarAngulo(o.rotation.y, p.ang, dt * 5);
@@ -4937,6 +4982,21 @@ async function carregarCidadeSocial() {
   casasLista = cs;
 }
 let portaAberta = null, casasLista = [];
+// painel do admin: o que está em cima do asfalto (casas e terrenos do banco, territórios, lixeiras e pontos)
+function objetosNaRua() {
+  ajustarAoMapa();
+  const r = [], ve = (x, z, m) => mundo.naRua(x, z, m);
+  const TIPO = { casa: '🏠 Casa', terreno: '🏗️ Terreno', apto: '🏢 Apto', unidade: '🏭 Unidade', oficial: '🏛️ Residência' };
+  const vistos = new Set();
+  for (const c of casasLista) {
+    const k = `${Math.round(c.x)},${Math.round(c.z)}`; if (vistos.has(k)) continue; vistos.add(k);
+    if (ve(c.x, c.z, c.tipo === 'terreno' ? 4 : 1)) r.push({ tipo: TIPO[c.tipo || 'casa'] || '🏠 Casa', nome: `${c.rotulo || ''} (id ${c.id})`, x: c.x, z: c.z });
+  }
+  for (const v of territorios.values()) if (v.d && ve(v.d.x, v.d.z, 2)) r.push({ tipo: '🚩 Território', nome: v.d.nome, x: v.d.x, z: v.d.z });
+  for (const l of LIXEIRAS) if (ve(l.x, l.z, 0.3)) r.push({ tipo: '🗑️ Lixeira', nome: `setor ${l.setor}`, x: l.x, z: l.z });
+  for (const L of LINHAS) for (const p of L.pontos) { const q = pontoCaminho(L, p.s), x = q.x - Math.cos(q.ang) * 4.6, z = q.z + Math.sin(q.ang) * 4.6; if (ve(x, z, 0.3)) r.push({ tipo: '🚏 Ponto', nome: `${p.nome} · ${L.curto}`, x, z }); }
+  return r;
+}
 const moraEm = (d) => d && (d.dono === jogador.perfil.id || (d.inquilino === jogador.perfil.id && Date.parse(d.pago_ate) > agoraServidor()));
 const placasTorre = new Map();
 const num = (n) => Number(n || 0).toLocaleString('pt-BR');
@@ -5809,6 +5869,7 @@ function quadroJogo() {
   const dt = Math.min(relogio.getDelta(), 0.05);
   ferrovia.atualizar(agoraServidor() / 1000);
   atualizarCeu(agoraServidor() / 1000);
+  ceu.atualizar(dt, camAtiva, noiteAtual, clima.atual(), clima.fatorTempo(), camAtiva === camP, SOL_DIR);
   clima.atualizar(dt, agoraServidor() / 1000, CICLO_DIA, { x: foco().x, y: (foco().y || 0) - 2, z: foco().z, dentro: !!jogador.dentroCasa && !averiguando }, { sol, hemi, cena: scene });
   tempoClima -= dt; if (tempoClima <= 0) { tempoClima = 30; carregarClima(); }
   mundo.atualizar(dt);
@@ -7811,7 +7872,10 @@ function montarParadasLinha(L) {
     if (melhor) L.pontos.push({ s: melhor.s, nome: nome || nomeDaRua(cx, cz) || 'Ponto' });
   }
   L.pontos.sort((a, b) => a.s - b.s);
-  // tabela: chegada e saída em cada ponto (segundos depois da saída da plataforma)
+  tabelaLinha(L);
+}
+// tabela: chegada e saída em cada ponto (segundos depois da saída da plataforma)
+function tabelaLinha(L) {
   let t = 0, sAnt = 0; L.tab = [];
   for (const p of L.pontos) { const chega = t + (p.s - sAnt) / V_ONIBUS + 2; L.tab.push({ chega, sai: chega + ESPERA_PONTO }); t = chega + ESPERA_PONTO; sAnt = p.s; }
   L.R = t + (L.sFila - sAnt) / V_ONIBUS + 2;           // volta inteira até a fila
@@ -7847,11 +7911,12 @@ function estadoSaida(L, m, t) {
   if (t >= T + D) { const r = sNaRota(L, (t - T - D) * L.R / (L.R - D)); return { ...r, rota: true, parado: r.ponto !== undefined }; }
   const entra = T - L.H + 7 + atrasoSaida(L, m - 1);   // só encosta depois que o da frente saiu (e ganhou distância)
   if (t >= entra) { const k = THREE.MathUtils.smootherstep((t - entra) / 6, 0, 1); return { s: L.sFila + (L.L - L.sFila) * k, baia: true, parado: k >= 1, atrasado: t >= T ? Math.floor(t - T) : 0 }; }
-  return { s: L.sFila, fila: true, parado: true };
+  return { s: L.sFila, fila: true, parado: true };   // a posição na fila (um atrás do outro) é decidida no quadro
 }
 const proximaSaidaLinha = (L, t) => Math.ceil((t - L.fase) / L.H);
 const saidasOcupadas = new Set();   // '2.123' assumidas por motoristas jogadores (vindas da presença)
 const onibusNpc = [];               // { mesh, L, m, x, z, ang, parado, ativo }
+const estadoBus = new Map(), pontosOcupados = [], pontosAntes = [], juncaoAntes = [], juncaoAgora = [];        // 'linha.saída' -> { atraso, sVis, bloq, fantasma }: atraso local de quem esperou no trânsito
 let paradasMontadas = false, minhaVolta = null, placasRodo = [];
 // modelo do ônibus de cada saída: as linhas alternam entre os modelos (o mesmo ônibus físico mantém o modelo)
 function modeloSaida(L, m) { const lista = L.modelos.filter((x) => x === 'onibus' || modelos[x]); return lista.length ? lista[(((m % L.k) + L.k) % L.k) % lista.length] : 'onibus'; }
@@ -7868,7 +7933,28 @@ function abrigo(x, z, ang, nome, cor) {
   g.position.set(x, alturaChao(x, z), z); g.rotation.y = ang; scene.add(g);
   mundo.addCol({ tipo: 'circ', x, z, r: 0.6 });
 }
+// pontos e lixeiras que caíram numa esquina (o abrigo ficaria na rua que cruza): anda até a calçada mais perto
+// (no máximo 30 m pelo mesmo trajeto). Precisa das ruas do mapa prontas; roda uma vez.
+let mapaAjustado = false;
+function sForaDaRua(cam, s0, lado = 4.6) {
+  for (let k = 0; k <= 60; k++) {
+    const s = s0 + (k % 2 ? -1 : 1) * Math.ceil(k / 2); if (s < 3 || s > cam.L - 3) continue;
+    // a rua que cruza (perpendicular a quem passa), com folga de 2 m: o abrigo não pode encostar nela
+    const ok = [-3, 0, 3].every((d) => { const q = pontoCaminho(cam, s + d), x = q.x - Math.cos(q.ang) * lado, z = q.z + Math.sin(q.ang) * lado; return !mundo.naRua(x, z, 0.4) && !mundo.naRua(x, z, 3, Math.abs(Math.cos(q.ang)) < 0.7); });
+    if (ok) return s;
+  }
+  return s0;
+}
+function ajustarAoMapa() {
+  if (mapaAjustado || !mundo.listaRuas().length) return; mapaAjustado = true;
+  for (const L of LINHAS) { for (const p of L.pontos) p.s = sForaDaRua(L, p.s); L.pontos.sort((a, b) => a.s - b.s); tabelaLinha(L); }
+  for (const S of SETORES) {
+    for (const l of S.lix) { l.s = sForaDaRua(S.cam, l.s); const q = pontoCaminho(S.cam, l.s); l.x = q.x - Math.cos(q.ang) * 4.6; l.z = q.z + Math.sin(q.ang) * 4.6; l.ang = q.ang; }
+    S.lix.sort((a, b) => a.s - b.s); tabelaSetor(S);
+  }
+}
 function montarParadas() {
+  ajustarAoMapa();
   if (paradasMontadas) return; paradasMontadas = true;
   for (const L of LINHAS) for (const p of L.pontos) {
     const q = pontoCaminho(L, p.s), rx = -Math.cos(q.ang), rz = Math.sin(q.ang);
@@ -7969,12 +8055,63 @@ function atualizarOnibus(dt) {
   saidasOcupadas.clear(); for (const r of remotos.values()) if (r.meta?.on) saidasOcupadas.add(String(r.meta.on));
   const t = agoraServidor() / 1000;
   if ((tempoPlacas -= dt) <= 0) { tempoPlacas = 1; atualizarPlacasRodo(t); }
-  const usados = new Map();
+  const usados = new Map(), porLinha = new Map(), feitos = new Set();
+  juncaoAntes.length = 0; for (const k2 of juncaoAgora) juncaoAntes.push(k2); juncaoAgora.length = 0;
+  // pontos ocupados: quem já estava parado no quadro anterior continua dono (os outros esperam atrás)
+  pontosOcupados.length = 0; for (const o of pontosAntes) pontosOcupados.push(o);
   for (const b of onibusNpc) b.ativo = false;
   for (const L of LINHAS) {
     const m0 = Math.floor((t - L.fase) / L.H);
     for (let m = m0 - L.k - 1; m <= m0 + L.k + 1; m++) {
-      const e = estadoSaida(L, m, t); if (!e) continue;
+      const chB = `${L.id}.${((m % L.k) + L.k) % L.k}`, st = estadoBus.get(chB) || { atraso: 0 };
+      if (feitos.has(chB)) continue;   // um ônibus físico só aparece numa volta por quadro
+      let e = estadoSaida(L, m, t - st.atraso); if (!e) continue;
+      feitos.add(chB);
+      estadoBus.set(chB, st);
+      // ponto ocupado (linhas que dividem o mesmo ponto): quem chegou depois espera atrás, sem parar em cima do outro
+      if (e.rota) {
+        // o ponto em que está parado ou o próximo (a menos de 14 m)
+        const pi = e.ponto ?? L.pontos.findIndex((p) => p.s >= e.s - 0.5 && p.s - e.s < 14);
+        if (pi >= 0) {
+          const sp = L.pontos[pi].s, q0 = pontoCaminho(L, sp);
+          const outro = pontosOcupados.find((o) => o.dono !== chB && Math.hypot(o.x - q0.x, o.z - q0.z) < 10);
+          if (outro) {   // ocupado: fica 13 m antes do ponto, esperando
+            for (let i = 0; i < 80 && e && e.rota && e.s > sp - 13; i++) { st.atraso += 0.5; e = estadoSaida(L, m, t - st.atraso); }
+            if (!e) continue;
+          } else if (e.parado) pontosOcupados.push({ x: q0.x, z: q0.z, dono: chB });
+        }
+      }
+      // circulares: as três linhas se encontram na esquina da rodoviária (vindas de lados opostos); entra um por vez
+      if (L.circular) {
+        const naJ = (q) => q.s > L.L - 24 || q.s < 16;
+        if (naJ(e)) {
+          const outro = [...juncaoAntes, ...juncaoAgora].some((k2) => k2 !== chB) && !juncaoAntes.includes(chB);
+          if (outro) {   // espera antes da esquina (no fim da volta anterior)
+            let mm = m;
+            for (let i = 0; i < 120 && e && naJ(e); i++) { st.atraso += 0.5; e = estadoSaida(L, mm, t - st.atraso); if (!e && mm === m) { mm = m - L.k; e = estadoSaida(L, mm, t - st.atraso); } }
+            if (!e) continue;
+          } else juncaoAgora.push(chB);
+        }
+      }
+      // plataforma: só entra quem achar a baia livre; na fila, um atrás do outro (14 m cada), na ordem de chegada
+      if (!L.circular) {
+        const pl = porLinha.get(L) || { fila: 0, baia: false }; porLinha.set(L, pl);
+        if (e.rota && e.s < 14) pl.baia = true;
+        // chegando: para atrás do último da fila (a fila do quadro anterior), sem encostar nele
+        if (e.rota && e.s > L.sFila - 60) {
+          let nq = 0; for (const [k2, s2] of estadoBus) if (k2 !== chB && k2.startsWith(L.id + '.') && s2.filaAtiva) nq++;
+          const lim = L.sFila - 14 * nq;
+          if (e.s > lim) { st.atraso += dt; e = { ...e, s: Math.max(lim, 0), parado: true, chegando: true }; }
+        }
+        if (e.baia) { if (pl.baia) { e = { s: L.sFila, fila: true, parado: true }; st.atraso += dt; } else pl.baia = true; }   // segura na fila (o horário dele espera)
+        if (e.fila) {
+          st.filaDesde ??= t; let idx = 0;
+          for (const [k2, s2] of estadoBus) if (k2 !== chB && k2.startsWith(L.id + '.') && s2.filaDesde !== undefined && s2.filaAtiva && (s2.filaDesde < st.filaDesde || (s2.filaDesde === st.filaDesde && k2 < chB))) idx++;
+          e = { ...e, s: L.sFila - 14 * idx }; st.filaAtiva = true; pl.fila++;
+        } else { st.filaDesde = undefined; st.filaAtiva = false; }
+      }
+      // fila e plataforma: anda até a posição nova devagar (sem pular de lugar)
+      if (e.fila || e.baia) { st.sVis = st.sVis === undefined ? e.s : st.sVis + THREE.MathUtils.clamp(e.s - st.sVis, -6 * dt, 6 * dt); e.s = st.sVis; } else st.sVis = e.s;
       if (saidasOcupadas.has(`${L.id}.${m}`) || (minhaVolta && minhaVolta.L === L && minhaVolta.m === m)) continue;
       const q = pontoCaminho(L, e.s);
       const longe = Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) > 320 && !(jogador.onibus && jogador.onibus.L === L && jogador.onibus.m === m);
@@ -7982,11 +8119,22 @@ function atualizarOnibus(dt) {
       const mod = modeloSaida(L, m), chave = `${L.id}|${mod}`, i = usados.get(chave) || 0; usados.set(chave, i + 1);
       const doTipo = onibusNpc.filter((x) => x.chave === chave);   // reaproveita os ônibus da mesma linha e modelo
       let b = doTipo[i]; if (!b) { b = { mesh: corpoOnibus(L.cor, mod), L, mod, chave }; scene.add(b.mesh); onibusNpc.push(b); }
-      b.m = m; b.x = q.x; b.z = q.z; b.ang = q.ang; b.parado = e.parado; b.ativo = true; b.e = e;
+      b.m = m; b.x = q.x; b.z = q.z; b.ang = q.ang; b.parado = e.parado; b.ativo = true; b.e = e; b.chB = chB;
       b.mesh.position.set(q.x, alturaChao(q.x, q.z), q.z); b.mesh.rotation.y = q.ang; b.mesh.visible = !jogador.dentroCasa;
+      // respeita quem está na frente: com um veículo parado à frente, espera (o horário dele atrasa um pouco)
+      if (!e.parado && !e.fila) {
+        // chegando na rodoviária: os ônibus da própria linha na fila e na plataforma estão no lugar deles (a fila já cuida)
+        // ônibus lado a lado (chegaram juntos num trecho em comum): só um espera, senão os dois travariam
+        const fx = Math.sin(b.ang), fz = Math.cos(b.ang);
+        const term = !L.circular && e.s > L.sFila - 60;
+        st.ignorar = new Set([b.mesh, ...onibusNpc.filter((x) => x.vivo && x !== b && ((term && x.L === L && (x.e?.fila || x.e?.baia)) || (x.chB > chB && Math.hypot(x.x - b.x, x.z - b.z) < 9 && Math.abs((x.x - b.x) * fx + (x.z - b.z) * fz) < 1.5))).map((x) => x.mesh)]);
+        frearAtras(st, b.mesh, dt, 13, b.x, b.z, b.ang, 70);
+      }
     }
   }
-  for (const b of onibusNpc) if (!b.ativo) b.mesh.visible = false;
+  for (const b of onibusNpc) { if (!b.ativo) b.mesh.visible = false; b.vivo = b.ativo && b.mesh.visible; }   // corpos para o próximo quadro
+  corposT = 0;
+  pontosAntes.length = 0; for (const b of onibusNpc) if (b.ativo && b.e?.rota && b.e.parado) pontosAntes.push({ x: b.x, z: b.z, dono: b.chB });   // libera quem saiu
   if (minhaVolta) atualizarMinhaVolta(dt, t);
   animarRota(dt);
   atualizarFiscal(dt, t);
@@ -8437,11 +8585,14 @@ SETORES.forEach((S, k) => {
     const l = { s, x: q.x + rx * 4.6, z: q.z + rz * 4.6, ang: q.ang, coletada: -1e9, mesh: null, i: LIXEIRAS.length, setor: S.id }; LIXEIRAS.push(l); S.lix.push(l);
   }
   // caminhão do sistema: 7 m/s, para em cada lixeira e 20 s na Central; os setores saem em horários diferentes
-  const tab = []; let t = 0, sAnt = 0;
-  for (const l of S.lix) { const chega = t + (l.s - sAnt) / 7 + 2; tab.push({ chega, sai: chega + PARADA_LIXO }); t = chega + PARADA_LIXO; sAnt = l.s; }
-  const fimT = t + (S.cam.L - sAnt) / 7 + 2; S.tab = { tab, fim: fimT, ciclo: fimT + 20 }; S.fase = k * 47;
+  S.fase = k * 47; tabelaSetor(S);
   S.npc = null; S.garis = [];
 });
+function tabelaSetor(S) {
+  const tab = []; let t = 0, sAnt = 0;
+  for (const l of S.lix) { const chega = t + (l.s - sAnt) / 7 + 2; tab.push({ chega, sai: chega + PARADA_LIXO }); t = chega + PARADA_LIXO; sAnt = l.s; }
+  const fimT = t + (S.cam.L - sAnt) / 7 + 2; S.tab = { tab, fim: fimT, ciclo: fimT + 20 };
+}
 const SETOR_ID = Object.fromEntries(SETORES.map((S) => [S.id, S]));
 function caminhaoLixoNpc(S, t) {
   const C = S.tab.ciclo, u = (((t - S.fase) % C) + C) % C; let sAnt = 0, tAnt = 0;
@@ -8457,6 +8608,7 @@ function caminhaoLixoNpc(S, t) {
 let centralMontada = false, minhaColeta = null;
 const ehGari = () => jogador.perfil?.profissao === 'gari' || jogador.perfil?.cargo === 'admin';
 function montarCentral() {
+  ajustarAoMapa();
   if (centralMontada) return; centralMontada = true;
   const C = CENTRAL, y = 0.18, Mt = (cor, o = {}) => new THREE.MeshStandardMaterial({ color: cor, roughness: 0.8, ...o });
   const caixa = (x, yy, z, w, h, d, m, col = false) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, yy, z); o.castShadow = o.receiveShadow = true; scene.add(o); if (col) mundo.addCol({ tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 }); return o; };
@@ -8522,12 +8674,14 @@ function atualizarColeta(dt) {
   montarCentral();
   const t = agoraServidor() / 1000, ocupados = setoresComGari();
   for (const S of SETORES) {
-    const e = caminhaoLixoNpc(S, t), q = pontoCaminho(S.cam, e.s), perto = Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) < 260;
+    S.st ||= { atraso: 0 };
+    const e = caminhaoLixoNpc(S, t - S.st.atraso), q = pontoCaminho(S.cam, e.s), perto = Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) < 260;
     const ativo = !ocupados.has(S.id);
     if (ativo && e.lixeira) esvaziar(e.lixeira, t);   // o caminhão do sistema recolhe mesmo longe (todos veem igual)
     if (!S.npc && perto && modelos.caminhao_lixo) { S.npc = civico.modeloCarro('caminhao_lixo', '#ffffff'); S.npc.userData.giroflex = true; scene.add(S.npc); }
     if (!S.npc) continue;
     S.npc.position.set(q.x, alturaChao(q.x, q.z), q.z); S.npc.rotation.y = q.ang;
+    if (S.npc.visible && !e.lixeira) frearAtras(S.st, S.npc, dt, 8);   // respeita quem está parado na frente
     S.npc.visible = ativo && perto && !jogador.dentroCasa;
     if (S.npc.visible) sons.continuo(e.lixeira ? 'caminhao_lenta' : 'caminhao_alto', 0.45 * sons.perto(Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z), 50), 0.9);
     if (S.npc.visible || S.garis.length) posicionarGaris(S, S.npc, e.lixeira ? e.f : null, e.lixeira ? lixReal(e.lixeira) : null, S.npc.visible && Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) < 160, dt);

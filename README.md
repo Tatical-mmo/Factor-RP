@@ -930,3 +930,23 @@ Rode **`supabase/65a_financiamento.sql`** e depois **`supabase/65b_financiamento
   - o atraso cresce 3% a cada 64 min, e o banco tira da poupança e de metade da carteira;
   - depois de acertar, volta ao nível 1 com +2% de juros e precisa de 2 financiamentos em dia para subir cada nível até o 3.
 - O empréstimo à vista antigo continua, mas não dá para ter os dois ao mesmo tempo.
+
+## Versão 13/11 · ruas e PRF (20261113o)
+Rode **`supabase/66a_prf_computador.sql`** e depois **`supabase/66b_prf_sigilo.sql`** no Supabase.
+- **Nada de ponto ou lixeira no meio da rua:**
+  - o jogo confere o asfalto de verdade;
+  - ponto de ônibus ou lixeira que caía numa esquina (encostando na rua que cruza) anda até a calçada mais perto, no máximo 30 m pelo mesmo trajeto;
+  - o ônibus e o caminhão de lixo param no lugar novo.
+- **NPCs só pelas ruas:**
+  - bombeiros, ambulância, viatura, carona e veículos chamados seguem um mapa das ruas: saem pela rua mais perto, andam pelos cruzamentos na faixa da direita e param no meio-fio mais perto do destino, sem atravessar terrenos;
+  - sem ligação por rua (rodovias), usam o caminho antigo.
+- **Painel do admin → 🧭 Objetos em cima da rua:**
+  - lista casas, terrenos, prédios, territórios, lixeiras e pontos que encostam no asfalto, com a posição;
+  - toque para ir até lá; "📋 Copiar lista" para mandar a correção.
+- **PRF · 🖥️ Computador da PRF** (aba PRF da Prefeitura, só em serviço):
+  - mostra o diário de gastos do prefeito: salário dele, salário da polícia, seguranças, saídas do cofre, transferências e atos sobre territórios;
+  - transferências e atos sobre território aparecem com o destino em **SIGILO BANCÁRIO**;
+  - **🔓 Quebrar sigilo**: a Justiça leva 3 min e o agente precisa ficar em serviço; 1 pedido a cada 10 min por agente;
+  - se o destino foi um clã, é a prova: o prefeito é cassado e fica procurado (+3.000). Contra um ex-prefeito, ele fica procurado;
+  - o antigo "Investigar documentos" (sorte de 35%) saiu.
+- **Prefeito · Obras e eventos (gastos legais):** obra pública, evento na praça ou bônus dividido entre os servidores em serviço (polícia, PRF, médicos e bombeiros). Também aparecem como transferência em sigilo, então a PRF precisa quebrar o sigilo para saber se foi legal.

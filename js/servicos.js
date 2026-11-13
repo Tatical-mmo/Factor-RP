@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import * as rede from './rede.js';
 import * as civico from './civico.js';
-import { ruaC } from './mundo.js';
+import { ruaC, caminhoRuas } from './mundo.js';
 
 let ctx = null;
 let incendios = [], tempoFogo = 2, tempoProc = 20, tempoPonto = 45, esperaPonto = 0, tempoGuerra = 3;
@@ -211,10 +211,14 @@ function baterPonto() {
 const npcs = new Map();     // chave -> { obj, pts, t0, vel, volta, ... }
 function ruaMaisPerto(v) { let m = ruaC(0), d = Infinity; for (let i = -7; i <= 11; i++) { const c = ruaC(i); if (Math.abs(c - v) < d) { d = Math.abs(c - v); m = c; } } return m; }
 // caminho pelas ruas (em L): sai para a rua, anda na horizontal, depois na vertical e entra no destino
+// só pelas ruas de verdade (grafo do asfalto) e para no meio-fio mais perto do destino, sem entrar no terreno;
+// sem ligação pelas ruas (rodovias), usa o caminho em L antigo
 export function rotaRuas(a, b, parar = 0) {
-  const za = ruaMaisPerto(a.z), xb = ruaMaisPerto(b.x), zb = ruaMaisPerto(b.z);
-  const pts = faixaDireita([{ x: a.x, z: a.z }, { x: a.x, z: za }, { x: xb, z: za }, { x: xb, z: zb }, { x: b.x, z: zb }, { x: b.x, z: b.z }]
-    .filter((p, i, l) => i === 0 || Math.hypot(p.x - l[i - 1].x, p.z - l[i - 1].z) > 0.5));
+  const c = caminhoRuas(a, b);
+  let base;
+  if (c) base = c;
+  else { const za = ruaMaisPerto(a.z), xb = ruaMaisPerto(b.x), zb = ruaMaisPerto(b.z); base = [{ x: a.x, z: a.z }, { x: a.x, z: za }, { x: xb, z: za }, { x: xb, z: zb }, { x: b.x, z: zb }, { x: b.x, z: b.z }]; }
+  const pts = faixaDireita(base.filter((p, i, l) => i === 0 || Math.hypot(p.x - l[i - 1].x, p.z - l[i - 1].z) > 0.5));
   if (parar > 0 && pts.length > 1) {   // para um pouco antes do destino
     const u = pts[pts.length - 1], w = pts[pts.length - 2], d = Math.hypot(u.x - w.x, u.z - w.z);
     if (d > parar + 0.5) pts[pts.length - 1] = { x: u.x + (w.x - u.x) / d * parar, z: u.z + (w.z - u.z) / d * parar }; else pts.pop();
@@ -234,7 +238,7 @@ export function faixaDireita(pts, o = 2.4) {
     const off = dot > 0.9 ? a : { x: a.x + b.x, z: a.z + b.z };
     r.push({ x: pts[i].x + off.x * o, z: pts[i].z + off.z * o });
   }
-  r.push(pts[pts.length - 1]);
+  { const u = pts[pts.length - 1], d = dirTo(dir(pts[pts.length - 2], u)); r.push({ x: u.x + d.x * o, z: u.z + d.z * o }); }   // termina na faixa da direita
   return r;
 }
 export function pontoNaRota(r, s) {

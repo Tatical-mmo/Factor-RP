@@ -1154,3 +1154,72 @@ export function propsPerto(px, pz, dt) {
 }
 const alturaChaoMundo = (x, z) => { for (const [cx, cz, w, d, y] of calcadas) if (Math.abs(x - cx) <= w / 2 && Math.abs(z - cz) <= d / 2) return y; return 0.18; };
 export function finalizar() { planejarProps(); montarMobiliario(); montarMalhas(); }
+
+// ---------------------------------------------------------------- ruas de verdade: "é rua?" e caminho só pelas ruas
+// (usa os retângulos de asfalto desenhados; vale para a Metrópole, o horizonte e as cidades vizinhas)
+// as ruas do centro (4 x 4 quarteirões) são desenhadas pelo main.js; entram aqui só para a conta
+const ruasCentro = []; for (let i = 0; i <= N; i++) ruasCentro.push([0, ruaC(i), TOTAL, RW, false], [ruaC(i), 0, RW, TOTAL, true]);
+const todasRuas = () => (ruas.length ? ruas.concat(ruasCentro) : ruas);
+export function naRua(x, z, m = 0, vert) {   // vert: só as ruas verticais (true) ou horizontais (false)
+  for (const [rx, rz, w, d, v] of todasRuas()) if (vert !== undefined && v !== vert) continue; else if (Math.abs(x - rx) <= w / 2 + m && Math.abs(z - rz) <= d / 2 + m) return true;
+  return false;
+}
+let grafo = null;
+function montarGrafo() {
+  // cada rua vira uma linha no meio dela; os nós ficam nas pontas e nos cruzamentos
+  const segs = todasRuas().map(([x, z, w, d, vert]) => (vert ? { v: true, c: x, a: z - d / 2, b: z + d / 2, larg: w } : { v: false, c: z, a: x - w / 2, b: x + w / 2, larg: d }));
+  for (const s of segs) s.nos = [s.a, s.b];
+  for (let i = 0; i < segs.length; i++) for (let j = i + 1; j < segs.length; j++) {
+    const s = segs[i], t = segs[j];
+    if (s.v !== t.v) {   // cruzamento
+      const h = s.v ? t : s, v = s.v ? s : t;
+      if (v.c >= h.a - h.larg && v.c <= h.b + h.larg && h.c >= v.a - v.larg && h.c <= v.b + v.larg) { h.nos.push(Math.min(h.b, Math.max(h.a, v.c))); v.nos.push(Math.min(v.b, Math.max(v.a, h.c))); }
+    } else if (Math.abs(s.c - t.c) < 1 && s.a <= t.b + 2 && t.a <= s.b + 2) {   // mesma rua em pedaços
+      s.nos.push(Math.min(s.b, Math.max(s.a, t.a)), Math.min(s.b, Math.max(s.a, t.b))); t.nos.push(Math.min(t.b, Math.max(t.a, s.a)), Math.min(t.b, Math.max(t.a, s.b)));
+    }
+  }
+  const nos = new Map(), chave = (x, z) => `${Math.round(x / 2)},${Math.round(z / 2)}`;   // pontas a menos de ~2 m viram o mesmo nó
+  const no = (x, z) => { const k = chave(x, z); let n = nos.get(k); if (!n) { n = { x, z, viz: [] }; nos.set(k, n); } return n; };
+  for (const s of segs) {
+    s.nos = [...new Set(s.nos.map((u) => Math.round(u * 10) / 10))].sort((p, q) => p - q);
+    s.lista = s.nos.map((u) => (s.v ? no(s.c, u) : no(u, s.c)));
+    for (let k = 1; k < s.lista.length; k++) { const p = s.lista[k - 1], q = s.lista[k]; if (p === q) continue; const d = Math.hypot(p.x - q.x, p.z - q.z); p.viz.push([q, d]); q.viz.push([p, d]); }
+  }
+  grafo = { segs, nos: [...nos.values()] };
+}
+// ponto da rua mais perto (no meio dela) e os nós vizinhos naquele trecho
+function entrada(x, z) {
+  let m = null, dm = Infinity;
+  for (const s of grafo.segs) {
+    const u = Math.min(s.b, Math.max(s.a, s.v ? z : x)), px = s.v ? s.c : u, pz = s.v ? u : s.c, d = Math.hypot(px - x, pz - z);
+    if (d < dm) { dm = d; m = { s, u, x: px, z: pz, d }; }
+  }
+  if (!m) return null;
+  const L = m.s.lista, us = m.s.nos; let k = 1; while (k < us.length - 1 && us[k] < m.u) k++;
+  m.viz = [[L[k - 1], Math.abs(m.u - us[k - 1])], [L[k], Math.abs(us[k] - m.u)]];
+  return m;
+}
+// caminho pelas ruas de a até o meio-fio mais perto de b: [{x,z}, ...] (null se não houver ligação)
+export function caminhoRuas(a, b) {
+  if (!ruas.length) return null;
+  if (!grafo) montarGrafo();
+  const ea = entrada(a.x, a.z), eb = entrada(b.x, b.z);
+  if (!ea || !eb || ea.d > 80 || eb.d > 80) return null;
+  if (ea.s === eb.s) return [{ x: a.x, z: a.z }, { x: ea.x, z: ea.z }, { x: eb.x, z: eb.z }];
+  // Dijkstra simples (poucos nós)
+  const dist = new Map(), ant = new Map(), fila = [];
+  for (const [n, d] of ea.viz) { if (!(dist.get(n) <= d)) { dist.set(n, d); ant.set(n, null); fila.push(n); } }
+  const fim = new Map(eb.viz.map(([n, d]) => [n, d]));
+  let melhor = null, dmelhor = Infinity;
+  while (fila.length) {
+    let i = 0; for (let k = 1; k < fila.length; k++) if (dist.get(fila[k]) < dist.get(fila[i])) i = k;
+    const n = fila.splice(i, 1)[0], dn = dist.get(n);
+    if (dn >= dmelhor) break;
+    if (fim.has(n) && dn + fim.get(n) < dmelhor) { dmelhor = dn + fim.get(n); melhor = n; }
+    for (const [q, d] of n.viz) { const nd = dn + d; if (!(dist.get(q) <= nd)) { if (!dist.has(q)) fila.push(q); dist.set(q, nd); ant.set(q, n); } }
+  }
+  if (!melhor) return null;
+  const meio = []; for (let n = melhor; n; n = ant.get(n)) meio.unshift({ x: n.x, z: n.z });
+  return [{ x: a.x, z: a.z }, { x: ea.x, z: ea.z }, ...meio, { x: eb.x, z: eb.z }];
+}
+export const listaRuas = () => ruas;

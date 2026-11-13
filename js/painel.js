@@ -364,6 +364,12 @@ function abaEu() {
         .map(([k, t]) => `<label><input type="checkbox" data-reset="${k}" checked> ${t}</label>`).join('')}</div>
       <div class="botoes"><input id="pResetConf" placeholder="Digite RESETAR"><button id="pReset" class="perigo">🧹 Resetar o mapa</button></div>`;
   }
+  if (eu.cargo === 'admin' && ctx.objetosNaRua) {
+    const lista = ctx.objetosNaRua();
+    h += `<div class="sub">🧭 Objetos em cima da rua</div>${lista.length ? `<p class="dica">${lista.length} encontrado(s). Toque para ir até lá; "Copiar lista" para mandar a correção.</p>
+      <div class="botoes">${lista.map((o, i) => `<button data-narua="${i}">${esc(o.tipo)} ${esc(o.nome)} · ${Math.round(o.x)}, ${Math.round(o.z)}</button>`).join('')}<button id="pNaRuaCopiar">📋 Copiar lista</button></div>`
+      : '<p class="dica">Nada em cima da rua: casas, terrenos, territórios, lixeiras e pontos estão no lugar.</p>'}`;
+  }
   if (eu.cargo === 'admin' && ctx.veiculosTeste) h += `<div class="sub">🧪 Testar veículo</div><p class="dica">Aparece aqui onde você está (aviões: na frota do Aeroporto da Metrópole). Para sair, use o botão de sair do veículo: ele some.</p><div class="botoes">${ctx.veiculosTeste().map((v) => `<button data-testar="${v.id}">${esc(v.nome)}</button>`).join('')}</div>`;
   if (pode('teleportar')) h += `<div class="sub">Teleportar para</div><div class="botoes">${ctx.locais().map((l, i) => `<button data-local="${i}">${esc(l.nome)}</button>`).join('')}</div>`;
   h += `<div class="sub">Skin (grátis para a equipe)</div><div class="skins">${[...ROBOS.map((id) => ({ id, nome: id === 'Rusty_Scout_Bot' ? 'Robô Batedor' : 'Robô Sentinela' })), ...PERSONAGENS, ...(eu.cargo === 'admin' ? PERSONAGENS_EVENTO : [])]
@@ -373,6 +379,11 @@ function abaEu() {
   const apd = $('pArmaPd'); if (apd) apd.onclick = () => executar(() => ctx.esconderArmaPd(), 'Arma dourada escondida aqui. Todos foram avisados do evento.');
   const b = $('pImortal'); if (b) b.onclick = () => executar(() => rede.painel.imortal(!eu.imortal), eu.imortal ? 'Modo imortal desligado.' : 'Modo imortal ligado.');
   c.querySelectorAll('[data-local]').forEach((x) => { x.onclick = () => { const l = ctx.locais()[x.dataset.local]; ctx.teleportar(l.x, l.z); msg('Teleportado: ' + l.nome); }; });
+  if (ctx.objetosNaRua && $('pNaRuaCopiar')) {
+    const lista = ctx.objetosNaRua();
+    c.querySelectorAll('[data-narua]').forEach((x) => { x.onclick = () => { const o = lista[x.dataset.narua]; ctx.teleportar(o.x + 3, o.z + 3); msg(`Você foi até: ${o.tipo} ${o.nome}`); }; });
+    $('pNaRuaCopiar').onclick = () => { const t = lista.map((o) => `${o.tipo} ${o.nome} @ ${o.x.toFixed(1)}, ${o.z.toFixed(1)}`).join('\n'); navigator.clipboard?.writeText(t).then(() => msg('Lista copiada.'), () => msg(t)); };
+  }
   c.querySelectorAll('[data-testar]').forEach((x) => { x.onclick = () => { fechar(); ctx.testarVeiculo(x.dataset.testar); }; });
   c.querySelectorAll('[data-skin]').forEach((x) => { x.onclick = () => executar(() => rede.painel.skin(x.dataset.skin), 'Skin trocada.'); });
   if (eu.cargo === 'admin') { blocoPrefeitura(); blocoPerdao(); }

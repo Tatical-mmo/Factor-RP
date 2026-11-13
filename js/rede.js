@@ -455,6 +455,7 @@ export const prefeitura = {
   processar: () => rpc('processar_prefeitura'),
   verba: (cla, valor) => rpc('favor_verba', { p_cla: cla, p_valor: valor }),
   territorio: (t, cla) => rpc('favor_territorio', { p_territorio: t, p_cla: cla }),
+  gasto: (tipo, v) => rpc('prefeito_gasto', { p_tipo: tipo, p_valor: v }),
   outdoors: () => sel(sb.from('outdoors').select('*').order('id')),
   alugarOutdoor: (id, min, tipo, empresa, texto) => rpc('alugar_outdoor', { p_outdoor: id, p_minutos: min, p_tipo: tipo, p_empresa: empresa, p_texto: texto }),
 };
@@ -463,6 +464,9 @@ export const prf = {
   sair: () => rpc('sair_prf'),
   salario: () => rpc('salario_prf'),
   investigar: () => rpc('prf_investigar'),
+  computador: () => rpc('prf_computador'),
+  pedirSigilo: (id) => rpc('prf_pedir_sigilo', { p_gasto: id }),
+  verSigilo: (id) => rpc('prf_ver_sigilo', { p_pedido: id }),
   prender: (alvo) => rpc('prf_prender', { p_alvo: alvo }),
 };
 export const carros = {
