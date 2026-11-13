@@ -299,7 +299,7 @@ function atualizarNpcs(dt) {
     // trânsito: espera quem estiver na frente (o atraso é recuperado depois, um pouco mais rápido)
     if (n.obj.visible && !n.chegou || n.volta) {
       const o = n.obj.position, bloq = n.obj.visible && (ctx.obstaculo?.(o.x, o.z, n.obj.rotation.y, n.obj) || (n.volta && ctx.sinal?.(o.x, o.z, n.obj.rotation.y)));   // voltando (sem sirene) respeita o sinal
-      n.atraso = bloq ? Math.min(30, n.atraso + dt) : Math.max(0, n.atraso - dt * 0.4);
+      n.atraso = bloq ? Math.min(bloq.fogo ? 900 : 30, n.atraso + dt) : Math.max(0, n.atraso - dt * 0.4);   // veículo em chamas: espera o tempo que for
     }
     const r = n.volta || n.rota; let s = ((agora - (n.volta ? n.t1 : n.t0)) / 1000 - n.atraso) * n.vel;
     // arrancada: sai devagar e vai ganhando velocidade (os pesados demoram mais); o que faltou vira atraso

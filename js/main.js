@@ -246,11 +246,11 @@ function carregarGLB(url) {
 }
 
 const modelos = {};   // nome -> Object3D original (para clonar)
-function prepararEstatico(obj) {
+function prepararEstatico(obj, doisLados = false) {
   obj.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = true; o.receiveShadow = true;
-      if (o.material) { o.material.envMapIntensity = 0.8; }
+      if (o.material) { o.material.envMapIntensity = 0.8; if (doisLados) o.material.side = THREE.DoubleSide; }   // modelo com faces viradas pra dentro: desenha os dois lados (senão fica 'transparente')
     }
   });
   return obj;
@@ -2168,7 +2168,7 @@ async function iniciarJogo(perfil) {
   $('carregando').classList.remove('oculto');
   montarChao();
   // um modelo faltando não pode travar o jogo: ele só fica de fora (veículos e prédios têm versão feita por código)
-  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${/^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : ''}`)).scene); } catch (e) { console.warn('modelo não carregou:', m, e); } });
+  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${/^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); } catch (e) { console.warn('modelo não carregou:', m, e); } });
   const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
   const skin = perfil.policial ? SKIN_POLICIA : id;
   const avatarP = criarAvatar(ROBOS.includes(skin) ? 'robos' : pastaJogador, skin);
@@ -3503,13 +3503,13 @@ function frearAtras(st, o, dt, dist = 9, x = o.position.x, z = o.position.z, ang
   // sinal vermelho à frente: espera na faixa (não conta para a "paciência" de travamento)
   // (medido do bico do veículo: um ônibus comprido não para com a frente já dentro do cruzamento)
   const meio = Math.max(0, dist - 7), bx = x + Math.sin(ang) * meio, bz = z + Math.cos(ang) * meio;
-  if (!st.sirene && semaforos.sinalAFrente(bx, bz, ang, meio > 0 ? 5 : Math.min(dist, 10))) { st.atraso = Math.min(120, (st.atraso || 0) + dt); return st.atraso; }
+  if (!st.sirene && semaforos.sinalAFrente(bx, bz, ang, meio > 0 ? 5 : Math.min(dist, 10))) { if ((st.atraso || 0) < 120) st.atraso = Math.min(120, (st.atraso || 0) + dt); return st.atraso; }
   // longe de quem joga a checagem é mais espaçada (meio segundo), mas continua: ninguém "entra" no outro fora da vista
   const f = foco(), longe = Math.abs(x - f.x) + Math.abs(z - f.z) > 260;
   let bloq;
   if (longe && (st.prox = (st.prox || 0) - dt) > 0) bloq = st.ultimo;
   else { st.prox = 0.5; bloq = st.ultimo = st.fantasma <= 0 && obstaculoAFrente(x, z, ang, st.ignorar || o, dist, o); }
-  if (bloq) { st.atraso = Math.min(120, (st.atraso || 0) + dt); if (!bloq.fogo) st.bloq = (st.bloq || 0) + dt; if (st.bloq > paciencia) { st.fantasma = 2; st.bloq = 0; } }   // veículo em chamas: espera de verdade, nunca atravessa
+  if (bloq) { const teto = bloq.fogo ? 1800 : 120; if ((st.atraso || 0) < teto) st.atraso = Math.min(teto, (st.atraso || 0) + dt); if (!bloq.fogo) st.bloq = (st.bloq || 0) + dt; if (st.bloq > paciencia) { st.fantasma = 2; st.bloq = 0; } }   // veículo em chamas: espera de verdade, nunca atravessa
   else { st.bloq = 0; st.atraso = Math.max(0, (st.atraso || 0) - dt * (longe ? 1 : 0.35)); }
   return st.atraso;
 }
@@ -7536,9 +7536,9 @@ function atualizarQueimados(dt) {
   for (const f of servicos.listaIncendios()) {
     if (f.tipo !== 'veiculo' || !f.ref?.startsWith('rua:')) continue;
     const k = +f.ref.slice(4), c = mundo.carroRua(k); if (!c || largadosRua.has(k)) continue;
-    mundo.tirarCarroRua(k, true);
-    const mesh = civico.modeloCarro(MODELO_RUA[c.tipo] || 'popular', c.cor); mesh.position.set(c.x, alturaChao(c.x, c.z), c.z); mesh.rotation.y = c.rot; scene.add(mesh);
-    largadosRua.set(k, { mesh, x: c.x, z: c.z, r: c.rot, ate: Date.parse(f.inicio) + 360000 });   // depois de ~6 min volta uma vaga nova
+    mundo.tirarCarroRua(k, true);   // o carro está onde o fogo está (vaga ou onde foi largado)
+    const mesh = civico.modeloCarro(MODELO_RUA[c.tipo] || 'popular', c.cor); mesh.position.set(f.x, alturaChao(f.x, f.z), f.z); mesh.rotation.y = c.rot; scene.add(mesh);
+    largadosRua.set(k, { mesh, x: f.x, z: f.z, r: c.rot, ate: Date.parse(f.inicio) + 360000 });   // depois de ~6 min volta uma vaga nova
   }
   for (const f of servicos.listaIncendios()) {
     if (f.tipo !== 'veiculo' || !f.ref) continue;
@@ -7576,7 +7576,7 @@ function atualizarObstrucoes(dt) {
   if ((tempoBloq -= dt) > 0) return; tempoBloq = 1;
   const lista = [];
   for (const f of servicos.listaIncendios()) if (f.tipo === 'veiculo') {
-    const r = f.porte >= 2 ? 4 : 2.6, v = f.ref && veiculoPorRef(f.ref), x = v ? v.x : f.x, z = v ? v.z : f.z;
+    const r = f.porte >= 2 ? 6 : 5, v = f.ref && veiculoPorRef(f.ref), x = v ? v.x : f.x, z = v ? v.z : f.z;   // fecha a rua toda (as duas faixas)
     lista.push({ x, z, r, ref: f.ref }); if (f.ref) carcacas.set(f.ref, { x, z, r });
   }
   for (const [ref, k] of carcacas) {   // carcaça: some quando o veículo sai dali (volta para a vaga, o dono, a rota…)
@@ -7604,8 +7604,9 @@ function montarDesvios(lista) {
       for (let s = 0; s < L.L; s += 2) { const q = pontoCaminho(L, s), d = Math.hypot(q.x - k.x, q.z - k.z); if (d < dm) { dm = d; sb = s; } }
       if (sb === null) continue;
       const s1 = Math.max(0, sb - 32), s2 = Math.min(L.L, sb + 32);
+      if (!L.circular && (s1 < 14 || s2 > L.sFila - 60)) continue;   // dentro/na porta da rodoviária não dá para contornar: espera
       const a = pontoCaminho(L, s1), b = pontoCaminho(L, s2), rota = servicos.rotaRuas({ x: a.x, z: a.z }, { x: b.x, z: b.z });
-      if (!rota || rota.total > 450 || rota.pts.some((p, i) => i > 0 && mundo.distTrecho(k, rota.pts[i - 1], p) < k.r + 2)) continue;   // sem volta possível: espera
+      if (!rota || rota.total > 450 || rota.total < (s2 - s1) * 0.8 || rota.pts.some((p, i) => i > 0 && mundo.distTrecho(k, rota.pts[i - 1], p) < k.r + 2)) continue;   // sem volta possível: espera
       L.desvios.push({ id: ++desvioSeq, s1, s2, rota });
     }
   }
@@ -7669,7 +7670,7 @@ function desvioJujuba(v, agora) {
 // ================================================================= jujubas (ração militar)
 // Efeito de 5 min (mais rápido, soco mais forte, +20% de vida aos poucos), caminhões de rações saindo do Quartel
 // (Porto Sul) para a corporação, sequestro, placa do valor no quartel e o comprador ilegal de Vila Serra.
-const COMPRADOR = { x: 64, z: -972, porta: { x: 64, z: -962.5 } };
+const COMPRADOR = { x: 64, z: -972, porta: { x: 64, z: -964 } };
 const viagensJuj = new Map();   // id -> { d, rota, mesh }
 let placaRacoes = null, valorPlaca = 0, compradorMontado = null, tempoJujPos = 0, jujubaAvisou = 0;
 const racaoAtiva = () => Math.max(jogador.jujubaAte || 0, Date.parse(jogador.perfil?.jujuba_ate || 0) || 0) > agoraServidor();
@@ -7764,6 +7765,7 @@ function dirigirJujuba(v, qtd) {
   entrarCarro({ d: { id: 'juj' + v.d.id, modelo: 'exercito_caminhao', cor: '#556b2f' }, mesh: v.mesh });
   jogador.carro.jujuba = v.d.id; jogador.carro.salvar = 1e9; jogador.carro.cargaJuj = qtd || v.d.qtd;
   v.mesh = null;
+  rastrear({ nome: '📦 Comprador (Seu Tonho)', x: COMPRADOR.porta.x, z: COMPRADOR.porta.z + 6, comprador: true });   // destaque no mapa + feixe até o armazém
   aviso('🚚 Carga de rações do Exército: não dá para guardar no clã. Só o comprador do armazém de Vila Serra (ao lado da loja) compra.', 5);
 }
 function largarJujuba(c) {
@@ -7789,19 +7791,53 @@ function montarComprador() {
   const perto = Math.hypot(COMPRADOR.x - jogador.pos.x, COMPRADOR.z - jogador.pos.z) < 160;
   if (!perto) return;
   if (!compradorMontado) {
-    const g = new THREE.Group(), m = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });
-    const galpao = new THREE.Mesh(new THREE.BoxGeometry(12, 5, 12), m('#8a7f6a')); galpao.position.set(0, 2.6, 0); g.add(galpao);
-    const teto = new THREE.Mesh(new THREE.BoxGeometry(12.6, 0.4, 12.6), m('#5d5446')); teto.position.set(0, 5.2, 0); g.add(teto);
-    const porta = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, 0.2), m('#3d3a35')); porta.position.set(0, 1.9, 6.05); g.add(porta);
+    // galpão de tijolo com telhado de zinco em duas águas, porta de enrolar listrada, toldo, caixotes e balcão
+    const g = new THREE.Group(), m = (c, r = 0.85, x = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: r, ...x });
+    const tex = (w, h, f) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; f(cv.getContext('2d')); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; };
+    const tijolo = tex(128, 128, (c) => { c.fillStyle = '#9a5a3c'; c.fillRect(0, 0, 128, 128); c.fillStyle = '#c9b49a';
+      for (let y = 0; y < 128; y += 16) { c.fillRect(0, y, 128, 2); for (let x = (y / 16) % 2 ? 16 : 0; x < 128; x += 32) c.fillRect(x, y, 2, 16); }
+      for (let k = 0; k < 90; k++) { c.fillStyle = `rgba(${Math.random() < 0.5 ? '60,30,20' : '200,140,110'},.18)`; c.fillRect(Math.random() * 128, Math.random() * 128, 14, 6); } });
+    tijolo.repeat.set(3, 1.4);
+    const zinco = tex(64, 64, (c) => { for (let x = 0; x < 64; x++) { const v = 150 + Math.round(Math.sin(x / 64 * Math.PI * 8) * 35); c.fillStyle = `rgb(${v},${v + 4},${v + 8})`; c.fillRect(x, 0, 1, 64); } c.fillStyle = 'rgba(120,70,40,.25)'; c.fillRect(0, 50, 64, 14); });
+    zinco.repeat.set(6, 1);
+    const enrolar = tex(64, 64, (c) => { for (let y = 0; y < 64; y += 4) { c.fillStyle = y % 8 ? '#7d8790' : '#5e666e'; c.fillRect(0, y, 64, 4); } });
+    enrolar.repeat.set(1, 4);
+    const W = 13, D = 11, H = 5;
+    const parede = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), m('#ffffff', 0.95, { map: tijolo })); parede.position.y = H / 2; g.add(parede);
+    const rodape = new THREE.Mesh(new THREE.BoxGeometry(W + 0.1, 0.6, D + 0.1), m('#5b5650')); rodape.position.y = 0.3; g.add(rodape);
+    const oitao = new THREE.Shape([new THREE.Vector2(-W / 2, 0), new THREE.Vector2(W / 2, 0), new THREE.Vector2(0, 2.2)]);
+    for (const zz of [D / 2, -D / 2]) { const o = new THREE.Mesh(new THREE.ShapeGeometry(oitao), m('#ffffff', 0.95, { map: tijolo, side: THREE.DoubleSide })); o.position.set(0, H, zz); g.add(o); }
+    const aba = Math.hypot(W / 2 + 0.6, 2.2), incl = Math.atan2(2.2, W / 2);
+    for (const lado of [-1, 1]) { const t = new THREE.Mesh(new THREE.BoxGeometry(aba, 0.12, D + 1.2), m('#ffffff', 0.45, { map: zinco, metalness: 0.5 }));
+      t.position.set(lado * (W / 4 + 0.15), H + 1.1 + 0.05, 0); t.rotation.z = -lado * incl; g.add(t); }
+    const moldura = new THREE.Mesh(new THREE.BoxGeometry(5.8, 4.3, 0.3), m('#3b3631')); moldura.position.set(0, 2.15, D / 2 + 0.05); g.add(moldura);
+    const vao = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, 0.1), m('#1d1b19', 1)); vao.position.set(0, 1.8, D / 2 + 0.12); g.add(vao);
+    const porta = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, 0.12), m('#ffffff', 0.5, { map: enrolar, metalness: 0.6 })); porta.position.set(0, 1.9, D / 2 + 0.2); g.add(porta);
+    const caixaPorta = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.6, 0.6), m('#6b7178', 0.5, { metalness: 0.6 })); caixaPorta.position.set(0, 4.05, D / 2 + 0.35); g.add(caixaPorta);
+    const toldo = new THREE.Mesh(new THREE.BoxGeometry(7.5, 0.1, 2.2), m('#2f6b3a')); toldo.position.set(0, 4.55, D / 2 + 1.1); toldo.rotation.x = 0.22; g.add(toldo);
+    for (const xx of [-3.6, 3.6]) { const j = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.1, 0.12), m('#d8d1a8', 0.2, { emissive: '#3a3320' })); j.position.set(xx + (xx > 0 ? 0.6 : -0.6), 2.8, D / 2 + 0.06); g.add(j);
+      const gr = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.3, 0.05), m('#2a2a2a', 0.6, { wireframe: true })); gr.position.set(j.position.x, 2.8, D / 2 + 0.14); g.add(gr); }
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), m('#ffe9a8', 0.3, { emissive: '#ffcf6a', emissiveIntensity: 0.8 })); lamp.position.set(0, 4.75, D / 2 + 0.5); g.add(lamp);
+    const madeira = m('#a07a4a'), pallet = m('#8a6a3e');
+    for (const [cx, cz, cy, s] of [[-5.2, D / 2 + 1.6, 0.45, 0.9], [-4.2, D / 2 + 1.4, 0.45, 0.9], [-4.7, D / 2 + 1.5, 1.35, 0.9], [5.3, D / 2 + 1.3, 0.4, 0.8]]) {
+      const cx2 = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), madeira); cx2.position.set(cx, cy, cz); cx2.rotation.y = cx * 0.3; g.add(cx2); }
+    const pl = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.18, 1.1), pallet); pl.position.set(4.6, 0.09, D / 2 + 2.6); g.add(pl);
+    const balcao = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.05, 0.7), m('#6e4b2a')); balcao.position.set(3.2, 0.52, D / 2 + 1.4); g.add(balcao);
+    g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     g.position.set(COMPRADOR.x, alturaChao(COMPRADOR.x, COMPRADOR.z), COMPRADOR.z); scene.add(g);
-    const placa = textoSprite('📦 Armazém do Seu Tonho', { escala: 0.7, fundo: 'rgba(90,70,40,.92)' }); placa.position.set(COMPRADOR.x, 6.6, COMPRADOR.z + 6.3); scene.add(placa);
+    colisores.push({ tipo: 'caixa', x0: COMPRADOR.x - W / 2, x1: COMPRADOR.x + W / 2, z0: COMPRADOR.z - D / 2, z1: COMPRADOR.z + D / 2 });
+    const placa = textoSprite('📦 Armazém do Seu Tonho', { escala: 0.7, fundo: 'rgba(90,70,40,.92)' }); placa.position.set(COMPRADOR.x, 7.6, COMPRADOR.z + D / 2 + 0.4); scene.add(placa);
     compradorMontado = { g, porta, aberto: null, placaFechado: null };
-    criarAvatar('personagens', 'Bandit_Brave').then((av) => { av.raiz.position.set(COMPRADOR.porta.x + 2, alturaChao(COMPRADOR.x, COMPRADOR.z), COMPRADOR.porta.z); av.raiz.rotation.y = 0; scene.add(av.raiz); av.tocar('idle'); compradorMontado.av = av; }).catch(() => {});
+    // Seu Tonho: atrás do balcão, de frente para a rua, com nome em cima
+    criarAvatar('personagens', 'Bandit_Brave').then((av) => { const y = alturaChao(COMPRADOR.x, COMPRADOR.z);
+      av.raiz.position.set(COMPRADOR.x + 3.2, y, COMPRADOR.z + D / 2 + 0.75); av.raiz.rotation.y = 0; scene.add(av.raiz); av.tocar('idle'); compradorMontado.av = av;
+      const nome = textoSprite('Seu Tonho', { escala: 0.45, fundo: 'rgba(40,30,20,.85)' }); nome.position.set(0, 2.25, 0); av.raiz.add(nome);
+    }).catch((e) => console.warn('Seu Tonho não carregou', e));
   }
   const aberto = !oficialPerto();
   if (aberto !== compradorMontado.aberto) {
     compradorMontado.aberto = aberto;
-    compradorMontado.porta.position.y = aberto ? 4.4 : 1.9;   // porta de enrolar: sobe quando abre
+    compradorMontado.porta.scale.y = aberto ? 0.12 : 1; compradorMontado.porta.position.y = aberto ? 3.85 : 1.9;   // porta de enrolar: enrola lá em cima quando abre
     if (compradorMontado.av) compradorMontado.av.raiz.visible = aberto;
     if (!compradorMontado.placaFechado) { const f = textoSprite('FECHADO', { escala: 0.6, fundo: 'rgba(150,30,20,.92)' }); f.position.set(COMPRADOR.x, 3.6, COMPRADOR.z + 6.4); scene.add(f); compradorMontado.placaFechado = f; }
     compradorMontado.placaFechado.visible = !aberto;
@@ -7825,6 +7861,7 @@ async function venderJujuba() {
   try {
     const valor = await rede.jujuba.vender(c.jujuba, jogador.pos.x, jogador.pos.z);
     sairCarroLocal(); if (c.mesh) scene.remove(c.mesh); viagensJuj.delete(c.jujuba);
+    if (rastreio?.comprador) rastrear(null);
     aviso(`💰 O Seu Tonho comprou a carga: +${valor.toLocaleString('pt-BR')} moedas.`, 4);
   } catch (e) { aviso(e.message, 3); }
   finally { ocupado = false; }
@@ -9486,6 +9523,7 @@ function prepararTransporte() {
   mundo.limparArea(RODO.x0 - 1, RODO.z0 - 1, RODO.x1 + 1, RODO.z1 + 1);
   mundo.limparArea(CENTRAL.x0 - 1, CENTRAL.z0 - 1, CENTRAL.x1 + 1, CENTRAL.z1 + 1); for (const S of SETORES) mundo.semEstacionar(S.cam.pts);
   mundo.limparArea(AUTOESCOLA.x0 - 1, AUTOESCOLA.z0 - 1, AUTOESCOLA.x1 + 1, AUTOESCOLA.z1 + 1);
+  mundo.limparArea(COMPRADOR.x - 9, COMPRADOR.z - 8, COMPRADOR.x + 9, COMPRADOR.z + 11);   // armazém do Seu Tonho: sem árvore na frente
   mundo.semEstacionar([[AUTOESCOLA.x0 - 12, AUTOESCOLA.saida.z], [AUTOESCOLA.x1 + 6, AUTOESCOLA.saida.z]]);
   for (const a of AEROPORTOS) {
     const c = a.cerca; mundo.limparArea(c.x0 - 6, c.z0 - 6, c.x1 + 6, c.z1 + 6);

@@ -1174,3 +1174,11 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **No jogo**:
   - Golpes e atropelos que chegam rápido demais do mesmo jogador (mais de 8 por segundo) são ignorados.
   - O aviso de "mapa resetado" só recarrega a página se veio de um admin on-line.
+
+## Versão 13/11 · armazém do Seu Tonho (20261113zi)
+
+- **Caminhão "transparente"**: o modelo novo do caminhão tem muitas faces viradas para dentro. Agora os modelos de caminhão são desenhados dos dois lados, e a cabine e o baú ficam inteiros.
+- **Comprador em destaque**: quando um membro de clã sequestra ou pega de volta o caminhão de rações, o armazém do Seu Tonho é marcado no mapa, com o feixe amarelo. A marca some depois da venda.
+- **Armazém novo**: galpão de tijolo com telhado de zinco em duas águas, porta de enrolar de metal, toldo, lâmpada, janelas com grade, caixotes, palete e balcão. As árvores da frente foram tiradas, e o galpão agora tem colisão.
+- **Seu Tonho**: fica atrás do balcão, de frente para a rua, com o nome em cima. Ele some quando a loja fecha porque há Exército, Polícia ou PRF a menos de 45 m.
+- **Ônibus e veículo em chamas**: nenhum ônibus passa pelo fogo. Eles param antes ou desviam, e os que estão saindo da rodoviária também esperam.
