@@ -595,7 +595,10 @@ const CORES_FAVELA = ['#b5652f', '#a85a2a', '#c4703a', '#9c4f25', '#b86b3c', '#a
 const chaoNatural = (x, z) => (z < -1150 ? morro(x, z) : morroPorto(x, z));
 export const LOTES_FAVELA = [];   // centros dos lotes de empresa na rua de baixo de cada favela
 const BASES_MORRO = [];           // { x, z, w, d, h, rampa }
-export const CASAS_FAVELA = [];   // portas das casas (id 5000+, igual à tabela casas do banco: compra e aluguel)
+export const CASAS_FAVELA = [];
+const alicerces = [];             // [x, z, w, d, y, h]: base de concreto das casas no barranco
+let malhaJanelas = null, matJanelas = null;
+const janelasDe = new Map();      // índice do prédio -> [instâncias das janelas acesas]   // portas das casas (id 5000+, igual à tabela casas do banco: compra e aluguel)
 let favelasProntas = false;
 export function listaCasasFavela() { if (!favelasProntas) gerarFavelas(); return CASAS_FAVELA; }
 function gerarFavelas() {
@@ -653,14 +656,16 @@ function gerarFavelas() {
       if (!livre(x - w / 2, z - d / 2, x + w / 2, z + d / 2)) continue;
       const hs = [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, 0]].map(([a, b]) => chaoNatural(x + a * w / 2, z + b * d / 2));
       const lo = Math.min(...hs), hi = Math.max(...hs), andares = 1 + Math.floor(rf() * rf() * 3.6);
-      const i = predio(x, z, w, d, andares * 2.9 + (hi - lo) + 0.4, { y: lo - 0.4, cor: CORES_FAVELA[Math.floor(rf() * CORES_FAVELA.length)], loja: false, det: false });
+      const topo = hi + 0.15;   // a casa começa no nível do ponto mais alto do terreno; embaixo, o alicerce de concreto
+      const i = predio(x, z, w, d, andares * 2.9, { y: topo, cor: CORES_FAVELA[Math.floor(rf() * CORES_FAVELA.length)], loja: false, det: false });
+      alicerces.push([x, z, w + 0.12, d + 0.12, lo - 0.6, topo - lo + 0.6]);
       // frente virada para a rua mais perto (o modelo 3D olha para +z)
       let rumo = 0, dm = Infinity;
       for (const [rx, rz, rw, rd, vert] of ruasMorro) {
         const dx = Math.max(0, Math.abs(x - rx) - rw / 2), dz = Math.max(0, Math.abs(z - rz) - rd / 2), dd = Math.hypot(dx, dz);
         if (dd < dm) { dm = dd; rumo = vert ? (rx > x ? Math.PI / 2 : -Math.PI / 2) : (rz > z ? 0 : Math.PI); }
       }
-      Object.assign(edificios[i], { tipo: 'favela', k: 1 + Math.floor(rf() * 4), rumo, solo: hi - lo + 0.4 });
+      Object.assign(edificios[i], { tipo: 'favela', k: 1 + Math.floor(rf() * 4), rumo, andares });
       { const meia = Math.abs(Math.sin(rumo)) > 0.5 ? w / 2 : d / 2, px = x + Math.sin(rumo) * (meia + 0.8), pz = z + Math.cos(rumo) * (meia + 0.8);
         const fav = f === F.serra ? 'serra' : 'porto', nfav = CASAS_FAVELA.filter((q) => q.favela === fav).length + 1;
         CASAS_FAVELA.push({ id: 5000 + CASAS_FAVELA.length, x: Math.round(px * 10) / 10, z: Math.round(pz * 10) / 10, favela: fav, rotulo: `${fav === 'serra' ? 'Morro da Serra' : 'Morro do Porto'} · casa ${nfav}` }); }
@@ -671,6 +676,34 @@ function gerarFavelas() {
 }
 // terreno do Morro do Porto, ruas acompanhando o relevo e o paredão de pedra sobre o mar
 function montarFavelasMalhas() {
+  // alicerces: concreto liso, com um tom levemente diferente em cada casa
+  if (alicerces.length) {
+    const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.95 }), alicerces.length);
+    alicerces.forEach(([x, z, w, d, y, h], k) => { _m.compose(_v.set(x, y, z), _q.identity(), _e.set(w, h, d)); im.setMatrixAt(k, _m); im.setColorAt(k, _c.set(['#8f8a80', '#9a958b', '#85817a', '#a39e93'][k % 4])); });
+    im.castShadow = true; im.receiveShadow = true; ctx.scene.add(im);
+  }
+  // janelas acesas à noite nas casas da favela (quadros de luz na frente da casa; acendem com a noite)
+  const lista = [];
+  edificios.forEach((e, i) => {
+    if (e.tipo !== 'favela') return;
+    const lado = Math.abs(Math.sin(e.rumo)) > 0.5, larg = lado ? e.d : e.w, meia = (lado ? e.w : e.d) / 2 + 0.04;
+    const fx = Math.sin(e.rumo), fz = Math.cos(e.rumo), rx = Math.cos(e.rumo), rz = -Math.sin(e.rumo);
+    const porAndar = larg > 5.4 ? 2 : 1, idx = [];
+    for (let a = 0; a < (e.andares || 1); a++) for (let k = 0; k < porAndar; k++) {
+      const h = Math.abs(Math.sin(i * 12.9898 + a * 78.233 + k * 37.719) * 43758.5453) % 1;   // sorteio fixo (não mexe no resto)
+      if (h > 0.68) continue;   // nem toda janela fica acesa
+      const off = porAndar === 1 ? (a % 2 ? 0.9 : -0.9) : (k ? 1 : -1) * larg * 0.24;
+      idx.push(lista.length);
+      lista.push([e.x + fx * meia + rx * off, e.y + 1.35 + a * 2.9, e.z + fz * meia + rz * off, e.rumo]);
+    }
+    if (idx.length) janelasDe.set(i, idx);
+  });
+  if (lista.length) {
+    matJanelas = new THREE.MeshBasicMaterial({ color: '#ffd58a', transparent: true, opacity: 0, depthWrite: false, toneMapped: false });
+    malhaJanelas = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.85, 0.85), matJanelas, lista.length);
+    lista.forEach(([x, y, z, r], k) => { _q.setFromAxisAngle(_v.set(0, 1, 0), r); _m.compose(_v.set(x, y, z), _q, _e.set(1, 1, 1)); malhaJanelas.setMatrixAt(k, _m); });
+    malhaJanelas.visible = false; malhaJanelas.frustumCulled = false; ctx.scene.add(malhaJanelas);
+  }
   const geo = new THREE.PlaneGeometry(200, 164, 80, 66).rotateX(-Math.PI / 2), pp = geo.attributes.position;
   for (let k = 0; k < pp.count; k++) { const x = pp.getX(k) + 1000, z = pp.getZ(k) + 1030; pp.setY(k, morroPorto(x, z) + 0.05); }
   geo.computeVertexNormals();
@@ -1252,6 +1285,7 @@ function mergeSimples(lista) {
 // noite: 0 = dia claro, 1 = noite fechada
 export function definirNoite(n) {
   UNI.uNoite.value = n;
+  if (matJanelas) { matJanelas.opacity = Math.min(1, n * 1.3) * 0.95; malhaJanelas.visible = n > 0.05; }
   if (matCabeca) matCabeca.emissiveIntensity = n * 2.2;
   if (matPoca) { matPoca.opacity = n * 0.6; matPoca.userData.malha.visible = n > 0.02; }
 }

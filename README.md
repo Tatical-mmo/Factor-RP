@@ -1439,3 +1439,4 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Incêndios em qualquer lugar**: além de empresas e casas, o fogo começa em ruas da metrópole (lixo e entulho), na mata de Vila Serra e de Porto Sul e em qualquer casa das favelas. Até 3 focos ao mesmo tempo, no máximo 1 novo a cada 4 minutos.
   - **Todos veem ao mesmo tempo**: o jogo recebe o aviso do banco na hora (não espera a próxima leitura), e quem está a até 220 m recebe "🔥 Fogo na …, a X m de você!".
   - Sem bombeiros, a prefeitura apaga em 3 minutos; quem tem dono (empresa, casa, casa da favela) paga a taxa de 300.
+- **Casas da favela**: a parte de baixo agora é um alicerce de concreto liso (sem janelas), do chão do barranco até o piso da casa. À noite, as janelas da frente das casas acendem (também nas casas em 3D).
