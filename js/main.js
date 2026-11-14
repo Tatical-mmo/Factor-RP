@@ -2717,7 +2717,7 @@ function atualizarRemotos(dt) {
         // o motor dele pegando, se for perto (o avião só se estiver no chão)
         const d = Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z), av = /^aviao_/.test(mod), pf = perfilSom(mod);
         if (av && (a.y || 0) - alturaChao(a.x, a.z) < 1 && d < 150) sons.tocar(`${SOM_AVIAO[mod.slice(6)]}_partida`, { vol: 0.8, dist: d, raio: 150 });
-        else if (pf && pf.p !== 'onibus' && d < 60) sons.tocar(`${pf.p}_partida`, { vol: 0.6, dist: d, raio: 60, velocidade: pf.tom });
+        else if (pf && d < 60) sons.tocar(`${pf.p}_partida`, { vol: 0.6, dist: d, raio: 60, velocidade: pf.tom });
       }
       const kc = Math.min(1, dt * 10);
       r.carro.position.x += (a.x - r.carro.position.x) * kc; r.carro.position.y += (a.y - r.carro.position.y) * kc; r.carro.position.z += (a.z - r.carro.position.z) * kc;
@@ -4220,7 +4220,7 @@ function perfilSom(modelo) {
   return { p, ronco: p !== 'caminhao', tom: modelo === 'tanque' ? 0.78 : 1 };
 }
 const perfilDoCarro = (c) => perfilSom(c.caminhao ? (c.tipo || 'caminhao') : c.modelo) || perfilSom(c.servico);
-function somPartida(c, op = {}) { const pf = c && perfilDoCarro(c); if (pf?.p === 'onibus') return; sons.tocar(pf ? `${pf.p}_partida` : 'carro_partida', { vol: pf ? 0.7 : 0.6, velocidade: pf?.tom || 1, ...op }); }
+function somPartida(c, op = {}) { const pf = c && perfilDoCarro(c); sons.tocar(pf ? `${pf.p}_partida` : 'carro_partida', { vol: pf ? 0.7 : 0.6, velocidade: pf?.tom || 1, ...op }); }
 function somMotores(dist) {
   const c = jogador.carro;
   if (c && !c.voa) {
@@ -4228,6 +4228,9 @@ function somMotores(dist) {
     if (pf?.p === 'onibus') {   // ônibus: som de viagem só andando; parado (ponto, rodoviária) fica em silêncio
       const max = c.max || 12, k = THREE.MathUtils.clamp(Math.abs(c.vel || 0) / max, 0, 1);
       if (Math.abs(c.vel || 0) > 0.4) sons.continuo('onibus_viagem', 0.25 + 0.35 * k, 0.85 + 0.25 * k);
+      const pe = pedais.acel || teclas.has('w') || teclas.has('arrowup') || (Math.abs(joy.y) > 0.3 && !TOQUE), agora = performance.now();
+      if (pe && !c.peAntes && k < 0.12 && agora - (c.ultRonco || 0) > 9000) { c.ultRonco = agora; sons.tocar('onibus_ronco', { vol: 0.6 }); }   // arrancada
+      c.peAntes = pe;
     } else if (pf) {   // parado: marcha lenta; acelerando: entra a rotação alta e o tom sobe; pisar devagar dá uma acelerada
       const max = c.max || civico.CARROS[c.modelo]?.vel || 11, k = THREE.MathUtils.clamp(Math.abs(c.vel || 0) / max, 0, 1);
       const pe = pedais.acel || teclas.has('w') || teclas.has('arrowup') || (Math.abs(joy.y) > 0.3 && !TOQUE);
@@ -9615,8 +9618,10 @@ function atualizarOnibus(dt) {
   // som de viagem (motor a diesel e estrada) só com o ônibus andando; parado no ponto ou esperando na rodoviária, silêncio
   if (jogador.onibus) { const b = onibusNpc.find((x) => x.ativo && x.L === jogador.onibus.L && x.m === jogador.onibus.m); if (b && !b.parado) sons.continuo('onibus_viagem', 0.55); }
   for (const b of onibusNpc) {
-    if (!b.ativo || b.parado || !andando(b.mesh)) continue;   // parado no trânsito também fica quieto
+    if (!b.ativo) continue;
     const d = Math.hypot(b.x - jogador.pos.x, b.z - jogador.pos.z);
+    if (b.parado !== b.paradoAntes) { if (b.paradoAntes && d < 50) sons.tocar('onibus_ronco', { vol: 0.55, dist: d, raio: 50 }); b.paradoAntes = b.parado; }   // arrancada ao sair do ponto
+    if (b.parado || !andando(b.mesh)) continue;   // parado (ponto, rodoviária, trânsito) fica quieto
     sons.continuo('onibus_viagem', 0.5 * sons.perto(d, 55));
   }
 }
