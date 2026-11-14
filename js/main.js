@@ -2363,6 +2363,7 @@ async function iniciarJogo(perfil) {
     esconderArmaPd: () => rede.pd.esconder(jogador.pos.x, jogador.pos.z),
     locais: () => LOCAIS,
     objetosNaRua: () => objetosNaRua(),
+    testeDefesa: (base, tipo) => testeDefesa(base, tipo),
     veiculosTeste: () => Object.entries(civico.CARROS).map(([id, c]) => ({ id, nome: `${c.voa ? (id.startsWith('aviao') ? '✈️' : '🚁') : id.includes('onibus') ? '🚌' : id.includes('caminhao') || id === 'bombeiros' ? '🚚' : id === 'tanque' ? '🪖' : '🚗'} ${c.nome}${id === 'onibus_executivo2' ? ' 2' : ''}` })),
     testarVeiculo,
     bueiro: (k) => BUEIROS[k], irPara: (x, z) => { jogador.dentroCasa = null; teleportar(x, z); }, marcar: (a) => rastrear(a),
@@ -12139,5 +12140,111 @@ function atualizarMarinha(dt) {
   const p = jogador.pos;
   if (!baseNaval && Math.hypot(p.x - 760, p.z - 1100) < 800) montarBaseNaval();
   if (Math.hypot(p.x - 450, p.z - 1054) < 500) portoesInternos();
-  atualizarPortoesInternos(dt); atualizarBaseNaval(dt); atualizarCruzeiros(dt); pedidosMissilAdmin(dt);
+  atualizarPortoesInternos(dt); atualizarBaseNaval(dt); atualizarCruzeiros(dt); pedidosMissilAdmin(dt); atualizarTesteDefesa(dt);
+}
+
+// ================================================================= 🧪 teste de defesa das bases (só na tela do admin)
+// Um NPC invasor (a pé, de helicóptero ou de avião) segue as mesmas regras dos jogadores: aviso, último aviso,
+// tiros dos soldados / alerta do antiaéreo e abate. No fim, um relatório com os tempos.
+let teste = null;
+const BASE_INFO = {   // portão e a direção "para fora" de cada base
+  a51: { montar: () => montarArea51(), portao: () => ({ x: A51.x1, z: 0 }), fora: [1, 0] },
+  quartel: { montar: () => montarQuartelExtras(), portao: () => mundo.QUARTEL.portao ? { x: mundo.QUARTEL.x0, z: mundo.QUARTEL.portao.z } : null, fora: [-1, 0] },
+  aerea: { montar: () => montarBaseAerea(), portao: () => ({ ...mundo.BASE_AEREA.portao }), fora: [0, -1] },
+  naval: { montar: () => montarBaseNaval(), portao: () => ({ ...mundo.BASE_NAVAL.portao }), fora: [0, -1] },
+};
+function testeDefesa(base, tipo) {
+  if (jogador.perfil?.cargo !== 'admin') return 'Só o admin.';
+  pararTeste();
+  if (base === 'parar') return 'Teste parado.';
+  const info = BASE_INFO[base]; if (!info) return 'Base inválida.';
+  let B = BASES.find((b) => b.id === base);
+  if (!B) { info.montar(); B = BASES.find((b) => b.id === base); }
+  if (!B) return 'A base não montou.';
+  const g = info.portao(), [fx, fz] = info.fora;
+  teste = { B, tipo, t: 0, log: [], fim: false, vida: 100, tiros: 0, aaT: 0, aaTiros: 0, aaDisp: 0, rajada: 0, avisou: false, mirou: false };
+  if (tipo === 'pe') {
+    teste.pos = new THREE.Vector3(g.x + fx * 60, 0, g.z + fz * 60); teste.alvo = new THREE.Vector3(g.x - fx * 30, 0, g.z - fz * 30);
+    criarAvatar('personagens', 'Bandit_Brave').then((av) => {
+      if (!teste) return; teste.av = av; av.raiz.position.copy(teste.pos); scene.add(av.raiz); av.tocar('walk', { velocidade: 1.8 });
+      const et = textoSprite('INVASOR (teste)', { escala: 0.5, fundo: 'rgba(170,30,30,.95)' }); et.position.y = 2.3; av.raiz.add(et);
+    }).catch(() => { teste.log.push('não carregou o invasor'); });
+  } else {
+    const ar = tipo === 'heli', d = ar ? 400 : 520, mod = ar ? 'helicoptero' : 'aviao_pequeno';
+    teste.pos = new THREE.Vector3(B.aa.cx + fx * d, ar ? 40 : 80, B.aa.cz + fz * d);
+    teste.mesh = civico.modeloCarro(mod); teste.mesh.position.copy(teste.pos); scene.add(teste.mesh);
+    const et = textoSprite('INVASOR (teste)', { escala: 0.6, fundo: 'rgba(170,30,30,.95)' }); et.position.y = 5; teste.mesh.add(et);
+    teste.vel = ar ? 30 : 45; teste.orbita = ar ? 40 : 90;
+  }
+  aviso(`🧪 Teste de defesa: ${tipo === 'pe' ? 'invasor a pé' : tipo === 'heli' ? 'helicóptero' : 'avião'} indo para ${B.nome}.`, 4);
+  return null;
+}
+function pararTeste() {
+  if (!teste) return;
+  if (teste.av) scene.remove(teste.av.raiz);
+  if (teste.mesh) scene.remove(teste.mesh);
+  teste = null;
+}
+function logTeste(txt) { teste.log.push(`${txt} em ${teste.t.toFixed(1)} s`); aviso(`🧪 ${txt} (${teste.t.toFixed(1)} s)`, 2.5); }
+function fimTeste(txt) {
+  teste.fim = true; teste.log.push(txt);
+  const T = teste;
+  setTimeout(() => { escolher('🧪 Relatório do teste', `${T.B.nome} · ${T.tipo === 'pe' ? 'invasor a pé' : T.tipo === 'heli' ? 'helicóptero' : 'avião'}:<br>• ${T.log.join('<br>• ')}`, [{ rotulo: 'Ok', fn: () => {} }]); if (teste === T) pararTeste(); }, 2500);
+}
+function atualizarTesteDefesa(dt) {
+  if (!teste || teste.fim && teste.tipo === 'pe') { if (teste?.av) teste.av.mixer.update(dt); return; }
+  const T = teste, B = T.B; T.t += dt;
+  if (T.t > 90 && !T.fim) { fimTeste('⏱️ 90 s sem abate: a defesa falhou'); return; }
+  if (T.tipo === 'pe') {
+    if (!T.av) return;
+    const r = T.av.raiz, d = distRect(B.rect, r.position.x, r.position.z);
+    if (!T.fim) {   // anda até passar do portão (os soldados não deixam)
+      const dx = T.alvo.x - r.position.x, dz = T.alvo.z - r.position.z, L = Math.hypot(dx, dz);
+      if (L > 1) { const nx = r.position.x + dx / L * 3 * dt, nz = r.position.z + dz / L * 3 * dt; r.position.set(nx, alturaChao(nx, nz), nz); r.rotation.y = Math.atan2(dx, dz); }
+    }
+    T.av.mixer.update(dt);
+    if (!T.avisou && d < B.aviso) { T.avisou = true; logTeste('⚠️ entrou na zona de aviso'); }
+    if (d < B.tiro) T.zona = (T.zona || 0) + dt;
+    if (T.zona >= 3 && !T.mirou) { T.mirou = true; logTeste('🔫 último aviso acabou: soldados atirando'); }
+    if (T.mirou && (T.rajada -= dt) <= 0 && T.vida > 0) {
+      T.rajada = 0.7;
+      let melhor = null, dm = 120;
+      for (const s of B.guardas) { const q = s.av.raiz.position, dd = Math.hypot(q.x - r.position.x, q.z - r.position.z); if (dd < dm) { dm = dd; melhor = s; } }
+      if (melhor) {
+        const q = melhor.av.raiz; q.rotation.y = Math.atan2(r.position.x - q.position.x, r.position.z - q.position.z);
+        const de = new THREE.Vector3(q.position.x, q.position.y + 1.3, q.position.z), vx = r.position.x - de.x, vy = r.position.y + 1.1 - de.y, vz = r.position.z - de.z, vl = Math.hypot(vx, vy, vz) || 1;
+        criarBola(de, new THREE.Vector3(vx / vl * 60, vy / vl * 60, vz / vl * 60), '#ffcf3a', false, 0.7);
+        T.vida -= 25; T.tiros++;
+        if (T.vida <= 0) { T.av.tocar('death', { umaVez: true, velocidade: 1, fade: 0.1 }); logTeste(`💀 invasor abatido com ${T.tiros} tiros`); fimTeste('✅ defesa a pé funcionando'); }
+      } else if (!T.semGuarda) { T.semGuarda = true; logTeste('❗ nenhum soldado a menos de 120 m para atirar'); }
+    }
+    for (const s of B.guardas) { const q = s.av.raiz; if (Math.hypot(q.position.x - r.position.x, q.position.z - r.position.z) < 110 && T.avisou && !T.fim) q.rotation.y = Math.atan2(r.position.x - q.position.x, r.position.z - q.position.z); }
+    return;
+  }
+  // aeronave
+  const m = T.mesh, c = new THREE.Vector3(B.aa.cx, T.pos.y, B.aa.cz);
+  if (!T.fim) {
+    const dc = Math.hypot(T.pos.x - c.x, T.pos.z - c.z);
+    if (dc > T.orbita) { const dir = c.clone().sub(T.pos); dir.y = 0; dir.normalize(); T.pos.addScaledVector(dir, T.vel * dt); T.ang = Math.atan2(dir.x, dir.z); }
+    else { T.a = (T.a ?? Math.atan2(T.pos.x - c.x, T.pos.z - c.z)) + T.vel / T.orbita * dt; T.pos.set(c.x + Math.sin(T.a) * T.orbita, T.pos.y, c.z + Math.cos(T.a) * T.orbita); T.ang = T.a + Math.PI / 2; }
+    m.position.copy(T.pos); m.rotation.set(0, T.ang || 0, 0);
+    const dentro = Math.hypot(T.pos.x - B.aa.cx, T.pos.z - B.aa.cz) < B.aa.raio;
+    if (dentro) {
+      if (!T.avisou) { T.avisou = true; logTeste('📡 radar detectou: alerta de 10 s'); }
+      T.aaT += dt;
+      for (const b of B.baterias) { b.giro.rotation.y = suavizarAngulo(b.giro.rotation.y, Math.atan2(T.pos.x - b.x, T.pos.z - b.z), dt * 4); b.canos.rotation.x = -Math.atan2(T.pos.y - 2.6, Math.hypot(T.pos.x - b.x, T.pos.z - b.z)); }
+      if (T.aaT >= 10 && (T.aaDisp -= dt) <= 0) {
+        if (!T.aaTiros) logTeste('💥 antiaéreo disparando');
+        T.aaDisp = 0.35; T.aaTiros++;
+        const b = B.baterias[T.aaTiros % B.baterias.length], de = new THREE.Vector3(b.x, 4, b.z);
+        criarBola(de, T.pos.clone().sub(de).normalize().multiplyScalar(90), '#ff7a2a', false, 0.9);
+        efeitoExplosao(T.pos.x + (Math.random() - 0.5) * 8, T.pos.y + (Math.random() - 0.5) * 5, T.pos.z + (Math.random() - 0.5) * 8, 0.5, false);
+        if (T.aaTiros >= 5) { efeitoExplosao(T.pos.x, T.pos.y, T.pos.z, 1.6, false); T.fim = true; T.queda = 0; logTeste('🔥 aeronave abatida'); T.log.push('✅ antiaéreo funcionando'); }
+      }
+    }
+  } else if (T.queda !== undefined && T.queda < 3) {   // cai girando
+    T.queda += dt; T.pos.y = Math.max(alturaChao(T.pos.x, T.pos.z), T.pos.y - (8 + T.queda * 15) * dt);
+    m.position.copy(T.pos); m.rotation.z += dt * 3; m.rotation.x += dt;
+    if (T.queda >= 3) { efeitoExplosao(T.pos.x, T.pos.y + 1, T.pos.z, 1.4, false); const Tt = T; setTimeout(() => { escolher('🧪 Relatório do teste', `${Tt.B.nome} · ${Tt.tipo === 'heli' ? 'helicóptero' : 'avião'}:<br>• ${Tt.log.join('<br>• ')}`, [{ rotulo: 'Ok', fn: () => {} }]); if (teste === Tt) pararTeste(); }, 2000); }
+  }
 }

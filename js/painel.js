@@ -377,6 +377,9 @@ function abaEu() {
       : '<p class="dica">Nada em cima da rua: casas, terrenos, territórios, lixeiras e pontos estão no lugar.</p>'}`;
   }
   if (eu.cargo === 'admin' && ctx.veiculosTeste) h += `<div class="sub">🧪 Testar veículo</div><p class="dica">Aparece aqui onde você está (aviões: na frota do Aeroporto da Metrópole). Para sair, use o botão de sair do veículo: ele some.</p><div class="botoes">${ctx.veiculosTeste().map((v) => `<button data-testar="${v.id}">${esc(v.nome)}</button>`).join('')}</div>`;
+  if (eu.cargo === 'admin' && ctx.testeDefesa) h += `<div class="sub">🧪 Teste de defesa das bases</div><p class="dica">Um NPC tenta invadir: só na sua tela, não vale para os outros nem para o banco. Teleporte para perto da base para assistir.</p>
+    ${[['a51', '👽 Área 51'], ['quartel', '🪖 Quartel'], ['aerea', '✈️ Base Aérea'], ['naval', '⚓ Base Naval']].map(([id, n]) => `<div class="botoes"><b style="min-width:110px">${n}</b><button data-tdef="${id}:pe">🚶 A pé</button><button data-tdef="${id}:heli">🚁 Helicóptero</button><button data-tdef="${id}:aviao">✈️ Avião</button></div>`).join('')}
+    <div class="botoes"><button data-tdef="parar">⏹ Parar teste</button></div>`;
   if (pode('teleportar')) h += `<div class="sub">Teleportar para</div><div class="botoes">${ctx.locais().map((l, i) => `<button data-local="${i}">${esc(l.nome)}</button>`).join('')}</div>`;
   h += `<div class="sub">Skin (grátis para a equipe)</div><div class="skins">${[...ROBOS.map((id) => ({ id, nome: id === 'Rusty_Scout_Bot' ? 'Robô Batedor' : 'Robô Sentinela' })), ...PERSONAGENS, ...(eu.cargo === 'admin' ? PERSONAGENS_EVENTO : [])]
     .map((p) => `<button class="skin ${p.id === eu.personagem ? 'sel' : ''}" data-skin="${p.id}"><img src="assets/miniaturas/${p.id}.webp" alt=""><span>${esc(p.nome)}</span></button>`).join('')}</div>`;
@@ -384,6 +387,7 @@ function abaEu() {
   if ($('pBueiro')) blocoBueiro();
   const apd = $('pArmaPd'); if (apd) apd.onclick = () => executar(() => ctx.esconderArmaPd(), 'Arma dourada escondida aqui. Todos foram avisados do evento.');
   const b = $('pImortal'); if (b) b.onclick = () => executar(() => rede.painel.imortal(!eu.imortal), eu.imortal ? 'Modo imortal desligado.' : 'Modo imortal ligado.');
+  c.querySelectorAll('[data-tdef]').forEach((x) => { x.onclick = () => { const [base, tipo] = x.dataset.tdef.split(':'); const r = ctx.testeDefesa(base, tipo); msg(r || 'Teste iniciado.'); if (base !== 'parar') fechar(); }; });
   c.querySelectorAll('[data-local]').forEach((x) => { x.onclick = () => { const l = ctx.locais()[x.dataset.local]; ctx.teleportar(l.x, l.z); msg('Teleportado: ' + l.nome); }; });
   if (ctx.objetosNaRua && $('pNaRuaCopiar')) {
     const lista = ctx.objetosNaRua();

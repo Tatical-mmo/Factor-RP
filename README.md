@@ -1323,3 +1323,11 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - Base Aérea: 16;
   - Base Naval: 16, sendo 4 no convés do porta-aviões.
   - A Base Naval também tem antiaéreo, com raio de 210 m cobrindo os navios.
+
+## Versão 14/11 · teste de defesa (20261114c)
+
+- No painel de admin entrou a seção **🧪 Teste de defesa das bases**. Para cada base (Área 51, Quartel, Base Aérea e Base Naval) há três botões: **🚶 A pé**, **🚁 Helicóptero** e **✈️ Avião**. Também há o **⏹ Parar teste**.
+- **A pé**: um invasor ("INVASOR (teste)") nasce a 60 m do portão e corre até ele. Ele passa pela zona de aviso e pelo último aviso de 3 s. Depois o soldado mais perto atira a cada 0,7 s, 25 de vida por tiro, e o invasor cai.
+- **Helicóptero e avião**: a aeronave nasce fora da base, entra no espaço aéreo e fica rodando por cima. O radar detecta e os canhões seguem a aeronave. Depois de 10 s, o antiaéreo dispara 5 vezes e ela cai girando e explode.
+- No fim aparece o **relatório** com os tempos de cada etapa. Se ninguém for abatido em 90 s, o relatório marca "a defesa falhou".
+- É tudo só na tela do admin: não mexe no banco e os outros não veem.
