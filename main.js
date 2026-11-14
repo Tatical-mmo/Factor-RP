@@ -153,6 +153,19 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.NeutralToneMapping ?? THREE.ACESFilmicToneMapping;   // neutro: cores vivas, brancos sem estourar
 renderer.toneMappingExposure = 0.95;
+// celular: ao sair do app, o sistema pode tirar a placa de vídeo do jogo (contexto WebGL perdido). Na volta, texturas e
+// sombras não voltam direito e o cenário fica escuro. A posição já foi salva ao sair; então o jogo recarrega limpo.
+{
+  let recarregando = false;
+  const recarregarCena = () => { if (recarregando) return; recarregando = true; setTimeout(() => location.reload(), 300); };
+  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); if (document.visibilityState === 'visible') recarregarCena(); }, false);
+  canvas.addEventListener('webglcontextrestored', recarregarCena, false);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    const gl = renderer.getContext();
+    if (gl.isContextLost()) recarregarCena();
+  });
+}
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.localClippingEnabled = true;   // corte do teto do trem quando você está dentro
 
