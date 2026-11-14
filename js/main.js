@@ -1131,6 +1131,7 @@ function acaoContexto() {
   const carro = meuCarroProximo(); if (carro && !jogador.carregando) { if (carro.d.queimado || veiculoEmChamas('car:' + carro.d.id)) { aviso('🔥 Seu carro queimou: pague o conserto (5.000) na concessionária.', 3.5); return; } entrarCarro(carro); return; }
   { const so = onibusSeqPerto(); if (so !== null) { pegarOnibusSeq(so); return; } }
   { const va = viaturaAbandonadaPerto(); if (va) { roubarViatura(va); return; } }
+  { const cx = contextoExtra87(); if (cx) { cx[2](); return; } }
   { const cj = contextoComprador(); if (cj) { cj[2](); return; } }
   { const jl = jujubaLargadaPerto(); if (jl) { rede.jujuba.pegarSeq(jl.d.id).then((q) => dirigirJujuba(jl, q)).catch((e) => aviso(e.message, 3)); return; } }
   { const vl = vanLargadaPerto(); if (vl) { entrarCarro({ d: { id: 'vnpc' + vl.id, modelo: 'van', cor: '#f2f2ee' }, mesh: vl.obj }); jogador.carro.vanNpc = vl; jogador.carro.salvar = 1e9; vl.largadaAte = 0; return; } }
@@ -1659,7 +1660,7 @@ const ARMA_POR_COD = Object.fromEntries(Object.entries(ARMAS).map(([k, a]) => [a
 function tipoArma() {
   const p = jogador.perfil; if (!p) return 'basica';
   const general = p.cargo === 'admin';
-  if (jogador.armaEspecial && qtdItem(jogador.armaEspecial) > 0 && !jogador.armaPesada) return jogador.armaEspecial;   // espingarda ou fuzil equipado
+  if (jogador.armaEspecial && (jogador.desviada?.item === jogador.armaEspecial ? jogador.desviada.balas > 0 : qtdItem(jogador.armaEspecial) > 0) && !jogador.armaPesada) return jogador.armaEspecial;   // espingarda ou fuzil (desviada: até acabarem as balas)   // espingarda ou fuzil equipado
   if (jogador.armaPesada && (general || (p.profissao === 'exercito' && p.arma_pesada_ate && Date.parse(p.arma_pesada_ate) > agoraServidor()))) return 'pesada';
   if (militar()) return 'exercito';   // militar em serviço (o General Supremo sempre)
   if (p.policial) return 'policia';
@@ -1730,6 +1731,7 @@ function atirar(alvo) {
   const r2 = (n) => Math.round(n * 100) / 100;
   conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: cor, s: A.bola || 1 });
   if (A.chumbos && !dourada) chumbos(A, boca, v, cor);
+  if (!dourada && jogador.desviada && jogador.armaTipo === jogador.desviada.item) gastarBalaDesviada();
   if (!dourada) jogador.recarga = A.recarga / (1 + bonusTreino('luta'));
 }
 // espingarda: mais chumbos espalhados (cada um com o dano dele), que caem logo (curto alcance)
@@ -3403,7 +3405,7 @@ const SKIN_POLICIA = 'Rustbolt_Sentinel';
 const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfil?.personagem);
 function metaPresenca() {
   const p = jogador.perfil;
-  return { bope: !!p.bope, invis: !!p.invisivel, som: somAtivo ? { url: somAtivo.url, txt: somAtivo.txt } : null, emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
+  return { ceu: jogador.noCeu ? 1 : 0, bope: !!p.bope, invis: !!p.invisivel, som: somAtivo ? { url: somAtivo.url, txt: somAtivo.txt } : null, emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
     prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
@@ -4706,7 +4708,7 @@ async function morrerLocal(pd = false) {
   if (pd) {   // arma dourada: ninguém socorre; 7 s depois acorda no cemitério
     rede.combate.morrer(j.ultimoAgressor || null).catch(() => {});
     aviso(`☠️ Você foi atingido pela ARMA DOURADA${quem ? ` de ${quem}` : ''}. Vão te enterrar…`, 6);
-    clearTimeout(j.timerHospital); j.timerHospital = setTimeout(acordarNoCemiterio, 7000);
+    clearTimeout(j.timerHospital); j.timerHospital = setTimeout(entrarCeu, 6000);   // 5 min no purgatório
     return;
   }
   try {
@@ -5769,6 +5771,8 @@ function aoComando(c) {
   if (c.tipo === 'teleporte' && c.dados) { teleportar(Number(c.dados.x), Number(c.dados.z)); aviso('Você foi teleportado pela equipe.'); }
   if (c.tipo === 'aviso' && c.dados?.texto) { aviso(c.dados.texto, 5); atualizarJanelaEmpresa(); }
   if (c.tipo === 'socorro') socorrido(c.dados?.medico);
+  if (c.tipo === 'reviver') { if (jogador.noCeu) voltarDoCeu('⚡ O General Supremo te reviveu.'); else if (jogador.morto) { levantar(100); aviso('⚡ O General Supremo te reviveu.', 4); } }
+  if (c.tipo === 'ceu_oferta') ofertaCeu(c.dados?.nome);
   if (c.tipo === 'bloqueio_carro') {   // o dono bloqueou o carro que eu roubei
     const id = c.dados?.carro, seg = c.dados?.segundos || 20;
     aviso(`🔒 O dono acionou o BLOQUEIO: o carro trava em ${seg} s!`, 4);
@@ -6365,6 +6369,7 @@ function contexto() {
   if (meuCarroProximo() && !jogador.carregando) return [meuCarroProximo().d.ladrao ? 'dirigir o carro roubado' : 'dirigir o seu carro', 'Dirigir'];
   if (onibusSeqPerto() !== null) return ['dirigir o ônibus sequestrado pelo seu clã', 'Dirigir'];
   if (viaturaAbandonadaPerto()) return ['roubar a viatura abandonada (crime)', 'Roubar'];
+  { const cx = contextoExtra87(); if (cx) return [cx[0], cx[1]]; }
   { const cj = contextoComprador(); if (cj) return [cj[0], cj[1]]; }
   if (jujubaLargadaPerto()) return ['dirigir o caminhão de rações sequestrado', 'Dirigir'];
   if (vanLargadaPerto()) return ['dirigir a van sequestrada', 'Dirigir'];
@@ -8104,7 +8109,7 @@ async function sequestrarJujuba(v) {
     v.d = { ...v.d, status: 'sequestrada', x, z, ang, largado: true, motorista: jogador.perfil.id };
     const espera = fugirDoVeiculo(x, z, ang, 8, 1);
     jogador.trava = espera / 1000;
-    aviso(`🔫 Caminhão de rações sequestrado (${qtd} jujubas)! O motorista está descendo…`, 3);
+    aviso(v.d.kit ? `🔫 Caminhão do Exército com kit de armas sequestrado${qtd ? ` (+${qtd} jujubas)` : ''}! O motorista está descendo…` : `🔫 Caminhão de rações sequestrado (${qtd} jujubas)! O motorista está descendo…`, 3);
     setTimeout(() => {
       if (jogador.morto || jogador.carro || Math.hypot(x - jogador.pos.x, z - jogador.pos.z) > 25) { rede.jujuba.mover(v.d.id, x, z, ang, true).catch(() => {}); return; }
       dirigirJujuba(v, qtd);
@@ -8115,10 +8120,10 @@ async function sequestrarJujuba(v) {
 function dirigirJujuba(v, qtd) {
   v.d = { ...v.d, largado: false };
   entrarCarro({ d: { id: 'juj' + v.d.id, modelo: 'exercito_caminhao', cor: '#556b2f' }, mesh: v.mesh });
-  jogador.carro.jujuba = v.d.id; jogador.carro.salvar = 1e9; jogador.carro.cargaJuj = qtd || v.d.qtd;
+  jogador.carro.jujuba = v.d.id; jogador.carro.salvar = 1e9; jogador.carro.cargaJuj = qtd || v.d.qtd; jogador.carro.kitJuj = v.d.kit || 0;
   v.mesh = null;
   rastrear({ nome: '📦 Comprador (Seu Tonho)', x: COMPRADOR.porta.x, z: COMPRADOR.porta.z + 6, comprador: true });   // destaque no mapa + feixe até o armazém
-  aviso('🚚 Carga de rações do Exército: não dá para guardar no clã. Só o comprador do armazém de Vila Serra (ao lado da loja) compra.', 5);
+  aviso(v.d.kit ? '🚚 Carga do Exército com KIT DE ARMAS! O Seu Tonho (armazém de Vila Serra, ao lado da loja) compra e revende as armas.' : '🚚 Carga de rações do Exército: não dá para guardar no clã. Só o comprador do armazém de Vila Serra (ao lado da loja) compra.', 5);
 }
 function largarJujuba(c) {
   const v = viagensJuj.get(c.jujuba);
@@ -8201,12 +8206,12 @@ function contextoComprador() {
   const c = jogador.carro;
   if (c?.jujuba && Math.hypot(COMPRADOR.porta.x - jogador.pos.x, COMPRADOR.porta.z - jogador.pos.z) < 20 && Math.abs(c.vel) < 2) {
     if (!compradorMontado.aberto) return ['o armazém está fechado (tem oficial por perto)', 'Fechado', () => aviso('O Seu Tonho fechou o armazém: tem oficial por perto.', 3)];
-    return [`vender a carga ao comprador (${((c.cargaJuj || 0) * 9).toLocaleString('pt-BR')} moedas)`, 'Vender', () => venderJujuba()];
+    return [`vender a carga ao Seu Tonho (${((c.cargaJuj || 0) * 9 + (c.kitJuj || 0) * 230000).toLocaleString('pt-BR')} moedas${c.kitJuj ? ', com as armas' : ''})`, 'Vender', () => venderJujuba()];
   }
   if (c || !perto(COMPRADOR.porta, 3.5)) return null;
   if (!compradorMontado.aberto) return ['o armazém está fechado', 'Fechado', () => aviso('O Seu Tonho fechou o armazém: tem oficial por perto.', 3)];
   if (!jogador.cla) return ['"Só faço negócio com gente de clã."', 'Armazém', () => aviso('"Só faço negócio com gente de clã."', 3)];
-  return ['comprar jujubas do comprador (500 cada)', 'Comprar', () => racoes.abrir('comprador')];
+  return ['comprar jujubas ou armas desviadas do Seu Tonho', 'Comprar', () => menuTonho()];
 }
 async function venderJujuba() {
   const c = jogador.carro; if (!c?.jujuba || ocupado) return; ocupado = true;
@@ -13183,7 +13188,7 @@ function atualizarTatica(dt) {
   try { tiqueTatica(dt); } catch (e) { if (!atualizarTatica.erro) { atualizarTatica.erro = true; console.warn('tático:', e); } }   // nunca trava o jogo
 }
 function tiqueTatica(dt) {
-  atualizarGranadas(dt); atualizarSons2(dt); atualizarBope(dt);
+  atualizarGranadas(dt); atualizarSons2(dt); atualizarBope(dt); atualizar87(dt);
   if ((tBarricadas -= dt) <= 0) { tBarricadas = 12; rede.tatica.barricadas().then(sincronizarBarricadas).catch(() => {}); }
   if ((atualizarTatica.t = (atualizarTatica.t || 0) - dt) <= 0) { atualizarTatica.t = 0.3; painelRapido(); }
   // blindagem do Caveirão na tela
@@ -13208,6 +13213,7 @@ function tiqueTatica(dt) {
 // ---------------------------------------------------------------- janela tática (menu 🎯)
 function equiparArma(item) {
   if (item && qtdItem(item) < 1) { aviso('Você não tem essa arma.'); return; }
+  enviarBalas(); jogador.desviada = null;
   jogador.armaEspecial = item || null; conferirArma();
   aviso(item ? `🔫 ${item === 'fuzil' ? 'Fuzil' : 'Espingarda'} equipado. Saque com o botão Arma.` : '🔫 Voltou para a arma padrão.', 2.5);
 }
@@ -13243,6 +13249,15 @@ async function desenharTatica() {
   h += `<div class="sub">🎒 Seu equipamento</div><p class="dica">Espingarda: <b>${q('espingarda')}</b> · Fuzil: <b>${q('fuzil')}</b> · Granadas: <b>${q('granada')}</b> · Barricadas: <b>${q('barricada')}</b>. Arma na mão: <b>${jogador.armaEspecial ? NOME_ITEM_T[jogador.armaEspecial] : 'padrão'}</b>.</p>
     <div class="botoes">${q('espingarda') ? '<button data-eq="espingarda">🔫 Equipar espingarda</button>' : ''}${q('fuzil') ? '<button data-eq="fuzil">🔫 Equipar fuzil</button>' : ''}${jogador.armaEspecial ? '<button data-eq="">Arma padrão</button>' : ''}</div>
     ${q('granada') ? '<p class="dica">💣 Granada: botão na tela (no PC, tecla <b>H</b>). Estoura 2,3 s depois, tinta num raio de 6 m.</p>' : ''}`;
+  desviadas = await rede.tatica.minhasDesviadas(eu);
+  if (desviadas.length) h += `<div class="sub">🔫 Armas desviadas</div><p class="dica">Compradas do Seu Tonho: só têm as balas que restam e depois são descartadas.</p>
+    <div class="botoes">${desviadas.map((d) => `<button data-desv="${d.id}">${jogador.desviada?.id === d.id ? '✔️ ' : ''}${d.item === 'fuzil' ? 'Fuzil' : 'Espingarda'} (${jogador.desviada?.id === d.id ? jogador.desviada.balas : d.balas} balas)</button>`).join('')}</div>`;
+  if (souAdmin()) {
+    const mortos = [...remotos].filter(([, r]) => r.meta?.ceu || r.meta?.ferido);
+    h += `<div class="sub">☁️ Purgatório e mortos (General Supremo)</div><p class="dica">Reviva qualquer um. No purgatório (arma dourada), chegue perto e ofereça a segunda chance: ele escolhe voltar agora ou com outro nome (+2.000.000).</p>
+      <div class="botoes"><button id="tCeu">☁️ Ir ao purgatório</button></div>
+      <div class="lista">${mortos.length ? mortos.map(([id, r]) => `<div class="linha item"><span class="nm"><b>${esc(r.meta.nome)}</b><small>${r.meta.ceu ? 'no purgatório' : 'caído, esperando socorro'}</small></span><span class="bts"><button data-revive="${id}">⚡ Reviver</button></span></div>`).join('') : '<span class="vazio">Ninguém morto agora.</span>'}</div>`;
+  }
   if (jogador.cla) {
     const minhas = [...barricadasMundo.values()].filter((b) => b.d.cla === jogador.cla && Math.hypot(b.d.x - jogador.pos.x, b.d.z - jogador.pos.z) < 15);
     h += `<div class="sub">🚧 Barricadas do clã</div><p class="dica">Bloqueiam a rua para todos. Até 6 por clã, somem em 3 h. O Caveirão do BOPE rompe empurrando, e granadas estragam.</p>
@@ -13303,6 +13318,9 @@ async function desenharTatica() {
   on('tEntrarBope', () => fazerTatica(() => rede.tatica.entrarBope(), '💀 Bem-vindo ao BOPE.'));
   on('tSairBope', () => fazerTatica(() => rede.tatica.sairBope(), 'Você saiu do BOPE.'));
   on('tKit', () => fazerTatica(() => rede.tatica.kitBope(), (t) => `Kit pego: ${t}.`));
+  c.querySelectorAll('[data-desv]').forEach((b) => { b.onclick = () => { const d = desviadas.find((x) => String(x.id) === b.dataset.desv); if (d) { equiparDesviada(d); desenharTatica(); } }; });
+  on('tCeu', () => { $('taticaJanela')?.classList.add('oculto'); modoTatica = null; irAoCeu(); });
+  c.querySelectorAll('[data-revive]').forEach((b) => { b.onclick = () => fazerTatica(() => rede.tatica.adminReviver(b.dataset.revive), '⚡ Revivido.'); });
   on('tSedeBope', () => { if (pontos.sedeBope) { rastrear({ nome: '💀 Sede do BOPE', x: pontos.sedeBope.x, z: pontos.sedeBope.z + 2 }); msgTatica('Rota até a Sede do BOPE no mapa.'); } });
   c.querySelectorAll('[data-rbope]').forEach((b) => { b.onclick = () => { const a = radarLista.find((x) => x.id === b.dataset.rbope); if (a) { rastrear({ nome: `📡 ${a.nome}`, x: a.x, z: a.z }); msgTatica('Marcado no mapa.'); } }; });
   c.querySelectorAll('[data-indicar]').forEach((b) => { b.onclick = () => fazerTatica(() => rede.tatica.indicarBope(b.dataset.indicar), (n) => `💀 ${n} foi indicado para o BOPE.`); });
@@ -13764,4 +13782,185 @@ function botaoGranadaMira(bt) {
   bt.addEventListener('pointermove', moverMiraG);
   bt.addEventListener('pointerup', (ev) => soltarMiraG(ev));
   bt.addEventListener('pointercancel', (ev) => soltarMiraG(ev, true));
+}
+
+// ================================================================= 87: armas desviadas (Seu Tonho), purgatório da arma dourada e lápide
+// ---------------------------------------------------------------- armas desviadas: 80 balas e depois são descartadas
+let desviadas = [], tDesv = 0;
+function carregarDesviadas() { if (jogador.perfil) rede.tatica.minhasDesviadas(jogador.perfil.id).then((l) => { desviadas = l || []; }).catch(() => {}); }
+function equiparDesviada(d) {
+  enviarBalas();
+  jogador.desviada = { id: d.id, item: d.item, balas: d.balas, pend: 0 };
+  jogador.armaEspecial = d.item; conferirArma();
+  aviso(`🔫 ${d.item === 'fuzil' ? 'Fuzil desviado' : 'Espingarda desviada'}: ${d.balas} balas, depois é descartada. Saque com o botão Arma.`, 3.5);
+}
+function enviarBalas() { const d = jogador.desviada; if (!d?.pend) return; const n = d.pend; d.pend = 0; rede.tatica.gastarDesviada(d.id, n).catch(() => { d.pend += n; }); }
+function gastarBalaDesviada() {
+  const d = jogador.desviada; if (!d) return;
+  d.balas--; d.pend++;
+  if (d.balas <= 0) { enviarBalas(); jogador.desviada = null; jogador.armaEspecial = null; conferirArma(); aviso('🗑️ Acabaram as 80 balas: a arma desviada foi descartada.', 3.5); setTimeout(carregarDesviadas, 1500); }
+  else if (d.balas === 10) aviso('⚠️ Arma desviada: últimas 10 balas.', 2);
+}
+const NOME_TONHO = { espingarda: '🔫 Espingarda desviada', fuzil: '🔫 Fuzil desviado', granada: '💣 Granada desviada' };
+async function menuTonho() {
+  const est = await rede.tatica.tonhoEstoque();
+  const ops = [{ rotulo: '🍬 Jujubas (500 cada)', fn: () => racoes.abrir('comprador') }];
+  for (const e of est) ops.push({ rotulo: `${NOME_TONHO[e.item] || e.item} · ${num(e.preco)}${e.qtd ? ` (${e.qtd} no estoque)` : ' (sem estoque)'}`, fn: () => comprarTonho(e) });
+  escolher('📦 Seu Tonho', '"Tenho jujuba e umas armas que caíram do caminhão do Exército. Arma desviada vem com <b>80 balas</b> e depois vira descartável, igual a dourada."', ops);
+}
+function comprarTonho(e) {
+  if (!e.qtd) { aviso('O Seu Tonho está sem estoque disso agora.', 2.5); return; }
+  rede.tatica.comprarTonho(e.item).then(() => { aviso(e.item === 'granada' ? '💣 Granada comprada.' : '🔫 Arma desviada comprada: equipe no 🎯 Tático (80 balas).', 3.5); recarregarInventario(); carregarDesviadas(); }).catch((x) => aviso(x.message, 3));
+}
+
+// ---------------------------------------------------------------- purgatório (arma dourada): 5 min, segunda chance
+const PURG = { bx: 3000, bz: 3400 };
+const souAdmin = () => jogador.perfil?.cargo === 'admin';
+const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+function restaCeu() { const a = jogador.perfil?.ceu_ate; return a ? Math.max(0, (Date.parse(a) - agoraServidor()) / 1000) || 0 : 0; }
+function salaCeu() {
+  return montarSala('ceu', PURG.bx, PURG.bz, 34, 30, { piso: '#eef3ff', parede: '#dfe9ff', luz: '#fff6dc' }, (i) => {
+    const { placa, g, mat } = i;
+    const nuv = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, transparent: true, opacity: 0.92 });
+    for (let k = 0; k < 26; k++) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(1 + (k % 4) * 0.5, 12, 10), nuv), a = k / 26 * Math.PI * 2, r = 10 + (k % 3) * 2;
+      s.position.set(Math.cos(a) * r, 0.3 + (k % 2) * 0.4, Math.sin(a) * r * 0.75); s.scale.y = 0.45; g.add(s);
+    }
+    const ouro = mat('#d4af37', 0.3, 0.8);
+    for (const x of [-2.4, 2.4]) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4.2, 0.5), ouro); c.position.set(x, 2.1, -12.5); g.add(c); }
+    const arco = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.22, 10, 30, Math.PI), ouro); arco.position.set(0, 4.2, -12.5); g.add(arco);
+    for (let k = -4; k <= 4; k++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.6, 0.08), ouro); b.position.set(k * 0.5, 1.8, -12.5); g.add(b); }
+    const halo = new THREE.PointLight('#ffe7a0', 6, 18, 1.5); halo.position.set(0, 4, -11); g.add(halo);
+    i.pontos.portao = { x: PURG.bx, z: PURG.bz - 11.3 };
+    i.pontos.chegada = { x: PURG.bx, z: PURG.bz + 6 };
+    placa('🚪 Portão da segunda chance', 0, -11.8, 5);
+    placa('☁️ Purgatório · acima do Cemitério Municipal', 0, 2, 3.4);
+  });
+}
+function entrarCeu() {
+  const j = jogador; if (j.noCeu || !j.avatar) return;
+  const i = salaCeu();
+  clearTimeout(j.timerHospital); j.presoBope = null;
+  levantar(100);
+  j.noCeu = true;
+  const p = civico.pontoNoCemiterio();
+  entrarSala('ceu', { x: p.x, z: p.z }, i.pontos.chegada.x, i.pontos.chegada.z);
+  conexao?.rastrear(metaPresenca());
+  aviso('☁️ Você está no purgatório. Em 5 minutos o portão da segunda chance abre. O administrador pode vir falar com você.', 6);
+}
+function voltarDoCeu(msg) {
+  const j = jogador; if (!j.noCeu) return;
+  j.noCeu = false; if (j.perfil) j.perfil.ceu_ate = null;
+  dicaCeu('');
+  if (j.dentroCasa === 'ceu') sairSala();
+  conexao?.rastrear(metaPresenca()); setTimeout(() => { conexao?.rastrear(metaPresenca()); atualizarInfo(); }, 2000);
+  aviso(msg, 5);
+}
+async function sairDoCeu(modo, nome) {
+  try {
+    const n = await rede.tatica.sairDoCeu(modo, nome);
+    voltarDoCeu(modo === 'novo_nome' ? `😇 Segunda chance: agora você é ${n}, com 2.000.000 para recomeçar. O nome antigo foi para a lápide.`
+      : modo === 'nome_antigo' ? `🪦 Você reaveu o nome ${n}.` : '😇 Você voltou à vida.');
+  } catch (e) { aviso(e.message, 3.5); }
+}
+async function menuPortao() {
+  const ops = [{ rotulo: `😇 Voltar à vida como ${jogador.perfil?.nome || ''}`, fn: () => sairDoCeu('esperar') }];
+  try { for (const m of (await rede.tatica.nomesMortos()) || []) if (m.meu) ops.push({ rotulo: `🪦 Voltar com o nome antigo: ${m.nome}`, fn: () => sairDoCeu('nome_antigo', m.nome) }); } catch { /* sem lista */ }
+  escolher('🚪 Portão da segunda chance', 'O portão abriu. Você volta no cemitério. Se tiver um nome antigo na lápide, pode reavê-lo agora (o nome atual vai para a lápide).', ops);
+}
+function ofertaCeu(admin) {
+  if (!jogador.noCeu) return;
+  escolher('😇 Segunda chance', `<b>${esc(admin || 'O General Supremo')}</b> veio falar com você no purgatório. A escolha é sua:`, [
+    { rotulo: '⚡ Voltar à vida agora', fn: () => sairDoCeu('reviver') },
+    { rotulo: '🆕 Voltar com outro nome (+2.000.000)', fn: () => {
+      const n = window.prompt('Novo nome (3 a 16 letras ou números). O nome atual vai para a lápide e o dinheiro dele fica com ele; o novo nome começa com 2.000.000.');
+      if (n) sairDoCeu('novo_nome', n);
+    } },
+    { rotulo: '⏳ Ignorar e esperar os 5 minutos', fn: () => {} },
+  ]);
+}
+function mortoNoCeuPerto() {
+  if (jogador.dentroCasa !== 'ceu') return null;
+  for (const [id, r] of remotos) { const q = r.av?.raiz.position; if (r.meta?.ceu && q && Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z) < 2.6) return { id, nome: r.meta.nome }; }
+  return null;
+}
+function conversarNoCeu(m) {
+  escolher(`😇 ${esc(m.nome)}`, 'Ofereça a segunda chance (ele escolhe: voltar agora, voltar com outro nome e 2.000.000, ou esperar) ou reviva na hora.', [
+    { rotulo: '😇 Oferecer a segunda chance', fn: () => rede.tatica.oferecerChance(m.id).then(() => aviso(`😇 Segunda chance oferecida a ${m.nome}.`, 3)).catch((e) => aviso(e.message, 3)) },
+    { rotulo: '⚡ Reviver agora', fn: () => rede.tatica.adminReviver(m.id).then(() => aviso(`⚡ ${m.nome} foi revivido.`, 3)).catch((e) => aviso(e.message, 3)) },
+  ]);
+}
+function irAoCeu() { const i = salaCeu(); entrarSala('ceu', { x: jogador.pos.x + 1.5, z: jogador.pos.z + 1.5 }, i.pontos.chegada.x, i.pontos.chegada.z); aviso('☁️ Purgatório: chegue perto de quem morreu e toque em Conversar.', 4); }
+SALAS.ceu = {
+  contexto: () => {
+    const m = souAdmin() ? mortoNoCeuPerto() : null;
+    if (m) return [`conversar com ${m.nome} (segunda chance)`, 'Conversar'];
+    if (pontoInterior('portao', 2.6) || naPorta()) {
+      if (!jogador.noCeu) return ['sair do purgatório', 'Sair'];
+      const f = restaCeu(); return f > 0 ? [`o portão da segunda chance abre em ${mmss(f)}`, 'Portão'] : ['passar pelo portão: voltar à vida', 'Voltar'];
+    }
+    return [jogador.noCeu ? `☁️ purgatório · o portão abre em ${mmss(restaCeu())}` : 'purgatório', ''];
+  },
+  acao: () => {
+    const m = souAdmin() ? mortoNoCeuPerto() : null;
+    if (m) { conversarNoCeu(m); return; }
+    if (pontoInterior('portao', 2.6) || naPorta()) {
+      if (!jogador.noCeu) { sairSala(); return; }
+      if (restaCeu() > 0) { aviso('O portão ainda não abriu. Espere, ou aguarde o administrador.', 3); return; }
+      menuPortao();
+    }
+  },
+};
+function dicaCeu(txt) {
+  let el = $('dicaCeu');
+  if (!el) { el = document.createElement('div'); el.id = 'dicaCeu'; el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 18vh);z-index:9;pointer-events:none;font:700 15px system-ui;color:#3a3200;background:rgba(255,248,220,.92);padding:8px 14px;border-radius:14px'; document.body.appendChild(el); }
+  el.style.display = txt ? 'block' : 'none'; if (txt) el.textContent = txt;
+}
+
+// ---------------------------------------------------------------- lápide dos nomes (no cemitério, ao lado do portão)
+const LAPIDE = { x: civico.CEMITERIO.x + 6, z: civico.CEMITERIO.z - 16 };
+let lapideFeita = false;
+function montarLapide() {
+  if (lapideFeita || Math.hypot(LAPIDE.x - jogador.pos.x, LAPIDE.z - jogador.pos.z) > 150) return; lapideFeita = true;
+  const g = new THREE.Group(), y = alturaChao(LAPIDE.x, LAPIDE.z);
+  const granito = new THREE.MeshStandardMaterial({ color: '#2b2b30', roughness: 0.35, metalness: 0.2 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.4, 1.4), granito); base.position.y = 0.2; g.add(base);
+  const pedra = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2, 0.35), granito); pedra.position.y = 1.4; g.add(pedra);
+  const topo = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.35, 24, 1, false, 0, Math.PI), granito); topo.rotation.z = Math.PI / 2; topo.rotation.y = Math.PI / 2; topo.position.y = 2.4; g.add(topo);
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256; const c = cv.getContext('2d');
+  c.fillStyle = '#2b2b30'; c.fillRect(0, 0, 256, 256); c.fillStyle = '#d8c58a'; c.textAlign = 'center';
+  c.font = '700 30px serif'; c.fillText('✝', 128, 50); c.font = '700 26px serif'; c.fillText('NOMES QUE', 128, 110); c.fillText('PARTIRAM', 128, 145); c.font = '18px serif'; c.fillText('toque para ver', 128, 200);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+  const pl = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.8), new THREE.MeshStandardMaterial({ map: t, roughness: 0.5 })); pl.position.set(0, 1.4, 0.18); g.add(pl);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  g.position.set(LAPIDE.x, y, LAPIDE.z); scene.add(g);
+  colisores.push({ tipo: 'circ', x: LAPIDE.x, z: LAPIDE.z, r: 1.2 });
+}
+async function verLapide() {
+  let l = []; try { l = (await rede.tatica.nomesMortos()) || []; } catch { l = []; }
+  escolher('🪦 Nomes que partiram', l.length ? l.map((m) => `✝ <b>${esc(m.nome)}</b> · ${new Date(m.morto_em).toLocaleDateString('pt-BR')}${m.meu ? ' <small>(seu: para reaver, só morrendo de novo pela arma dourada)</small>' : ''}`).join('<br>')
+    : 'Nenhum nome na lápide ainda. Quem morre pela arma dourada e volta com outro nome deixa o antigo aqui: ninguém mais pode usar.', [{ rotulo: 'Ok', fn: () => {} }]);
+}
+function feridoRemotoPerto(raio) {
+  for (const [id, r] of remotos) { const q = posRemoto(r); if (r.meta?.ferido && q && Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z) < raio) return { id, nome: r.meta.nome }; }
+  return null;
+}
+function contextoExtra87() {
+  if (jogador.carro || jogador.dentroCasa || jogador.morto) return null;
+  if (lapideFeita && Math.hypot(LAPIDE.x - jogador.pos.x, LAPIDE.z - jogador.pos.z) < 2.6) return ['lápide dos nomes que partiram', 'Lápide', verLapide];
+  if (souAdmin()) { const f = feridoRemotoPerto(3); if (f) return [`reviver ${f.nome} (administrador)`, 'Reviver', () => rede.tatica.adminReviver(f.id).then(() => aviso(`⚡ ${f.nome} foi revivido.`, 3)).catch((e) => aviso(e.message, 3))]; }
+  return null;
+}
+function atualizar87(dt) {
+  const j = jogador; if (!j.perfil || !j.avatar) return;
+  montarLapide();
+  if ((tDesv -= dt) <= 0) { tDesv = 3; enviarBalas(); if (!atualizar87.carregou) { atualizar87.carregou = true; carregarDesviadas(); } }
+  // purgatório: entra (voltou ao jogo morto pela dourada), mantém lá dentro e mostra o tempo
+  if (j.perfil.ceu_ate && !j.noCeu && !j.morto) entrarCeu();
+  if (j.noCeu) {
+    if (!j.perfil.ceu_ate) { if ((atualizar87.semCeu = (atualizar87.semCeu || 0) + dt) > 3) { atualizar87.semCeu = 0; voltarDoCeu('😇 Você voltou à vida.'); } return; }
+    atualizar87.semCeu = 0;
+    if (j.dentroCasa !== 'ceu' && !j.morto) { const i = salaCeu(); entrarSala('ceu', j.saidaSala || civico.pontoNoCemiterio(), i.pontos.chegada.x, i.pontos.chegada.z); }
+    const f = restaCeu(); dicaCeu(f > 0 ? `☁️ Purgatório · o portão da segunda chance abre em ${mmss(f)}` : '🚪 O portão abriu: vá até ele para voltar à vida');
+  }
 }
