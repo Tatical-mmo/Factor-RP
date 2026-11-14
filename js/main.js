@@ -1065,6 +1065,7 @@ function acaoContexto() {
   if (BANCAS.some((b) => perto(b, 3.2))) { abrirServico('jornal'); return; }
   if (perto(GUARITA_ALIST, 3.2)) { menuGuarita(); return; }
   if (perto(CENTRAL_MISSEIS, 4)) { menuCentralMisseis(); return; }
+  if ((jogador.embarcado || navioNoPier()) && acaoNavio()) return;
   if (perto(civico.EXERCITO.balcao, 3.2)) { abrirServico(jogador.perfil?.profissao === 'exercito' ? 'trabalho' : 'empregos'); return; }
   if (jogador.perfil.profissao === 'jornalista') { const rp = reportagemProxima(); if (rp) { reportar(rp); return; } }
   if (perto(civico.PREFEITURA.jornal, 3.2)) { abrirServico('jornal'); return; }
@@ -2432,7 +2433,7 @@ function conectarMultiplayer(perfil) {
     explosao: (e) => receberExplosao(e),
     voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m),
-    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), cruzeiro: (e) => receberCruzeiro(e),
+    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), cruzeiro: (e) => receberCruzeiro(e), navio: (e) => receberNavio(e),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -3177,7 +3178,7 @@ const SKIN_POLICIA = 'Rustbolt_Sentinel';
 const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfil?.personagem);
 function metaPresenca() {
   const p = jogador.perfil;
-  return { inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
+  return { emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
     prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
@@ -5575,6 +5576,7 @@ function atualizarJogador(dt) {
   for (let i = j.eventos.length - 1; i >= 0; i--) { j.eventos[i].t -= dt; if (j.eventos[i].t <= 0) { j.eventos[i].fn(); j.eventos.splice(i, 1); } }
   j.recarga = Math.max(0, j.recarga - dt);
   if (j.abducao) { seguirAbducao(dt); return; }
+  if (j.embarcado) { seguirNavio(dt); return; }
   if (j.trem && seguirTrem()) {
     av.tocar(j.carregando ? 'carregar_parado' : 'idle'); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw;
     av.mixer.update(dt); av.raiz.updateMatrixWorld(true);
@@ -6053,6 +6055,7 @@ function contexto() {
   if (perto(civico.EXERCITO.arsenal, 3.2)) return [jogador.armaPesada ? 'guardar a arma pesada' : 'arsenal: pegar a arma pesada (com autorização)', 'Arsenal'];
   if (BANCAS.some((b) => perto(b, 3.2))) return ['banca de jornal: ler as notícias', 'Jornal'];
   if (perto(CONTRABANDISTA, 3.2)) return ['contrabandista: arma militar e alicate de corte', 'Negociar'];
+  { const cn = contextoNavio(); if (cn) return cn; }
   if (perto(CENTRAL_MISSEIS, 4)) return ['Central de Mísseis da Marinha (alvo = ponto marcado no mapa)', '🚀 Mísseis'];
   if (perto(GUARITA_ALIST, 3.2)) return [militar() ? 'guarita do Exército: pedidos de alistamento' : 'guarita do Exército: alistamento e licitação de rações', 'Guarita'];
   if (perto(civico.EXERCITO.balcao, 3.2)) return [jogador.perfil?.profissao === 'exercito' ? 'comando do Exército: ordens e caçadas' : 'comando do Exército: alistar-se', 'Comando'];
@@ -11839,7 +11842,11 @@ function prepararJato(c) {
 }
 // convés do porta-aviões: retângulo da pista (proa para +z) e altura do convés
 const CONVES_Y = 14;
-function noConves(x, z) { const P = mundo.BASE_NAVAL.porta; return Math.abs(x - P.x) < 14 && Math.abs(z - P.z) < P.comp * 0.45 ? CONVES_Y : null; }
+function noConves(x, z) {
+  const n = NAVIOS.porta; if (!n) return null;
+  const dx = x - n.x, dz = z - n.z, c = Math.cos(n.ang), sn = Math.sin(n.ang), lz = dx * sn + dz * c, lx = dx * c - dz * sn;
+  return Math.abs(lx) < 14 && Math.abs(lz) < n.comp * 0.45 ? CONVES_Y : null;
+}
 function pilotarJato(c, dt) {
   const J = JATOS[c.servico];
   let acel = pedais.acel || teclas.has('w'), freio = pedais.freio || teclas.has('s');
@@ -11856,6 +11863,7 @@ function pilotarJato(c, dt) {
     if (acel && !freio) c.vel = Math.min(lim, c.vel + (naPista ? 14 : 4) * dt); else if (freio) c.vel = Math.max(0, c.vel - 16 * dt); else c.vel = Math.max(0, c.vel - 3 * dt);
     jogador.yaw -= c.volante * 1.1 * Math.min(1, c.vel / 3) / (1 + c.vel / 15) * dt;
     jogador.pos.x += Math.sin(jogador.yaw) * c.vel * dt; jogador.pos.z += Math.cos(jogador.yaw) * c.vel * dt;
+    if (c.alt > 1) { const n = NAVIOS.porta; if (n?.dx !== undefined) { const rx = jogador.pos.x - n.x0, rz = jogador.pos.z - n.z0, ca = Math.cos(n.dang), sa = Math.sin(n.dang); jogador.pos.x = n.x + rx * ca + rz * sa; jogador.pos.z = n.z - rx * sa + rz * ca; jogador.yaw += n.dang; } }
     if (c.alt > 1 && noConves(jogador.pos.x, jogador.pos.z) === null) { acidenteVeiculo(c, '💥 O caça caiu do porta-aviões no mar!'); return; }
     if (c.alt < 1) resolverColisao(jogador.pos, Math.min(3, J.raio));
     suave(c.vel >= J.vdec * 0.85 && puxa > 0.15 ? 0.18 * puxa : 0, 0.6);
@@ -11899,7 +11907,8 @@ function pilotarJato(c, dt) {
 // ---- pouso automático: escolhe a pista mais perto (Base Aérea ou porta-aviões), entra na reta final e desce na rampa
 function pistasPouso() {
   const P = mundo.BASE_AEREA.pista, N = mundo.BASE_NAVAL.porta;
-  return [{ nome: 'Base Aérea', tx: P.x0 + 12, tz: P.z, dx: 1, dz: 0, h: 0 }, { nome: 'porta-aviões', tx: N.x, tz: N.z - N.comp * 0.42, dx: 0, dz: 1, h: CONVES_Y }];
+  const n = NAVIOS.porta || { x: N.x, z: N.z, ang: 0, comp: N.comp }, fx = Math.sin(n.ang), fz = Math.cos(n.ang);
+  return [{ nome: 'Base Aérea', tx: P.x0 + 12, tz: P.z, dx: 1, dz: 0, h: 0 }, { nome: 'porta-aviões', navio: true, tx: n.x - fx * n.comp * 0.42, tz: n.z - fz * n.comp * 0.42, dx: fx, dz: fz, h: CONVES_Y }];
 }
 function pistaPousoPerto() {
   let melhor = null, dm = 2200;
@@ -11915,7 +11924,8 @@ function ligarPousoAuto() {
   aviso(`🛬 Pouso automático: indo para a ${p.nome}. Mexa no manche para cancelar.`, 4);
 }
 function guiarPouso(c, J, dt) {
-  const A = c.auto, p = A.p, P = jogador.pos;
+  const A = c.auto; if (A.p.navio) A.p = pistasPouso()[1];   // o porta-aviões anda: a pista vai junto
+  const p = A.p, P = jogador.pos;
   const s = (P.x - p.tx) * p.dx + (P.z - p.tz) * p.dz;                     // distância ao longo da pista (negativo = antes da cabeceira)
   let ax, az, altAlvo, velAlvo;
   if (A.fase === 'entrada') {
@@ -12094,17 +12104,14 @@ function montarBaseNaval() {
   caixa((N.x0 + N.x1) / 2, 0.4, 1112, N.x1 - N.x0, 0.8, 4, concreto);
   for (const x of [675, 760, 845]) caixa(x, 0.35, 1140, 8, 0.7, 56, concreto);
   for (const [x, z] of [[N.x0 + 6, N.z0 + 6], [N.x1 - 6, N.z0 + 6], [N.x0 + 6, N.z1 - 8], [N.x1 - 6, N.z1 - 8]]) caixa(x, 2, z, 3.2, 4, 3.2, M('#6b6f5e'), true);
-  // navios ancorados (proa para o mar)
-  const pa = navio('porta_avioes', N.porta.comp, 7, '#6b737c'); pa.position.set(N.porta.x, 0, N.porta.z); g.add(pa);
-  const destroieres = N.destroieres.map((d) => { const o = navio('destroier', d.comp, 4, '#5f666e'); o.position.set(d.x, 0, d.z); g.add(o); return o; });
   const baterias = [[650, 1020], [870, 1020]].map(([x, z]) => criarBateria(g, x, z));
-  baseNaval = { g, portao, braco, pa, destroieres };
+  baseNaval = { g, portao, braco };
   registrarBase({ id: 'naval', nome: 'Base Naval', rect: N, aviso: 30, tiro: 12, acesso: () => militar(), acessoAr: () => militar(),
     aa: { cx: N.porta.x, cz: 1150, raio: 210 }, baterias, rotulo: 'Marinha · Sentinela',
     postos: [{ parado: [gx - 9, N.z0 - 4, Math.PI] }, { parado: [gx + 9, N.z0 - 4, Math.PI] }, { parado: [gx - 10, N.z0 + 4, Math.PI] }, { parado: [gx + 10, N.z0 + 4, Math.PI] },
       ...[[N.x0 + 6, N.z0 + 6], [N.x1 - 6, N.z0 + 6], [N.x0 + 6, N.z1 - 8], [N.x1 - 6, N.z1 - 8]].map(([x, z]) => ({ parado: [x, z, Math.atan2(x - (N.x0 + N.x1) / 2, z - (N.z0 + N.z1) / 2)], alto: 4.05 })),
       ...[0, 1, 2, 3].map((k) => { const l = laco([[N.x0 + 12, N.z0 + 12], [N.x1 - 12, N.z0 + 12], [N.x1 - 12, N.z1 - 12], [N.x0 + 12, N.z1 - 12]]); return { l, fase: k * l.total / 4, vel: 1.1 }; }),
-      ...[[-8, -60], [8, -60], [-8, 40], [8, 70]].map(([dx, dz]) => ({ parado: [N.porta.x + dx, N.porta.z + dz, Math.PI], alto: CONVES_Y }))] });
+      ...[655, 700, 805, 860].map((x) => ({ parado: [x, N.z1 - 3, 0] }))] });
 }
 function atualizarBaseNaval(dt) {
   if (!baseNaval) return;
@@ -12133,7 +12140,7 @@ function dispararCruzeiro(x, z, autor) {
 }
 const cruzeiros = [];
 function receberCruzeiro(e) {
-  const N = mundo.BASE_NAVAL, d0 = N.destroieres[Math.abs(Math.round(e.x)) % 2];
+  const N = mundo.BASE_NAVAL, d0 = NAVIOS[Math.abs(Math.round(e.x)) % 2 ? 'd2' : 'd1'] || N.destroieres[0];
   const mesh = jato.criarMissil(modelos.missil_cruzeiro); mesh.scale.setScalar(1.8); scene.add(mesh);
   cruzeiros.push({ ...e, de: new THREE.Vector3(d0.x, 14, d0.z), mesh, fum: 0, avisado: 0 });
   if (Math.hypot(jogador.pos.x - e.x, jogador.pos.z - e.z) > 200) aviso(`🚀 A Marinha lançou um míssil de cruzeiro em direção a: ${regiaoDe(e.x, e.z)}.`, 4);
@@ -12173,7 +12180,7 @@ function atualizarMarinha(dt) {
   const p = jogador.pos;
   if (!baseNaval && Math.hypot(p.x - 760, p.z - 1100) < 800) montarBaseNaval();
   if (Math.hypot(p.x - 450, p.z - 1054) < 500) portoesInternos();
-  atualizarPortoesInternos(dt); atualizarBaseNaval(dt); atualizarCruzeiros(dt); pedidosMissilAdmin(dt); atualizarTesteDefesa(dt);
+  atualizarNavios(dt); atualizarPortoesInternos(dt); atualizarBaseNaval(dt); atualizarCruzeiros(dt); pedidosMissilAdmin(dt); atualizarTesteDefesa(dt);
 }
 
 // ================================================================= 🧪 teste de defesa das bases (só na tela do admin)
@@ -12280,4 +12287,167 @@ function atualizarTesteDefesa(dt) {
     m.position.copy(T.pos); m.rotation.z += dt * 3; m.rotation.x += dt;
     if (T.queda >= 3) { efeitoExplosao(T.pos.x, T.pos.y + 1, T.pos.z, 1.4, false); const Tt = T; setTimeout(() => { escolher('🧪 Relatório do teste', `${Tt.B.nome} · ${Tt.tipo === 'heli' ? 'helicóptero' : 'avião'}:<br>• ${Tt.log.join('<br>• ')}`, [{ rotulo: 'Ok', fn: () => {} }]); if (teste === Tt) pararTeste(); }, 2000); }
   }
+}
+
+// ================================================================= NAVIOS: patrulha automática ou tripulados
+// Sem piloto, cada navio faz a rota dele pelo mar do sul (do oeste ao leste do mapa) e para 2 min no cais.
+// A rota sai do relógio do servidor: todos veem o navio no mesmo lugar. Quem assume o leme manda a posição
+// (5 vezes por segundo para os outros, e a cada 4 s para o servidor); ao largar, o navio volta sozinho.
+const NAVIOS = {};
+const ROTA_EXTERNA = [[900, 1350], [1050, 1560], [600, 1820], [-200, 1840], [-900, 1760], [-1060, 1460], [-700, 1260], [0, 1300], [500, 1330]];
+const ROTA_INTERNA = [[950, 1320], [700, 1520], [0, 1540], [-700, 1500], [-920, 1360], [-400, 1260], [300, 1280]];
+const DEF_NAVIOS = {
+  porta: { nome: 'porta-aviões', glb: 'porta_avioes', comp: 200, cala: 7, convés: CONVES_Y, vel: 4, max: 7, rota: ROTA_INTERNA, fase: 0, cor: '#6b737c' },
+  d1: { nome: 'destróier 1', glb: 'destroier', comp: 110, cala: 4, convés: 9, vel: 6, max: 10, rota: ROTA_EXTERNA, fase: 0, cor: '#5f666e' },
+  d2: { nome: 'destróier 2', glb: 'destroier', comp: 110, cala: 4, convés: 9, vel: 6, max: 10, rota: ROTA_EXTERNA, fase: 0.5, cor: '#5f666e' },
+};
+const PARADA_CAIS = 120;   // s atracado
+function docaDe(id) { const N = mundo.BASE_NAVAL; return id === 'porta' ? { x: N.porta.x, z: N.porta.z } : { ...N.destroieres[id === 'd1' ? 0 : 1] }; }
+function montarNavios() {
+  if (NAVIOS.porta) return;
+  for (const [id, D] of Object.entries(DEF_NAVIOS)) {
+    const mesh = navio(D.glb, D.comp, D.cala, D.cor); scene.add(mesh);
+    const doca = docaDe(id), pts = [[doca.x, doca.z], ...D.rota, [doca.x, doca.z + 40], [doca.x, doca.z]];
+    const caminho = laco(pts);   // laço fechado: doca → rota → doca
+    NAVIOS[id] = { id, ...D, mesh, doca, caminho, x: doca.x, z: doca.z, ang: 0, v: 0, db: null, remoto: null, guardas: [] };
+    criarGuardasNavio(NAVIOS[id], id === 'porta' ? 4 : 2);
+  }
+}
+async function criarGuardasNavio(n, k) {
+  for (let i = 0; i < k; i++) {
+    try {
+      const av = await criarAvatar('robos', 'Rusty_Scout_Bot'); const et = textoSprite('Marinha', { escala: 0.5, fundo: 'rgba(24,52,96,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+      try { av.arma = novaArma('militar', av); } catch { /* sem arma */ }
+      scene.add(av.raiz); av.tocar('idle'); n.guardas.push({ av, lx: (i % 2 ? 1 : -1) * (n.id === 'porta' ? 9 : 3), lz: (i < 2 ? -0.3 : 0.3) * n.comp });
+    } catch { /* sem guarda */ }
+  }
+}
+// posição da patrulha no instante t (ms do servidor): parado no cais, depois a volta toda
+function patrulhaNavio(n, t) {
+  const L = n.caminho.total, periodo = PARADA_CAIS + L / n.vel, u = ((t / 1000 + n.fase * periodo) % periodo + periodo) % periodo;
+  if (u < PARADA_CAIS) return { x: n.doca.x, z: n.doca.z, ang: 0, v: 0, cais: true };
+  const q = pontoNoLaco(n.caminho, (u - PARADA_CAIS) * n.vel);
+  return { x: q.x, z: q.z, ang: q.ang, v: n.vel, cais: false };
+}
+// depois de largar o leme: vai em linha reta até o cais e espera o próximo ciclo da patrulha
+function retorno(n, t) {
+  const d = n.db, t0 = Date.parse(d.t), dist = Math.hypot(n.doca.x - d.x, n.doca.z - d.z), tChega = t0 + dist / n.vel * 1000;
+  if (t < tChega) { const k = (t - t0) / (tChega - t0 || 1); return { x: d.x + (n.doca.x - d.x) * k, z: d.z + (n.doca.z - d.z) * k, ang: Math.atan2(n.doca.x - d.x, n.doca.z - d.z), v: n.vel, cais: false }; }
+  const L = n.caminho.total, periodo = (PARADA_CAIS + L / n.vel) * 1000, fase = n.fase * periodo;
+  const prox = Math.ceil((tChega + fase) / periodo) * periodo - fase;
+  if (t < prox) return { x: n.doca.x, z: n.doca.z, ang: 0, v: 0, cais: true };
+  return patrulhaNavio(n, t);
+}
+let tNaviosDB = 0;
+function lerNavios(dt) {
+  if ((tNaviosDB -= dt) > 0) return; tNaviosDB = 8;
+  rede.navios.lista().then((l) => { for (const r of l || []) if (NAVIOS[r.id]) NAVIOS[r.id].db = r; }).catch(() => {});
+}
+function receberNavio(e) { const n = NAVIOS[e.id]; if (n) n.remoto = { ...e, quando: performance.now() }; }
+function atualizarNavios(dt) {
+  montarNavios(); lerNavios(dt);
+  const t = agoraServidor(), meu = jogador.embarcado?.leme ? jogador.embarcado.id : null;
+  for (const n of Object.values(NAVIOS)) {
+    n.x0 = n.x; n.z0 = n.z; const a0 = n.ang;
+    if (n.id === meu) { /* quem pilota move em pilotarNavio */ }
+    else {
+      const db = n.db, pilotado = db?.modo === 'pilotado' && db.piloto !== jogador.perfil?.id && t - Date.parse(db.t) < 40000;
+      let alvo;
+      if (pilotado) alvo = n.remoto && performance.now() - n.remoto.quando < 3000 ? n.remoto : { x: db.x, z: db.z, ang: db.ang, v: 0 };
+      else if (db?.modo === 'retorno' || (db?.modo === 'pilotado' && db.x != null)) alvo = retorno(n, t);
+      else alvo = patrulhaNavio(n, t);
+      if (Math.hypot(alvo.x - n.x, alvo.z - n.z) > 60) { n.x = alvo.x; n.z = alvo.z; n.ang = alvo.ang; }
+      else { const k = Math.min(1, dt * 3); n.x += (alvo.x - n.x) * k; n.z += (alvo.z - n.z) * k; n.ang = suavizarAngulo(n.ang, alvo.ang, dt * 2); }
+      n.v = alvo.v || 0; n.cais = !!alvo.cais;
+    }
+    n.dang = Math.atan2(Math.sin(n.ang - a0), Math.cos(n.ang - a0)); n.dx = n.x - n.x0;
+    const balanco = Math.sin(t / 1300 + n.comp) * 0.008;
+    n.mesh.position.set(n.x, Math.sin(t / 1700 + n.comp) * 0.25, n.z); n.mesh.rotation.set(balanco, n.ang, balanco * 0.6, 'YXZ');
+    n.mesh.visible = Math.hypot(n.x - jogador.pos.x, n.z - jogador.pos.z) < 1600;
+    for (const s of n.guardas) { const p = pontoNoNavio(n, s.lx, s.lz); s.av.raiz.position.set(p.x, n.convés, p.z); s.av.raiz.rotation.y = n.ang + Math.PI; s.av.raiz.visible = n.mesh.visible; if (Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z) < 120) s.av.mixer.update(dt); }
+  }
+}
+function pontoNoNavio(n, lx, lz) { const c = Math.cos(n.ang), s = Math.sin(n.ang); return { x: n.x + lx * c + lz * s, z: n.z - lx * s + lz * c }; }
+function atracado(n) { return n.cais || (Math.hypot(n.x - n.doca.x, n.z - n.doca.z) < 25 && Math.abs(n.v) < 0.5); }
+function podePilotarNavio(id) { const p = jogador.perfil; return p?.cargo === 'admin' || (militar() && p?.forca === 'marinha' && (jogador.patenteNivel || 0) >= (id === 'porta' ? 9 : 8)); }
+// ---- embarque: no fim do píer de cada navio, com ele atracado. Até 15 militares por navio.
+function navioNoPier() {
+  for (const n of Object.values(NAVIOS)) if (Math.hypot(jogador.pos.x - n.doca.x, jogador.pos.z - 1166) < 5) return n;
+  return null;
+}
+function lotacaoNavio(id) { let k = jogador.embarcado?.id === id ? 1 : 0; for (const r of remotos.values()) if (r.meta?.emb === id) k++; return k; }
+function contextoNavio() {
+  const e = jogador.embarcado;
+  if (e) {
+    const n = NAVIOS[e.id];
+    if (e.leme) return [`no leme do ${n.nome}: ${atracado(n) ? 'atracado' : `${Math.abs(n.v).toFixed(0)} m/s`}`, 'Largar leme'];
+    if (atracado(n)) return [`${n.nome} atracado: descer no píer`, 'Desembarcar'];
+    return [podePilotarNavio(n.id) && !lemeOcupado(n) ? `a bordo do ${n.nome}: assumir o leme` : `a bordo do ${n.nome} (alto-mar)`, podePilotarNavio(n.id) && !lemeOcupado(n) ? 'Leme' : 'A bordo'];
+  }
+  const n = navioNoPier(); if (!n) return null;
+  if (!atracado(n)) return [`${n.nome} fora do cais (ele volta a cada volta da patrulha)`, '⚓ Píer'];
+  return [`⚓ embarcar no ${n.nome} (${lotacaoNavio(n.id)}/15)`, 'Embarcar'];
+}
+function lemeOcupado(n) { const db = n.db; return db?.modo === 'pilotado' && db.piloto !== jogador.perfil?.id && agoraServidor() - Date.parse(db.t) < 40000; }
+function acaoNavio() {
+  const e = jogador.embarcado;
+  if (e) {
+    const n = NAVIOS[e.id];
+    if (e.leme) { largarLeme(); return true; }
+    if (atracado(n)) { desembarcarNavio(); return true; }
+    if (podePilotarNavio(n.id) && !lemeOcupado(n)) { assumirLeme(); return true; }
+    return true;
+  }
+  const n = navioNoPier(); if (!n) return false;
+  if (!atracado(n)) { aviso(`O ${n.nome} está em patrulha. Espere ele voltar ao cais.`, 3); return true; }
+  if (!militar()) { aviso('⚓ Só militares das Forças Armadas embarcam.', 3); return true; }
+  if (lotacaoNavio(n.id) >= 15) { aviso(`⚓ O ${n.nome} está lotado (15 soldados).`, 3); return true; }
+  const embarcar = (leme) => { jogador.embarcado = { id: n.id, slot: lotacaoNavio(n.id), leme: false }; if (jogador.armado) alternarArma(); conexao?.rastrear(metaPresenca()); aviso(`⚓ A bordo do ${n.nome}.`, 2.5); if (leme) assumirLeme(); };
+  if (podePilotarNavio(n.id) && !lemeOcupado(n)) escolher(`⚓ ${n.nome}`, 'Embarcar como tripulante ou assumir o leme?', [{ rotulo: '🧭 Assumir o leme', fn: () => embarcar(true) }, { rotulo: '🪖 Só embarcar', fn: () => embarcar(false) }]);
+  else embarcar(false);
+  return true;
+}
+function assumirLeme() {
+  const e = jogador.embarcado, n = NAVIOS[e.id];
+  rede.navios.assumir(n.id, n.x, n.z, n.ang).then(() => {
+    e.leme = true; n.v = 0; modoVolante(true); aviso(`🧭 Você está no leme do ${n.nome}: acelere, freie/ré e vire. O navio não entra em terra.`, 5);
+  }).catch((er) => aviso(er.message, 3.5));
+}
+function largarLeme() {
+  const e = jogador.embarcado, n = NAVIOS[e.id]; e.leme = false; modoVolante(false);
+  rede.navios.largar(n.id, n.x, n.z, n.ang).then(() => { n.db = { ...(n.db || {}), modo: 'retorno', piloto: null, x: n.x, z: n.z, ang: n.ang, t: new Date(agoraServidor()).toISOString() }; }).catch(() => {});
+  aviso(`🧭 Leme largado: o ${n.nome} volta sozinho para a patrulha.`, 3.5);
+}
+function desembarcarNavio() {
+  const n = NAVIOS[jogador.embarcado.id];
+  if (jogador.embarcado.leme) largarLeme();
+  jogador.embarcado = null; conexao?.rastrear(metaPresenca());
+  jogador.pos.set(n.doca.x, 0, 1164); teleportar(n.doca.x, 1160);
+  aviso('⚓ Desembarcou no píer.', 2.5);
+}
+let tLemeRede = 0, tLemeDB = 0;
+function seguirNavio(dt) {
+  const j = jogador, e = j.embarcado, n = NAVIOS[e.id]; if (!n) { j.embarcado = null; return; }
+  if (e.leme) pilotarNavio(n, dt);
+  const lx = e.leme ? 0 : ((e.slot % 4) - 1.5) * (n.id === 'porta' ? 4 : 1.6), lz = e.leme ? n.comp * 0.05 : (Math.floor(e.slot / 4) - 1.5) * (n.id === 'porta' ? 8 : 5);
+  const p = pontoNoNavio(n, lx, lz);
+  j.pos.set(p.x, n.convés, p.z); j.yaw = n.ang;
+  j.avatar.raiz.position.copy(j.pos); j.avatar.raiz.rotation.y = n.ang; j.avatar.tocar('idle'); j.avatar.mixer.update(dt);
+}
+function pilotarNavio(n, dt) {
+  const acel = pedais.acel || teclas.has('w'), freio = pedais.freio || teclas.has('s');
+  const lado = THREE.MathUtils.clamp((pedais.dir || teclas.has('d') || teclas.has('arrowright') ? 1 : 0) - (pedais.esq || teclas.has('a') || teclas.has('arrowleft') ? 1 : 0), -1, 1);
+  if (acel && !freio) n.v = Math.min(n.max, n.v + 0.8 * dt); else if (freio) n.v = Math.max(-2, n.v - 1.2 * dt); else n.v *= Math.max(0, 1 - 0.05 * dt);
+  n.ang -= lado * 0.09 * Math.min(1, Math.abs(n.v) / 3) * Math.sign(n.v || 1) * dt;
+  let nx = n.x + Math.sin(n.ang) * n.v * dt, nz = n.z + Math.cos(n.ang) * n.v * dt;
+  const meia = n.comp / 2, proaX = nx + Math.sin(n.ang) * meia * Math.sign(n.v || 1), proaZ = nz + Math.cos(n.ang) * meia * Math.sign(n.v || 1);
+  const naAgua = (x, z) => Math.abs(x) < 1080 && z > 1135 && z < 1895;
+  let bate = !naAgua(proaX, proaZ) && !(Math.hypot(nx - n.doca.x, nz - n.doca.z) < 30);
+  for (const o of Object.values(NAVIOS)) if (o !== n && Math.hypot(o.x - nx, o.z - nz) < (o.comp + n.comp) * 0.32) bate = true;
+  if (bate) { n.v = 0; if (performance.now() - (n.avisoBate || 0) > 3000) { n.avisoBate = performance.now(); aviso('⚓ Aí não dá: terra ou outro navio à frente.', 2); } }
+  else { n.x = nx; n.z = nz; }
+  n.cais = false;
+  if ((tLemeRede -= dt) <= 0) { tLemeRede = 0.2; conexao?.enviar('navio', { id: n.id, x: r2(n.x), z: r2(n.z), ang: r2(n.ang), v: r2(n.v) }); }
+  if ((tLemeDB -= dt) <= 0) { tLemeDB = 4; rede.navios.mover(n.id, n.x, n.z, n.ang).catch(() => {}); }
+  sons.continuo('aviaoG_lenta', 0.2 + Math.abs(n.v) / n.max * 0.3, 0.5);
 }

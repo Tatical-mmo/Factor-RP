@@ -91,6 +91,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'onibusSeq' }, ({ payload }) => eventos.onibusSeq?.(payload));
   canal.on('broadcast', { event: 'denuncia' }, ({ payload }) => eventos.denuncia?.(payload));
   canal.on('broadcast', { event: 'reset' }, ({ payload }) => eventos.reset?.(payload));
+  canal.on('broadcast', { event: 'navio' }, ({ payload }) => eventos.navio?.(payload));
   canal.on('broadcast', { event: 'cruzeiro' }, ({ payload }) => eventos.cruzeiro?.(payload));
   canal.on('broadcast', { event: 'missil' }, ({ payload }) => eventos.missil?.(payload));
   canal.on('broadcast', { event: 'travado' }, ({ payload }) => eventos.travado?.(payload));
@@ -374,6 +375,10 @@ function traduzirRpc(m) {
     'caminhao sem carga': 'Esse caminhão não está levando carga.',
     'esse caminhao e seu': 'Esse caminhão é seu.',
     'quem tem crimes nao entra na policia': 'Quem está procurado não entra na polícia.',
+    'navio so marinha': 'Só a Marinha pilota: Tenente para cima nos destróieres e Capitão para cima no porta-aviões.',
+    'navio ja tem piloto': 'Esse navio já tem alguém no leme.',
+    'navio fora do mar': 'O navio não sai do mar.',
+    'navio invalido': 'Navio inválido.',
     'entre 0 e 60 soldados': 'Escolha entre 0 e 60 soldados por base.',
     'base invalida': 'Base inválida.',
     'so general da marinha': 'Só um General da Marinha (ou o General Supremo) usa a Central de Mísseis.',
@@ -621,6 +626,12 @@ export const jornal = {
   redacao: () => rpc('materias_redacao'),
   salvar: (id, titulo, texto, imagem, quando) => rpc('salvar_materia', { p_id: id || null, p_titulo: titulo, p_texto: texto, p_imagem: imagem || null, p_publicar_em: quando || null }),
   apagar: (id) => rpc('apagar_materia', { p_id: id }),
+};
+export const navios = {
+  lista: () => sel(sb.from('navios').select('id,piloto,modo,x,z,ang,t')),
+  assumir: (id, x, z, ang) => rpc('assumir_navio', { p_navio: id, p_x: x, p_z: z, p_ang: ang }),
+  mover: (id, x, z, ang) => rpc('mover_navio', { p_navio: id, p_x: x, p_z: z, p_ang: ang }),
+  largar: (id, x, z, ang) => rpc('largar_navio', { p_navio: id, p_x: x, p_z: z, p_ang: ang }),
 };
 export const guardas = {
   lista: () => sel(sb.from('guardas_bases').select('base,guardas')),

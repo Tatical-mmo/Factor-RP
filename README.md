@@ -1342,3 +1342,29 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - Abaixo do padrão, o jogo tira primeiro os da ronda e deixa os do portão.
 - **Economia para o celular**: soldado a mais de 120 m de você fica parado em pose de guarda, sem animação. Ele continua aparecendo até 260 m.
 - Os jogadores recebem o número novo em até 1 minuto. Você vê na hora.
+
+## Versão 14/11 · navios em patrulha (20261114e)
+
+**Rode o SQL `supabase/79_navios.sql`** (depois do 78).
+
+- **Patrulha automática**: o porta-aviões e os 2 destróieres saem sozinhos do cais da Base Naval e dão a volta pelo mar do sul, de uma ponta do mapa à outra.
+  - O porta-aviões faz uma rota mais por dentro, a 4 m/s, e a volta leva uns 18 min.
+  - Os destróieres fazem uma rota mais por fora, a 6 m/s, e a volta leva uns 15 min. Eles saem defasados para não andarem juntos.
+  - A cada volta, cada navio **fica 2 min atracado** no cais, que é a hora de embarcar.
+  - Todos os jogadores veem o mesmo navio no mesmo lugar, porque a rota sai do relógio do servidor.
+- **Embarque**: no fim do píer de cada navio, com ele atracado, aparece **⚓ Embarcar**.
+  - Entram até **15 militares por navio**, de qualquer Força.
+  - Embarcados, ficam em pé no convés e andam junto com o navio.
+  - **Desembarcar** só com o navio atracado.
+- **Tripulado**: a Marinha assume o **leme**, no embarque ou já a bordo.
+  - Tenente para cima pilota os destróieres; o porta-aviões é de Capitão para cima. O General Supremo pilota todos.
+  - Controles: acelerar, freio/ré e virar.
+  - O navio não entra em terra e para antes de bater em outro navio.
+  - Os outros jogadores veem o movimento ao vivo.
+  - Ao largar o leme, o navio vai sozinho até o cais e volta para a patrulha.
+  - Se o piloto cair do jogo, o leme fica livre em 40 s.
+- **Porta-aviões em movimento**:
+  - Os caças pousam e decolam com ele andando, e o caça pousado anda e gira junto.
+  - O 🛬 Pouso automático segue o navio e se alinha com a direção dele.
+  - O porta-aviões leva 4 guardas da Marinha no convés, e cada destróier leva 2.
+- O míssil de cruzeiro sai do destróier, de onde ele estiver.
