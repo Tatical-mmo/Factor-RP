@@ -864,7 +864,7 @@ const pedais = { esq: false, dir: false, acel: false, freio: false };
 window.addEventListener('keydown', (e) => {
   const foco = document.activeElement;
   if (foco && (foco.tagName === 'INPUT' || foco.tagName === 'TEXTAREA')) return;
-  const k = e.key.toLowerCase(); teclas.add(k);
+  const k = (e.key || '').toLowerCase(); if (!k) return; teclas.add(k);
   if (!jogador.avatar || e.repeat) return;
   if (k === 'e') acaoContexto();
   if (k === 'f') { if (jogador.carro?.servico === 'tanque') atirarTanque(); else if (!jogador.carro?.voa) socar(); }
@@ -877,7 +877,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'c') acaoCrime();
   if (k === 'j') ejetar();
 });
-window.addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); teclas.delete(k); if (k === 'v') { voz.falar(false); desenharBotaoVoz(); } });
+window.addEventListener('keyup', (e) => { const k = (e.key || '').toLowerCase(); teclas.delete(k); if (k === 'v') { voz.falar(false); desenharBotaoVoz(); } });
 window.addEventListener('blur', () => teclas.clear());
 window.addEventListener('wheel', (e) => { if (modoCam === 'livre') { olhar.dist = THREE.MathUtils.clamp(olhar.dist * (e.deltaY > 0 ? 1.1 : 0.9), 4, 60); return; } zoom = THREE.MathUtils.clamp(zoom * (e.deltaY > 0 ? 1.1 : 0.9), 12, 70); ajustarCamera(); }, { passive: true });
 
@@ -1952,6 +1952,8 @@ const REGIOES_MAPA = [
   { x0: -320, z0: -1400, x1: 320, z1: -640 },     // Vila Serra (com a rodovia)
   { x0: -320, z0: 640, x1: 320, z1: 1190 },      // Porto Sul (com a rodovia)
   { x0: 100, z0: -900, x1: 560, z1: -640 },     // aeroporto da Metrópole
+  { x0: 100, z0: 900, x1: 900, z1: 1420 },      // bases militares (Quartel, Base Aérea, Base Naval e o mar)
+  { x0: -900, z0: -270, x1: -630, z1: 270 },     // Área 51 (só aparece para quem tem acesso)
 ];
 let fundosMapa = [];
 function regiaoMapa(x, z) { return REGIOES_MAPA.findIndex((r) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1); }
@@ -1981,7 +1983,7 @@ function desenharCentroNoMapa(g) {
   if (contratante) { g.fillStyle = '#ffd23e'; g.beginPath(); g.arc(contratante.x, contratante.z, 5, 0, 7); g.fill(); }
 }
 // ---------------------------------------------------------------- mapa grande e rastreio
-const NOMES_REGIAO = ['Metrópole', 'Vila Serra', 'Porto Sul', 'Aeroporto'];
+const NOMES_REGIAO = ['Metrópole', 'Vila Serra', 'Porto Sul', 'Aeroporto', 'Bases militares', 'Área 51'];
 let rastreio = null, regiaoMapaG = 0, beacon = null;
 function alvosRastreio() {
   const eu = jogador.perfil?.id, r = [];
@@ -2052,19 +2054,20 @@ function atualizarRastreio(dt) {
   if (!passo.estacao && d < 5) { aviso(`Você chegou: ${rastreio.nome}`); rastrear(null); }
 }
 function abrirMapaGrande() {
-  regiaoMapaG = Math.max(0, regiaoMapa(jogador.pos.x, jogador.pos.z));
+  regiaoMapaG = Math.max(0, regiaoMapa(jogador.pos.x, jogador.pos.z)); if (regiaoMapaG === 5 && !acessoArea51()) regiaoMapaG = 0;
   $('mapaJanela').classList.remove('oculto');
   desenharMapaGrande();
 }
 function desenharMapaGrande() {
   const abas = $('mapaAbas');
-  abas.innerHTML = NOMES_REGIAO.map((n, i) => `<button data-reg="${i}" class="${i === regiaoMapaG ? 'sel' : ''}">${n}</button>`).join('');
+  abas.innerHTML = NOMES_REGIAO.map((n, i) => i === 5 && !acessoArea51() ? '' : `<button data-reg="${i}" class="${i === regiaoMapaG ? 'sel' : ''}">${n}</button>`).join('');
   abas.querySelectorAll('[data-reg]').forEach((b) => { b.onclick = () => { regiaoMapaG = Number(b.dataset.reg); desenharMapaGrande(); }; });
   const c = $('mapaG'), g = c.getContext('2d'), w = c.width, r = REGIOES_MAPA[regiaoMapaG];
   g.fillStyle = '#86a95c'; g.fillRect(0, 0, w, w);
   const lado = Math.max(r.x1 - r.x0, r.z1 - r.z0), esc = w / lado, ox = (r.x0 + r.x1) / 2 - lado / 2, oz = (r.z0 + r.z1) / 2 - lado / 2;
   if (fundosMapa[regiaoMapaG]) g.drawImage(fundosMapa[regiaoMapaG], ((r.x1 - r.x0) - lado) / 2 > 0 ? 0 : 0, 0, fundosMapa[regiaoMapaG].width, fundosMapa[regiaoMapaG].height, (r.x0 - ox) * esc, (r.z0 - oz) * esc, (r.x1 - r.x0) * esc, (r.z1 - r.z0) * esc);
   const tela = (x, z) => [(x - ox) * esc, (z - oz) * esc];
+  desenharBasesNoMapa(g, tela, esc, true);
   desenharLinhasMapaGrande(g, tela, esc);
   const ponto = (x, z, cor, raio, txt) => {
     const [mx, mz] = tela(x, z); if (mx < 0 || mz < 0 || mx > w || mz > w) return;
@@ -2098,6 +2101,7 @@ function desenharMapa() {
     sw = Math.min(sw, f.width - sx); sh = Math.min(sh, f.height - sy);
     if (sw > 1 && sh > 1) g.drawImage(f, sx, sy, sw, sh, dx, dy, sw * k, sh * k);
   }
+  desenharBasesNoMapa(g, (x, z) => [((x - px) / MAPA_R * 0.5 + 0.5) * w, ((z - pz) / MAPA_R * 0.5 + 0.5) * w], w / (MAPA_R * 2), false);
   const desenhar = (x, z, cor, raio) => {
     const mx = ((x - px) / MAPA_R * 0.5 + 0.5) * w, mz = ((z - pz) / MAPA_R * 0.5 + 0.5) * w;
     if (mx < -8 || mz < -8 || mx > w + 8 || mz > w + 8) return;
@@ -5437,7 +5441,10 @@ function montarLocais() {
   LOCAIS.push({ nome: 'Transportadora', x: quadC(2) + 9, z: ruaC(2) + 2.5 });
   LOCAIS.push({ nome: 'Avenida Central', x: 0, z: ruaC(2) });
   for (const a of AEROPORTOS) LOCAIS.push({ nome: `✈️ ${a.nome}`, x: a.balcao.x, z: a.balcao.z + (a.eixo === 'x' ? 4 : 0) });
-  LOCAIS.push({ nome: '🛸 Área 51 (portão)', x: mundo.AREA51.x1 + 8, z: 0 });   // o admin entra; os outros levam tiro
+  LOCAIS.push({ nome: '🛸 Área 51 (portão)', x: mundo.AREA51.x1 + 8, z: 0 });
+  LOCAIS.push({ nome: '🪖 Quartel do Exército (portão)', x: mundo.QUARTEL.x0 - 8, z: mundo.QUARTEL.portao.z });
+  LOCAIS.push({ nome: '✈️ Base Aérea (portão)', x: mundo.BASE_AEREA.portao.x, z: mundo.BASE_AEREA.z0 - 8 });
+  LOCAIS.push({ nome: '⚓ Base Naval (portão)', x: mundo.BASE_NAVAL.portao.x, z: mundo.BASE_NAVAL.z0 - 8 });   // o admin entra; os outros levam tiro
   LOCAIS.push({ nome: '🛩️ Aviões dos pilotos (frota)', x: 444, z: -728 });
   LOCAIS.push({ nome: '🚌 Rodoviária', x: RODO.guiche.x - 2, z: RODO.guiche.z });
   LOCAIS.push({ nome: '♻️ Central de Reciclagem', x: CENTRAL.garagem.x, z: CENTRAL.garagem.z + 2 });
@@ -12450,4 +12457,37 @@ function pilotarNavio(n, dt) {
   if ((tLemeRede -= dt) <= 0) { tLemeRede = 0.2; conexao?.enviar('navio', { id: n.id, x: r2(n.x), z: r2(n.z), ang: r2(n.ang), v: r2(n.v) }); }
   if ((tLemeDB -= dt) <= 0) { tLemeDB = 4; rede.navios.mover(n.id, n.x, n.z, n.ang).catch(() => {}); }
   sons.continuo('aviaoG_lenta', 0.2 + Math.abs(n.v) / n.max * 0.3, 0.5);
+}
+
+// bases militares no mapa (grande e minimapa): pisos, pista, hangares, cais e os navios onde estiverem.
+// A Área 51 só aparece para quem tem acesso.
+function desenharBasesNoMapa(g, tela, esc, rotulos) {
+  const ret = (x0, z0, x1, z1, cor) => { const [a, b] = tela(x0, z0), [c, d] = tela(x1, z1); g.fillStyle = cor; g.fillRect(a, b, c - a, d - b); };
+  const txt = (x, z, t) => { if (!rotulos) return; const [mx, mz] = tela(x, z); g.font = 'bold 18px sans-serif'; g.textAlign = 'center'; g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,.8)'; g.fillStyle = '#fff'; g.strokeText(t, mx, mz); g.fillText(t, mx, mz); };
+  g.save();
+  const A = mundo.BASE_AEREA, N = mundo.BASE_NAVAL, P = A.pista, PS = mundo.PASSAGEM_BASES;
+  ret(296, 938, N.x1 + 10, N.z1 + 2, '#6f8f4a');
+  ret(216, 940, N.portao.x + 5, 950, '#41454d'); ret(A.portao.x - 5, 945, A.portao.x + 5, A.z0, '#41454d'); ret(N.portao.x - 5, 945, N.portao.x + 5, N.z0, '#41454d');
+  ret(mundo.QUARTEL.x1, PS.z0, N.x0, PS.z1, '#41454d');
+  ret(A.x0, A.z0, A.x1, A.z1, '#a29f97'); ret(P.x0, P.z - P.larg / 2, P.x1, P.z + P.larg / 2, '#3b3e45'); ret(P.x0, 1048, P.x1, 1062, '#4a4e55');
+  for (const [hx, w] of [[350, 26], [395, 28], [455, 40]]) ret(hx - w / 2, 990, hx + w / 2, 1020, '#6f757b');
+  ret(557, 1002, 563, 1008, '#d9d4c8');
+  ret(N.x0, N.z0, N.x1, N.z1, '#a29f97'); ret(685, 1021, 715, 1039, '#d8d3c4'); ret(802, 1028, 838, 1042, '#c9c3b2');
+  for (const x of [675, 760, 845]) ret(x - 4, 1112, x + 4, 1168, '#9a978f');
+  // navios onde estiverem (retângulo girado)
+  for (const n of Object.values(NAVIOS)) {
+    const lg = n.id === 'porta' ? 34 : 16, c = Math.cos(n.ang), sn = Math.sin(n.ang), pts = [[-lg / 2, -n.comp / 2], [lg / 2, -n.comp / 2], [lg / 2, n.comp / 2], [0, n.comp / 2 + 8], [-lg / 2, n.comp / 2]];
+    g.fillStyle = n.id === 'porta' ? '#59626b' : '#4a525a'; g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath();
+    pts.forEach(([lx, lz], i) => { const [mx, mz] = tela(n.x + lx * c + lz * sn, n.z - lx * sn + lz * c); if (i) g.lineTo(mx, mz); else g.moveTo(mx, mz); });
+    g.closePath(); g.fill(); g.stroke();
+    if (rotulos) txt(n.x, n.z - n.comp / 2 - 10, n.id === 'porta' ? '⚓ Porta-aviões' : '⚓ Destróier');
+  }
+  txt((A.x0 + A.x1) / 2, A.z0 - 12, '✈️ Base Aérea'); txt((N.x0 + N.x1) / 2, N.z0 - 12, '⚓ Base Naval'); txt((mundo.QUARTEL.x0 + mundo.QUARTEL.x1) / 2, mundo.QUARTEL.z0 - 12, '🪖 Quartel');
+  if (acessoArea51()) {
+    const R = mundo.AREA51, D = R.deserto;
+    ret(D.x0, D.z0, D.x1, D.z1, '#d2b07a'); ret(-700, -5, -640, 5, '#3d4047'); ret(R.x0, R.z0, R.x1, R.z1, '#9d9a92');
+    ret(-865, 64, -715, 80, '#3d4047'); ret(R.hangar.x - R.hangar.w / 2, R.hangar.z - R.hangar.d / 2, R.hangar.x + R.hangar.w / 2, R.hangar.z + R.hangar.d / 2, '#6f757b');
+    txt((R.x0 + R.x1) / 2, R.z0 - 12, '🛸 Área 51');
+  }
+  g.restore();
 }

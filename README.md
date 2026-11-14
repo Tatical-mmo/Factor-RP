@@ -1368,3 +1368,12 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - O 🛬 Pouso automático segue o navio e se alinha com a direção dele.
   - O porta-aviões leva 4 guardas da Marinha no convés, e cada destróier leva 2.
 - O míssil de cruzeiro sai do destróier, de onde ele estiver.
+
+## Versão 14/11 · bases no mapa (20261114f)
+
+- **Erro ao abrir** ("Cannot read properties of undefined (reading 'toLowerCase') · main.js:880"): alguns teclados de celular mandam um evento de tecla sem a tecla. O jogo agora ignora esse evento e a faixa vermelha não aparece mais.
+- **Mapa**:
+  - Nova aba **Bases militares**: mostra Quartel, Base Aérea (pista, pátio, hangares e torre), Base Naval (comando, cais e píeres), a passagem entre as bases e os **navios onde estiverem**.
+  - Nova aba **Área 51**: só aparece para quem tem acesso.
+  - O minimapa também desenha as bases e os navios.
+- **Teleportar** (painel): entraram **🪖 Quartel do Exército (portão)**, **✈️ Base Aérea (portão)** e **⚓ Base Naval (portão)**.
