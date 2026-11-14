@@ -1214,3 +1214,8 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Jornalistas**: à noite, com o óvni voando alto, quem está a menos de 320 m recebe "🛸 Luzes estranhas no céu…".
   - Os jornalistas recebem o avistamento com a região aproximada, cerca de 60 m de erro, e uma marca no mapa por 3 min, para correr e fotografar pelo Jornal › Tirar foto.
   - Cada abdução vira um "Relato de abdução" para os jornalistas, com a região, sem dizer quem foi.
+
+## Versão 13/11 · botões do óvni (20261113zm)
+
+- Pilotando o óvni, aparecem dois botões grandes do lado esquerdo, no meio da tela: **👻 Invisível** (ou 👁️ Visível) e **👽 Abduzir**. Antes o botão de invisibilidade ficava atrás do Sair e das setas da câmera.
+- O botão Abduzir fica sempre à mostra e diz o estado: o nome do alvo, "sem alvo" ou o tempo de recarga. Tocado sem alvo, ele explica o que falta: subir, descer, parar ou chegar mais perto de um jogador, com a distância do mais perto.

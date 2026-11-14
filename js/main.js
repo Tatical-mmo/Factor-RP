@@ -11319,7 +11319,7 @@ function atualizarArea51(dt) {
     else if (!c?.aviao) teleportar(A51.x1 + 8, 0);
     if (agora - avisoA51 > 4000) { avisoA51 = agora; aviso('🚫 Área 51: acesso restrito ao Exército (Tenente para cima). Espaço aéreo fechado para pouso.', 4); }
   }
-  if (jogador.carro?.servico !== 'ovni') { const bt = $('btOvniInv'); if (bt) bt.style.display = 'none'; }
+  if (jogador.carro?.servico !== 'ovni') { const pn = $('painelOvni'); if (pn) pn.style.display = 'none'; }
   tetoHangar(dt);
   // o óvni da exposição só aparece para quem tem acesso
   const vit = civico.EXERCITO.veiculos.find((v) => v.modelo === 'ovni');
@@ -11436,19 +11436,34 @@ function tetoHangar(dt) {
 function dentroHangar(x, z) { const H = A51.hangar; return Math.abs(x - H.x) < H.w / 2 - 1 && Math.abs(z - H.z) < H.d / 2 - 1; }
 // botão de invisibilidade (e pousado fora do hangar ele fica invisível sozinho)
 function controlesOvni(c) {
-  let bt = $('btOvniInv');
-  if (!bt) {
-    bt = document.createElement('button'); bt.id = 'btOvniInv';
-    bt.style.cssText = 'position:fixed;right:calc(env(safe-area-inset-right,0px) + 14px);top:calc(env(safe-area-inset-top,0px) + 46vh);z-index:12;border-radius:14px;border:2px solid #7ff6ff;background:rgba(14,30,40,.85);color:#dffcff;font:800 13px system-ui;padding:9px 12px;min-width:92px';
-    bt.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); alternarInvisivel(); });
-    document.body.appendChild(bt);
+  let pn = $('painelOvni');
+  if (!pn) {   // à esquerda, no meio da tela (longe do Sair, das setas da câmera e do manche)
+    pn = document.createElement('div'); pn.id = 'painelOvni';
+    pn.style.cssText = 'position:fixed;left:calc(env(safe-area-inset-left,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 36vh);z-index:30;display:flex;flex-direction:column;gap:8px';
+    const bt = (id, fn) => { const b = document.createElement('button'); b.id = id; b.style.cssText = 'border-radius:14px;border:2px solid #7ff6ff;background:rgba(14,30,40,.88);color:#dffcff;font:800 13px system-ui;padding:8px 10px;min-width:96px;line-height:1.15;touch-action:none';
+      b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); fn(); }); pn.appendChild(b); return b; };
+    bt('btOvniInv', alternarInvisivel);
+    bt('btOvniAbd', () => { const a = alvoAbducao(); if (a) abduzir(a); else aviso(dicaAbducao(), 4); });
+    document.body.appendChild(pn);
     window.addEventListener('keydown', (ev) => { if (ev.key?.toLowerCase() === 'i' && jogador.carro?.servico === 'ovni' && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) alternarInvisivel(); });
   }
-  bt.style.display = 'block';
+  pn.style.display = 'flex';
   if ((c.alt || 0) <= 0.2 && !dentroHangar(jogador.pos.x, jogador.pos.z) && !c.invisivel) { c.invisivel = true; aviso('👻 Pousado fora do hangar: o óvni ficou invisível sozinho.', 3); }
-  const txt = c.invisivel ? '👻 Invisível<br><small>ligado</small>' : '👁️ Visível<br><small>toque p/ sumir</small>';
-  if (bt.dataset.t !== txt) { bt.dataset.t = txt; bt.innerHTML = txt; bt.style.borderColor = c.invisivel ? '#b48cff' : '#7ff6ff'; }
+  const bi = $('btOvniInv'), ba = $('btOvniAbd'), alvo = alvoAbducao(), rec = Math.max(0, Math.ceil((abducaoPronta - performance.now()) / 1000));
+  const ti = c.invisivel ? '👻 Invisível<br><small>ligado</small>' : '👁️ Visível<br><small>toque p/ sumir</small>';
+  if (bi.dataset.t !== ti) { bi.dataset.t = ti; bi.innerHTML = ti; bi.style.borderColor = c.invisivel ? '#b48cff' : '#7ff6ff'; }
+  const ta = rec ? `👽 Abduzir<br><small>recarga ${rec} s</small>` : alvo ? `👽 Abduzir<br><small>${esc((alvo.r.meta?.nome || 'jogador').slice(0, 12))}</small>` : '👽 Abduzir<br><small>sem alvo</small>';
+  if (ba.dataset.t !== ta) { ba.dataset.t = ta; ba.innerHTML = ta; ba.style.opacity = alvo && !rec ? '1' : '.6'; ba.style.borderColor = alvo && !rec ? '#7dff8a' : '#7ff6ff'; }
   const h = c.mesh.getObjectByName?.('ovniHalo'); if (h) h.visible = !c.invisivel;   // para você: sem o halo quando está invisível
+}
+// por que não dá para abduzir agora
+function dicaAbducao() {
+  const c = jogador.carro; if (!c) return '';
+  if ((c.alt || 0) < 3) return '👽 Suba um pouco: o feixe funciona de 3 a 45 m de altura.';
+  if (c.alt > 45) return '👽 Muito alto: desça para menos de 45 m.';
+  if (Math.abs(c.vel) > 5) return '👽 Pare o óvni em cima da pessoa.';
+  let dm = Infinity; for (const r of remotos.values()) if (r.alvo) dm = Math.min(dm, Math.hypot(r.alvo.x - jogador.pos.x, r.alvo.z - jogador.pos.z));
+  return dm === Infinity ? '👽 Nenhum jogador na cidade para abduzir agora.' : `👽 Pare bem em cima de um jogador a pé (o mais perto está a ${Math.round(dm)} m).`;
 }
 function alternarInvisivel() {
   const c = jogador.carro; if (c?.servico !== 'ovni') return;
