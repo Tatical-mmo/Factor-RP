@@ -1280,6 +1280,7 @@ function sincronizarCarros(lista) {
     if (d.destruido_ate && Date.parse(d.destruido_ate) > agoraServidor()) { v.mesh.visible = false; continue; }
     v.mesh.visible = !outros.has(d.id);
     v.mesh.position.set(d.x, alturaChao(d.x, d.z), d.z); v.mesh.rotation.y = d.ang;
+    if (!civico.CARROS[d.modelo]?.voa) eixos.inclinar(v.mesh, alturaChao);
   }
 }
 function meuCarroProximo() {
@@ -1424,6 +1425,7 @@ function dirigir(dt) {
   const chao = alturaChao(jogador.pos.x, jogador.pos.z);
   jogador.pos.y += (chao - jogador.pos.y) * Math.min(1, dt * 10);
   c.mesh.position.copy(jogador.pos); c.mesh.rotation.y = jogador.yaw;
+  eixos.inclinar(c.mesh, alturaChao, c.raio > 1.5 ? 1.2 : 0.9);   // ladeira do morro: acompanha o chão
   jogador.avatar.raiz.position.copy(jogador.pos);
 }
 
@@ -2574,6 +2576,7 @@ function atualizarRemotos(dt) {
       const kc = Math.min(1, dt * 10);
       r.carro.position.x += (a.x - r.carro.position.x) * kc; r.carro.position.y += (a.y - r.carro.position.y) * kc; r.carro.position.z += (a.z - r.carro.position.z) * kc;
       r.carro.rotation.y = suavizarAngulo(r.carro.rotation.y, a.r, dt * 10);
+      if (!civico.CARROS[mod]?.voa) eixos.inclinar(r.carro, alturaChao);
       r.carro.visible = !a.iv;   // óvni invisível
       if (mod === 'ambulancia' || mod === 'bombeiros') civico.atualizarSirenes(performance.now() / 1000, r.carro);
       raiz.position.copy(r.carro.position); raiz.visible = false; r.av.mixer.update(dt);

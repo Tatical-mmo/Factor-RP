@@ -14,7 +14,20 @@ export function marcar(o, guia = null) {
   e.marcado = true; e.guia = guia;
 }
 export function restaurar() {
-  for (const [o, e] of estado) if (e.vis) { o.position.x = e.lx; o.position.z = e.lz; o.rotation.y = e.la; e.vis = false; }
+  for (const [o, e] of estado) if (e.vis) { o.position.x = e.lx; o.position.z = e.lz; o.rotation.y = e.la; o.rotation.x = 0; o.rotation.z = 0; e.vis = false; }
+}
+// ladeira: o veículo acompanha o chão (sobe de nariz, desce de nariz e tomba de lado na encosta).
+// A altura é a média do chão debaixo dos dois eixos. Em chão plano não muda nada.
+export function inclinar(o, alturaChao, larg = 1.0) {
+  if (!o || !alturaChao) return;
+  const { zf, zr } = eixosDe(o), a = o.rotation.y, sa = Math.sin(a), ca = Math.cos(a), x = o.position.x, z = o.position.z;
+  const hf = alturaChao(x + sa * zf, z + ca * zf), hr = alturaChao(x + sa * zr, z + ca * zr);
+  const hd = alturaChao(x + ca * larg, z - sa * larg), he = alturaChao(x - ca * larg, z + sa * larg);
+  const lim = 0.5, wb = (zf - zr) || 2.6;
+  o.rotation.order = 'YXZ';
+  o.rotation.x = Math.max(-lim, Math.min(lim, -Math.atan2(hf - hr, wb)));
+  o.rotation.z = Math.max(-lim, Math.min(lim, Math.atan2(hd - he, larg * 2)));
+  o.position.y = (hf + hr) / 2;
 }
 export function aplicar(alturaChao) {
   for (const [o, e] of estado) {
@@ -34,7 +47,7 @@ export function aplicar(alturaChao) {
     e.rx = fx - dx * wb; e.rz = fz - dz * wb; e.fx = fx; e.fz = fz;
     const x = fx - dx * zf, z = fz - dz * zf;
     o.position.x = x; o.position.z = z; o.rotation.y = ang;
-    if (alturaChao) o.position.y = alturaChao(x, z);
+    if (alturaChao) inclinar(o, alturaChao);
     e.vis = true;
   }
 }
