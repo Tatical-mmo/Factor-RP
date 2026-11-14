@@ -6002,9 +6002,12 @@ function atualizarCamera3D(dt) {
     if (!v && !jogador.alvo && Math.hypot(joy.x, joy.y) < 0.05) jogador.yaw = yaw;   // parado, o corpo vira para onde você olha
   } else {
     for (const g of Object.values(cabines)) g.visible = false;
-    const f = foco(), alvo = new THREE.Vector3(f.x, (f.y || 0) + (jogador.pos.y || 0) + 1.4, f.z);
-    if (v && olhar.arrastou <= 0) olhar.yaw += Math.atan2(Math.sin(v.rotation.y - olhar.yaw), Math.cos(v.rotation.y - olhar.yaw)) * Math.min(1, dt * 1.5);   // dirigindo: fica atrás do veículo
-    const dist = v ? Math.max(olhar.dist, 12) : olhar.dist;
+    // aeronave: a câmera segue o próprio veículo na altura em que ele estiver (não fica no chão) e fica mais longe
+    const aereo = !!(v && (jogador.carro?.voa || jogador.voo || jogador.passageiro?.c?.d?.tipo === 'helicoptero'));
+    const f = foco(), alvo = v && !averiguando ? new THREE.Vector3(v.position.x, v.position.y + (aereo ? 2.5 : 1.4), v.position.z)
+      : new THREE.Vector3(f.x, averiguando ? (f.y || 0) + (jogador.pos.y || 0) + 1.4 : (jogador.pos.y || 0) + 1.4, f.z);
+    if (v && olhar.arrastou <= 0) olhar.yaw += Math.atan2(Math.sin(v.rotation.y - olhar.yaw), Math.cos(v.rotation.y - olhar.yaw)) * Math.min(1, dt * (aereo ? 3 : 1.5));   // dirigindo: fica atrás do veículo
+    const dist = v ? Math.max(olhar.dist, aereo ? 26 : 12) : olhar.dist;
     camP.position.set(alvo.x - Math.sin(olhar.yaw) * Math.cos(olhar.incl) * dist, alvo.y + Math.sin(olhar.incl) * dist, alvo.z - Math.cos(olhar.yaw) * Math.cos(olhar.incl) * dist);
     const chao = alturaChao(camP.position.x, camP.position.z) + 0.6; if (camP.position.y < chao) camP.position.y = chao;
     camP.lookAt(alvo);
@@ -8242,6 +8245,7 @@ let averiguando = null;
 const ANIM_TXT = { idle: 'parado', idle_long: 'parado', walk: 'andando', run: 'correndo', punch_left: 'dando soco', punch_right: 'dando soco', punch_combo: 'dando soco', shoot: 'atirando', walk_shoot: 'atirando andando', pegar: 'pegando algo', carregar: 'carregando caixa', carregar_parado: 'carregando caixa', death: 'caído', hit: 'levando dano' };
 function foco() {
   if (jogador.carro?.aviao) return { x: jogador.pos.x, y: jogador.carro.alt, z: jogador.pos.z };
+  if (jogador.carro?.voa) return { x: jogador.pos.x, y: (jogador.pos.y || 0) + (jogador.carro.alt || 0), z: jogador.pos.z };
   if (jogador.voo) return { x: jogador.pos.x, y: jogador.vooY || 0, z: jogador.pos.z };
   const a = averiguando && remotos.get(averiguando.id)?.alvo;
   return a ? { x: a.x, y: Math.max(0, a.y - alturaChao(a.x, a.z)), z: a.z } : jogador.pos;
@@ -12046,7 +12050,18 @@ function controlesJato(c) {
   let pn = $('painelJato');
   if (!pn) {
     pn = document.createElement('div'); pn.id = 'painelJato';
-    pn.style.cssText = 'position:fixed;left:calc(env(safe-area-inset-left,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 36vh);z-index:30;display:flex;flex-direction:column;gap:8px';
+    pn.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 64px);transform:translateX(-50%);z-index:30;display:flex;flex-direction:row;align-items:stretch;gap:6px';
+    // alça para arrastar o painel para onde quiser (fica guardado neste aparelho)
+    const alca = document.createElement('div'); alca.textContent = '⠿'; alca.title = 'Arraste para mover';
+    alca.style.cssText = 'display:flex;align-items:center;justify-content:center;width:26px;border-radius:10px;background:rgba(14,24,40,.75);color:#8fd3ff;font:700 18px system-ui;touch-action:none;cursor:grab;user-select:none';
+    pn.appendChild(alca);
+    const colocar = (x, y) => { const w = pn.offsetWidth || 200, h = pn.offsetHeight || 50; pn.style.transform = 'none'; pn.style.left = THREE.MathUtils.clamp(x, 0, innerWidth - w) + 'px'; pn.style.top = THREE.MathUtils.clamp(y, 0, innerHeight - h) + 'px'; };
+    try { const g = JSON.parse(localStorage.getItem('painelJatoPos') || 'null'); if (g) requestAnimationFrame(() => colocar(g.x * innerWidth, g.y * innerHeight)); } catch { /* sem posição guardada */ }
+    let arr = null;
+    alca.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); const r = pn.getBoundingClientRect(); arr = { id: ev.pointerId, dx: ev.clientX - r.left, dy: ev.clientY - r.top }; alca.setPointerCapture(ev.pointerId); });
+    alca.addEventListener('pointermove', (ev) => { if (!arr || ev.pointerId !== arr.id) return; ev.preventDefault(); ev.stopPropagation(); colocar(ev.clientX - arr.dx, ev.clientY - arr.dy); });
+    const soltar = (ev) => { if (!arr || ev.pointerId !== arr.id) return; arr = null; const r = pn.getBoundingClientRect(); try { localStorage.setItem('painelJatoPos', JSON.stringify({ x: r.left / innerWidth, y: r.top / innerHeight })); } catch { /* sem armazenamento */ } };
+    alca.addEventListener('pointerup', soltar); alca.addEventListener('pointercancel', soltar);
     const bt = (id, fn) => { const b = document.createElement('button'); b.id = id; b.style.cssText = 'border-radius:14px;border:2px solid #8fd3ff;background:rgba(14,24,40,.88);color:#e3f4ff;font:800 13px system-ui;padding:8px 10px;min-width:100px;line-height:1.15;touch-action:none';
       b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); fn(); }); pn.appendChild(b); return b; };
     bt('btJPouso', () => ligarPousoAuto()); bt('btJTravar', () => travarAlvo()); bt('btJDisparar', () => dispararMissil()); bt('btJInv', () => { const k = jogador.carro; if (!k?.jato || !JATOS[k.servico].invisivel) return; k.invisivel = !k.invisivel; aviso(k.invisivel ? '👻 Asa furtiva invisível: ninguém vê você.' : '✈️ Visível de novo.', 3); });
