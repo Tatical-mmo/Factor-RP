@@ -1283,3 +1283,13 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - Um caça rápido em curva fechada escapa; helicóptero e avião em linha reta não.
   - Os mísseis recarregam ao pousar na Base Aérea.
 - **Correção**: o chão da Área 51 não cintila mais.
+
+## Versão 14/11 · modelos dos caças (20261114a)
+
+- Entraram os modelos 3D enviados: `assets/modelos/caca_leve.glb`, `caca_furtivo.glb`, `asa_furtiva.glb` e `missil.glb`.
+- Os modelos vieram com o nariz para o lado, e o do míssil para trás. O jogo agora gira cada um, põe as rodas no chão e ajusta o tamanho:
+  - caça leve: 14 m de comprimento;
+  - caça furtivo: 18 m;
+  - asa furtiva: 20 m de comprimento e cerca de 33 m de envergadura;
+  - míssil: 3,5 m.
+- Os dois caças ganharam a chama de pós-combustão atrás, que cresce ao acelerar.

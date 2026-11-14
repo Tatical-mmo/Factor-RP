@@ -63,12 +63,25 @@ function asaFurtiva() {
   trem(g, [[0, 6], [-3.5, -1], [3.5, -1]], 1.5);
   return g;
 }
+// os modelos gerados vêm com o nariz em +x (o míssil em -z): gira para +z, põe as rodas no chão e ajusta o comprimento
+const GIRO_GLB = { caca_leve: -Math.PI / 2, caca_furtivo: -Math.PI / 2, asa_furtiva: -Math.PI / 2, missil: Math.PI };
+function ajustarGLB(glb, giro, comp, centrar = false) {
+  const piv = new THREE.Group(), c = glb.clone(true); c.rotation.y = giro; piv.add(c); piv.updateMatrixWorld(true);
+  const b = new THREE.Box3().setFromObject(piv), s = comp / Math.max(0.01, b.max.z - b.min.z);
+  c.position.set(-(b.min.x + b.max.x) / 2, centrar ? -(b.min.y + b.max.y) / 2 : -b.min.y, -(b.min.z + b.max.z) / 2); piv.scale.setScalar(s);
+  c.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return piv;
+}
 export function criarJato(tipo, glb) {
   const J = JATOS[tipo], g = new THREE.Group(); g.name = 'jato';
   if (glb) {
-    const c = glb.clone(true), b = new THREE.Box3().setFromObject(c), s = J.comp / Math.max(0.01, b.max.z - b.min.z);
-    c.scale.setScalar(s); c.position.set(-(b.min.x + b.max.x) / 2 * s, -b.min.y * s, -(b.min.z + b.max.z) / 2 * s); g.add(c);
-  } else g.add(tipo === 'caca_furtivo' ? cacaFurtivo() : tipo === 'asa_furtiva' ? asaFurtiva() : cacaLeve());
+    const piv = ajustarGLB(glb, GIRO_GLB[tipo] ?? 0, J.comp); g.add(piv);
+    if (tipo !== 'asa_furtiva') {   // pós-combustão atrás do modelo
+      const b = new THREE.Box3().setFromObject(piv), ch = new THREE.Mesh(new THREE.ConeGeometry(J.comp * 0.035, J.comp * 0.17, 10), mats().fogo);
+      ch.rotation.x = -Math.PI / 2; ch.position.set(0, (b.min.y + b.max.y) * 0.45, b.min.z - J.comp * 0.07); ch.name = 'chama'; g.add(ch);
+    }
+  }
+  else g.add(tipo === 'caca_furtivo' ? cacaFurtivo() : tipo === 'asa_furtiva' ? asaFurtiva() : cacaLeve());
   g.userData.jato = tipo;
   return g;
 }
@@ -78,7 +91,7 @@ export function chamas(g, k) { g.traverse((o) => { if (o.name === 'chama') { o.v
 // míssil: corpo branco, ponta cinza e fumaça
 export function criarMissil(glb) {
   const g = new THREE.Group(), m = mats();
-  if (glb) { const c = glb.clone(true), b = new THREE.Box3().setFromObject(c), s = 3.5 / Math.max(0.01, b.max.z - b.min.z); c.scale.setScalar(s); g.add(c); }
+  if (glb) g.add(ajustarGLB(glb, GIRO_GLB.missil, 3.5, true));
   else {
     const c = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 3, 8), m.branco); c.rotation.x = Math.PI / 2; g.add(c);
     const p = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.6, 8), m.cinza); p.rotation.x = Math.PI / 2; p.position.z = 1.8; g.add(p);
