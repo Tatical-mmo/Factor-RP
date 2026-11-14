@@ -1098,7 +1098,7 @@ function acaoContexto() {
   if (perto(CONTRABANDISTA, 3.2)) { falarContrabandista(); return; }
   if (BANCAS.some((b) => perto(b, 3.2))) { abrirServico('jornal'); return; }
   if (perto(GUARITA_ALIST, 3.2)) { menuGuarita(); return; }
-  if (perto(CENTRAL_MISSEIS, 4)) { menuCentralMisseis(); return; }
+  if (perto(CENTRAL_MISSEIS, 4)) { menuComandoNaval(); return; }
   if ((jogador.embarcado || navioNoPier()) && acaoNavio()) return;
   if (perto(civico.EXERCITO.balcao, 3.2)) { abrirServico(jogador.perfil?.profissao === 'exercito' ? 'trabalho' : 'empregos'); return; }
   if (jogador.perfil.profissao === 'jornalista') { const rp = reportagemProxima(); if (rp) { reportar(rp); return; } }
@@ -2408,6 +2408,7 @@ async function iniciarJogo(perfil) {
     locais: () => LOCAIS,
     objetosNaRua: () => objetosNaRua(),
     testeDefesa: (base, tipo) => testeDefesa(base, tipo),
+    embarcarNavio: (id) => embarcarAdmin(id),
     guardasBases: () => ({ a51: 28, quartel: 16, aerea: 16, naval: 16, ...GUARDAS_CONF }),
     definirGuardas: (base, n) => rede.guardas.definir(base, n).then(() => { GUARDAS_CONF[base] = n; const B = BASES.find((b) => b.id === base); if (B) ajustarGuardas(B); }),
     veiculosTeste: () => Object.entries(civico.CARROS).map(([id, c]) => ({ id, nome: `${c.voa ? (id.startsWith('aviao') ? '✈️' : '🚁') : id.includes('onibus') ? '🚌' : id.includes('caminhao') || id === 'bombeiros' ? '🚚' : id === 'tanque' ? '🪖' : '🚗'} ${c.nome}${id === 'onibus_executivo2' ? ' 2' : ''}` })),
@@ -5483,7 +5484,8 @@ function montarLocais() {
   LOCAIS.push({ nome: '🛸 Área 51 (portão)', x: mundo.AREA51.x1 + 8, z: 0 });
   LOCAIS.push({ nome: '🪖 Quartel do Exército (portão)', x: mundo.QUARTEL.x0 - 8, z: mundo.QUARTEL.portao.z });
   LOCAIS.push({ nome: '✈️ Base Aérea (portão)', x: mundo.BASE_AEREA.portao.x, z: mundo.BASE_AEREA.z0 - 8 });
-  LOCAIS.push({ nome: '⚓ Base Naval (portão)', x: mundo.BASE_NAVAL.portao.x, z: mundo.BASE_NAVAL.z0 - 8 });   // o admin entra; os outros levam tiro
+  LOCAIS.push({ nome: '⚓ Base Naval (portão)', x: mundo.BASE_NAVAL.portao.x, z: mundo.BASE_NAVAL.z0 - 8 });
+  for (const [id, nome] of [['porta', 'Porta-aviões'], ['d1', 'Destróier 1'], ['d2', 'Destróier 2']]) LOCAIS.push({ nome: `⚓ ${nome} (a bordo)`, x: mundo.BASE_NAVAL.portao.x, z: mundo.BASE_NAVAL.z0 - 8, navio: id });   // o admin entra; os outros levam tiro
   LOCAIS.push({ nome: '🛩️ Aviões dos pilotos (frota)', x: 444, z: -728 });
   LOCAIS.push({ nome: '🚌 Rodoviária', x: RODO.guiche.x - 2, z: RODO.guiche.z });
   LOCAIS.push({ nome: '♻️ Central de Reciclagem', x: CENTRAL.garagem.x, z: CENTRAL.garagem.z + 2 });
@@ -5503,6 +5505,7 @@ function montarLocais() {
 }
 
 function teleportar(x, z) {
+  if (jogador.embarcado) { if (jogador.embarcado.leme) largarLeme(); jogador.embarcado = null; conexao?.rastrear(metaPresenca()); }
   if (jogador.carro) sairCarro();
   if (jogador.trem) { ferrovia.ocultarTeto(jogador.trem.li, jogador.trem.k, false); jogador.trem = null; }
   if (jogador.pena > 0 && cadeia) { const c = posCela(); x = c.x; z = c.z; jogador.dentroCasa = 'carceragem'; jogador.saidaSala = { x: cadeia.x + 4.5, z: cadeia.z }; }
@@ -6102,7 +6105,7 @@ function contexto() {
   if (BANCAS.some((b) => perto(b, 3.2))) return ['banca de jornal: ler as notícias', 'Jornal'];
   if (perto(CONTRABANDISTA, 3.2)) return ['contrabandista: arma militar e alicate de corte', 'Negociar'];
   { const cn = contextoNavio(); if (cn) return cn; }
-  if (perto(CENTRAL_MISSEIS, 4)) return ['Central de Mísseis da Marinha (alvo = ponto marcado no mapa)', '🚀 Mísseis'];
+  if (perto(CENTRAL_MISSEIS, 4)) return ['Comando Naval: míssil de cruzeiro e chamar navio ao cais', '⚓ Comando'];
   if (perto(GUARITA_ALIST, 3.2)) return [militar() ? 'guarita do Exército: pedidos de alistamento' : 'guarita do Exército: alistamento e licitação de rações', 'Guarita'];
   if (perto(civico.EXERCITO.balcao, 3.2)) return [jogador.perfil?.profissao === 'exercito' ? 'comando do Exército: ordens e caçadas' : 'comando do Exército: alistar-se', 'Comando'];
   if (jogador.perfil?.profissao === 'jornalista' && reportagemProxima()) return [`reportar: ${reportagemProxima().titulo} (+200)`, 'Reportar'];
@@ -12538,4 +12541,30 @@ function estadoCais(n) {
   const L = n.caminho.total, periodo = PARADA_CAIS + L / n.vel, u = ((agoraServidor() / 1000 + n.fase * periodo) % periodo + periodo) % periodo;
   if (n.db?.modo === 'retorno' && !atracado(n)) return 'voltando ao cais';
   return u < PARADA_CAIS ? `atracado agora (sai em ${fmt(PARADA_CAIS - u)})` : `atraca em ${fmt(periodo - u)}`;
+}
+
+// admin: teleporta para o convés do navio onde ele estiver (mesmo em alto-mar)
+function embarcarAdmin(id) {
+  montarNavios(); const n = NAVIOS[id]; if (!n) return;
+  teleportar(n.doca.x, 1160);
+  jogador.embarcado = { id, slot: lotacaoNavio(id), leme: false }; if (jogador.armado) alternarArma();
+  conexao?.rastrear(metaPresenca());
+  aviso(`⚓ A bordo do ${n.nome}. Toque em Leme para assumir; para sair, use o Teleportar.`, 4.5);
+}
+// Comando Naval: míssil de cruzeiro e chamar navio ao cais
+function menuComandoNaval() {
+  montarNavios();
+  const ops = [{ rotulo: '🚀 Míssil de cruzeiro', fn: () => menuCentralMisseis() }];
+  for (const n of Object.values(NAVIOS)) {
+    const st = estadoCais(n), dist = Math.hypot(n.x - n.doca.x, n.z - n.doca.z), eta = Math.ceil(dist / n.vel / 60);
+    ops.push({ rotulo: `⚓ Chamar o ${n.nome} · ${st}`, fn: () => {
+      if (!podePilotarNavio(n.id)) { aviso(`Só quem pilota o ${n.nome} pode chamar: Marinha, ${n.id === 'porta' ? 'Capitão' : 'Tenente'} para cima.`, 3.5); return; }
+      if (atracado(n)) { aviso(`O ${n.nome} já está atracado.`, 2.5); return; }
+      rede.navios.chamar(n.id, n.x, n.z, n.ang).then(() => {
+        n.db = { ...(n.db || {}), modo: 'retorno', piloto: null, x: n.x, z: n.z, ang: n.ang, t: new Date(agoraServidor()).toISOString() };
+        aviso(`⚓ O ${n.nome} está voltando ao cais: chega em uns ${eta} min e fica atracado esperando.`, 4.5);
+      }).catch((e) => aviso(e.message, 3.5));
+    } });
+  }
+  escolher('⚓ Comando Naval', 'Míssil de cruzeiro ou chamar um navio de volta ao cais.', ops);
 }

@@ -643,6 +643,7 @@ export const navios = {
   assumir: (id, x, z, ang) => rpc('assumir_navio', { p_navio: id, p_x: x, p_z: z, p_ang: ang }),
   mover: (id, x, z, ang) => rpc('mover_navio', { p_navio: id, p_x: x, p_z: z, p_ang: ang }),
   largar: (id, x, z, ang) => rpc('largar_navio', { p_navio: id, p_x: x, p_z: z, p_ang: ang }),
+  chamar: (id, x, z, ang) => rpc('chamar_navio', { p_navio: id, p_x: x, p_z: z, p_ang: ang }),
 };
 export const guardas = {
   lista: () => sel(sb.from('guardas_bases').select('base,guardas')),

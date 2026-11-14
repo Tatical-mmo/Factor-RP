@@ -1394,3 +1394,16 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Teletransporte indo para os navios**: o cais e os 3 píeres da Base Naval não eram área andável. Quem passava do muro era jogado para a borda de Porto Sul. Agora dá para andar no cais e até a ponta de cada píer, onde se embarca.
 - **Onde estão os navios**: para militares e para o admin, a lista do mapa grande mostra cada navio **(agora)**, com rastreio até ele, e o **Píer do navio** com o estado. Exemplos: "atraca em 10 min", "atracado agora (sai em 1 min)", "voltando ao cais" ou "com piloto".
 - Na ponta do píer, o botão mostra o mesmo estado do navio, para saber quanto falta.
+
+## Versão 14/11 · a bordo dos navios (20261114i)
+
+**Rode o SQL `supabase/80_chamar_navio.sql`** (depois do 79).
+
+- **Teleportar a bordo** (painel): entraram **⚓ Porta-aviões (a bordo)**, **⚓ Destróier 1 (a bordo)** e **⚓ Destróier 2 (a bordo)**.
+  - Você cai no convés do navio onde ele estiver, mesmo em alto-mar.
+  - Lá o botão vira **Leme**, para assumir o controle na hora.
+  - Para sair em alto-mar, use o Teleportar para qualquer lugar. Se você estiver no leme, o navio volta sozinho para a patrulha.
+- **Comando Naval** (no prédio da Central de Mísseis): o botão agora abre **🚀 Míssil de cruzeiro** e **⚓ Chamar** cada navio.
+  - Cada opção mostra o estado do navio.
+  - O navio chamado sai da patrulha, vem direto ao cais (aparece o tempo estimado) e fica atracado esperando o próximo ciclo da patrulha.
+  - Chama quem pode pilotar aquele navio: Marinha, Tenente para cima nos destróieres, Capitão para cima no porta-aviões, e o General Supremo.

@@ -391,7 +391,7 @@ function abaEu() {
   const b = $('pImortal'); if (b) b.onclick = () => executar(() => rede.painel.imortal(!eu.imortal), eu.imortal ? 'Modo imortal desligado.' : 'Modo imortal ligado.');
   c.querySelectorAll('[data-gsalvar]').forEach((x) => { x.onclick = () => { const id = x.dataset.gsalvar, n = Math.round(Number(c.querySelector(`[data-gnum="${id}"]`).value)); executar(() => ctx.definirGuardas(id, n), `Soldados na base: ${n}.`); }; });
   c.querySelectorAll('[data-tdef]').forEach((x) => { x.onclick = () => { const [base, tipo] = x.dataset.tdef.split(':'); const r = ctx.testeDefesa(base, tipo); msg(r || 'Teste iniciado.'); if (base !== 'parar') fechar(); }; });
-  c.querySelectorAll('[data-local]').forEach((x) => { x.onclick = () => { const l = ctx.locais()[x.dataset.local]; ctx.teleportar(l.x, l.z); msg('Teleportado: ' + l.nome); }; });
+  c.querySelectorAll('[data-local]').forEach((x) => { x.onclick = () => { const l = ctx.locais()[x.dataset.local]; if (l.navio && ctx.embarcarNavio) { ctx.embarcarNavio(l.navio); fechar(); return; } ctx.teleportar(l.x, l.z); msg('Teleportado: ' + l.nome); }; });
   if (ctx.objetosNaRua && $('pNaRuaCopiar')) {
     const lista = ctx.objetosNaRua();
     c.querySelectorAll('[data-narua]').forEach((x) => { x.onclick = () => { const o = lista[x.dataset.narua]; ctx.teleportar(o.x + 3, o.z + 3); msg(`Você foi até: ${o.tipo} ${o.nome}`); }; });
