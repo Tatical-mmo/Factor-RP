@@ -666,7 +666,8 @@ function colocarLojaExtra(x, z) {
 }
 
 // ================================================================= PERSONAGENS
-const NOMES_LOCOMOCAO = ['idle', 'idle_long', 'walk', 'run', 'carry_walk', 'walk_shoot'];
+const NOMES_LOCOMOCAO = ['idle', 'idle_long', 'walk', 'run', 'carry_walk', 'walk_shoot', 'algemado_andar'];
+const RESERVA_ANIM = { algemado: 'carregar_parado', algemado_andar: 'carry_walk', rendido: 'idle', levantar_maos: 'idle', arremessar: 'punch_right' };
 function prepararClipes(anims) {
   const clipes = {};
   for (const c of anims) clipes[c.name] = c;
@@ -683,7 +684,7 @@ function prepararClipes(anims) {
   const sub = THREE.AnimationUtils.subclip;
   if (clipes.shoot) clipes.mirar = sub(clipes.shoot, 'mirar', 78, 117, 30);
   // parado segurando: braços e tronco congelados na pose de carregar, pernas da animação parada
-  if (clipes.carry_walk && clipes.idle) clipes.carregar_parado = poseSuperior(clipes.idle, clipes.carry_walk, 0.2, 'carregar_parado');
+  if (clipes.carry_walk && clipes.idle && !clipes.carregar_parado) clipes.carregar_parado = poseSuperior(clipes.idle, clipes.carry_walk, 0.2, 'carregar_parado');
   if (clipes.pickup) clipes.pegar = sub(clipes.pickup, 'pegar', 21, 72, 30);
   return clipes;
 }
@@ -725,9 +726,10 @@ class Avatar {
     return this.acoes[nome];
   }
   tocar(nome, { fade = 0.2, umaVez = false, velocidade = 1 } = {}) {
-    if (!this.clipes[nome]) return;
+    const real = this.clipes[nome] ? nome : this.clipes[RESERVA_ANIM[nome]] ? RESERVA_ANIM[nome] : null;   // personagem antigo sem a animação nova
+    if (!real) return;
     if (this.nomeAtual === nome && !umaVez) { this.atual.setEffectiveTimeScale(velocidade); return; }
-    const prox = this.acao(nome);
+    const prox = this.acao(real);
     prox.reset();
     prox.setLoop(umaVez ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
     prox.clampWhenFinished = umaVez;
@@ -760,7 +762,11 @@ const _maoArma = new THREE.Vector3();
 // Copiar as rotações direto deixava pés e corpo tortos, porque cada esqueleto tem a pose de descanso um pouco diferente.
 // Aqui elas são adaptadas "no mundo": cada osso faz o mesmo movimento que faz no robô, a partir da própria pose de descanso.
 const DO_ROBO = ['punch_combo', 'shoot', 'death', 'pickup', 'hit', 'idle', 'punch_left', 'idle_long', 'punch_right', 'walk_shoot', 'carry_walk'];
-let roboBase = null;
+let roboBase = null, baseAnimacoes = null;
+function obterBaseAnimacoes() {
+  if (!baseAnimacoes) baseAnimacoes = carregarGLB('assets/personagens/_animacoes.glb').then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => null);
+  return baseAnimacoes;
+}
 function obterRoboBase() {
   if (!roboBase) roboBase = carregarGLB('assets/robos/Rusty_Scout_Bot.glb').then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => null);
   return roboBase;
@@ -821,7 +827,15 @@ async function criarAvatar(pasta, id) {
   if (!gltf.userData.clipes) {
     let anims = gltf.animations;
     const robo = pasta === 'personagens' ? await obterRoboBase() : null;
-    if (robo) {
+    // personagem novo (só esqueleto, do Meshy/Mixamo): as animações vêm do arquivo base; tiro e pegar, do robô
+    const base = pasta === 'personagens' && !gltf.animations.some((a) => a.name === 'idle') ? await obterBaseAnimacoes() : null;
+    if (base) {
+      try {
+        const daBase = base.animations.map((c) => adaptarClipe(c, base.scene, gltf.scene)), tem = new Set(daBase.map((c) => c.name));
+        const doRobo = robo ? robo.animations.filter((c) => DO_ROBO.includes(c.name) && !tem.has(c.name)).map((c) => adaptarClipe(c, robo.scene, gltf.scene)) : [];
+        anims = [...daBase, ...doRobo];
+      } catch (e) { console.warn('não adaptou as animações da base:', id, e); }
+    } else if (robo) {
       try {
         const novos = robo.animations.filter((c) => DO_ROBO.includes(c.name)).map((c) => adaptarClipe(c, robo.scene, gltf.scene));
         anims = [...gltf.animations.filter((a) => !DO_ROBO.includes(a.name)), ...novos];
@@ -5935,12 +5949,14 @@ function atualizarJogador(dt) {
     // animação conforme o estado
     if (j.morto) { /* fica caído */ }
     else if (vel > 0) {
-      if (j.carregando) av.tocar('carry_walk', { velocidade: 1 });
+      if (j.algemado) av.tocar('algemado_andar', { velocidade: 1 });
+      else if (j.carregando) av.tocar('carry_walk', { velocidade: 1 });
       else if (j.armado) av.tocar('walk_shoot', { velocidade: 1.25 });
       else if (correr) av.tocar('run', { velocidade: 1 });
       else av.tocar('walk', { velocidade: vel / VELOCIDADE.andar });
     } else {
-      if (j.carregando || j.algemado) av.tocar('carregar_parado');
+      if (j.algemado) av.tocar('algemado');
+      else if (j.carregando) av.tocar('carregar_parado');
       else if (j.armado) av.tocar('mirar');
       else av.tocar('idle');
     }
@@ -7799,7 +7815,7 @@ function pedestreParaAssaltar() {
 async function assaltarPedestre(n) {
   assaltando = true;
   const p = n.av.raiz.position; virarPara(p.x, p.z); jogador.alvo = null;
-  n.av.raiz.rotation.y = Math.atan2(jogador.pos.x - p.x, jogador.pos.z - p.z); n.av.tocar('idle'); n.rendido = 1.2;
+  n.av.raiz.rotation.y = Math.atan2(jogador.pos.x - p.x, jogador.pos.z - p.z); n.av.tocar('rendido'); n.rendido = 1.2;
   try {
     const v = await rede.assaltarNpc();
     const chamou = Math.random() < 0.4;
@@ -13005,7 +13021,7 @@ function lancarGranada(mira) {
   rede.tatica.usarGranada().then(() => recarregarInventario()).catch((e) => aviso(e.message, 2.5));
   criarGranada(pos, v, true);
   conexao?.enviar('tatica', { k: 'gr', x: r2t(pos.x), y: r2t(pos.y), z: r2t(pos.z), vx: r2t(v.x), vy: r2t(v.y), vz: r2t(v.z), de: jogador.perfil.id });
-  if (!ps) { jogador.avatar.tocar('punch_right', { umaVez: true, velocidade: 1.6, fade: 0.08 }); jogador.trava = 0.35; }
+  if (!ps) { jogador.avatar.tocar('arremessar', { umaVez: true, velocidade: jogador.avatar.clipes.arremessar ? 2.4 : 1.6, fade: 0.08 }); jogador.trava = 0.35; }
 }
 function criarGranada(pos, v, minha) { const m = new THREE.Mesh(geoGranada, matGranada); m.position.copy(pos); m.castShadow = true; scene.add(m); granadas.push({ m, v: v.clone(), t: 2.3, minha }); }
 function atualizarGranadas(dt) {
