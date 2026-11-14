@@ -1219,3 +1219,11 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 
 - Pilotando o óvni, aparecem dois botões grandes do lado esquerdo, no meio da tela: **👻 Invisível** (ou 👁️ Visível) e **👽 Abduzir**. Antes o botão de invisibilidade ficava atrás do Sair e das setas da câmera.
 - O botão Abduzir fica sempre à mostra e diz o estado: o nome do alvo, "sem alvo" ou o tempo de recarga. Tocado sem alvo, ele explica o que falta: subir, descer, parar ou chegar mais perto de um jogador, com a distância do mais perto.
+
+## Versão 13/11 · óvni abduz moradores (20261113zn)
+
+- **Teleportar → 🛸 Área 51 (portão)** no painel de admin. O lugar continua fora do mapa para os jogadores.
+- O óvni também abduz os **moradores da calçada**, mas não os robôs da polícia nem os bandidos. Quando não há jogador embaixo, o alvo é o morador mais perto, a menos de 7,5 m.
+  - O morador sobe girando no feixe, some e volta à calçada depois de 3 min.
+  - Todos veem, e os jornalistas recebem o relato de abdução.
+  - A recarga do feixe depois de abduzir um morador é de 30 s. Depois de abduzir um jogador continua 2 min.

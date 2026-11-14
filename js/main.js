@@ -1873,6 +1873,7 @@ async function criarNPCs(excluir) {
 }
 function atualizarNPCs(dt) {
   for (const n of npcs) {
+    if (n.abduzido) { npcAbduzido(n, dt); continue; }
     if (n.ordem !== undefined) { const off = n.ordem >= configJogo.policia_robo; if (off !== !!n.fora) { n.fora = off; n.av.raiz.visible = !off; if (off) { n.perseguindo = false; n.cerco = null; } } if (off) continue; }
     if (n.bandido && banditoAtivo(n)) { atualizarBandido(n, dt); continue; }
     if (n.algemado) { npcAlgemado(n, dt); continue; }
@@ -3433,7 +3434,7 @@ function acaoNoVeiculo() {
   if (c.jujuba) { const cj = contextoComprador(); if (cj) return ['comprador', cj[0], cj[1]]; }
   if (c.servico === 'bombeiros' && Math.abs(c.vel) < 2 && (servicos.estaApagando() || servicos.fogoProximo(15))) return ['jato', servicos.estaApagando() ? 'jogando água (toque para parar)' : 'jogar água no fogo (+400)', 'Jato'];
   if (c.servico === 'ambulancia' && Math.abs(c.vel) < 2 && feridoProximo(7)) return ['socorrer', 'socorrer o ferido (+250)', 'Socorrer'];
-  if (c.servico === 'ovni') { const alvo = alvoAbducao(); if (alvo) return ['abduzir', `abduzir ${alvo.r.meta?.nome || 'o jogador'} (ele não vê nada e acorda em outro lugar)`, '👽 Abduzir']; }
+  if (c.servico === 'ovni') { const alvo = alvoAbducao(); if (alvo) return ['abduzir', alvo.npc ? 'abduzir o morador' : `abduzir ${alvo.r.meta?.nome || 'o jogador'} (ele não vê nada e acorda em outro lugar)`, '👽 Abduzir']; }
   return null;
 }
 function donoDoVeiculo(c) { return empresas.get(c.d.empresa)?.dono === jogador.perfil?.id; }
@@ -5422,6 +5423,7 @@ function montarLocais() {
   LOCAIS.push({ nome: 'Transportadora', x: quadC(2) + 9, z: ruaC(2) + 2.5 });
   LOCAIS.push({ nome: 'Avenida Central', x: 0, z: ruaC(2) });
   for (const a of AEROPORTOS) LOCAIS.push({ nome: `✈️ ${a.nome}`, x: a.balcao.x, z: a.balcao.z + (a.eixo === 'x' ? 4 : 0) });
+  LOCAIS.push({ nome: '🛸 Área 51 (portão)', x: mundo.AREA51.x1 + 8, z: 0 });
   LOCAIS.push({ nome: '🛩️ Aviões dos pilotos (frota)', x: 444, z: -728 });
   LOCAIS.push({ nome: '🚌 Rodoviária', x: RODO.guiche.x - 2, z: RODO.guiche.z });
   LOCAIS.push({ nome: '♻️ Central de Reciclagem', x: CENTRAL.garagem.x, z: CENTRAL.garagem.z + 2 });
@@ -11348,6 +11350,11 @@ function alvoAbducao() {
     const a = r.alvo; if (!a || !r.av?.raiz.visible || a.cv || a.vc || a.pg || a.tr || a.x > 1500) continue;
     const d = Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z); if (d < dm) { dm = d; melhor = { id, r }; }
   }
+  if (melhor) return melhor;
+  npcs.forEach((n, idx) => {   // moradores da calçada (não os robôs da polícia nem os bandidos)
+    if (n.policia || n.bandido || n.abduzido || n.algemado || n.conversa || !n.av?.raiz.visible) return;
+    const p = n.av.raiz.position, d = Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z); if (d < dm) { dm = d; melhor = { npc: n, idx }; }
+  });
   return melhor;
 }
 function feixeEm(pai, h, seg = 6.5) { const f = ovni.feixe(h); pai.add(f); feixesOvni.push({ g: f, ate: performance.now() + seg * 1000 }); }
@@ -11358,6 +11365,13 @@ function abduzir(alvo) {
   abducaoPronta = agora + 120000;
   const c = jogador.carro;
   feixeEm(c.mesh, c.alt || 10); sons.abducao?.();
+  if (alvo.npc) {
+    abducaoPronta = agora + 30000;   // morador: recarga curta
+    iniciarAbducaoNpc(alvo.npc, c.mesh.position.y);
+    conexao.enviar('abducao', { npc: alvo.idx, de: jogador.perfil.id, x: r2(jogador.pos.x), z: r2(jogador.pos.z), y: r2(c.mesh.position.y), h: r2(c.alt || 10) });
+    const p = alvo.npc.av.raiz.position; conexao.enviar('ovniAbducao', { x: Math.round(p.x), z: Math.round(p.z), lugar: regiaoDe(p.x, p.z) });
+    aviso('👽 Morador subindo no feixe…', 3); return;
+  }
   conexao.enviar('abducao', { alvo: alvo.id, de: jogador.perfil.id, x: r2(jogador.pos.x), z: r2(jogador.pos.z), y: r2(c.mesh.position.y), h: r2(c.alt || 10) });
   aviso(`👽 Feixe ligado em ${alvo.r.meta?.nome || 'alguém'}…`, 3);
 }
@@ -11368,6 +11382,7 @@ function receberAbducao(e) {
   if (r?.carro?.visible) feixeEm(r.carro, Number(e.h) || 10);
   else { const o = new THREE.Group(); o.position.set(e.x, e.y, e.z); scene.add(o); feixeEm(o, Number(e.h) || 10); setTimeout(() => scene.remove(o), 7000); }
   if (Math.hypot(e.x - jogador.pos.x, e.z - jogador.pos.z) < 120) sons.abducao?.();
+  if (e.npc !== undefined) { const n = npcs[Number(e.npc)]; if (n && !n.abduzido) iniciarAbducaoNpc(n, Number(e.y)); return; }
   if (e.alvo !== jogador.perfil.id) return;
   const j = jogador, agora = performance.now();
   const motivo = j.dentroCasa ? 'está dentro de um lugar fechado' : j.carro || j.trem || j.passageiro || j.onibus || j.voo ? 'está num veículo' : j.morto ? 'está caído'
@@ -11452,7 +11467,7 @@ function controlesOvni(c) {
   const bi = $('btOvniInv'), ba = $('btOvniAbd'), alvo = alvoAbducao(), rec = Math.max(0, Math.ceil((abducaoPronta - performance.now()) / 1000));
   const ti = c.invisivel ? '👻 Invisível<br><small>ligado</small>' : '👁️ Visível<br><small>toque p/ sumir</small>';
   if (bi.dataset.t !== ti) { bi.dataset.t = ti; bi.innerHTML = ti; bi.style.borderColor = c.invisivel ? '#b48cff' : '#7ff6ff'; }
-  const ta = rec ? `👽 Abduzir<br><small>recarga ${rec} s</small>` : alvo ? `👽 Abduzir<br><small>${esc((alvo.r.meta?.nome || 'jogador').slice(0, 12))}</small>` : '👽 Abduzir<br><small>sem alvo</small>';
+  const ta = rec ? `👽 Abduzir<br><small>recarga ${rec} s</small>` : alvo ? `👽 Abduzir<br><small>${esc((alvo.npc ? 'morador' : alvo.r.meta?.nome || 'jogador').slice(0, 12))}</small>` : '👽 Abduzir<br><small>sem alvo</small>';
   if (ba.dataset.t !== ta) { ba.dataset.t = ta; ba.innerHTML = ta; ba.style.opacity = alvo && !rec ? '1' : '.6'; ba.style.borderColor = alvo && !rec ? '#7dff8a' : '#7ff6ff'; }
   const h = c.mesh.getObjectByName?.('ovniHalo'); if (h) h.visible = !c.invisivel;   // para você: sem o halo quando está invisível
 }
@@ -11477,4 +11492,16 @@ function guardarOvni(c) {
   if (dentroHangar(c.mesh.position.x, c.mesh.position.z)) { aviso('🛸 Óvni guardado no Hangar 18.', 3); return; }
   scene.remove(c.mesh); if (meuMilitar?.mesh === c.mesh) meuMilitar = null;
   aviso('🛸 O óvni voltou sozinho, invisível, para o Hangar 18.', 3.5);
+}
+
+// morador abduzido: sobe girando no feixe, some e volta à calçada depois de 3 min
+function iniciarAbducaoNpc(n, yTopo) {
+  const p = n.av.raiz.position; n.abduzido = { t: 0, chao: p.y, topo: Math.max(p.y + 3, (yTopo || p.y + 12) - 1.5) };
+  n.av.tocar('idle');
+}
+function npcAbduzido(n, dt) {
+  const A = n.abduzido, r = n.av.raiz; A.t += dt;
+  if (A.t < 4.5) { r.position.y = A.chao + (A.t / 4.5) * (A.topo - A.chao); r.rotation.y += dt * 2; n.av.mixer.update(dt); return; }
+  r.visible = false;
+  if (A.t > 180) { n.abduzido = null; r.visible = true; r.position.y = A.chao; n.av.tocar('walk', { velocidade: 0.85 }); }
 }
