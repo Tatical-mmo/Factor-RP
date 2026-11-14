@@ -598,6 +598,7 @@ function modeloCarroBase(modelo, cor) {
   const pint = mat(cor, { roughness: 0.25, metalness: 0.55 }), vidro = mat('#1b2633', { roughness: 0.1, metalness: 0.6 }), pneu = mat('#161616', { roughness: 0.9 });
   const luz = mat('#fff6d0', { emissive: '#fff1c8', emissiveIntensity: 1.4 }), lanterna = mat('#c81e1e', { emissive: '#c81e1e', emissiveIntensity: 0.8 });
   if (modelo === 'onibus') { const o = modeloOnibus(cor); adicionarLuzes(o, modelo); cacheCarro.set(chave, o); return o.clone(); }
+  if (GLB_NOVOS[modelo] && ctx?.modelo?.(modelo)) { const o = veiculoGLBNovo(modelo, cor); adicionarLuzes(o, modelo); cacheCarro.set(chave, o); return o.clone(); }
   if (modelo === 'caveirao') { const o = modeloCaveirao(); adicionarLuzes(o, modelo); cacheCarro.set(chave, o); return o.clone(); }
   if (modelo === 'viatura_civil' || modelo === 'viatura_prf') { const o = modeloViaturaNova(modelo); adicionarLuzes(o, modelo); cacheCarro.set(chave, o); return o.clone(); }
   if (modelo === 'saveiro' || modelo === 'saveiro_som') { const o = modeloSaveiro(cor, modelo === 'saveiro_som'); adicionarLuzes(o, modelo); cacheCarro.set(chave, o); return o.clone(); }
@@ -622,6 +623,20 @@ function modeloCarroBase(modelo, cor) {
   return g.clone();
 }
 
+// modelos 3D gerados (vêm com a frente em +x e tamanho 1): gira para +z, põe as rodas no chão e ajusta o comprimento
+const GLB_NOVOS = { caveirao: 6, viatura_civil: 4.6, viatura_prf: 4.7, saveiro: 4.4, saveiro_som: 4.4 };
+function veiculoGLBNovo(modelo, cor) {
+  const L = GLB_NOVOS[modelo], g = new THREE.Group(), piv = new THREE.Group(), c = ctx.modelo(modelo).clone(true);
+  c.rotation.y = -Math.PI / 2; piv.add(c); piv.updateMatrixWorld(true);
+  const b = new THREE.Box3().setFromObject(piv), s = L / Math.max(0.01, b.max.z - b.min.z);
+  c.position.set(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2); piv.scale.setScalar(s); g.add(piv);
+  const tinta = modelo === 'saveiro' ? 0.45 : modelo === 'saveiro_som' ? 0.3 : 0;
+  c.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (tinta) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor || '#ffffff'), tinta); } } });
+  const h = (b.max.y - b.min.y) * s;
+  if (modelo === 'caveirao' || modelo.startsWith('viatura')) sirene(g, [h + 0.05, modelo === 'caveirao' ? 0.6 : -0.2]);
+  g.userData.eixos = { zf: L * 0.31, zr: -L * 0.31 }; g.userData.modelo = modelo;
+  return g;
+}
 // placa de texto pintada (letreiro na lataria)
 function letreiro(txt, cor, fundo, w, h) {
   const c = document.createElement('canvas'); c.width = 256; c.height = 64; const x = c.getContext('2d');

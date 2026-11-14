@@ -61,7 +61,7 @@ function montarComposer() {
 function aplicar() {
   if (!R) return;
   const dpr = window.devicePixelRatio || 1;
-  const pr = nivel === 'baixo' ? 1 : nivel === 'medio' ? Math.min(dpr, toque ? 1.5 : 2) : Math.min(dpr, toque ? 1.5 : 2);
+  const pr = nivel === 'baixo' ? 1 : nivel === 'medio' ? Math.min(dpr, toque ? 1.25 : 2) : Math.min(dpr, toque ? 1.5 : 2);   // celular na média: 1,25x (bem mais leve, quase a mesma nitidez)
   R.setPixelRatio(pr);
   R.shadowMap.type = nivel === 'baixo' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
   const tam = nivel === 'alto' ? 2048 : 1024;

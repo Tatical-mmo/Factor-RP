@@ -1463,3 +1463,10 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Carros estacionam na ilha inteira** (antes eram puxados de volta para a metrópole).
 - **Equipe invisível**: o administrador e os moderadores com o poder "Modo invisível" ligam no Painel; os jogadores não veem (nem no minimapa), a equipe continua vendo. O modo imortal continua como antes.
 - **Mini rodoviárias das favelas**: as linhas 9 (Morro da Serra) e 10 (Morro do Porto) saem da mini rodoviária de Vila Serra e de Porto Sul (onde para o intermunicipal da Metrópole), dão a volta no morro e voltam para ela, onde ficam paradas até a hora da próxima saída (em loop). Correção: elas não somem mais no ponto final.
+- **Modelos 3D novos** (`assets/modelos/`): `caveirao`, `viatura_civil`, `viatura_prf`, `saveiro`, `saveiro_som`, `arma_espingarda` e `arma_fuzil` (texturas reduzidas para 512 px). O jogo gira cada um para a frente, põe as rodas no chão e ajusta o tamanho (Caveirão 6 m, viaturas ~4,7 m, Saveiro 4,4 m, armas ~0,9 m). A Saveiro pega a cor escolhida na concessionária. Sem o arquivo, volta o modelo feito por código.
+
+## Versão 14/11 · correção e mais leve (20261114x)
+
+- **Correção**: o jogo não abria na 14v (uma função declarada duas vezes travava o carregamento).
+- **Distância de visão na câmera 3D** (atrás do personagem e primeira pessoa), como no Minecraft: o que está longe some na neblina e não é desenhado; conforme você anda, o que está na frente aparece e o de trás some. Baixa 140 m, Média 190 m, Alta 260 m.
+- **Mais leve no celular**: na qualidade Média a resolução vai a 1,25x (antes 1,5x); menos prédios em 3D ao mesmo tempo (Baixa 6, Média 16, Alta 36); casas 3D da favela só bem perto (até 45 m) e no máximo metade do total.

@@ -1014,15 +1014,16 @@ function rumo3d(e) {
 export function predios3dPerto(px, pz, dt) {
   if (!modelos3d || !malhaPredios) return;
   if ((tempo3d -= dt) > 0) return; tempo3d = 0.7;
-  const q = ctx.qualidade?.() || 'medio', max = q === 'alto' ? 48 : q === 'medio' ? 26 : 10, raio = q === 'alto' ? 170 : q === 'medio' ? 130 : 80;
+  const q = ctx.qualidade?.() || 'medio', max = q === 'alto' ? 36 : q === 'medio' ? 16 : 6, raio = q === 'alto' ? 150 : q === 'medio' ? 100 : 65;
   const perto = [];
   if (max) for (const k of chaves(px - raio, pz - raio, px + raio, pz + raio)) for (const i of gradeEd.get(k) || []) {
     const e = edificios[i]; if (cortados.has(i)) continue; const t = tipo3d(e); if (!t || !modelos3d[t]) continue;
-    const d = Math.hypot(e.x - px, e.z - pz); if (d < raio) perto.push([d, i, t]);
+    const d = Math.hypot(e.x - px, e.z - pz); if (d < (e.tipo === 'favela' ? Math.min(raio, 45) : raio)) perto.push([d, i, t]);   // casas da favela: só as bem perto (modelo pesado)
   }
   perto.sort((a, b) => a[0] - b[0]);
   const novo = new Map(); const conta = {};
-  for (const [, i, t] of perto) { if (novo.has(i)) continue; conta[t] = conta[t] || 0; if (novo.size >= max || conta[t] >= 48) continue; novo.set(i, t); conta[t]++; }
+  let fav = 0; const maxFav = Math.max(4, Math.round(max * 0.5));
+  for (const [, i, t] of perto) { if (novo.has(i)) continue; conta[t] = conta[t] || 0; if (novo.size >= max || conta[t] >= 48) continue; if (t.startsWith('favela_') && fav++ >= maxFav) continue; novo.set(i, t); conta[t]++; }
   // os que saíram voltam a ser caixa; os que entraram escondem a caixa (e telhado / detalhes)
   const mostrar = (i, vis) => {
     const e = edificios[i];

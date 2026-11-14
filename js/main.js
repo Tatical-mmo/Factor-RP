@@ -224,6 +224,13 @@ function atualizarCeu(t) {
   noiteAtual = noite;
   // neblina leve no fundo da cena (mesma cor do céu): dá profundidade e esconde o fim do mapa
   if (scene.fog) { scene.fog.color.copy(scene.background); scene.fog.near = 175 + (1 - molhadoAtual) * 25; scene.fog.far = 330 - molhadoAtual * 90; }
+  // câmera 3D (atrás do personagem e primeira pessoa): distância de visão curta, como no Minecraft. O que fica além
+  // some na neblina e nem é desenhado; conforme você anda, o que está na frente aparece e o de trás some.
+  if (scene.fog && modo3D()) {
+    const q = visual.nivelAtual(), alcance = q === 'alto' ? 260 : q === 'medio' ? 190 : 140;
+    scene.fog.far = Math.min(scene.fog.far, alcance); scene.fog.near = Math.min(scene.fog.near, alcance * 0.45);
+    if (Math.abs(camP.far - (alcance + 5)) > 1) { camP.far = alcance + 5; camP.updateProjectionMatrix(); }
+  }
   for (const m of luzesCasas) m.emissiveIntensity = noite * 1.1;
   civico.brilhoOutdoors(noite);
 }
@@ -1644,8 +1651,8 @@ const ARMAS = {
   exercito: { cod: 4, modelo: 'arma_exercito', dano: 32, recarga: 0.16, vel: 30, cor: '#2fbf5a', pega: [0, 0.15, -0.25], boca: [0, 0.3, 0.4] },
   militar: { cod: 5, modelo: 'arma_militar', dano: 30, recarga: 0.16, vel: 30, cor: null, pega: [0, 0.12, -0.21], boca: [0, 0.22, 0.45] },
   pesada: { cod: 6, modelo: 'arma_grande_porte', dano: 55, recarga: 0.45, vel: 34, cor: '#1f9e46', pega: [0, 0.15, -0.18], boca: [0, 0.25, 0.58], bola: 2.2 },
-  espingarda: { cod: 7, modelo: 'arma_grande_porte', dano: 11, recarga: 0.85, vel: 23, cor: '#ff7a1a', pega: [0, 0.15, -0.18], boca: [0, 0.25, 0.58], chumbos: 7, espalha: 0.13, alcance: 0.6 },
-  fuzil: { cod: 8, modelo: 'arma_militar', dano: 26, recarga: 0.11, vel: 42, cor: '#d9dde3', pega: [0, 0.12, -0.21], boca: [0, 0.22, 0.45] },
+  espingarda: { cod: 7, modelo: 'arma_espingarda', comp: 0.9, reserva: 'arma_grande_porte', dano: 11, recarga: 0.85, vel: 23, cor: '#ff7a1a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.58], chumbos: 7, espalha: 0.13, alcance: 0.6 },
+  fuzil: { cod: 8, modelo: 'arma_fuzil', comp: 0.95, reserva: 'arma_militar', dano: 26, recarga: 0.11, vel: 42, cor: '#d9dde3', pega: [0, 0.02, 0], boca: [0, 0.02, 0.62] },
 };
 const ARMA_POR_COD = Object.fromEntries(Object.entries(ARMAS).map(([k, a]) => [a.cod, k]));
 function tipoArma() {
@@ -1661,8 +1668,22 @@ function tipoArma() {
 }
 function novaArma(tipo, av) {
   const a = ARMAS[tipo];
-  const arma = modelos[a.modelo] ? clonar(a.modelo) : clonar('arma_paintball');
-  av.encaixarArma(arma, modelos[a.modelo] ? a.pega : ARMAS.basica.pega); return arma;
+  if (a.comp && modelos[a.modelo]) { const arma = armaNormalizada(a.modelo, a.comp); av.encaixarArma(arma, a.pega); return arma; }
+  const nome = modelos[a.modelo] ? a.modelo : a.reserva && modelos[a.reserva] ? a.reserva : null;
+  const arma = nome ? clonar(nome) : clonar('arma_paintball');
+  av.encaixarArma(arma, nome === a.modelo ? a.pega : nome ? (Object.values(ARMAS).find((x) => x.modelo === nome)?.pega || a.pega) : ARMAS.basica.pega); return arma;
+}
+// armas geradas (tamanho 1, cano em +x): gira o cano para a frente, ajusta o comprimento e põe a empunhadura na origem
+const cacheArmaN = new Map();
+function armaNormalizada(nome, comp) {
+  if (!cacheArmaN.has(nome)) {
+    const g = new THREE.Group(), piv = new THREE.Group(), c = modelos[nome].clone(true);
+    c.rotation.y = -Math.PI / 2; piv.add(c); piv.updateMatrixWorld(true);
+    const b = new THREE.Box3().setFromObject(piv), L = Math.max(0.01, b.max.z - b.min.z), s = comp / L;
+    c.position.set(-(b.min.x + b.max.x) / 2, -(b.min.y + b.max.y) / 2, -b.min.z - L * 0.35); piv.scale.setScalar(s); g.add(piv);
+    cacheArmaN.set(nome, g);
+  }
+  return cacheArmaN.get(nome).clone(true);
 }
 // troca a arma na mão quando muda o serviço (só no expediente) ou a autorização
 function conferirArma() {
@@ -12919,7 +12940,6 @@ function menuComandoNaval() {
 // ================================================================= POLÍCIA E ARMAS · PATROCINADORES · SAVEIRO COM SOM · EQUIPE (SQL 85)
 // Armas airsoft (espingarda e fuzil), granadas, barricadas dos clãs, BOPE e Caveirão (blindado, 5 atiradores, troca de
 // motorista, rompe barricadas), kit de armas por caminhão, patrocinadores (loja e radar da PRF), Saveiro com som e invisível.
-const souEquipe = () => ['admin', 'moderador'].includes(jogador.perfil?.cargo);
 function yawDaCamera() { if (modo3D()) return olhar.yaw; const off = offsetCamera(anguloCamSuave); return Math.atan2(-off.x, -off.z); }
 const r2t = (n) => Math.round(n * 100) / 100;
 
