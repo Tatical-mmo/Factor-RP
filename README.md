@@ -1227,3 +1227,16 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - O morador sobe girando no feixe, some e volta à calçada depois de 3 min.
   - Todos veem, e os jornalistas recebem o relato de abdução.
   - A recarga do feixe depois de abduzir um morador é de 30 s. Depois de abduzir um jogador continua 2 min.
+
+## Versão 13/11 · estrelas e perdão automático (20261113zo)
+
+**Rode o SQL `supabase/75_perdao_automatico.sql`** (depois do 74d).
+
+- **Estrelas**: os crimes viram estrelas, 1 crime = 1 estrela, no máximo **5**. Quem tinha mais de 5 fica com 5. Elas aparecem no seu painel (★★★☆☆), na etiqueta em cima da cabeça, na lista de procurados, na denúncia, na ficha do jogador e no painel de admin.
+- **Perdão automático**: até 3 estrelas, some 1 a cada **5 min**. Acima de 3, cada estrela extra leva **20 min**. Com 5 estrelas, a ficha limpa em 55 min.
+  - Só conta o tempo **online**.
+  - O relógio **pausa** enquanto a polícia persegue ou cerca você e enquanto você está preso ou algemado.
+  - **Crime novo zera o relógio.**
+  - No painel aparece "próxima some em 4:32" ou "perdão pausado".
+- A conta é feita no servidor (`perdao_tick`, chamado a cada 30 s). Um intervalo maior que 50 s, por estar offline, não conta. Não dá para apressar mexendo no jogo.
+- A recompensa (🎯) não é mexida: ela só sai quando alguém cobra ou pelo perdão do admin.

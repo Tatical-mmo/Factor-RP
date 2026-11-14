@@ -97,7 +97,7 @@ function etiquetas(j, online) {
   if (j.banido) t.push('<i class="tag ruim">banido</i>');
   if (j.algemado) t.push('<i class="tag ruim">algemado</i>');
   if (j.pena_seg > 0) t.push(`<i class="tag ruim">preso ${Math.ceil(j.pena_seg / 60)} min</i>`);
-  if (j.crimes > 0) t.push(`<i class="tag ruim">procurado (${j.crimes})</i>`);
+  if (j.crimes > 0) t.push(`<i class="tag ruim">procurado ${'★'.repeat(Math.min(5, j.crimes || 0))}</i>`);
   if (j.policial) t.push('<i class="tag moderador">policial</i>');
   return t.join(' ');
 }
@@ -409,7 +409,7 @@ async function blocoPerdao() {
   const el = $('pPerdao'); if (!el) return;
   let lista; try { lista = await rede.procuradosTodos(); } catch (e) { el.textContent = e.message; return; }
   el.className = '';
-  el.innerHTML = (lista || []).length ? `<div class="lista">${lista.map((p) => `<div class="linha item"><span class="nm"><b>${esc(p.nome)}</b><small>${p.crimes} crime${p.crimes === 1 ? '' : 's'}${p.recompensa ? ` · recompensa ${Number(p.recompensa).toLocaleString('pt-BR')}` : ''}${p.pena_seg > 0 ? ' · preso' : ''}</small></span>
+  el.innerHTML = (lista || []).length ? `<div class="lista">${lista.map((p) => `<div class="linha item"><span class="nm"><b>${esc(p.nome)}</b><small>${p.crimes > 0 ? '★'.repeat(Math.min(5, p.crimes)) : 'sem estrelas'}${p.recompensa ? ` · recompensa ${Number(p.recompensa).toLocaleString('pt-BR')}` : ''}${p.pena_seg > 0 ? ' · preso' : ''}</small></span>
     <span class="bts"><button data-perdoar="${p.id}">Perdoar</button></span></div>`).join('')}</div>` : '<p class="dica">Ninguém com crimes agora.</p>';
   el.querySelectorAll('[data-perdoar]').forEach((b) => { b.onclick = () => executar(() => rede.perdoar(b.dataset.perdoar), 'Crimes perdoados. Ficha limpa!'); });
 }

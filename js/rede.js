@@ -558,6 +558,7 @@ export const mercado = {
   comprar: (id, qtd) => rpc('comprar_oferta', { p_oferta: id, p_qtd: qtd }),
 };
 export const crime = {
+  perdaoTick: (perseguido) => rpc('perdao_tick', { p_perseguido: !!perseguido }),
   iniciar: (loja, x, z) => rpc('iniciar_assalto', { p_loja: loja, p_x: x, p_z: z }),
   concluir: () => rpc('concluir_assalto'),
   cancelar: () => rpc('cancelar_assalto'),

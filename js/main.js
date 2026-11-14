@@ -2371,7 +2371,7 @@ function atualizarInfo() {
   $('info').innerHTML = `<b>${escapar(p.nome)}</b>${tags}<br>Moedas: ${p.moedas.toLocaleString('pt-BR')}<br>`
     + `Vida <span class="vida" id="barVida"><i></i></span> Fome <span class="fome" id="barFome"><i></i></span>`
     + `<span id="linhaEscudo" style="display:none"> 🛡️<span class="vida escudo" id="barEscudo"><i></i></span><small id="txtEscudo"></small></span><br>`
-    + (p.policial ? '<span style="color:#7fb8ff">● Em serviço (polícia)</span><br>' : '') + (p.crimes > 0 ? `<span style="color:#ff6b6b">● PROCURADO (${p.crimes})</span><br>` : '')
+    + (p.policial ? '<span style="color:#7fb8ff">● Em serviço (polícia)</span><br>' : '') + (p.crimes > 0 ? `<span style="color:#ff6b6b">● PROCURADO <b style="color:#ffd23e;letter-spacing:1px">${estrelas(p.crimes, true)}</b> <small id="perdaoTxt" style="color:#ffb3b3"></small></span><br>` : '')
     + `<span class="online">● ${online} online</span>${conectado ? '' : ' <small>(conectando…)</small>'}<br><button id="btSair">Sair da conta</button>`;
   $('btSair').onclick = async () => { await salvarAgora(); await rede.sair(); location.reload(); };
   desenharFome();
@@ -3175,7 +3175,7 @@ function etiquetaStatus(r) {
   if (r.status) { r.av.raiz.remove(r.status); r.status = null; }
   const m = r.meta;
   const inimigo = m.cla && inimigos.has(m.cla);
-  const txt = m.ferido ? '✚ FERIDO' : m.recompensa > 0 ? `🎯 PROCURADO · ${Number(m.recompensa).toLocaleString('pt-BR')}` : inimigo ? `⚔️ INIMIGO [${m.cla}]` : m.crimes > 0 ? `PROCURADO${m.eleitoral ? ' (PRF)' : ''} ${'★'.repeat(Math.min(5, m.crimes))}` : m.prefeito ? '★ PREFEITO ★'
+  const txt = m.ferido ? '✚ FERIDO' : m.recompensa > 0 ? `🎯 PROCURADO · ${Number(m.recompensa).toLocaleString('pt-BR')}` : inimigo ? `⚔️ INIMIGO [${m.cla}]` : m.crimes > 0 ? `PROCURADO${m.eleitoral ? ' (PRF)' : ''} ${estrelas(m.crimes)}` : m.prefeito ? '★ PREFEITO ★'
     : m.policial ? `POLÍCIA${m.patente ? ` · ${m.patente}` : ''}` : m.prf ? `PRF${m.patente ? ` · ${m.patente}` : ''}` : m.profissao === 'medico' ? `✚ ${(m.patente || 'MÉDICO').toUpperCase()}`
     : m.profissao === 'bombeiro' ? `🚒 ${(m.patente || 'BOMBEIRO').toUpperCase()}` : m.profissao === 'jornalista' ? `📰 ${(m.patente || 'IMPRENSA').toUpperCase()}` : m.profissao === 'exercito' ? `🎖️ ${(m.patente || 'EXÉRCITO').toUpperCase()}` : m.cla ? `[${m.cla}]` : null;
   if (!txt) return;
@@ -6162,6 +6162,7 @@ function quadroJogo() {
   atualizarMira();
   civico.atualizarQuartel(jogador.pos);
   atualizarArea51(dt);
+  atualizarPerdao(dt);
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
@@ -7027,7 +7028,7 @@ function quadroMissoes() {
 async function informacoesTuneis() {
   let d; try { d = await rede.lixeiros.informacoes(); } catch (e) { aviso(e.message, 3); return; }
   const a = d.assalto;
-  const ops = (d.procurados || []).map((p) => ({ rotulo: `🚨 ${esc(p.nome)} · ${p.crimes} crimes · visto em x ${Math.round(p.x)}, z ${Math.round(p.z)} — denunciar à polícia (+400)`, fn: async () => {
+  const ops = (d.procurados || []).map((p) => ({ rotulo: `🚨 ${esc(p.nome)} · ${estrelas(p.crimes)} · visto em x ${Math.round(p.x)}, z ${Math.round(p.z)} — denunciar à polícia (+400)`, fn: async () => {
     try { const v = await rede.lixeiros.denunciar(p.id); aviso(`🐀 Denúncia anônima enviada aos policiais: +${v}.`, 3); } catch (e) { aviso(e.message, 3); }
   } }));
   escolher('👂 O que se ouve nos túneis', `${a ? `🚢 O clã <b>${esc(a.cla_nome)}</b> está assaltando o cargueiro no Porto Sul.<br>` : 'Nenhum assalto ao cargueiro agora.<br>'}${ops.length ? 'Procurados vistos nos últimos 10 minutos (toque para denunciar):' : 'Nenhum procurado à vista.'}`, ops.length ? ops : [{ rotulo: 'Ok', fn: () => {} }]);
@@ -7063,7 +7064,7 @@ const daPolicia = () => !!(jogador.perfil?.policial || jogador.perfil?.prf || jo
 function quadroProcurados() {
   rede.procuradosTodos().then((l) => {
     const lista = (l || []).filter((p) => p.crimes > 0 && !(p.pena_seg > 0)).slice(0, 15);
-    escolher('🚨 Procurados', lista.length ? 'Os mais procurados da cidade agora:' : 'Ninguém procurado agora.', lista.length ? lista.map((p) => ({ rotulo: `${esc(p.nome)} · ${p.crimes} crimes${p.recompensa ? ` · recompensa ${num(p.recompensa)}` : ''}`, fn: () => {} })) : [{ rotulo: 'Ok', fn: () => {} }]);
+    escolher('🚨 Procurados', lista.length ? 'Os mais procurados da cidade agora:' : 'Ninguém procurado agora.', lista.length ? lista.map((p) => ({ rotulo: `${esc(p.nome)} · ${estrelas(p.crimes)}${p.recompensa ? ` · recompensa ${num(p.recompensa)}` : ''}`, fn: () => {} })) : [{ rotulo: 'Ok', fn: () => {} }]);
   }).catch((e) => aviso(e.message, 3));
 }
 function salaDelegacia(chave, bz, titulo, cor) {
@@ -8174,7 +8175,7 @@ function estadoAveriguado() {
   else if (a.x > 1500) t.push('dentro de um prédio ou casa');
   else t.push(ANIM_TXT[a.a] || a.a || 'parado');
   if (a.ar) t.push('🔫 armado'); if (a.al) t.push('🔗 algemado'); if (a.cx) t.push('📦 com caixa');
-  if (r.meta?.crimes > 0) t.push(`🚨 ${r.meta.crimes} crimes`);
+  if (r.meta?.crimes > 0) t.push(`🚨 ${estrelas(r.meta.crimes)}`);
   if (r.meta?.cla) t.push(`⚔️ clã ${r.meta.cla}`);
   const rua = a.x < 1500 ? nomeDaRua(a.x, a.z) : '';
   return `${t.join(' · ')}${rua ? ` · ${rua}` : ''} · x ${Math.round(a.x)}, z ${Math.round(a.z)}`;
@@ -11504,4 +11505,30 @@ function npcAbduzido(n, dt) {
   if (A.t < 4.5) { r.position.y = A.chao + (A.t / 4.5) * (A.topo - A.chao); r.rotation.y += dt * 2; n.av.mixer.update(dt); return; }
   r.visible = false;
   if (A.t > 180) { n.abduzido = null; r.visible = true; r.position.y = A.chao; n.av.tocar('walk', { velocidade: 0.85 }); }
+}
+
+// ================================================================= estrelas e perdão automático
+// 1 crime = 1 estrela (no máximo 5). Online, sem perseguição e fora da cadeia: até 3 estrelas some 1 a cada
+// 5 min; acima de 3, 20 min por estrela. A conta é no servidor (perdao_tick, a cada 30 s).
+function estrelas(n, html = false) { const k = Math.max(0, Math.min(5, Number(n) || 0)); return !k ? '' : html ? '★'.repeat(k) + '<span style="opacity:.3">' + '★'.repeat(5 - k) + '</span>' : '★'.repeat(k); }
+let tPerdao = 5, perdaoInfo = null, tPerdaoTxt = 0;
+function atualizarPerdao(dt) {
+  const p = jogador.perfil; if (!p || !conectado) return;
+  if ((p.crimes || 0) <= 0) { perdaoInfo = null; return; }
+  if ((tPerdao -= dt) <= 0) {
+    tPerdao = 30;
+    const perseguido = npcs.some((n) => n.policia && (n.perseguindo || n.cerco)) || !!jogador.algemado || jogador.pena > 0;
+    rede.crime.perdaoTick(perseguido).then((r) => {
+      if (!r) return;
+      perdaoInfo = { falta: Number(r.falta) || 0, pausa: !!r.pausa, t: performance.now() };
+      const antes = p.crimes || 0;
+      if (Number(r.crimes) < antes) { p.crimes = Number(r.crimes); atualizarInfo(); conexao?.rastrear(metaPresenca()); aviso(p.crimes > 0 ? `⭐ Uma estrela sumiu: ${p.crimes} restante${p.crimes > 1 ? 's' : ''}.` : '✅ Ficha limpa: a polícia parou de procurar você.', 3.5); }
+    }).catch(() => {});
+  }
+  if ((tPerdaoTxt -= dt) > 0) return; tPerdaoTxt = 1;
+  const el = $('perdaoTxt'); if (!el) return;
+  if (!perdaoInfo) { el.textContent = ''; return; }
+  if (perdaoInfo.pausa) { el.textContent = '· perdão pausado'; return; }
+  const s = Math.max(0, Math.round(perdaoInfo.falta - (performance.now() - perdaoInfo.t) / 1000));
+  el.textContent = `· próxima some em ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }

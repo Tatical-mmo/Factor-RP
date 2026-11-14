@@ -317,7 +317,7 @@ async function blocoExercito(car) {
   const [lista, cacadas] = await Promise.all([rede.exercito.procurados().catch(() => []), rede.exercito.cacadas().catch(() => [])]);
   const ativa = new Map((cacadas || []).map((k) => [k.alvo, k]));
   h += `<div class="linha"><b>🎖️ Ordens de caçada</b><small>Os soldados e jipes do Exército vão atrás do procurado por 10 min e prendem quando alcançam.</small></div>`;
-  h += (lista || []).length ? lista.map((p) => `<div class="linha item"><span class="ic">🚨</span><span class="nm"><b>${esc(p.nome)}</b><small>${p.crimes} crime${p.crimes > 1 ? 's' : ''}${ativa.has(p.id) ? ` · caçada até ${new Date(ativa.get(p.id).ate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</small></span>
+  h += (lista || []).length ? lista.map((p) => `<div class="linha item"><span class="ic">🚨</span><span class="nm"><b>${esc(p.nome)}</b><small>${'★'.repeat(Math.min(5, p.crimes || 0))}${ativa.has(p.id) ? ` · caçada até ${new Date(ativa.get(p.id).ate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</small></span>
     <span class="bts">${ativa.has(p.id) ? `<button data-cancelacaca="${p.id}">Suspender</button>` : `<button data-caca="${p.id}">Autorizar caçada</button>`}</span></div>`).join('') : '<div class="linha"><small>Nenhum procurado online agora.</small></div>';
   return h;
 }
