@@ -28,7 +28,20 @@ export function morro(x, z) {
   const t = Math.min(1, (-z - 1150) / 230), base = t * t * (3 - 2 * t);
   const ondas = 0.78 + 0.14 * Math.sin(x / 47) + 0.08 * Math.sin(x / 19 + z / 31);
   const picos = 10 * Math.exp(-((x + 120) ** 2 + (z + 1330) ** 2) / 5000) + 8 * Math.exp(-((x - 150) ** 2 + (z + 1300) ** 2) / 4000);
-  return base * 46 * ondas + picos * base;
+  const mar = 1 - THREE.MathUtils.smoothstep(-z, 1440, 1528);   // depois do topo, a encosta desce até o mar do norte
+  return (base * 46 * ondas + picos * base) * mar;
+}
+// ---------------------------------------------------------------- FAVELAS (morros com casas prontas, ruas, ônibus e base de clã no alto)
+// Morro da Serra (atrás de Vila Serra) e Morro do Porto (litoral leste, ao lado da Base Naval, com vista para o mar).
+export const FAVELAS = {
+  serra: { nome: 'Favela do Morro da Serra', x0: -128, x1: 128, z0: -1386, z1: -1142, base: { x: 0, z: -1362, w: 50, d: 44 }, entrada: { x: 0, z: -1150 } },
+  porto: { nome: 'Favela do Morro do Porto', x0: 914, x1: 1094, z0: 954, z1: 1107, base: { x: 1050, z: 1085, w: 50, d: 38 }, entrada: { x: 1050, z: 958 } },
+};
+// relevo do Morro do Porto: sobe da rua (norte) e da Base Naval (oeste) até o paredão sobre o mar (sul e leste)
+export function morroPorto(x, z) {
+  if (x < 900 || x > 1100 || z < 948 || z > 1112) return 0;
+  const sx = THREE.MathUtils.smoothstep(x, 912, 1030), sz = THREE.MathUtils.smoothstep(z, 952, 1068);
+  return 34 * sx * sz * (0.86 + 0.09 * Math.sin(x / 23) + 0.05 * Math.sin(z / 17 + x / 41));
 }   // cidade + a mata em volta
 // Quartel do Exército (Porto Sul, na mata a leste da cidade): muro, portão a oeste, pátio no meio
 // Base Aérea: ao lado do quartel (a leste), com pista ao longo de x. Acesso pela rua z = 945 (vinda da rodovia).
@@ -98,6 +111,7 @@ export function altura(x, z) {
   const i = Math.round((x - quadC(0)) / PASSO), j = Math.round((z - quadC(0)) / PASSO);
   if (blocosMetro.has(i + ',' + j) && Math.abs(x - quadC(i)) < QB / 2 && Math.abs(z - quadC(j)) < QB / 2) return 0.18;
   if (z < -1150) return morro(x, z);
+  if (x > 900 && x < 1100 && z > 948 && z < 1112) return morroPorto(x, z);
   return null;
 }
 // mantém o jogador nas áreas andáveis (a ferrovia só se cruza de trem)
@@ -114,6 +128,7 @@ export function limitar(p) {
     if (md < 3) { p.x = melhor[0]; p.z = melhor[1]; return; }
   }
   if (p.x >= 110 && p.x <= 530 && p.z >= -880 && p.z <= -650) return;   // Aeroporto da Metrópole
+  if (p.x >= 880 && p.x <= 1096 && p.z >= 912 && p.z <= 1108) return;    // Favela do Morro do Porto e os lotes da rua dela
   if (p.z > BASE_NAVAL.z1 - 4 && p.z < 1175 && p.x > BASE_NAVAL.x0 - 5 && p.x < BASE_NAVAL.x1 + 5) {   // cais e píeres da Base Naval
     const areas = [{ x0: BASE_NAVAL.x0, x1: BASE_NAVAL.x1, z0: BASE_NAVAL.z1 - 4, z1: 1114 }, ...[675, 760, 845].map((x) => ({ x0: x - 3.6, x1: x + 3.6, z0: 1110, z1: 1167.5 }))];
     let melhor = null, md = Infinity;
@@ -390,6 +405,11 @@ export function limparArea(x0, z0, x1, z1) {
   }
 }
 function rua(x, z, w, d) { ruas.push([x, z, w, d, d > w]); }
+const ruasMorro = [];   // [x, z, w, d, vertical, desenhar]
+function ruaMorro(x0, z0, x1, z1, desenhar = true) {   // de ponta a ponta, no eixo
+  const vert = x0 === x1, w = vert ? RW : Math.abs(x1 - x0) + RW, d = vert ? Math.abs(z1 - z0) + RW : RW;
+  ruasMorro.push([(x0 + x1) / 2, (z0 + z1) / 2, w, d, vert, desenhar]);
+}
 
 // um quarteirão de 44 m: calçada e o que tem em cima
 function quadra(bx, bz, estilo, faixa = [2, 6], y = 0.18) {
@@ -567,6 +587,92 @@ function gerarCidade(cid) {
     arbustos.push([x, z, entre(0.6, 1.3)]);
   }
   if (cid.id === 'sul') montarQuartel();
+}
+// ---------------------------------------------------------------- favelas: casas prontas no morro (ninguém constrói), becos, ruas no relevo
+export const ILHA = { x0: -1000, x1: 1100, z0: -1528, z1: 1112 };   // a terra; em volta é mar
+let s1 = 424242; const rf = () => (s1 = (s1 * 16807) % 2147483647) / 2147483647;   // sorteio próprio (não mexe no resto do mapa)
+const CORES_FAVELA = ['#b5652f', '#a85a2a', '#c4703a', '#9c4f25', '#b86b3c', '#a4532b', '#d9cfc0', '#cfc6b4', '#e8c547', '#6fb1d6', '#e07a7a', '#8fcf8a', '#f0a35e', '#f2efe6', '#c9a0dc', '#7fc6b5'];
+const chaoNatural = (x, z) => (z < -1150 ? morro(x, z) : morroPorto(x, z));
+export const LOTES_FAVELA = [];   // centros dos lotes de empresa na rua de baixo de cada favela
+const BASES_MORRO = [];           // { x, z, w, d, h, rampa }
+function gerarFavelas() {
+  const F = FAVELAS;
+  // ---- Morro da Serra: rua principal subindo do centro de Vila Serra, três travessas e a laje da base no topo
+  ruaMorro(0, -1107, 0, -1338);
+  ruaMorro(-110, -1190, 110, -1190); ruaMorro(-110, -1260, 110, -1260); ruaMorro(-70, -1315, 70, -1315);
+  ruaMorro(-90, -1190, -90, -1260); ruaMorro(90, -1190, 90, -1260);
+  ruaMorro(86, -1107, 160, -1107); ruaMorro(-160, -1107, -86, -1107);   // rua dos lotes de empresa
+  for (const x of [-137, -115, 115, 137]) LOTES_FAVELA.push({ x, z: -1124.5, portao: { x, z: -1111 } });
+  limparArea(-165, -1392, 165, -1112);
+  // ---- Morro do Porto: a rua z = 945 vem da rodovia, passa na Base Naval e chega ao pé do morro
+  ruaMorro(86, 945, 216, 945, false); ruaMorro(216, 945, 760, 945, false); ruaMorro(760, 945, 1062, 945);
+  ruaMorro(1050, 945, 1050, 1058); ruaMorro(960, 945, 960, 1045);
+  ruaMorro(935, 1000, 1050, 1000); ruaMorro(935, 1045, 1050, 1045);
+  for (const x of [915, 937, 959, 981]) LOTES_FAVELA.push({ x, z: 927.5, portao: { x, z: 941 } });
+  limparArea(878, 910, 1100, 1112);
+  // ---- lajes das bases de clã (topo plano) e a rampa da rua até elas
+  for (const [f, rampa] of [[F.serra, { x0: -5, x1: 5, de: -1320, ate: F.serra.base.z + F.serra.base.d / 2 }], [F.porto, { x0: 1045, x1: 1055, de: 1050, ate: F.porto.base.z - F.porto.base.d / 2 }]]) {
+    const b = f.base, x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
+    let h = 0, lo = Infinity;
+    for (let x = x0; x <= x1; x += 2) for (let z = z0; z <= z1; z += 2) { const t = chaoNatural(x, z); h = Math.max(h, t); lo = Math.min(lo, t); }
+    h += 0.3;
+    pisos.push({ x0, x1, z0, z1, h });
+    const z0r = Math.min(rampa.de, rampa.ate), z1r = Math.max(rampa.de, rampa.ate);
+    pisos.push({ x0: rampa.x0, x1: rampa.x1, z0: z0r, z1: z1r, h, rampa: { eixo: 'z', de: rampa.de, ate: rampa.ate, h0: chaoNatural((rampa.x0 + rampa.x1) / 2, rampa.de), h1: h } });
+    BASES_MORRO.push({ ...b, h, lo, rampa: { x0: rampa.x0, x1: rampa.x1, z0: z0r, z1: z1r }, f });
+    // laje de concreto (a lateral vira muro de arrimo), mureta com a entrada da rampa, QG, caixa d'água e mastro
+    extrasMesh.push({ geo: [b.w, h - lo + 2, b.d], cor: '#9a958b', pos: [b.x, (h + lo - 2) / 2, b.z] });
+    const ent = Math.sign(rampa.de - rampa.ate);   // de que lado (z) chega a rampa
+    const mur = (mx0, mz0, mx1, mz1) => { const w = Math.max(0.5, mx1 - mx0), d = Math.max(0.5, mz1 - mz0); extrasMesh.push({ geo: [w, 1.5, d], cor: '#c9c1b0', pos: [(mx0 + mx1) / 2, h + 0.75, (mz0 + mz1) / 2] }); addCol({ tipo: 'caixa', x0: mx0, x1: mx0 + w, z0: mz0, z1: mz0 + d }); };
+    const zr = ent > 0 ? z1 - 0.5 : z0, zf = ent > 0 ? z0 : z1 - 0.5;
+    mur(x0, zr, b.x - 6, zr + 0.5); mur(b.x + 6, zr, x1, zr + 0.5); mur(x0, zf, x1, zf + 0.5); mur(x0, z0, x0 + 0.5, z1); mur(x1 - 0.5, z0, x1, z1);
+    const qz = b.z - ent * (b.d / 2 - 6);
+    predio(b.x - 12, qz, 16, 8, 5.2, { y: h, cor: '#6d5a4a', loja: false, det: false });
+    extrasMesh.push({ geo: [2.2, 1.6, 2.2], cor: '#2f6fd1', pos: [b.x - 16, h + 5.2 + 0.8, qz] });
+    extrasMesh.push({ geo: [0.18, 10, 0.18], cor: '#d8d8d0', pos: [b.x + 14, h + 5, qz] });
+    addCol({ tipo: 'circ', x: b.x + 14, z: qz, r: 0.3 });
+  }
+  // ---- casas: um bloco de 7 m por vez, com becos sobrando entre elas; nada em cima das ruas, da laje e dos lotes
+  const livre = (x0, z0, x1, z1) => {
+    for (const [rx, rz, w, d] of ruasMorro) if (x1 > rx - w / 2 - 1.2 && x0 < rx + w / 2 + 1.2 && z1 > rz - d / 2 - 1.2 && z0 < rz + d / 2 + 1.2) return false;
+    for (const b of BASES_MORRO) {
+      if (x1 > b.x - b.w / 2 - 3 && x0 < b.x + b.w / 2 + 3 && z1 > b.z - b.d / 2 - 3 && z0 < b.z + b.d / 2 + 3) return false;
+      const r = b.rampa; if (x1 > r.x0 - 2 && x0 < r.x1 + 2 && z1 > r.z0 - 2 && z0 < r.z1 + 2) return false;
+    }
+    for (const l of LOTES_FAVELA) if (x1 > l.x - 11 && x0 < l.x + 11 && z1 > l.z - 11 && z0 < l.z + 14) return false;
+    return true;
+  };
+  for (const f of Object.values(F)) {
+    for (let cx = f.x0 + 4; cx < f.x1 - 3; cx += 7.2) for (let cz = f.z0 + 4; cz < f.z1 - 3; cz += 7.2) {
+      if (rf() < 0.1) continue;   // beco / quintal
+      const w = 4.2 + rf() * 2.6, d = 4.2 + rf() * 2.6, x = cx + (rf() - 0.5) * 1.4, z = cz + (rf() - 0.5) * 1.4;
+      if (!livre(x - w / 2, z - d / 2, x + w / 2, z + d / 2)) continue;
+      const hs = [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, 0]].map(([a, b]) => chaoNatural(x + a * w / 2, z + b * d / 2));
+      const lo = Math.min(...hs), hi = Math.max(...hs), andares = 1 + Math.floor(rf() * rf() * 3.6);
+      const i = predio(x, z, w, d, andares * 2.9 + (hi - lo) + 0.4, { y: lo - 0.4, cor: CORES_FAVELA[Math.floor(rf() * CORES_FAVELA.length)], loja: false, det: false });
+      Object.assign(edificios[i], { tipo: 'favela', k: 1 + Math.floor(rf() * 4) });
+      if (rf() < 0.45) { edificios[i].det.push(detalhes.length); detalhes.push({ ed: i, dx: (rf() - 0.5) * (w - 1.6), dz: (rf() - 0.5) * (d - 1.6), w: 1.2, h: 1, d: 1.2 }); }   // caixa d'água
+    }
+    extras.push({ x0: f.x0, x1: f.x1, z0: f.z0, z1: f.z1, cor: '#a88a68' });
+  }
+}
+// terreno do Morro do Porto, ruas acompanhando o relevo e o paredão de pedra sobre o mar
+function montarFavelasMalhas() {
+  const geo = new THREE.PlaneGeometry(200, 164, 80, 66).rotateX(-Math.PI / 2), pp = geo.attributes.position;
+  for (let k = 0; k < pp.count; k++) { const x = pp.getX(k) + 1000, z = pp.getZ(k) + 1030; pp.setY(k, morroPorto(x, z) + 0.05); }
+  geo.computeVertexNormals();
+  const terreno = new THREE.Mesh(geo, MAT.campo); terreno.position.set(1000, 0, 1030); terreno.receiveShadow = true; ctx.scene.add(terreno);
+  const rocha = new THREE.MeshStandardMaterial({ color: '#7a7266', roughness: 1, flatShading: true });
+  for (let x = 900; x < 1100; x += 10) { const h = Math.max(morroPorto(x + 5, 1107), 0.6) + 0.4; const m = new THREE.Mesh(new THREE.BoxGeometry(10.4, h + 3, 4), rocha); m.position.set(x + 5, (h - 3) / 2, 1110); m.castShadow = true; ctx.scene.add(m); }
+  for (let z = 950; z < 1112; z += 10) { const h = Math.max(morroPorto(1095, z + 5), 0.6) + 0.4; const m = new THREE.Mesh(new THREE.BoxGeometry(4, h + 3, 10.4), rocha); m.position.set(1098, (h - 3) / 2, z + 5); m.castShadow = true; ctx.scene.add(m); }
+  for (const [x, z, w, d, vert, desenhar] of ruasMorro) {
+    if (!desenhar) continue;
+    const nx = Math.max(1, Math.round(w / (vert ? 5 : 2.5))), nz = Math.max(1, Math.round(d / (vert ? 2.5 : 5)));
+    const g = new THREE.PlaneGeometry(w, d, nx, nz).rotateX(-Math.PI / 2), q = g.attributes.position;
+    for (let k = 0; k < q.count; k++) { const vx = q.getX(k) + x, vz = q.getZ(k) + z; q.setY(k, (altura(vx, vz) ?? 0) + 0.1); }
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, MAT.asfalto); m.position.set(x, 0, z); m.receiveShadow = true; ctx.scene.add(m);
+  }
 }
 const arbustos = [];
 function montarQuartel() {
@@ -750,13 +856,21 @@ function montarChaos() {
   const terreno = new THREE.Mesh(geo, MAT.campo); terreno.position.z = -1340; terreno.receiveShadow = true; ctx.scene.add(terreno);
   const cone = new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0);
   const morros = [];
-  for (let k = 0; k < 22; k++) morros.push([entre(-900, 900), -entre(1620, 1850), entre(90, 180), entre(70, 140)]);
+  for (let k = 0; k < 22; k++) morros.push([entre(-900, 900), -entre(2050, 2350), entre(90, 180), entre(70, 140)]);   // serra de fundo: ilhas ao norte, longe da rota dos navios
   const im = new THREE.InstancedMesh(cone, MAT.morro, morros.length);
   morros.forEach(([x, z, r, h], k) => { _m.compose(_v.set(x, 0, z), _q.identity(), _e.set(r, h, r)); im.setMatrixAt(k, _m); im.setColorAt(k, _c.set(escolher(['#7d8f63', '#6f8259', '#8a9a6c', '#76866a']))); });
   im.receiveShadow = true; ctx.scene.add(im);
+  montarFavelasMalhas();
+  // chão por baixo de tudo, até a costa, e o mar em volta da ilha inteira (os navios dão a volta)
+  plano((ILHA.x0 + ILHA.x1) / 2, (ILHA.z0 + ILHA.z1) / 2, ILHA.x1 - ILHA.x0, ILHA.z1 - ILHA.z0, -0.03, MAT.campo);
+  const M = 2800;
+  plano(0, (ILHA.z1 + M) / 2, 2 * M, M - ILHA.z1, 0.03, MAT.agua);                                    // sul (Porto Sul)
+  plano(0, (ILHA.z0 - M) / 2, 2 * M, M + ILHA.z0, 0.03, MAT.agua);                                    // norte
+  plano((ILHA.x0 - M) / 2, (ILHA.z0 + ILHA.z1) / 2, M + ILHA.x0, ILHA.z1 - ILHA.z0, 0.03, MAT.agua);   // oeste
+  plano((ILHA.x1 + M) / 2, (ILHA.z0 + ILHA.z1) / 2, M - ILHA.x1, ILHA.z1 - ILHA.z0, 0.03, MAT.agua);   // leste
+  extras.push({ x0: -M, x1: M, z0: ILHA.z1, z1: M, cor: '#3e7ea6' }, { x0: -M, x1: M, z0: -M, z1: ILHA.z0, cor: '#3e7ea6' },
+    { x0: -M, x1: ILHA.x0, z0: ILHA.z0, z1: ILHA.z1, cor: '#3e7ea6' }, { x0: ILHA.x1, x1: M, z0: ILHA.z0, z1: ILHA.z1, cor: '#3e7ea6' });
   // o mar de Porto Sul, cais, píer e um navio
-  plano(0, 1112 + 400, 2200, 800, 0.03, MAT.agua);
-  extras.push({ x0: -1100, x1: 1100, z0: 1113, z1: 1900, cor: '#3e7ea6' });
   const cais = new THREE.Mesh(new THREE.BoxGeometry(200, 0.8, 1.2), MAT.concreto); cais.position.set(0, 0.2, 1113); ctx.scene.add(cais);
   const pier = new THREE.Mesh(new THREE.BoxGeometry(10, 0.5, 70), MAT.concreto); pier.position.set(48, 0.25, 1148); pier.receiveShadow = true; ctx.scene.add(pier);
   const navio = ctx.modelo?.('navio');
@@ -824,9 +938,14 @@ export function ativarPredios3d(mapa) {   // mapa: nome -> cena do GLB
       geo.setAttribute(k, new THREE.BufferAttribute(f, a.itemSize));
     }
     geo.applyMatrix4(new THREE.Matrix4().copy(cena.matrixWorld).invert().multiply(malha.matrixWorld));
+    // normaliza: base no chão (y = 0), centrado e com tamanho 1 × 1 × 1, para ocupar exatamente o lugar da caixa do prédio
+    // (os modelos vêm centrados na altura: sem isso, metade ficava enterrada)
     geo.computeBoundingBox();
+    { const bb = geo.boundingBox, sx = (bb.max.x - bb.min.x) || 1, sy = (bb.max.y - bb.min.y) || 1, sz = (bb.max.z - bb.min.z) || 1;
+      geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2); geo.scale(1 / sx, 1 / sy, 1 / sz); }
+    geo.computeBoundingBox(); if (!geo.attributes.normal) geo.computeVertexNormals();
     const mat = [].concat(malha.material)[0];
-    const im = new THREE.InstancedMesh(geo, mat, 28); im.count = 0; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; ctx.scene.add(im);
+    const im = new THREE.InstancedMesh(geo, mat, 48); im.count = 0; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; ctx.scene.add(im);
     modelos3d[nome] = im;
   }
   tempo3d = 0;
@@ -834,6 +953,7 @@ export function ativarPredios3d(mapa) {   // mapa: nome -> cena do GLB
 // que modelo usar e para onde o prédio olha (a rua mais perto do lote)
 function tipo3d(e) {
   if (e.y === 0) return null;                                        // horizonte: longe demais, fica caixa
+  if (e.tipo === 'favela') return `favela_casa${e.k || 1}`;          // só troca se o GLB existir
   if (e.tipo === 'casa') return e.h > 4 ? 'predio_sobrado' : (Math.round(e.x * 7 + e.z * 3) % 2 ? 'predio_casa1' : 'predio_casa2');
   if (e.loja === false && e.w > 30) return 'predio_galpao';
   if (e.w >= 28 && e.d >= 22 && e.h >= 30 && e.loja === false) return null;   // prédio de apartamentos especial (tem portaria própria)
@@ -847,7 +967,7 @@ function rumo3d(e) {
 export function predios3dPerto(px, pz, dt) {
   if (!modelos3d || !malhaPredios) return;
   if ((tempo3d -= dt) > 0) return; tempo3d = 0.7;
-  const q = ctx.qualidade?.() || 'medio', max = q === 'alto' ? 22 : q === 'medio' ? 10 : 0, raio = q === 'alto' ? 150 : 95;
+  const q = ctx.qualidade?.() || 'medio', max = q === 'alto' ? 48 : q === 'medio' ? 26 : 10, raio = q === 'alto' ? 170 : q === 'medio' ? 130 : 80;
   const perto = [];
   if (max) for (const k of chaves(px - raio, pz - raio, px + raio, pz + raio)) for (const i of gradeEd.get(k) || []) {
     const e = edificios[i]; if (cortados.has(i)) continue; const t = tipo3d(e); if (!t || !modelos3d[t]) continue;
@@ -855,7 +975,7 @@ export function predios3dPerto(px, pz, dt) {
   }
   perto.sort((a, b) => a[0] - b[0]);
   const novo = new Map(); const conta = {};
-  for (const [, i, t] of perto) { if (novo.has(i)) continue; conta[t] = conta[t] || 0; if (novo.size >= max || conta[t] >= 28) continue; novo.set(i, t); conta[t]++; }
+  for (const [, i, t] of perto) { if (novo.has(i)) continue; conta[t] = conta[t] || 0; if (novo.size >= max || conta[t] >= 48) continue; novo.set(i, t); conta[t]++; }
   // os que saíram voltam a ser caixa; os que entraram escondem a caixa (e telhado / detalhes)
   const mostrar = (i, vis) => {
     const e = edificios[i];
@@ -890,7 +1010,7 @@ export function desenharMapa(g) {
   g.fillStyle = '#d8d1c3'; for (const [x, z, w, d] of calcadas) g.fillRect(x - w / 2, z - d / 2, w, d);
   g.fillStyle = '#7fa45a'; for (const [x, z, w, d] of gramados) g.fillRect(x - w / 2, z - d / 2, w, d);
   g.fillStyle = '#4a4e57'; for (const [x, z, w, d] of ruas) g.fillRect(x - w / 2, z - d / 2, w, d);
-  for (const e of edificios) { g.fillStyle = e.tipo === 'casa' ? '#b3876a' : e.y === 0 ? '#55585e' : '#9b968d'; g.fillRect(e.x - e.w / 2, e.z - e.d / 2, e.w, e.d); }
+  for (const e of edificios) { g.fillStyle = e.tipo === 'casa' ? '#b3876a' : e.tipo === 'favela' ? '#b9774c' : e.y === 0 ? '#55585e' : '#9b968d'; g.fillRect(e.x - e.w / 2, e.z - e.d / 2, e.w, e.d); }
 }
 
 export function montar(contexto) {
@@ -899,6 +1019,7 @@ export function montar(contexto) {
   gerarMetropole();
   gerarHorizonte();
   for (const c of CIDADES) gerarCidade(c);
+  gerarFavelas();
   // árvores ao longo da faixa da ferrovia
   for (const s of [-1, 1]) for (let k = 0; k < 120; k++) {
     const x = (rnd() < 0.5 ? -1 : 1) * entre(13, CORREDOR - 3), z = s * entre(215, 835);
@@ -1181,7 +1302,7 @@ export function finalizar() { planejarProps(); montarMobiliario(); montarMalhas(
 // (usa os retângulos de asfalto desenhados; vale para a Metrópole, o horizonte e as cidades vizinhas)
 // as ruas do centro (4 x 4 quarteirões) são desenhadas pelo main.js; entram aqui só para a conta
 const ruasCentro = []; for (let i = 0; i <= N; i++) ruasCentro.push([0, ruaC(i), TOTAL, RW, false], [ruaC(i), 0, RW, TOTAL, true]);
-const todasRuas = () => (ruas.length ? ruas.concat(ruasCentro) : ruas);
+const todasRuas = () => (ruas.length ? ruas.concat(ruasCentro, ruasMorro) : ruas);
 export function naRua(x, z, m = 0, vert) {   // vert: só as ruas verticais (true) ou horizontais (false)
   for (const [rx, rz, w, d, v] of todasRuas()) if (vert !== undefined && v !== vert) continue; else if (Math.abs(x - rx) <= w / 2 + m && Math.abs(z - rz) <= d / 2 + m) return true;
   return false;

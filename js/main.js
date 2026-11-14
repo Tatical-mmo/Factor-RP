@@ -153,6 +153,19 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.NeutralToneMapping ?? THREE.ACESFilmicToneMapping;   // neutro: cores vivas, brancos sem estourar
 renderer.toneMappingExposure = 0.95;
+// celular: ao sair do app, o sistema pode tirar a placa de vídeo do jogo (contexto WebGL perdido). Na volta, texturas e
+// sombras não voltam direito e o cenário fica escuro. A posição já foi salva ao sair; então o jogo recarrega limpo.
+{
+  let recarregando = false;
+  const recarregarCena = () => { if (recarregando) return; recarregando = true; setTimeout(() => location.reload(), 300); };
+  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); if (document.visibilityState === 'visible') recarregarCena(); }, false);
+  canvas.addEventListener('webglcontextrestored', recarregarCena, false);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    const gl = renderer.getContext();
+    if (gl.isContextLost()) recarregarCena();
+  });
+}
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.localClippingEnabled = true;   // corte do teto do trem quando você está dentro
 
@@ -1303,7 +1316,11 @@ function entrarCarro(v) {
 function sairCarro() {
   const c = jogador.carro; if (!c) return;
   if (c.jato && (c.noAr || c.vel > 2)) { aviso('Pouse e pare o caça antes de sair.', 2); return; }
-  if (c.jato && c.alt > 1) { aviso('No porta-aviões não dá para descer: decole e pouse na Base Aérea.', 3); return; }
+  if (c.voa && !c.caminhao && !c.aviao && !c.teste && (c.jato ? c.alt > 1 : c.alt <= 1.5)) {   // pousado num navio
+    const dk = convesEm(jogador.pos.x, jogador.pos.z);
+    if (dk && (c.jato || Math.abs((jogador.pos.y || 0) - dk.h) < 1)) { descerNoConves(c, dk); return; }
+  }
+  if (c.jato && c.alt > 1) { aviso('Pare o caça no convés para descer.', 3); return; }
   if (c.servico === 'lixo' && minhaColeta) { encerrarColeta(); return; }
   if (c.aula && c.aula === aula) { if (c.aula.voo && c.alt > 1.5) { aviso('Pouse antes de sair.', 2); return; } encerrarAula(false, 'Você saiu do veículo da prova.'); return; }
   if (c.voa && !c.caminhao) {
@@ -1378,8 +1395,14 @@ function dirigir(dt) {
     // distância entre os eixos e da velocidade (rápido, o volante "pesa" e a curva fica mais aberta). Sem curva seca.
     c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * (volante ? 2.6 : 4.5));
     const tc = tipoCabine(), eixo = tc === 'onibus' ? 6.2 : tc === 'caminhao' ? 4.8 : 2.7, vAbs = Math.abs(c.vel);
-    const maxEsterco = (tc === 'carro' ? 0.58 : 0.8) / (1 + vAbs / 10);
-    const giro = vAbs / eixo * Math.tan(c.volante * maxEsterco);
+    // ângulo máximo das rodas (devagar dá para manobrar fechado) e limite de aderência: quanto mais rápido, mais aberta a curva
+    // (aceleração lateral máxima ~0,45 g no carro, ~0,3 g em caminhão/ônibus); o tanque gira sobre as esteiras.
+    const tanque = c.modelo === 'tanque', maxEsterco = tc === 'carro' ? 0.6 : 0.65;
+    const aLat = tanque ? 99 : tc === 'carro' ? (c.modelo === 'esportivo' || c.modelo === 'classico' ? 5.5 : 4.5) : 3;
+    let curva = Math.tan(c.volante * maxEsterco) / eixo;
+    const curvaMax = aLat / Math.max(1, vAbs * vAbs);
+    curva = THREE.MathUtils.clamp(curva, -curvaMax, curvaMax);
+    const giro = tanque ? c.volante * 0.9 * Math.min(1, vAbs / 2 + 0.4) : vAbs * curva;
     jogador.yaw -= giro * dt * Math.sign(c.vel || 1);
   }
   if (c.servico) civico.atualizarSirenes(performance.now() / 1000, c.mesh);
@@ -2147,7 +2170,7 @@ function desenharMapa() {
     g.fillStyle = cor; g.beginPath(); g.arc(mx, mz, raio, 0, 7); g.fill();
   };
   for (const n of npcs) desenhar(n.av.raiz.position.x, n.av.raiz.position.z, '#ffffffaa', 3.5);
-  for (const v of viaturas) desenhar(v.obj.position.x, v.obj.position.z, v.perseguindo ? '#ff3030' : '#3a6bff', 5);
+  for (const v of viaturas) desenhar(v.obj.position.x, v.obj.position.z, v.perseguindo || v.pe || remotoAtivo(v) ? '#ff3030' : '#3a6bff', 5);
   for (const r of remotos.values()) if (r.av?.raiz.visible) desenhar(r.av.raiz.position.x, r.av.raiz.position.z, '#4fa3ff', 5);
   if (caminhaoMovel) desenhar(caminhaoMovel.obj.position.x, caminhaoMovel.obj.position.z, '#e39b3a', 5);
   for (const [x, z] of ferrovia.marcadores()) desenhar(x, z, '#c8282e', 7);
@@ -2245,7 +2268,7 @@ async function iniciarJogo(perfil) {
   // objetos de rua em 3D (leves): bancos de praça, hidrantes e semáforos — carregam em segundo plano
   for (const n of ['banco', 'hidrante']) Promise.resolve(carregarGLB(`assets/modelos/prop_${n}.glb`)).then((g) => { if (g?.scene) mundo.montarProps(n, g.scene, scene); }).catch(() => {});
   // prédios 3D (perto do jogador): carregam em segundo plano
-  { const nomes = ['predio_casa1', 'predio_casa2', 'predio_sobrado', 'predio_residencial', 'predio_escritorio', 'predio_galpao'];
+  { const nomes = ['predio_casa1', 'predio_casa2', 'predio_sobrado', 'predio_residencial', 'predio_escritorio', 'predio_galpao', 'favela_casa1', 'favela_casa2', 'favela_casa3', 'favela_casa4'];
     Promise.all(nomes.map((n) => Promise.resolve(carregarGLB(`assets/modelos/${n}.glb`)).then((g) => [n, g?.scene]).catch(() => [n, null]))).then((l) => { const m = Object.fromEntries(l.filter(([, c]) => c)); if (Object.keys(m).length) mundo.ativarPredios3d(m); }); }
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
@@ -2540,6 +2563,7 @@ function atualizarRemotos(dt) {
     }
     if (a.cv) {   // dirigindo: mostra o carro no lugar do personagem
       const [cid, mod, cor] = String(a.cv).split('|');
+      { const pv = carrosMundo.get(Number(cid)); if (pv && pv.mesh.visible) pv.mesh.visible = false; }   // ele está dirigindo: some o carro parado
       if (!r.carro || r.carroId !== cid) {
         if (r.carro) scene.remove(r.carro); r.carro = civico.modeloCarro(mod, cor); r.carroId = cid; r.carroModelo = mod; r.carro.position.set(a.x, a.y, a.z); scene.add(r.carro);
         // o motor dele pegando, se for perto (o avião só se estiver no chão)
@@ -2616,6 +2640,7 @@ const agoraServidor = () => Date.now() + offsetServidor;
 const LOTE_L = (QB - CW * 2) / 2;  // 19 m
 
 function centroLote(l) {
+  if (l.c) return l.c;
   const [cx, cz] = l.q.split(',').map(Number);
   const c = LOTE_L / 2, x = quadC(cx), z = quadC(cz);
   return { x: l.lote === 'SO' ? x - c : x + c, z: l.lote === 'NE' || l.lote === 'NO' ? z - c : z + c };
@@ -4227,9 +4252,9 @@ function atualizarArmaPd(dt) {
 function carroAlheioProximo() {
   if (jogador.carro || jogador.trem) return null;
   const eu = jogador.perfil?.id, pol = jogador.perfil?.policial || jogador.perfil?.prf;
-  let melhor = null, dm = 3.4;
+  let melhor = null, dm = 3.4; const outros = dirigidosPorOutros();
   for (const v of carrosMundo.values()) {
-    if (!v.mesh.visible || v.d.modelo === 'presidencial' || v.d.dono === eu) continue;
+    if (!v.mesh.visible || v.d.modelo === 'presidencial' || v.d.dono === eu || outros.has(v.d.id)) continue;
     if (pol ? !v.d.ladrao : v.d.ladrao) continue;   // policial só mexe em carro roubado; ladrão só em carro livre
     const d = Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z);
     if (d < dm) { dm = d; melhor = v; }
@@ -4845,7 +4870,13 @@ function patrulha(n) { return pontoNoLaco(n.laco, agoraServidor() / 1000 * n.vel
 // estado compartilhado (perseguição, cerco, caído) que veio do banco
 function aoRobo(r) {
   const n = npcs.find((k) => k.id === r.id) || viaturas.find((k) => k.id === r.id);
-  if (n) n.remoto = r;
+  if (!n) return;
+  const antes = n.remoto?.estado;
+  n.remoto = r;
+  if (r.estado === 'perseguindo' && antes !== 'perseguindo' && r.alvo && r.alvo !== jogador.perfil?.id && Math.hypot(r.x - jogador.pos.x, r.z - jogador.pos.z) < 250) {
+    const quem = remotos.get(r.alvo)?.meta?.nome;
+    aviso(`🚨 Perseguição policial por perto${quem ? `: a polícia está atrás de ${quem}` : ''}!`, 3);
+  }
 }
 function remotoAtivo(n) {
   const r = n.remoto;
@@ -4951,7 +4982,7 @@ function atualizarViaturas(dt) {
     const o = v.obj;
     civico.atualizarSirenes(v.perseguindo || remotoAtivo(v) ? t : 0, o);
     if (v.roubada) { if (jogador.carro?.viatura !== v) atualizarViaturaRoubada(v); if (v.pe) atualizarViaturaAPe(v, dt); continue; }
-    if (v.pe) { atualizarViaturaAPe(v, dt); continue; }
+    if (v.pe) { atualizarViaturaAPe(v, dt); if (v.pe && !v.pe.volta) { v.perseguindo = true; publicarRobo(v, dt, o); v.perseguindo = false; } continue; }
     if (remotoAtivo(v)) {   // perseguição de outro jogador: segue o que ele gravou
       const r = v.remoto, dx = r.x - o.position.x, dz = r.z - o.position.z, d = Math.hypot(dx, dz);
       if (d > 40) o.position.set(r.x, alturaChao(r.x, r.z), r.z); else { o.position.x += dx * Math.min(1, dt * 3); o.position.z += dz * Math.min(1, dt * 3); }
@@ -5182,7 +5213,7 @@ function montarFortaleza(v, t, nivel, cor) {
     const band = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.4), new THREE.MeshStandardMaterial({ color: cor, side: THREE.DoubleSide, roughness: 0.7 }));
     band.position.set(mastro.position.x + 2, 14.6, 8); g.add(band);
   }
-  g.position.set(t.x, 0, t.z); scene.add(g);
+  g.position.set(t.x, alturaChao(t.x, t.z), t.z); scene.add(g);
   colisores.push(...cols);
   v.forte = { g, cols };
 }
@@ -5201,14 +5232,14 @@ async function carregarCidadeSocial() {
     if (v) { scene.remove(v.placa); removerFortaleza(v); }
     else {
       const anel = new THREE.Mesh(new THREE.RingGeometry(23, 24, 64), new THREE.MeshBasicMaterial({ color: '#888888', transparent: true, opacity: 0.6 }));
-      anel.rotation.x = -Math.PI / 2; anel.position.set(t.x, 0.05, t.z); scene.add(anel);
+      anel.rotation.x = -Math.PI / 2; anel.position.set(t.x, alturaChao(t.x, t.z) + 0.05, t.z); scene.add(anel);
       v = { anel }; territorios.set(t.id, v);
       if (!itensMapa.some((it) => it.tipo === 'territorio' && it.x === t.x && it.z === t.z)) { itensMapa.push({ tipo: 'territorio', x: t.x, z: t.z, r: 23 }); tempoFundoMapa = 0.5; }
     }
     v.d = t; v.chave = chave;
     v.anel.material.color.set(t.dono_cla ? corDoCla(t.dono_cla) : '#888888');
     v.placa = textoSprite(nome ? `${t.nome}: ${nome}${t.defesa ? ` · ${t.defesa} robôs` : ''}` : `${t.nome}: livre`, { escala: 1.05, cor: '#ffd9a0' });
-    v.placa.position.set(t.x, 13.5, t.z); scene.add(v.placa);
+    v.placa.position.set(t.x, alturaChao(t.x, t.z) + 13.5, t.z); scene.add(v.placa);
     if (t.dono_cla && nivelCla >= 5) montarFortaleza(v, t, nivelCla, corDoCla(t.dono_cla));
   }
   const eu = jogador.perfil.id, agoraMs = agoraServidor();
@@ -5501,6 +5532,10 @@ function montarLocais() {
   for (const e of ESCONDERIJOS) LOCAIS.push({ nome: `⛺ ${e.nome}`, x: e.x + 3.5, z: e.z + 3.5 });
   for (const [id, p] of Object.entries(PORTAS_QG)) LOCAIS.push({ nome: `🏴 QG do clã (${id === 'leste' ? 'Leste' : 'Oeste'})`, x: p.x + (p.x > 0 ? -2 : 2), z: p.z });
   LOCAIS.push({ nome: '🚢 Píer do cargueiro', x: 48, z: 1112 });
+  for (const f of Object.values(mundo.FAVELAS)) {
+    LOCAIS.push({ nome: `🏚️ ${f.nome} (entrada)`, x: f.entrada.x + 6, z: f.entrada.z });
+    LOCAIS.push({ nome: `🏴 ${f.nome} (base de clã no alto)`, x: f.base.x, z: f.base.z });
+  }
   LOCAIS.push({ nome: 'Prefeitura', x: civico.PREFEITURA.porta.x, z: civico.PREFEITURA.porta.z + 3 });
 }
 
@@ -5625,7 +5660,6 @@ function atualizarJogador(dt) {
   for (let i = j.eventos.length - 1; i >= 0; i--) { j.eventos[i].t -= dt; if (j.eventos[i].t <= 0) { j.eventos[i].fn(); j.eventos.splice(i, 1); } }
   j.recarga = Math.max(0, j.recarga - dt);
   if (j.abducao) { seguirAbducao(dt); return; }
-  if (j.embarcado) { seguirNavio(dt); return; }
   if (j.trem && seguirTrem()) {
     av.tocar(j.carregando ? 'carregar_parado' : 'idle'); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw;
     av.mixer.update(dt); av.raiz.updateMatrixWorld(true);
@@ -5652,6 +5686,7 @@ function atualizarJogador(dt) {
     const d = dir.length();
     if (d < 0.25) { j.alvo = null; forca = 0; } else { dir.normalize(); forca = 1; }
   }
+  if (j.embarcado) { seguirNavio(dt, dir, forca); return; }
   { const ej = !!(j.carro?.voa && !j.carro.caminhao && (j.carro.alt || 0) >= 8 && qtdItem('paraquedas') > 0); if (ej !== document.body.classList.contains('ejetar')) document.body.classList.toggle('ejetar', ej); }
   if (j.paraquedas) { descerParaquedas(dt, dir, forca); return; }
   if (j.voo) { seguirVoo(); return; }
@@ -5972,9 +6007,12 @@ function atualizarCamera3D(dt) {
     if (!v && !jogador.alvo && Math.hypot(joy.x, joy.y) < 0.05) jogador.yaw = yaw;   // parado, o corpo vira para onde você olha
   } else {
     for (const g of Object.values(cabines)) g.visible = false;
-    const f = foco(), alvo = new THREE.Vector3(f.x, (f.y || 0) + (jogador.pos.y || 0) + 1.4, f.z);
-    if (v && olhar.arrastou <= 0) olhar.yaw += Math.atan2(Math.sin(v.rotation.y - olhar.yaw), Math.cos(v.rotation.y - olhar.yaw)) * Math.min(1, dt * 1.5);   // dirigindo: fica atrás do veículo
-    const dist = v ? Math.max(olhar.dist, 12) : olhar.dist;
+    // aeronave: a câmera segue o próprio veículo na altura em que ele estiver (não fica no chão) e fica mais longe
+    const aereo = !!(v && (jogador.carro?.voa || jogador.voo || jogador.passageiro?.c?.d?.tipo === 'helicoptero'));
+    const f = foco(), alvo = v && !averiguando ? new THREE.Vector3(v.position.x, v.position.y + (aereo ? 2.5 : 1.4), v.position.z)
+      : new THREE.Vector3(f.x, averiguando ? (f.y || 0) + (jogador.pos.y || 0) + 1.4 : (jogador.pos.y || 0) + 1.4, f.z);
+    if (v && olhar.arrastou <= 0) olhar.yaw += Math.atan2(Math.sin(v.rotation.y - olhar.yaw), Math.cos(v.rotation.y - olhar.yaw)) * Math.min(1, dt * (aereo ? 3 : 1.5));   // dirigindo: fica atrás do veículo
+    const dist = v ? Math.max(olhar.dist, aereo ? 26 : 12) : olhar.dist;
     camP.position.set(alvo.x - Math.sin(olhar.yaw) * Math.cos(olhar.incl) * dist, alvo.y + Math.sin(olhar.incl) * dist, alvo.z - Math.cos(olhar.yaw) * Math.cos(olhar.incl) * dist);
     const chao = alturaChao(camP.position.x, camP.position.z) + 0.6; if (camP.position.y < chao) camP.position.y = chao;
     camP.lookAt(alvo);
@@ -8212,6 +8250,7 @@ let averiguando = null;
 const ANIM_TXT = { idle: 'parado', idle_long: 'parado', walk: 'andando', run: 'correndo', punch_left: 'dando soco', punch_right: 'dando soco', punch_combo: 'dando soco', shoot: 'atirando', walk_shoot: 'atirando andando', pegar: 'pegando algo', carregar: 'carregando caixa', carregar_parado: 'carregando caixa', death: 'caído', hit: 'levando dano' };
 function foco() {
   if (jogador.carro?.aviao) return { x: jogador.pos.x, y: jogador.carro.alt, z: jogador.pos.z };
+  if (jogador.carro?.voa) return { x: jogador.pos.x, y: (jogador.pos.y || 0) + (jogador.carro.alt || 0), z: jogador.pos.z };
   if (jogador.voo) return { x: jogador.pos.x, y: jogador.vooY || 0, z: jogador.pos.z };
   const a = averiguando && remotos.get(averiguando.id)?.alvo;
   return a ? { x: a.x, y: Math.max(0, a.y - alturaChao(a.x, a.z)), z: a.z } : jogador.pos;
@@ -8921,6 +8960,13 @@ const LINHAS = [
   { id: 6, nome: 'Linha 6 · Territórios', curto: 'Territórios', cor: '#16a085', k: 4, fase: 2, modelos: URB, circular: true,
     rua: [[162, -260], [162, -216], [108, -216], [108, -108], [-270, -108], [-270, -270], [-324, -270], [-324, 54], [-108, 54], [270, 54], [270, 324], [324, 324], [324, -270], [162, -270], [162, -260]],
     paradas: [ROD, [-297, -270, 'Praça do Território (NO)', 'o'], [-324, -100, 'Zona Oeste', 's'], [-162, 54, 'Território Oeste', 'l'], [297, 324, 'Praça do Território (SE)', 'l'], [324, 0, 'Zona Leste', 'n']] },
+  // favelas: circulares que saem do centro de cada cidade vizinha e sobem o morro
+  { id: 9, nome: 'Linha 9 · Morro da Serra', curto: 'Morro da Serra', cor: '#d35400', k: 2, fase: 4, modelos: URB, circular: true,
+    rua: [[27, -999], [27, -1107], [0, -1107], [0, -1260], [90, -1260], [90, -1190], [0, -1190], [0, -1107], [-27, -1107], [-27, -999], [27, -999]],
+    paradas: [[0, -999, 'Vila Serra · Centro'], [0, -1150, 'Morro da Serra · Entrada'], [0, -1230, 'Morro da Serra · Meio'], [45, -1260, 'Morro da Serra · Parte Alta'], [90, -1225, 'Morro da Serra · Travessa']] },
+  { id: 10, nome: 'Linha 10 · Morro do Porto', curto: 'Morro do Porto', cor: '#b03a2e', k: 3, fase: 8, modelos: URB, circular: true,
+    rua: [[27, 999], [27, 945], [1050, 945], [1050, 1045], [960, 1045], [960, 945], [-27, 945], [-27, 999], [27, 999]],
+    paradas: [[0, 999, 'Porto Sul · Centro'], [600, 945, 'Base Naval'], [1050, 975, 'Morro do Porto · Entrada'], [1050, 1020, 'Morro do Porto · Meio'], [1005, 1045, 'Morro do Porto · Parte Alta'], [960, 990, 'Morro do Porto · Baixada']] },
 ];
 const V_ONIBUS = 10, ESPERA_PONTO = 6, FOLGA_FILA = 25;
 // caminho de direção (faixa da direita, curvas arredondadas) de uma linha: da plataforma, pela cidade, de volta à fila e à plataforma
@@ -10543,12 +10589,18 @@ function pilotarHeli(c, dt, max) {
   const lado = THREE.MathUtils.clamp((toque ? manche.x : 0) + (teclas.has('d') || teclas.has('arrowright') ? 1 : 0) - (teclas.has('a') || teclas.has('arrowleft') ? 1 : 0), -1, 1);
   let sobe = pedais.acel || teclas.has('r'); const desce = pedais.freio || teclas.has('f');
   if (c.motorParado) sobe = false;
-  const noAr = c.alt > 0.3, chao = alturaChao(jogador.pos.x, jogador.pos.z);
+  // em cima de um navio: o convés é o chão, e parado nele o navio leva o helicóptero junto
+  const chaoHeli = (x, z) => { const dk = convesEm(x, z); return dk ? dk.h : alturaChao(x, z); };
+  if (c.alt < 0.5 && c.navio) {
+    const n = NAVIOS[c.navio];
+    if (n?.dx !== undefined) { const rx = jogador.pos.x - n.x0, rz = jogador.pos.z - n.z0, ca = Math.cos(n.dang), sa = Math.sin(n.dang); jogador.pos.x = n.x + rx * ca + rz * sa; jogador.pos.z = n.z - rx * sa + rz * ca; jogador.yaw += n.dang; }
+  }
+  const noAr = c.alt > 0.3, chao = chaoHeli(jogador.pos.x, jogador.pos.z);
   // altura: sobe 3 m/s, desce 2,5 m/s (sem tranco); com o motor falhando, cai a 7 m/s
   const ufo = c.servico === 'ovni', vsAlvo = c.motorParado ? -7 : sobe ? (ufo ? 7 : 3) : desce ? (ufo ? -6 : -2.5) : 0;
   c.vs = (c.vs || 0) + THREE.MathUtils.clamp(vsAlvo - (c.vs || 0), -(ufo ? 10 : 4) * dt, (ufo ? 10 : 4) * dt);
   const altAntes = c.alt; c.alt = Math.min(120, c.alt + c.vs * dt);
-  if (c.alt <= 1.5 && c.vs < 0) {   // pousando: precisa de chão livre
+  if (c.alt <= 1.5 && c.vs < 0 && !convesEm(jogador.pos.x, jogador.pos.z)) {   // pousando: precisa de chão livre (no convés pode)
     const t = jogador.pos.clone(); mundo.limitar(t);
     const livre = jogador.pos.clone(); resolverColisao(livre, c.raio || 2.2);
     const ocupado = Math.hypot(t.x - jogador.pos.x, t.z - jogador.pos.z) > 2 || Math.hypot(livre.x - jogador.pos.x, livre.z - jogador.pos.z) > 0.6;
@@ -10569,12 +10621,14 @@ function pilotarHeli(c, dt, max) {
   c.vel += THREE.MathUtils.clamp(alvoV - c.vel, -5 * dt, 4 * dt);
   c.volante = (c.volante || 0) + (lado - (c.volante || 0)) * Math.min(1, dt * 5);
   if (noAr) jogador.yaw -= c.volante * 1.3 * dt;
-  jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * dt, -890, 700);
-  jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * dt, -1200, 1200);
+  jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * dt, -1500, 1600);
+  jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * dt, -2000, 1900);
   // prédios: alarme e batida
   if (noAr && aeronaveEmPredio(c, chao)) return;
   if (noAr) alertaPredio(c, chao);
-  const ch2 = alturaChao(jogador.pos.x, jogador.pos.z);
+  const ch2 = chaoHeli(jogador.pos.x, jogador.pos.z);
+  if (ch2 !== chao) { c.alt = Math.max(0, c.alt - (ch2 - chao)); if (c.alt === 0) c.vs = 0; }   // passou por cima da borda do navio: a altura real não muda
+  { const dk = c.alt < 0.5 ? convesEm(jogador.pos.x, jogador.pos.z) : null; c.navio = dk ? dk.n.id : null; }
   jogador.pos.y = ch2; c.mesh.position.set(jogador.pos.x, ch2 + c.alt, jogador.pos.z);
   c.mesh.rotation.set(noAr ? c.vel / Math.max(max, 1) * (ufo ? 0.06 : 0.18) : 0, jogador.yaw, noAr ? c.volante * (ufo ? 0.05 : 0.12) : 0, 'YXZ');   // inclina para a frente e para o lado da curva
   const ro = c.mesh.userData.rotor || rotorDe(c.mesh); if (ro) { ro.visible = true; ro.rotation.y += dt * (c.motorParado ? 8 : c.alt > 0.3 || sobe ? 28 : 12); }
@@ -10608,7 +10662,8 @@ function menuRevisaoHeli(c) {
 // mecânico jogador, a pé, perto de um helicóptero de jogador pousado
 function heliParaRevisar() {
   if (jogador.perfil?.profissao !== 'mecanico' && jogador.perfil?.cargo !== 'admin') return null;
-  for (const v of carrosMundo.values()) if (v.d.modelo === 'helicoptero' && v.mesh.visible && Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z) < 5) return v;
+  const outros = dirigidosPorOutros();
+  for (const v of carrosMundo.values()) if (v.d.modelo === 'helicoptero' && v.mesh.visible && !outros.has(v.d.id) && Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z) < 5) return v;
   return null;
 }
 // prédios no caminho de aviões e helicópteros: abaixo do telhado = bateu (cai, com as regras de queda)
@@ -12007,7 +12062,18 @@ function controlesJato(c) {
   let pn = $('painelJato');
   if (!pn) {
     pn = document.createElement('div'); pn.id = 'painelJato';
-    pn.style.cssText = 'position:fixed;left:calc(env(safe-area-inset-left,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 36vh);z-index:30;display:flex;flex-direction:column;gap:8px';
+    pn.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 64px);transform:translateX(-50%);z-index:30;display:flex;flex-direction:row;align-items:stretch;gap:6px';
+    // alça para arrastar o painel para onde quiser (fica guardado neste aparelho)
+    const alca = document.createElement('div'); alca.textContent = '⠿'; alca.title = 'Arraste para mover';
+    alca.style.cssText = 'display:flex;align-items:center;justify-content:center;width:26px;border-radius:10px;background:rgba(14,24,40,.75);color:#8fd3ff;font:700 18px system-ui;touch-action:none;cursor:grab;user-select:none';
+    pn.appendChild(alca);
+    const colocar = (x, y) => { const w = pn.offsetWidth || 200, h = pn.offsetHeight || 50; pn.style.transform = 'none'; pn.style.left = THREE.MathUtils.clamp(x, 0, innerWidth - w) + 'px'; pn.style.top = THREE.MathUtils.clamp(y, 0, innerHeight - h) + 'px'; };
+    try { const g = JSON.parse(localStorage.getItem('painelJatoPos') || 'null'); if (g) requestAnimationFrame(() => colocar(g.x * innerWidth, g.y * innerHeight)); } catch { /* sem posição guardada */ }
+    let arr = null;
+    alca.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); const r = pn.getBoundingClientRect(); arr = { id: ev.pointerId, dx: ev.clientX - r.left, dy: ev.clientY - r.top }; alca.setPointerCapture(ev.pointerId); });
+    alca.addEventListener('pointermove', (ev) => { if (!arr || ev.pointerId !== arr.id) return; ev.preventDefault(); ev.stopPropagation(); colocar(ev.clientX - arr.dx, ev.clientY - arr.dy); });
+    const soltar = (ev) => { if (!arr || ev.pointerId !== arr.id) return; arr = null; const r = pn.getBoundingClientRect(); try { localStorage.setItem('painelJatoPos', JSON.stringify({ x: r.left / innerWidth, y: r.top / innerHeight })); } catch { /* sem armazenamento */ } };
+    alca.addEventListener('pointerup', soltar); alca.addEventListener('pointercancel', soltar);
     const bt = (id, fn) => { const b = document.createElement('button'); b.id = id; b.style.cssText = 'border-radius:14px;border:2px solid #8fd3ff;background:rgba(14,24,40,.88);color:#e3f4ff;font:800 13px system-ui;padding:8px 10px;min-width:100px;line-height:1.15;touch-action:none';
       b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); fn(); }); pn.appendChild(b); return b; };
     bt('btJPouso', () => ligarPousoAuto()); bt('btJTravar', () => travarAlvo()); bt('btJDisparar', () => dispararMissil()); bt('btJInv', () => { const k = jogador.carro; if (!k?.jato || !JATOS[k.servico].invisivel) return; k.invisivel = !k.invisivel; aviso(k.invisivel ? '👻 Asa furtiva invisível: ninguém vê você.' : '✈️ Visível de novo.', 3); });
@@ -12152,6 +12218,9 @@ function montarBaseNaval() {
   caixa(820, 3, 1035, 36, 6, 14, M('#c9c3b2'), true);
   caixa((N.x0 + N.x1) / 2, 0.4, 1112, N.x1 - N.x0, 0.8, 4, concreto);
   for (const x of [675, 760, 845]) caixa(x, 0.35, 1140, 8, 0.7, 56, concreto);
+  // pisa em cima do cais e dos píeres (antes os pés ficavam na altura do mar, "afundando" no concreto)
+  mundo.addPiso({ x0: N.x0, x1: N.x1, z0: 1110, z1: 1114, h: 0.8 });
+  for (const x of [675, 760, 845]) mundo.addPiso({ x0: x - 4, x1: x + 4, z0: 1112, z1: 1168, h: 0.7 });
   for (const [x, z] of [[N.x0 + 6, N.z0 + 6], [N.x1 - 6, N.z0 + 6], [N.x0 + 6, N.z1 - 8], [N.x1 - 6, N.z1 - 8]]) caixa(x, 2, z, 3.2, 4, 3.2, M('#6b6f5e'), true);
   const baterias = [[650, 1020], [870, 1020]].map(([x, z]) => criarBateria(g, x, z));
   baseNaval = { g, portao, braco };
@@ -12344,11 +12413,12 @@ function atualizarTesteDefesa(dt) {
 // (5 vezes por segundo para os outros, e a cada 4 s para o servidor); ao largar, o navio volta sozinho.
 const NAVIOS = {};
 const ROTA_EXTERNA = [[900, 1350], [1050, 1560], [600, 1820], [-200, 1840], [-900, 1760], [-1060, 1460], [-700, 1260], [0, 1300], [500, 1330]];
+const ROTA_ILHA = [[1000, 1350], [1320, 1250], [1340, 0], [1320, -1700], [0, -1760], [-1250, -1700], [-1270, 0], [-1220, 1300], [-500, 1340], [500, 1330]];
 const ROTA_INTERNA = [[950, 1320], [700, 1520], [0, 1540], [-700, 1500], [-920, 1360], [-400, 1260], [300, 1280]];
 const DEF_NAVIOS = {
   porta: { nome: 'porta-aviões', glb: 'porta_avioes', comp: 200, cala: 7, convés: CONVES_Y, vel: 4, max: 7, rota: ROTA_INTERNA, fase: 0, cor: '#6b737c' },
   d1: { nome: 'destróier 1', glb: 'destroier', comp: 110, cala: 4, convés: 9, vel: 6, max: 10, rota: ROTA_EXTERNA, fase: 0, cor: '#5f666e' },
-  d2: { nome: 'destróier 2', glb: 'destroier', comp: 110, cala: 4, convés: 9, vel: 6, max: 10, rota: ROTA_EXTERNA, fase: 0.5, cor: '#5f666e' },
+  d2: { nome: 'destróier 2', glb: 'destroier', comp: 110, cala: 4, convés: 9, vel: 6, max: 10, rota: ROTA_ILHA, fase: 0.5, cor: '#5f666e' },
 };
 const PARADA_CAIS = 120;   // s atracado
 function docaDe(id) { const N = mundo.BASE_NAVAL; return id === 'porta' ? { x: N.porta.x, z: N.porta.z } : { ...N.destroieres[id === 'd1' ? 0 : 1] }; }
@@ -12379,9 +12449,27 @@ function patrulhaNavio(n, t) {
   return { x: q.x, z: q.z, ang: q.ang, v: n.vel, cais: false };
 }
 // depois de largar o leme: vai em linha reta até o cais e espera o próximo ciclo da patrulha
+function caminhoVolta(n, x, z) {   // pelos cantos da ilha, se for preciso, até o cais
+  const I = mundo.ILHA, SE = [I.x1 + 160, I.z1 + 130], SO = [I.x0 - 160, I.z1 + 130], NE = [I.x1 + 160, I.z0 - 140], NO = [I.x0 - 160, I.z0 - 140];
+  const pts = [[x, z]];
+  if (z < I.z1 + 60) {
+    if (x >= I.x1) pts.push(...(z < I.z0 ? [NE] : []), SE);
+    else if (x <= I.x0) pts.push(...(z < I.z0 ? [NO] : []), SO);
+    else pts.push(...(x > 50 ? [NE, SE] : [NO, SO]));
+  }
+  pts.push([n.doca.x, n.doca.z]);
+  const acum = [0]; for (let i = 1; i < pts.length; i++) acum.push(acum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  return { pts, acum, total: acum[acum.length - 1] };
+}
 function retorno(n, t) {
-  const d = n.db, t0 = Date.parse(d.t), dist = Math.hypot(n.doca.x - d.x, n.doca.z - d.z), tChega = t0 + dist / n.vel * 1000;
-  if (t < tChega) { const k = (t - t0) / (tChega - t0 || 1); return { x: d.x + (n.doca.x - d.x) * k, z: d.z + (n.doca.z - d.z) * k, ang: Math.atan2(n.doca.x - d.x, n.doca.z - d.z), v: n.vel, cais: false }; }
+  const d = n.db, t0 = Date.parse(d.t);
+  if (!n.volta || n.volta.t0 !== t0) n.volta = { t0, ...caminhoVolta(n, d.x, d.z) };
+  const V = n.volta, tChega = t0 + V.total / n.vel * 1000;
+  if (t < tChega) {
+    const sv = (t - t0) / 1000 * n.vel; let i = 1; while (i < V.pts.length - 1 && V.acum[i] < sv) i++;
+    const a = V.pts[i - 1], b = V.pts[i], k = THREE.MathUtils.clamp((sv - V.acum[i - 1]) / ((V.acum[i] - V.acum[i - 1]) || 1), 0, 1);
+    return { x: a[0] + (b[0] - a[0]) * k, z: a[1] + (b[1] - a[1]) * k, ang: Math.atan2(b[0] - a[0], b[1] - a[1]), v: n.vel, cais: false };
+  }
   const L = n.caminho.total, periodo = (PARADA_CAIS + L / n.vel) * 1000, fase = n.fase * periodo;
   const prox = Math.ceil((tChega + fase) / periodo) * periodo - fase;
   if (t < prox) return { x: n.doca.x, z: n.doca.z, ang: 0, v: 0, cais: true };
@@ -12475,13 +12563,67 @@ function desembarcarNavio() {
   aviso('⚓ Desembarcou no píer.', 2.5);
 }
 let tLemeRede = 0, tLemeDB = 0;
-function seguirNavio(dt) {
+// área andável do convés (coordenadas do navio: lx para o lado, lz para a proa)
+function limitesConves(n) { return n.id === 'porta' ? { x: 13, z: n.comp * 0.45 } : { x: 5, z: n.comp * 0.42 }; }
+function localNoNavio(n, x, z) { const dx = x - n.x, dz = z - n.z, c = Math.cos(n.ang), s = Math.sin(n.ang); return { lx: dx * c - dz * s, lz: dx * s + dz * c }; }
+// algum navio embaixo deste ponto? devolve o navio e a altura do convés
+function convesEm(x, z) {
+  for (const n of Object.values(NAVIOS)) {
+    const { lx, lz } = localNoNavio(n, x, z), L = limitesConves(n);
+    if (Math.abs(lx) < L.x + 1 && Math.abs(lz) < L.z + 1) return { n, h: n.convés };
+  }
+  return null;
+}
+// o convés funciona como chão: dá para andar e correr em cima, e o navio leva você junto quando anda e vira
+function seguirNavio(dt, dir, forca) {
   const j = jogador, e = j.embarcado, n = NAVIOS[e.id]; if (!n) { j.embarcado = null; return; }
-  if (e.leme) pilotarNavio(n, dt);
-  const lx = e.leme ? 0 : ((e.slot % 4) - 1.5) * (n.id === 'porta' ? 4 : 1.6), lz = e.leme ? n.comp * 0.05 : (Math.floor(e.slot / 4) - 1.5) * (n.id === 'porta' ? 8 : 5);
-  const p = pontoNoNavio(n, lx, lz);
-  j.pos.set(p.x, n.convés, p.z); j.yaw = n.ang;
-  j.avatar.raiz.position.copy(j.pos); j.avatar.raiz.rotation.y = n.ang; j.avatar.tocar('idle'); j.avatar.mixer.update(dt);
+  const av = j.avatar;
+  if (e.leme) {
+    pilotarNavio(n, dt);
+    const p = pontoNoNavio(n, 0, n.comp * 0.05);
+    j.pos.set(p.x, n.convés, p.z); j.yaw = n.ang;
+    av.raiz.position.copy(j.pos); av.raiz.rotation.y = n.ang; av.tocar('idle'); av.mixer.update(dt);
+    return;
+  }
+  if (e.lx === undefined) { e.lx = ((e.slot % 4) - 1.5) * (n.id === 'porta' ? 4 : 1.6); e.lz = (Math.floor(e.slot / 4) - 1.5) * (n.id === 'porta' ? 8 : 5); e.lyaw = 0; }
+  let vel = 0;
+  const correr = !j.armado && (teclas.has('shift') || (joy.ativo && forca > 0.92));
+  if (forca > 0.15 && !j.morto && !(j.trava > 0)) {
+    vel = j.armado ? VELOCIDADE.armado : correr ? VELOCIDADE.correr : VELOCIDADE.andar;
+    if (joy.ativo && !correr) vel *= THREE.MathUtils.clamp(forca * 1.3, 0.5, 1);
+    const c = Math.cos(n.ang), s = Math.sin(n.ang);
+    const dlx = dir.x * c - dir.z * s, dlz = dir.x * s + dir.z * c;   // direção da tela → direção no navio
+    const L = limitesConves(n);
+    e.lx = THREE.MathUtils.clamp(e.lx + dlx * vel * dt, -L.x, L.x);
+    e.lz = THREE.MathUtils.clamp(e.lz + dlz * vel * dt, -L.z, L.z);
+    e.lyaw = suavizarAngulo(e.lyaw, Math.atan2(dir.x, dir.z) - n.ang, dt * 12);
+  }
+  if (j.trava > 0) j.trava -= dt;
+  const p = pontoNoNavio(n, e.lx, e.lz);
+  j.pos.set(p.x, n.convés, p.z); j.yaw = n.ang + e.lyaw;
+  av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw;
+  if (vel > 0) av.tocar(j.armado ? 'walk_shoot' : correr ? 'run' : 'walk', { velocidade: j.armado ? 1.25 : correr ? 1 : vel / VELOCIDADE.andar });
+  else av.tocar(j.armado ? 'mirar' : 'idle');
+  av.mixer.update(dt);
+}
+// pousou no convés e desceu: você fica a bordo, andando; a aeronave é levada pela equipe de solo
+function descerNoConves(c, dk) {
+  const n = dk.n;
+  jogador.carro = null; modoVolante(false); document.body.classList.remove('aviao'); if (typeof modoHeli === 'function') modoHeli(false);
+  if (c.servico) {
+    scene.remove(c.mesh); if (meuMilitar?.mesh === c.mesh) meuMilitar = null;
+    aviso(`⚓ Você desceu no ${n.nome}. A equipe de solo levou a aeronave de volta para a base.`, 4);
+  } else {
+    const P = { x: 760, z: 1080 };   // pátio da Base Naval
+    c.mesh.position.set(P.x, alturaChao(P.x, P.z), P.z); c.mesh.rotation.y = 0;
+    const v = carrosMundo.get(c.id); if (v) v.d = { ...v.d, x: P.x, z: P.z, ang: 0 };
+    rede.carros.estacionar(c.id, P.x, P.z, 0).catch(() => {});
+    aviso(`⚓ Você desceu no ${n.nome}. O helicóptero foi rebocado para o pátio da Base Naval.`, 4);
+  }
+  const { lx, lz } = localNoNavio(n, jogador.pos.x, jogador.pos.z), L = limitesConves(n);
+  jogador.embarcado = { id: n.id, slot: lotacaoNavio(n.id), leme: false, lx: THREE.MathUtils.clamp(lx + 2.5, -L.x, L.x), lz: THREE.MathUtils.clamp(lz, -L.z, L.z), lyaw: jogador.yaw - n.ang };
+  jogador.avatar.raiz.visible = true; if (jogador.armado) alternarArma();
+  conexao?.rastrear(metaPresenca());
 }
 function pilotarNavio(n, dt) {
   const acel = pedais.acel || teclas.has('w'), freio = pedais.freio || teclas.has('s');
@@ -12490,7 +12632,7 @@ function pilotarNavio(n, dt) {
   n.ang -= lado * 0.09 * Math.min(1, Math.abs(n.v) / 3) * Math.sign(n.v || 1) * dt;
   let nx = n.x + Math.sin(n.ang) * n.v * dt, nz = n.z + Math.cos(n.ang) * n.v * dt;
   const meia = n.comp / 2, proaX = nx + Math.sin(n.ang) * meia * Math.sign(n.v || 1), proaZ = nz + Math.cos(n.ang) * meia * Math.sign(n.v || 1);
-  const naAgua = (x, z) => Math.abs(x) < 1080 && z > 1135 && z < 1895;
+  const I = mundo.ILHA, naAgua = (x, z) => Math.abs(x) < 2600 && Math.abs(z) < 2600 && !(x > I.x0 - 25 && x < I.x1 + 25 && z > I.z0 - 25 && z < I.z1 + 23);
   let bate = !naAgua(proaX, proaZ) && !(Math.hypot(nx - n.doca.x, nz - n.doca.z) < 30);
   for (const o of Object.values(NAVIOS)) if (o !== n && Math.hypot(o.x - nx, o.z - nz) < (o.comp + n.comp) * 0.32) bate = true;
   if (bate) { n.v = 0; if (performance.now() - (n.avisoBate || 0) > 3000) { n.avisoBate = performance.now(); aviso('⚓ Aí não dá: terra ou outro navio à frente.', 2); } }

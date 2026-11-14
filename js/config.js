@@ -125,6 +125,15 @@ export const LOTES_VENDA = [
   { id: 22, q: '1,3', lote: 'SE', portao: { x: -17.5, z: 104 } },
   { id: 23, q: '2,3', lote: 'SO', portao: { x: 17.5, z: 104 } },
   { id: 24, q: '3,3', lote: 'SE', portao: { x: 90.5, z: 104 } },
+  // favelas: lotes na rua de baixo de cada morro (centro próprio em "c")
+  { id: 25, c: { x: -137, z: -1124.5 }, portao: { x: -137, z: -1111 } },
+  { id: 26, c: { x: -115, z: -1124.5 }, portao: { x: -115, z: -1111 } },
+  { id: 27, c: { x: 115, z: -1124.5 }, portao: { x: 115, z: -1111 } },
+  { id: 28, c: { x: 137, z: -1124.5 }, portao: { x: 137, z: -1111 } },
+  { id: 29, c: { x: 915, z: 927.5 }, portao: { x: 915, z: 941 } },
+  { id: 30, c: { x: 937, z: 927.5 }, portao: { x: 937, z: 941 } },
+  { id: 31, c: { x: 959, z: 927.5 }, portao: { x: 959, z: 941 } },
+  { id: 32, c: { x: 981, z: 927.5 }, portao: { x: 981, z: 941 } },
 ];
 export const DESTINOS = {
   loja: { nome: 'Mercado (Loja da Rua do Comércio)', x: -17.5, z: -4 },
