@@ -81,7 +81,7 @@ const ESTAGIOS = ['', 'Casa', 'Casa ampliada', 'Condomínio (4 aptos)', 'Prédio
 const real = (n) => Number(n || 0).toLocaleString('pt-BR');
 function valorVenda(c) {
   if (c.tipo === 'apto') return 8000;
-  if (c.tipo === 'unidade') return Math.floor((c.preco || 0) / 2);
+  if (c.tipo === 'unidade' || c.tipo === 'favela') return Math.floor((c.preco || 0) / 2);
   if (c.tipo !== 'terreno') return 20000;
   let v = 6000 + (VALOR_VENDA[c.modelo] || 0);
   for (let k = 1; k < (c.nivel || 1); k++) v += EVOLUIR[k - 1] / 2;
@@ -96,7 +96,7 @@ function desenharPorta(c) {
   $('janelaTitulo').textContent = m.rotulo || nome;
   const podeEvoluir = m.tipo === 'terreno' && m.modelo && nv < 5;
   c.innerHTML = `<p class="dica">${esc(nome)}. Você pode ter até 3 moradias (contando aluguéis), cada uma com cama e baú.</p>
-    ${inquilino ? `<p class="dica">Aluguel: <b>${real(m.aluguel)}</b> por dia, cobrado sozinho da sua carteira. Pago por mais ${restaAluguel(m)}. Se faltar dinheiro na renovação, você sai e o baú volta para a mochila.</p>` : ''}
+    ${inquilino ? `<p class="dica">Aluguel: <b>${real(m.aluguel)}</b> ${m.tipo === 'favela' ? 'a cada 15 ciclos (8 h)' : 'por dia'}, cobrado sozinho da sua carteira. Pago por mais ${restaAluguel(m)}. Se faltar dinheiro na renovação, você sai e o baú volta para a mochila.</p>` : ''}
     <div class="botoes">${m.tipo !== 'terreno' || m.modelo ? '<button id="pEntrar">Entrar</button>' : ''}
       ${m.tipo === 'terreno' && nv < 3 ? `<button id="pConstruir">${m.modelo ? 'Trocar a casa' : 'Construir a casa'}</button>` : ''}
       ${m.tipo === 'terreno' && nv >= 3 ? '<button id="pGerenciar">Apartamentos e aluguéis</button>' : ''}</div>

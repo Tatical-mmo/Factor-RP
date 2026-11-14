@@ -1420,5 +1420,7 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Ônibus**: Linha 9 · Morro da Serra (sai do centro de Vila Serra) e Linha 10 · Morro do Porto (sai do centro de Porto Sul).
 - **Mar em volta da ilha inteira**. O destróier 2 agora dá a volta na ilha, e o navio que volta sozinho ao cais contorna a terra.
 - **Teleportar** (painel): entrada e base de cada favela.
+- **Casas da favela à venda e para alugar** (rode `supabase/83_casas_favela.sql`): as 1017 casas dos dois morros. Toque na porta: **Alugar** por 200 a cada 15 ciclos (8 h, cobrado sozinho; sem dinheiro, você sai e o baú volta para a mochila) ou **Comprar** por 60.000 (vende pela metade). Conta no limite de 3 moradias, com cama, baú e renascer em casa. O aluguel vai para o cofre da prefeitura. O administrador muda os dois valores em Painel › Cidade.
+- **Casas 3D no barranco**: o modelo fica em cima de um alicerce (do ponto mais baixo ao mais alto do terreno), sem afundar no morro.
 - **Veículos na ladeira**: carros, ônibus, caminhões, viaturas e vans inclinam acompanhando o morro (frente/trás e de lado), inclusive os parados e os dos outros jogadores.
 - **Prédios em 3D**: os modelos `predio_*.glb` agora ficam em pé no chão e do tamanho certo (antes ficavam meio enterrados), e mais prédios perto do jogador viram 3D (Baixa 10, Média 26, Alta 48).

@@ -227,10 +227,19 @@ async function abaCidade() {
     <p class="dica">Quem morre e não é atendido (pela ambulância ou por um médico jogador) renasce dentro do hospital depois desse tempo. Atendido antes, levanta no mesmo lugar na hora.</p>
     <div class="botoes"><input id="cResp" type="range" min="15" max="300" step="5" value="${cf.respawn_seg ?? 90}" style="flex:1"><b id="cRespN" style="min-width:52px;text-align:center">${cf.respawn_seg ?? 90} s</b></div>
     <div class="botoes"><button id="cSalvar">Salvar</button></div>
+    <div class="sub">🏚️ Casas das favelas</div>
+    <p class="dica">Preço de compra e aluguel (cobrado a cada 15 ciclos, 8 h) das casas dos morros que ainda não foram vendidas.</p>
+    <div class="botoes"><label style="flex:1">Compra <input id="cFavP" type="number" inputmode="numeric" min="1000" value="${cf.favela_preco ?? 60000}" style="width:100%"></label>
+      <label style="flex:1">Aluguel <input id="cFavA" type="number" inputmode="numeric" min="50" value="${cf.favela_aluguel ?? 200}" style="width:100%"></label></div>
+    <div class="botoes"><button id="cFavSalvar">Salvar preços das favelas</button></div>
     <div class="sub">👔 Farda</div>
     <p class="dica">Ajuste o tamanho e a posição do colete e do capacete/boné de cada corporação, uma por uma, vendo no seu personagem. Ao salvar, vale para todos.</p>
     <div class="botoes"><button id="cFarda">👔 Ajustar a farda</button></div>`;
   $('cFarda').onclick = () => { fechar(); ctx.ajustarFarda?.(); };
+  $('cFavSalvar').onclick = async () => {
+    try { await rede.configJogo.salvarFavela(Number($('cFavP').value), Number($('cFavA').value)); ctx.configMudou?.(); msg('Preços das favelas salvos.'); }
+    catch (e) { msg(/admin_favela|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 83_casas_favela.sql no SQL Editor do Supabase.' : e.message, false); }
+  };
   $('cPol').oninput = () => { $('cPolN').textContent = $('cPol').value; };
   $('cChance').oninput = () => { $('cChanceN').textContent = $('cChance').value + '%'; };
   $('cResp').oninput = () => { $('cRespN').textContent = $('cResp').value + ' s'; };

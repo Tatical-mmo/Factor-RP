@@ -495,6 +495,7 @@ export const configJogo = {
   async ler() { const { data, error } = await sb.from('config_jogo').select('*').eq('id', 1).maybeSingle(); if (error) throw error; return data; },
   salvar: (policia, crimes, chance) => rpc('admin_config', { p_policia: policia, p_crimes: crimes, p_chance: chance }),
   salvarRespawn: (seg) => rpc('admin_respawn', { p_seg: seg }),
+  salvarFavela: (preco, aluguel) => rpc('admin_favela_precos', { p_preco: preco, p_aluguel: aluguel }),
   presos: async (desde) => (await sel(sb.from('bandidos_presos').select('ciclo').gte('ciclo', desde))) || [],
   prenderBandido: (ciclo) => rpc('prender_bandido', { p_ciclo: ciclo }),
   salvarFarda: (farda) => rpc('admin_farda', { p_farda: farda }),
@@ -889,6 +890,7 @@ export const casas = {
   alugar: (u) => rpc('alugar_unidade', { p_unidade: u }),
   comprarUnidade: (u) => rpc('comprar_unidade', { p_unidade: u }),
   sairAluguel: (u) => rpc('sair_aluguel', { p_unidade: u }),
+  alugarFavela: (id) => rpc('alugar_casa_favela', { p_casa: id }),
   processarAlugueis: () => rpc('processar_alugueis'),
 };
 export async function listarBau(casa) {
@@ -901,7 +903,7 @@ export const listarClas = () => sel(sb.from('clas').select('*, lider_perfil:perf
 export const membrosDoCla = (id) => sel(sb.from('membros_cla').select('jogador, desde, perfil:perfis!membros_cla_jogador_fkey(nome)').eq('cla', id).order('desde'));
 export async function meuClaId(id) { const d = await sel(sb.from('membros_cla').select('cla').eq('jogador', id).maybeSingle()); return d?.cla ?? null; }
 export const listarTerritorios = () => sel(sb.from('territorios').select('*').order('id'));
-export const listarCasas = () => sel(sb.from('casas').select('id, x, z, preco, dono, tipo, rotulo, modelo, pai, nivel, inquilino, aluguel, pago_ate, a_venda, dono_perfil:perfis!casas_dono_fkey(nome), inquilino_perfil:perfis!casas_inquilino_fkey(nome)').order('id'));
+export const listarCasas = () => sel(sb.from('casas').select('id, x, z, preco, dono, tipo, rotulo, modelo, pai, nivel, inquilino, aluguel, pago_ate, a_venda, dono_perfil:perfis!casas_dono_fkey(nome), inquilino_perfil:perfis!casas_inquilino_fkey(nome)').or('tipo.neq.favela,dono.not.is.null,inquilino.not.is.null').order('id'));
 
 export const autoescola = {
   iniciar: (cat) => rpc('iniciar_autoescola', { p_cat: cat }),

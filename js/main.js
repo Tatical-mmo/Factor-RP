@@ -5264,9 +5264,15 @@ async function carregarCidadeSocial() {
       fundo = minha ? 'rgba(30,110,60,.92)' : l ? 'rgba(30,60,90,.9)' : 'rgba(40,40,40,.85)';
     } else if (tipo === 'terreno') texto = !c.dono ? `${c.rotulo} à venda · ${num(c.preco)}` : minha ? (c.modelo ? 'Sua casa' : 'Seu terreno · construa aqui') : `${c.modelo ? 'Casa' : 'Terreno'} de ${c.dono_perfil?.nome || '?'}`;
     else if (tipo === 'oficial') { texto = 'Residência Oficial'; fundo = 'rgba(30,50,80,.92)'; }
+    else if (tipo === 'favela') {
+      const aluga = c.inquilino === eu && ativo(c);
+      if (!minha && !aluga && !c.dono) continue;                    // livre ou alugada por outro: sem placa (são mil casas)
+      texto = minha ? 'Sua casa' : aluga ? 'Sua casa (alugada)' : `Casa de ${c.dono_perfil?.nome || '?'}`;
+      if (aluga) fundo = 'rgba(30,110,60,.92)';
+    }
     else texto = c.dono ? (minha ? 'Sua casa' : `Casa de ${c.dono_perfil?.nome || '?'}`) : 'Casa à venda · 35.000';
     v.placa = textoSprite(texto, { escala: 0.6, fundo });
-    v.placa.position.set(c.x + 0.5, tipo === 'terreno' ? 3 + ((c.nivel || 1) >= 3 ? 1.5 : 0) : 2.4, c.z); scene.add(v.placa);
+    v.placa.position.set(c.x + 0.5, (tipo === 'favela' ? alturaChao(c.x, c.z) : 0) + (tipo === 'terreno' ? 3 + ((c.nivel || 1) >= 3 ? 1.5 : 0) : 2.4), c.z); scene.add(v.placa);
     if (tipo === 'terreno' && c.modelo) desenharCasaTerreno(v);
   }
   // uma placa por prédio de apartamentos
@@ -5439,7 +5445,28 @@ const luzesCasas = [];
 function casaProxima(raio) {
   let melhor = null, dm = raio;
   for (const v of casasMundo.values()) { const d = Math.hypot(v.d.x - jogador.pos.x, v.d.z - jogador.pos.z); if (d < dm) { dm = d; melhor = v.d; } }
+  const px = jogador.pos.x, pz = jogador.pos.z;
+  if ((pz < -1130 && Math.abs(px) < 140) || (px > 900 && pz > 945)) {
+    for (const f of mundo.CASAS_FAVELA) {
+      if (Math.abs(f.x - px) > dm || Math.abs(f.z - pz) > dm || casasMundo.has(f.id)) continue;
+      const d = Math.hypot(f.x - px, f.z - pz);
+      if (d < dm) { dm = d; melhor = { id: f.id, x: f.x, z: f.z, tipo: 'favela', rotulo: f.rotulo, preco: configJogo.favela_preco ?? 60000, aluguel: configJogo.favela_aluguel ?? 200 }; }
+    }
+  }
   return melhor;
+}
+// casa da favela: alugar (a cada 15 ciclos, 8 h) ou comprar
+function menuCasaFavela(c) {
+  const alugada = c.inquilino && Date.parse(c.pago_ate) > agoraServidor();
+  if (c.dono) { aviso(`Casa de ${c.dono_perfil?.nome || 'outro jogador'}. A porta está trancada.`); return; }
+  if (alugada) { aviso(`Casa alugada por ${c.inquilino_perfil?.nome || 'outro jogador'}. A porta está trancada.`); return; }
+  if (jogador.moradias >= 3) { aviso('Você já tem 3 moradias. Para sair de uma, toque na porta dela.', 4); return; }
+  const preco = c.preco ?? configJogo.favela_preco ?? 60000, aluguel = c.aluguel ?? configJogo.favela_aluguel ?? 200;
+  const feito = (msg) => { tempoSocial = 0; aviso(msg, 4); };
+  escolher(`🏠 ${c.rotulo || 'Casa da favela'}`, `Alugue por ${num(aluguel)} a cada 15 ciclos (8 h), cobrado sozinho da carteira, ou compre por ${num(preco)}. Com a casa você tem cama, baú e renasce aqui.`, [
+    { rotulo: `🔑 Alugar · ${num(aluguel)} / 15 ciclos`, fn: () => rede.casas.alugarFavela(c.id).then(() => feito('🔑 Casa alugada! Toque na porta para entrar.')).catch((e) => aviso(e.message, 3.5)) },
+    { rotulo: `🏠 Comprar · ${num(preco)}`, fn: () => rede.casas.comprar(c.id).then(() => feito('🏠 Casa comprada! Agora você renasce aqui.')).catch((e) => aviso(e.message, 3.5)) },
+    { rotulo: 'Cancelar', fn: () => {} }]);
 }
 let confirmaCasa = 0;
 // apartamentos do mesmo prédio dividem a porta: escolhe o meu ou o primeiro livre
@@ -5460,6 +5487,7 @@ async function acaoCasa(c0) {
   if (c.tipo === 'oficial') { if (moraEm(c)) entrarEmCasa(c); else aviso('Residência oficial: só o prefeito entra.'); return; }
   if (moraEm(c)) { portaAberta = c.id; abrirJanela('porta'); return; }
   if (c.tipo === 'terreno' && c.dono && (c.nivel || 1) >= 3) { portaAberta = c.id; abrirJanela('predio'); return; }
+  if (c.tipo === 'favela') { menuCasaFavela(c); return; }
   if (c.dono) { aviso(c.tipo === 'apto' ? 'Prédio lotado: todos os apartamentos têm dono.' : `${nomeMoradia(c)} de ${c.dono_perfil?.nome || 'outro jogador'}. A porta está trancada.`); return; }
   if (jogador.moradias >= 3) { aviso('Você já tem 3 moradias. Para vender uma, toque na porta dela e escolha Vender.', 4); return; }
   if (performance.now() - confirmaCasa > 3000) { confirmaCasa = performance.now(); aviso(`${c.rotulo || 'Casa'} à venda por ${num(c.preco)}. Aperte de novo para comprar.`, 3); return; }
@@ -6206,6 +6234,11 @@ function contexto() {
     if (u.tipo === 'oficial') return [minha ? 'entrar na residência oficial' : 'residência oficial do prefeito', minha ? 'Entrar' : 'Casa'];
     if (minha) return [u.tipo === 'unidade' ? 'seu apartamento: entrar ou sair' : `seu ${nm}: entrar, evoluir ou vender`, 'Porta'];
     if (u.tipo === 'terreno' && u.dono && (u.nivel || 1) >= 3) return ['ver apartamentos para alugar ou comprar', 'Aptos'];
+    if (u.tipo === 'favela') {
+      if (u.dono) return [`casa de ${u.dono_perfil?.nome || '?'}`, 'Casa'];
+      if (u.inquilino && Date.parse(u.pago_ate) > agoraServidor()) return [`casa alugada por ${u.inquilino_perfil?.nome || '?'}`, 'Casa'];
+      return [`${u.rotulo}: alugar ${num(u.aluguel ?? 200)} / 15 ciclos ou comprar ${num(u.preco ?? 60000)}`, 'Casa'];
+    }
     if (u.dono) return [u.tipo === 'apto' ? 'prédio lotado' : `${nm} de ${u.dono_perfil?.nome || '?'}`, 'Casa'];
     return [`comprar ${u.rotulo || 'esta casa'} (${num(u.preco)})`, 'Comprar'];
   }

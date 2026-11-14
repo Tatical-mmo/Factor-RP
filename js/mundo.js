@@ -595,7 +595,11 @@ const CORES_FAVELA = ['#b5652f', '#a85a2a', '#c4703a', '#9c4f25', '#b86b3c', '#a
 const chaoNatural = (x, z) => (z < -1150 ? morro(x, z) : morroPorto(x, z));
 export const LOTES_FAVELA = [];   // centros dos lotes de empresa na rua de baixo de cada favela
 const BASES_MORRO = [];           // { x, z, w, d, h, rampa }
+export const CASAS_FAVELA = [];   // portas das casas (id 5000+, igual à tabela casas do banco: compra e aluguel)
+let favelasProntas = false;
+export function listaCasasFavela() { if (!favelasProntas) gerarFavelas(); return CASAS_FAVELA; }
 function gerarFavelas() {
+  if (favelasProntas) return; favelasProntas = true;
   const F = FAVELAS;
   // ---- Morro da Serra: rua principal subindo do centro de Vila Serra, três travessas e a laje da base no topo
   ruaMorro(0, -1107, 0, -1338);
@@ -657,6 +661,9 @@ function gerarFavelas() {
         if (dd < dm) { dm = dd; rumo = vert ? (rx > x ? Math.PI / 2 : -Math.PI / 2) : (rz > z ? 0 : Math.PI); }
       }
       Object.assign(edificios[i], { tipo: 'favela', k: 1 + Math.floor(rf() * 4), rumo, solo: hi - lo + 0.4 });
+      { const meia = Math.abs(Math.sin(rumo)) > 0.5 ? w / 2 : d / 2, px = x + Math.sin(rumo) * (meia + 0.8), pz = z + Math.cos(rumo) * (meia + 0.8);
+        const fav = f === F.serra ? 'serra' : 'porto', nfav = CASAS_FAVELA.filter((q) => q.favela === fav).length + 1;
+        CASAS_FAVELA.push({ id: 5000 + CASAS_FAVELA.length, x: Math.round(px * 10) / 10, z: Math.round(pz * 10) / 10, favela: fav, rotulo: `${fav === 'serra' ? 'Morro da Serra' : 'Morro do Porto'} · casa ${nfav}` }); }
       if (rf() < 0.45) { edificios[i].det.push(detalhes.length); detalhes.push({ ed: i, dx: (rf() - 0.5) * (w - 1.6), dz: (rf() - 0.5) * (d - 1.6), w: 1.2, h: 1, d: 1.2 }); }   // caixa d'água
     }
     extras.push({ x0: f.x0, x1: f.x1, z0: f.z0, z1: f.z1, cor: '#a88a68' });
@@ -986,7 +993,8 @@ export function predios3dPerto(px, pz, dt) {
   // os que saíram voltam a ser caixa; os que entraram escondem a caixa (e telhado / detalhes)
   const mostrar = (i, vis) => {
     const e = edificios[i];
-    malhaPredios.setMatrixAt(i, vis ? matrizPredio(e, cortados.has(i) ? Math.min(e.h, 2.2) : e.h) : _m.makeScale(0, 0, 0));
+    // casa da favela em 3D: a caixa vira só o alicerce (do ponto mais baixo do barranco até o mais alto) e o modelo fica em cima
+    malhaPredios.setMatrixAt(i, vis ? matrizPredio(e, cortados.has(i) ? Math.min(e.h, 2.2) : e.h) : e.solo ? matrizPredio(e, e.solo) : _m.makeScale(0, 0, 0));
     if (idxTelha.has(i)) malhaTelhas.setMatrixAt(idxTelha.get(i), matrizTelha(e, vis && !cortados.has(i)));
     for (const k of e.det) malhaDet.setMatrixAt(k, matrizDet(detalhes[k], vis && !cortados.has(i)));
   };
@@ -997,7 +1005,7 @@ export function predios3dPerto(px, pz, dt) {
   const n = {}; for (const t of Object.keys(modelos3d)) n[t] = 0;
   for (const [i, t] of em3d) {
     const e = edificios[i], ang = rumo3d(e), lado = Math.abs(Math.sin(ang)) > 0.5;
-    const meio = e.solo ? e.solo * 0.5 : 0;   // favela no barranco: o modelo começa no meio da encosta (não estica tanto)
+    const meio = e.solo || 0;   // favela no barranco: o modelo começa em cima do alicerce (nada enterrado no morro)
     const h = e.tipo === 'casa' ? e.h + 1.5 : e.h - meio;
     _q.setFromAxisAngle(_v.set(0, 1, 0), ang);
     _m.compose(_v.set(e.x, e.y + meio, e.z), _q, _e.set(lado ? e.d : e.w, h, lado ? e.w : e.d));
