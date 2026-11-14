@@ -91,6 +91,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'onibusSeq' }, ({ payload }) => eventos.onibusSeq?.(payload));
   canal.on('broadcast', { event: 'denuncia' }, ({ payload }) => eventos.denuncia?.(payload));
   canal.on('broadcast', { event: 'reset' }, ({ payload }) => eventos.reset?.(payload));
+  canal.on('broadcast', { event: 'cruzeiro' }, ({ payload }) => eventos.cruzeiro?.(payload));
   canal.on('broadcast', { event: 'missil' }, ({ payload }) => eventos.missil?.(payload));
   canal.on('broadcast', { event: 'travado' }, ({ payload }) => eventos.travado?.(payload));
   canal.on('broadcast', { event: 'missilAcerto' }, ({ payload }) => eventos.missilAcerto?.(payload));
@@ -373,6 +374,12 @@ function traduzirRpc(m) {
     'caminhao sem carga': 'Esse caminhão não está levando carga.',
     'esse caminhao e seu': 'Esse caminhão é seu.',
     'quem tem crimes nao entra na policia': 'Quem está procurado não entra na polícia.',
+    'so general da marinha': 'Só um General da Marinha (ou o General Supremo) usa a Central de Mísseis.',
+    'missil recarregando': 'O míssil de cruzeiro está recarregando: espere 10 min entre lançamentos.',
+    'ja tem pedido esperando': 'Já tem um pedido de míssil esperando o General Supremo.',
+    'alvo fora do mapa': 'Esse alvo está fora do mapa.',
+    'so o general supremo': 'Só o General Supremo pode fazer isso.',
+    'so militares do exercito': 'Só quem é das Forças Armadas pode ser transferido.',
     'alistamento precisa de aprovacao': 'O Exército exige aprovação: peça o alistamento na guarita do lado de fora do portão do quartel.',
     'voce ja e do exercito': 'Você já é do Exército.',
     'alistamento recusado: tente de novo mais tarde': 'Seu alistamento foi recusado há pouco. Tente de novo mais tarde.',
@@ -612,6 +619,14 @@ export const jornal = {
   redacao: () => rpc('materias_redacao'),
   salvar: (id, titulo, texto, imagem, quando) => rpc('salvar_materia', { p_id: id || null, p_titulo: titulo, p_texto: texto, p_imagem: imagem || null, p_publicar_em: quando || null }),
   apagar: (id) => rpc('apagar_materia', { p_id: id }),
+};
+export const marinha = {
+  pedirMissil: (x, z) => rpc('pedir_missil', { p_x: x, p_z: z }),
+  pendente: () => rpc('missil_pendente'),
+  decidir: (id, lancar) => rpc('decidir_missil', { p_id: id, p_lancar: !!lancar }),
+  historico: () => rpc('missil_historico'),
+  definirForca: (id, forca) => rpc('definir_forca', { p_jogador: id, p_forca: forca }),
+  forcas: (ids) => ids.length ? sel(sb.from('perfis').select('id,forca').in('id', ids)) : Promise.resolve([]),
 };
 export const exercito = {
   pedirAlistamento: () => rpc('pedir_alistamento'),

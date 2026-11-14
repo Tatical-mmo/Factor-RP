@@ -1064,6 +1064,7 @@ function acaoContexto() {
   if (perto(CONTRABANDISTA, 3.2)) { falarContrabandista(); return; }
   if (BANCAS.some((b) => perto(b, 3.2))) { abrirServico('jornal'); return; }
   if (perto(GUARITA_ALIST, 3.2)) { menuGuarita(); return; }
+  if (perto(CENTRAL_MISSEIS, 4)) { menuCentralMisseis(); return; }
   if (perto(civico.EXERCITO.balcao, 3.2)) { abrirServico(jogador.perfil?.profissao === 'exercito' ? 'trabalho' : 'empregos'); return; }
   if (jogador.perfil.profissao === 'jornalista') { const rp = reportagemProxima(); if (rp) { reportar(rp); return; } }
   if (perto(civico.PREFEITURA.jornal, 3.2)) { abrirServico('jornal'); return; }
@@ -1267,6 +1268,7 @@ function entrarCarro(v) {
 function sairCarro() {
   const c = jogador.carro; if (!c) return;
   if (c.jato && (c.noAr || c.vel > 2)) { aviso('Pouse e pare o caça antes de sair.', 2); return; }
+  if (c.jato && c.alt > 1) { aviso('No porta-aviões não dá para descer: decole e pouse na Base Aérea.', 3); return; }
   if (c.servico === 'lixo' && minhaColeta) { encerrarColeta(); return; }
   if (c.aula && c.aula === aula) { if (c.aula.voo && c.alt > 1.5) { aviso('Pouse antes de sair.', 2); return; } encerrarAula(false, 'Você saiu do veículo da prova.'); return; }
   if (c.voa && !c.caminhao) {
@@ -2427,7 +2429,7 @@ function conectarMultiplayer(perfil) {
     explosao: (e) => receberExplosao(e),
     voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m),
-    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e),
+    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), cruzeiro: (e) => receberCruzeiro(e),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -3402,7 +3404,7 @@ function podePilotarHeliExercito() { return jogador.perfil?.cargo === 'admin' ||
 function entrarServico(sv) {
   if (jogador.carregando) { aviso('Largue a caixa antes de dirigir.'); return; }
   if (sv.exercito) {
-    if (JATOS[sv.modelo] && !podePilotarHeliExercito()) { aviso('Só oficiais do Exército (Tenente para cima) pilotam os caças.', 3.5); return; }
+    if (JATOS[sv.modelo] && !(jogador.perfil?.cargo === 'admin' || (militar() && jogador.perfil?.forca === 'aeronautica'))) { aviso('✈️ Os caças são da Aeronáutica: só quem o General Supremo nomeou para a Aeronáutica pilota.', 4); return; }
     if (sv.modelo === 'ovni' && !acessoArea51()) { aviso('Só oficiais do Exército (Tenente para cima) pilotam o óvni.', 3.5); return; }
     if (sv.modelo === 'helicoptero_exercito' && !podePilotarHeliExercito()) { aviso('Só Tenente para cima pilota o helicóptero do Exército. Você pode ir de passageiro.', 3.5); return; }
     if (!sv.exercito.meu) {   // pega uma cópia nova; a da vitrine continua lá
@@ -6048,6 +6050,7 @@ function contexto() {
   if (perto(civico.EXERCITO.arsenal, 3.2)) return [jogador.armaPesada ? 'guardar a arma pesada' : 'arsenal: pegar a arma pesada (com autorização)', 'Arsenal'];
   if (BANCAS.some((b) => perto(b, 3.2))) return ['banca de jornal: ler as notícias', 'Jornal'];
   if (perto(CONTRABANDISTA, 3.2)) return ['contrabandista: arma militar e alicate de corte', 'Negociar'];
+  if (perto(CENTRAL_MISSEIS, 4)) return ['Central de Mísseis da Marinha (alvo = ponto marcado no mapa)', '🚀 Mísseis'];
   if (perto(GUARITA_ALIST, 3.2)) return [militar() ? 'guarita do Exército: pedidos de alistamento' : 'guarita do Exército: alistamento e licitação de rações', 'Guarita'];
   if (perto(civico.EXERCITO.balcao, 3.2)) return [jogador.perfil?.profissao === 'exercito' ? 'comando do Exército: ordens e caçadas' : 'comando do Exército: alistar-se', 'Comando'];
   if (jogador.perfil?.profissao === 'jornalista' && reportagemProxima()) return [`reportar: ${reportagemProxima().titulo} (+200)`, 'Reportar'];
@@ -6170,7 +6173,7 @@ function quadroJogo() {
   atualizarExplosoes(dt); atualizarSemPiloto(dt); atualizarContagemMorte();
   atualizarMira();
   civico.atualizarQuartel(jogador.pos);
-  atualizarArea51(dt); atualizarBases(dt); atualizarQuartelExtras(dt); atualizarBaseAerea(dt); atualizarMisseis(dt); avisarAlistamentos(dt);
+  atualizarArea51(dt); atualizarBases(dt); atualizarQuartelExtras(dt); atualizarBaseAerea(dt); atualizarMisseis(dt); avisarAlistamentos(dt); atualizarMarinha(dt);
   atualizarPerdao(dt);
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
@@ -9563,7 +9566,7 @@ function prepararTransporte() {
   mundo.limparArea(CENTRAL.x0 - 1, CENTRAL.z0 - 1, CENTRAL.x1 + 1, CENTRAL.z1 + 1); for (const S of SETORES) mundo.semEstacionar(S.cam.pts);
   mundo.limparArea(AUTOESCOLA.x0 - 1, AUTOESCOLA.z0 - 1, AUTOESCOLA.x1 + 1, AUTOESCOLA.z1 + 1);
   { const D = mundo.AREA51.deserto; mundo.limparArea(D.x0, D.z0, D.x1, D.z1); }   // deserto da Área 51
-  mundo.abrirTrilha([[216, 945], [405, 945], [405, 975]], 7); mundo.limparArea(296, 938, 630, 1108);   // Base Aérea e a rua até ela
+  mundo.abrirTrilha([[216, 945], [760, 945], [760, 1000]], 7); mundo.abrirTrilha([[400, 945], [400, 975]], 7); mundo.limparArea(250, 938, 900, 1112);   // Base Aérea e a rua até ela
   mundo.limparArea(118, 1061, 126, 1069);   // guarita de alistamento (GUARITA_ALIST)
   mundo.limparArea(COMPRADOR.x - 9, COMPRADOR.z - 8, COMPRADOR.x + 9, COMPRADOR.z + 11);   // armazém do Seu Tonho: sem árvore na frente
   mundo.semEstacionar([[AUTOESCOLA.x0 - 12, AUTOESCOLA.saida.z], [AUTOESCOLA.x1 + 6, AUTOESCOLA.saida.z]]);
@@ -11326,7 +11329,9 @@ function montarArea51() {
     aa: { cx: (x0 + x1) / 2, cz: 0, raio: 250 }, baterias, rotulo: 'Exército · Área 51',
     postos: [{ parado: [x1 + 3, -8, Math.PI / 2] }, { parado: [x1 + 3, 8, Math.PI / 2] }, { parado: [x1 - 3, -9, Math.PI / 2] }, { parado: [x1 - 3, 9, Math.PI / 2] },
       ...[[x0 + 9, z0 + 9], [x0 + 9, z1 - 9], [x1 - 9, z0 + 9], [x1 - 9, z1 - 9]].map(([x, z]) => ({ parado: [x, z, Math.atan2(x - (x0 + x1) / 2, z)], alto: 4.05 })),
-      ...[0, 1, 2, 3].map((k) => ({ l: ronda, fase: k * ronda.total / 4, vel: 1.2 }))] });
+      ...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => ({ l: ronda, fase: k * ronda.total / 8, vel: 1.2 })),
+      ...[[x1 - 6, -30], [x1 - 6, 30], [x1 - 40, -60], [x1 - 40, 60], [-783 + 3, -20 + 18], [-783 + 3, -20 - 18], [x0 + 40, 0], [x0 + 70, -95]].map(([x, z]) => ({ parado: [x, z, Math.atan2(x - (x0 + x1) / 2, z)] })),
+      ...[x0 + 50, x0 + 110].map((x) => ({ parado: [x, z1 - 4, 0] })), ...[x0 + 50, x0 + 110].map((x) => ({ parado: [x, z0 + 4, Math.PI] }))] });
 }
 function atualizarArea51(dt) {
   if (!jogador.perfil) return;
@@ -11701,7 +11706,9 @@ function montarQuartelExtras() {
     livre: () => Math.hypot(jogador.pos.x - G.x, jogador.pos.z - G.z) < 8,
     aa: { cx: (Q.x0 + Q.x1) / 2, cz: (Q.z0 + Q.z1) / 2, raio: 120 }, baterias, rotulo: 'Exército · Sentinela',
     postos: [{ parado: [Q.x0 - 4, pz - 8, -Math.PI / 2] }, { parado: [Q.x0 - 4, pz + 8, -Math.PI / 2] }, { parado: [Q.x0 + 4, pz - 9, -Math.PI / 2] }, { parado: [Q.x0 + 4, pz + 9, -Math.PI / 2] },
-      ...[[Q.x0 + 2, Q.z0 + 2], [Q.x1 - 2, Q.z0 + 2], [Q.x0 + 2, Q.z1 - 2], [Q.x1 - 2, Q.z1 - 2]].map(([x, z]) => ({ parado: [x, z, Math.atan2(x - (Q.x0 + Q.x1) / 2, z - (Q.z0 + Q.z1) / 2)], alto: 10.5 }))] });
+      ...[[Q.x0 + 2, Q.z0 + 2], [Q.x1 - 2, Q.z0 + 2], [Q.x0 + 2, Q.z1 - 2], [Q.x1 - 2, Q.z1 - 2]].map(([x, z]) => ({ parado: [x, z, Math.atan2(x - (Q.x0 + Q.x1) / 2, z - (Q.z0 + Q.z1) / 2)], alto: 10.5 })),
+      { parado: [Q.x1 - 4, mundo.PASSAGEM_BASES.z0 - 2, Math.PI / 2] }, { parado: [Q.x1 - 4, mundo.PASSAGEM_BASES.z1 + 2, Math.PI / 2] },
+      ...[0, 1, 2, 3, 4, 5].map((k) => { const l = laco([[Q.x0 + 8, Q.z0 + 8], [Q.x1 - 8, Q.z0 + 8], [Q.x1 - 8, Q.z1 - 22], [Q.x0 + 8, Q.z1 - 22]]); return { l, fase: k * l.total / 6, vel: 1.1 }; })] });
 }
 function atualizarQuartelExtras(dt) {
   if (!quartelExtras) return;
@@ -11730,7 +11737,9 @@ function montarBaseAerea() {
   // muro com portão ao norte (x 392..408)
   const H = 3.2, e = 0.6, gx = B.portao.x;
   const m = (x0, z0, x1, z1) => caixa((x0 + x1) / 2, H / 2, (z0 + z1) / 2, Math.max(e, x1 - x0), H, Math.max(e, z1 - z0), muro, true);
-  m(B.x0, B.z0, gx - 8, B.z0 + e); m(gx + 8, B.z0, B.x1, B.z0 + e); m(B.x0, B.z1 - e, B.x1, B.z1); m(B.x0, B.z0, B.x0 + e, B.z1); m(B.x1 - e, B.z0, B.x1, B.z1);
+  const PS = mundo.PASSAGEM_BASES;
+  m(B.x0, B.z0, gx - 8, B.z0 + e); m(gx + 8, B.z0, B.x1, B.z0 + e); m(B.x0, B.z1 - e, B.x1, B.z1);
+  m(B.x0, B.z0, B.x0 + e, PS.z0); m(B.x0, PS.z1, B.x0 + e, B.z1); m(B.x1 - e, B.z0, B.x1, PS.z0); m(B.x1 - e, PS.z1, B.x1, B.z1);   // passagens para o Quartel e a Base Naval
   const portao = { tipo: 'caixa', x0: gx - 8, x1: gx + 8, z0: B.z0 - 0.6, z1: B.z0 + 0.6 }; colisores.push(portao);
   const braco = cancelaEm(g, gx - 8, B.z0 - 1, 16, 'x');
   caixa(gx + 11, 1.5, B.z0 + 4, 4, 3, 4, M('#6d7a52'), true); caixa(gx + 11, 3.15, B.z0 + 4, 4.6, 0.3, 4.6, M('#3f4733'));
@@ -11751,7 +11760,9 @@ function montarBaseAerea() {
   registrarBase({ id: 'aerea', nome: 'Base Aérea', rect: B, aviso: 30, tiro: 12, acesso: () => militar(), acessoAr: () => militar(),
     aa: { cx: (B.x0 + B.x1) / 2, cz: (B.z0 + B.z1) / 2, raio: 120 }, baterias, rotulo: 'Base Aérea · Sentinela',
     postos: [{ parado: [gx - 9, B.z0 - 4, Math.PI] }, { parado: [gx + 9, B.z0 - 4, Math.PI] }, { parado: [gx - 10, B.z0 + 4, Math.PI] }, { parado: [gx + 6, B.z0 + 9, Math.PI] },
-      ...[[B.x0 + 6, B.z0 + 6], [B.x1 - 6, B.z0 + 6], [B.x0 + 6, B.z1 - 6], [B.x1 - 6, B.z1 - 6]].map(([x, z]) => ({ parado: [x, z, Math.atan2(x - (B.x0 + B.x1) / 2, z - (B.z0 + B.z1) / 2)], alto: 4.05 }))] });
+      ...[[B.x0 + 6, B.z0 + 6], [B.x1 - 6, B.z0 + 6], [B.x0 + 6, B.z1 - 6], [B.x1 - 6, B.z1 - 6]].map(([x, z]) => ({ parado: [x, z, Math.atan2(x - (B.x0 + B.x1) / 2, z - (B.z0 + B.z1) / 2)], alto: 4.05 })),
+      { parado: [B.x0 + 4, mundo.PASSAGEM_BASES.z0 - 2, -Math.PI / 2] }, { parado: [B.x1 - 4, mundo.PASSAGEM_BASES.z0 - 2, Math.PI / 2] },
+      ...[0, 1, 2, 3, 4, 5].map((k) => { const l = laco([[B.x0 + 10, B.z0 + 10], [B.x1 - 10, B.z0 + 10], [B.x1 - 10, 1064], [B.x0 + 10, 1064]]); return { l, fase: k * l.total / 6, vel: 1.1 }; })] });
 }
 function atualizarBaseAerea(dt) {
   if (!baseAerea) return;
@@ -11792,52 +11803,103 @@ function prepararJato(c) {
   document.body.classList.add('aviao');
   aviso(`✈️ ${J.nome}: taxie até a pista, acelere até ${J.vdec} m/s e puxe o manche (▼). ${J.misseis ? `${J.misseis} mísseis: 🎯 Travar e 🚀 Disparar (só em procurados e invasores).` : 'Botão 👻 Invisível.'}`, 6);
 }
+// convés do porta-aviões: retângulo da pista (proa para +z) e altura do convés
+const CONVES_Y = 14;
+function noConves(x, z) { const P = mundo.BASE_NAVAL.porta; return Math.abs(x - P.x) < 14 && Math.abs(z - P.z) < P.comp * 0.45 ? CONVES_Y : null; }
 function pilotarJato(c, dt) {
   const J = JATOS[c.servico];
-  const acel = pedais.acel || teclas.has('w'), freio = pedais.freio || teclas.has('s');
+  let acel = pedais.acel || teclas.has('w'), freio = pedais.freio || teclas.has('s');
   const lado = THREE.MathUtils.clamp(manche.x + (pedais.dir || teclas.has('d') || teclas.has('arrowright') ? 1 : 0) - (pedais.esq || teclas.has('a') || teclas.has('arrowleft') ? 1 : 0), -1, 1);
   const puxa = THREE.MathUtils.clamp(manche.y + (teclas.has('arrowdown') ? 1 : 0) - (teclas.has('arrowup') ? 1 : 0), -1, 1);
-  c.volante = (c.volante || 0) + (lado - (c.volante || 0)) * Math.min(1, dt * 4);
-  const naPista = pistaMilitar(jogador.pos.x, jogador.pos.z) || !!pistaEm(jogador.pos.x, jogador.pos.z);
+  if (c.auto && (Math.abs(lado) > 0.5 || Math.abs(puxa) > 0.5)) { c.auto = null; aviso('🛬 Pouso automático cancelado: você está no comando.', 2.5); }
+  if (!c.auto) c.volante = (c.volante || 0) + (lado - (c.volante || 0)) * Math.min(1, dt * 4);
+  const conves = noConves(jogador.pos.x, jogador.pos.z);
+  const naPista = pistaMilitar(jogador.pos.x, jogador.pos.z) || !!pistaEm(jogador.pos.x, jogador.pos.z) || conves !== null;
   const suave = (alvo, taxa) => { c.pitch += THREE.MathUtils.clamp(alvo - c.pitch, -taxa * dt, taxa * dt); };
   if (!c.noAr) {
+    if (c.auto) { acel = false; freio = true; if (c.vel < 0.5) { c.auto = null; aviso('🛬 Pouso automático concluído.', 3); } }
     const lim = naPista ? J.vmax * 0.7 : 12;
     if (acel && !freio) c.vel = Math.min(lim, c.vel + (naPista ? 14 : 4) * dt); else if (freio) c.vel = Math.max(0, c.vel - 16 * dt); else c.vel = Math.max(0, c.vel - 3 * dt);
     jogador.yaw -= c.volante * 1.1 * Math.min(1, c.vel / 3) / (1 + c.vel / 15) * dt;
     jogador.pos.x += Math.sin(jogador.yaw) * c.vel * dt; jogador.pos.z += Math.cos(jogador.yaw) * c.vel * dt;
-    resolverColisao(jogador.pos, Math.min(3, J.raio));
+    if (c.alt > 1 && noConves(jogador.pos.x, jogador.pos.z) === null) { acidenteVeiculo(c, '💥 O caça caiu do porta-aviões no mar!'); return; }
+    if (c.alt < 1) resolverColisao(jogador.pos, Math.min(3, J.raio));
     suave(c.vel >= J.vdec * 0.85 && puxa > 0.15 ? 0.18 * puxa : 0, 0.6);
     if (!naPista && c.vel > 18) { acidenteVeiculo(c, '💥 O caça saiu da pista em alta velocidade!'); return; }
-    if (naPista && c.vel >= J.vdec && c.pitch > 0.08) { c.noAr = true; c.alt = 0.5; aviso('🛫 Decolou! Manche puxado sobe, empurrado desce. Pouse numa pista, devagar.', 3.5); }
+    if (naPista && c.vel >= J.vdec && c.pitch > 0.08) { c.noAr = true; c.alt += 0.5; aviso('🛫 Decolou! Manche puxado sobe, empurrado desce. Para pousar, use 🛬 Pouso automático perto da base.', 3.5); }
     c.vs = 0;
   } else {
     const estol = c.vel < J.vdec * 0.75;
-    let alvo = estol ? -0.25 : THREE.MathUtils.clamp(puxa * 0.45, -0.45, 0.45);
-    if (c.alt > 400 && alvo > 0) alvo = 0;
-    suave(alvo, 0.8);
-    if (acel && !freio) c.vel += 18 * dt; else if (freio) c.vel -= 16 * dt;
-    c.vel = THREE.MathUtils.clamp(c.vel - Math.sin(c.pitch) * 9 * dt, J.vdec * 0.6, J.vmax);
-    c.vs = estol ? Math.min(c.vel * Math.sin(c.pitch), -8) : c.vel * Math.sin(c.pitch);
+    if (c.auto) guiarPouso(c, J, dt);
+    else {
+      let alvo = estol ? -0.25 : THREE.MathUtils.clamp(puxa * 0.45, -0.45, 0.45);
+      if (c.alt > 400 && alvo > 0) alvo = 0;
+      suave(alvo, 0.8);
+      if (acel && !freio) c.vel += 18 * dt; else if (freio) c.vel -= 16 * dt;
+      c.vel = THREE.MathUtils.clamp(c.vel - Math.sin(c.pitch) * 9 * dt, J.vdec * 0.6, J.vmax);
+    }
+    c.vs = estol && !c.auto ? Math.min(c.vel * Math.sin(c.pitch), -8) : c.vel * Math.sin(c.pitch);
     jogador.yaw -= c.volante * J.giro * dt;
     jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, -1300, 1300);
     jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, -1400, 1400);
     c.alt = Math.min(420, c.alt + c.vs * dt);
     { const ch = alturaChao(jogador.pos.x, jogador.pos.z); if (aeronaveEmPredio(c, ch)) return; alertaPredio(c, ch); }
-    if (c.alt <= 0.3) {
-      const ok = naPista && c.vs > -7 && c.vel <= J.vdec * 1.5;
-      if (!ok) { acidenteVeiculo(c, !naPista ? '💥 O caça caiu fora da pista!' : '💥 Pouso rápido demais: o caça se despedaçou!'); return; }
-      c.noAr = false; c.alt = 0; c.vs = 0; c.pitch = 0; c.vel = Math.min(c.vel, J.vdec);
-      if (pistaMilitar(jogador.pos.x, jogador.pos.z) && c.misseis < J.misseis) { c.misseis = J.misseis; aviso('🛬 Pousou na Base Aérea: mísseis recarregados.', 3); } else aviso('🛬 Pousou.', 2.5);
+    const piso = noConves(jogador.pos.x, jogador.pos.z) ?? 0;
+    if (c.alt <= piso + 0.3) {
+      const naPista2 = pistaMilitar(jogador.pos.x, jogador.pos.z) || !!pistaEm(jogador.pos.x, jogador.pos.z) || piso > 0;
+      const ok = naPista2 && c.vs > -7 && c.vel <= J.vdec * 1.5;
+      if (!ok) { acidenteVeiculo(c, !naPista2 ? (jogador.pos.z > 1113 ? '💥 O caça caiu no mar!' : '💥 O caça caiu fora da pista!') : '💥 Pouso rápido demais: o caça se despedaçou!'); return; }
+      c.noAr = false; c.alt = piso; c.vs = 0; c.pitch = 0; c.vel = Math.min(c.vel, J.vdec);
+      if ((pistaMilitar(jogador.pos.x, jogador.pos.z) || piso > 0) && c.misseis < J.misseis) { c.misseis = J.misseis; aviso(`🛬 Pousou ${piso > 0 ? 'no porta-aviões' : 'na Base Aérea'}: mísseis recarregados.`, 3); } else if (!c.auto) aviso('🛬 Pousou.', 2.5);
     }
   }
   const chao = alturaChao(jogador.pos.x, jogador.pos.z);
-  jogador.pos.y = chao;
   c.mesh.position.set(jogador.pos.x, chao + c.alt, jogador.pos.z);
+  jogador.pos.y = chao;
   c.mesh.rotation.set(-c.pitch, jogador.yaw, c.noAr ? c.volante * 0.6 : 0, 'YXZ');
   jato.chamas(c.mesh, acel ? 1 : c.vel / J.vmax * 0.35);
   jogador.avatar.raiz.position.copy(jogador.pos);
   sons.continuo('aviaoG_alto', c.invisivel ? 0.15 : 0.35 + 0.4 * c.vel / J.vmax, 1.2 + c.vel / J.vmax * 0.5);
   controlesJato(c, dt);
+}
+// ---- pouso automático: escolhe a pista mais perto (Base Aérea ou porta-aviões), entra na reta final e desce na rampa
+function pistasPouso() {
+  const P = mundo.BASE_AEREA.pista, N = mundo.BASE_NAVAL.porta;
+  return [{ nome: 'Base Aérea', tx: P.x0 + 12, tz: P.z, dx: 1, dz: 0, h: 0 }, { nome: 'porta-aviões', tx: N.x, tz: N.z - N.comp * 0.42, dx: 0, dz: 1, h: CONVES_Y }];
+}
+function pistaPousoPerto() {
+  let melhor = null, dm = 2200;
+  for (const p of pistasPouso()) { const d = Math.hypot(jogador.pos.x - p.tx, jogador.pos.z - p.tz); if (d < dm) { dm = d; melhor = p; } }
+  return melhor;
+}
+function ligarPousoAuto() {
+  const c = jogador.carro; if (!c?.jato) return;
+  if (!c.noAr) { aviso('🛬 O pouso automático é para quando você está voando.', 2.5); return; }
+  if (c.auto) { c.auto = null; aviso('🛬 Pouso automático desligado.', 2); return; }
+  const p = pistaPousoPerto(); if (!p) { aviso('🛬 Chegue a menos de 2 km da Base Aérea ou do porta-aviões.', 3); return; }
+  c.auto = { p, fase: 'entrada' };
+  aviso(`🛬 Pouso automático: indo para a ${p.nome}. Mexa no manche para cancelar.`, 4);
+}
+function guiarPouso(c, J, dt) {
+  const A = c.auto, p = A.p, P = jogador.pos;
+  const s = (P.x - p.tx) * p.dx + (P.z - p.tz) * p.dz;                     // distância ao longo da pista (negativo = antes da cabeceira)
+  let ax, az, altAlvo, velAlvo;
+  if (A.fase === 'entrada') {
+    ax = p.tx - p.dx * 1400; az = p.tz - p.dz * 1400; altAlvo = p.h + 110; velAlvo = J.vdec * 1.5;
+    if (Math.hypot(P.x - ax, P.z - az) < 180 || (s < -900 && Math.abs((P.x - p.tx) * p.dz - (P.z - p.tz) * p.dx) < 60)) A.fase = 'final';
+  }
+  if (A.fase === 'final') {
+    const frente = Math.max(s + 260, 60);
+    ax = p.tx + p.dx * frente; az = p.tz + p.dz * frente;
+    altAlvo = p.h + Math.max(-3, -s * 0.075 - 2); velAlvo = s < -250 ? J.vdec * 1.2 : J.vdec * 1.05;   // mira um pouco abaixo: toca logo depois da cabeceira
+    if (s > 30 && c.alt > p.h + 25) { A.fase = 'entrada'; aviso('🛬 Arremetendo: vamos dar outra volta.', 2.5); }
+  }
+  const quer = Math.atan2(ax - P.x, az - P.z), dif = Math.atan2(Math.sin(quer - jogador.yaw), Math.cos(quer - jogador.yaw));
+  c.volante = THREE.MathUtils.clamp(-dif * 1.6, -1, 1);
+  const vsAlvo = THREE.MathUtils.clamp((altAlvo - c.alt) * 0.7, -10, 10);
+  const pitchAlvo = Math.asin(THREE.MathUtils.clamp(vsAlvo / Math.max(c.vel, 1), -0.4, 0.4));
+  c.pitch += THREE.MathUtils.clamp(pitchAlvo - c.pitch, -0.8 * dt, 0.8 * dt);
+  c.vel += THREE.MathUtils.clamp(velAlvo - c.vel, -12 * dt, 12 * dt);
 }
 // descer do caça: só parado no chão; fora da Base Aérea ele volta sozinho para o pátio
 function guardarJato(c) {
@@ -11855,13 +11917,15 @@ function controlesJato(c) {
     pn.style.cssText = 'position:fixed;left:calc(env(safe-area-inset-left,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 36vh);z-index:30;display:flex;flex-direction:column;gap:8px';
     const bt = (id, fn) => { const b = document.createElement('button'); b.id = id; b.style.cssText = 'border-radius:14px;border:2px solid #8fd3ff;background:rgba(14,24,40,.88);color:#e3f4ff;font:800 13px system-ui;padding:8px 10px;min-width:100px;line-height:1.15;touch-action:none';
       b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); fn(); }); pn.appendChild(b); return b; };
-    bt('btJTravar', () => travarAlvo()); bt('btJDisparar', () => dispararMissil()); bt('btJInv', () => { const k = jogador.carro; if (!k?.jato || !JATOS[k.servico].invisivel) return; k.invisivel = !k.invisivel; aviso(k.invisivel ? '👻 Asa furtiva invisível: ninguém vê você.' : '✈️ Visível de novo.', 3); });
+    bt('btJPouso', () => ligarPousoAuto()); bt('btJTravar', () => travarAlvo()); bt('btJDisparar', () => dispararMissil()); bt('btJInv', () => { const k = jogador.carro; if (!k?.jato || !JATOS[k.servico].invisivel) return; k.invisivel = !k.invisivel; aviso(k.invisivel ? '👻 Asa furtiva invisível: ninguém vê você.' : '✈️ Visível de novo.', 3); });
     document.body.appendChild(pn);
   }
   const J = JATOS[c.servico];
   pn.style.display = 'flex';
   $('btJTravar').style.display = $('btJDisparar').style.display = J.misseis ? 'block' : 'none';
   $('btJInv').style.display = J.invisivel ? 'block' : 'none';
+  { const bp = $('btJPouso'), perto = c.noAr && !!pistaPousoPerto(); bp.style.display = perto || c.auto ? 'block' : 'none';
+    const tp = c.auto ? `🛬 Pouso auto<br><small>${c.auto.p.nome} · cancelar</small>` : '🛬 Pouso<br><small>automático</small>'; if (bp.dataset.t !== tp) { bp.dataset.t = tp; bp.innerHTML = tp; bp.style.borderColor = c.auto ? '#7dff8a' : '#8fd3ff'; } }
   const tr = c.trava, r = tr && remotos.get(tr.id);
   if (tr && (!r?.carro || !alvoMissilValido(r, c, 900))) { c.trava = null; }
   else if (tr && !tr.ok) { tr.t += 1 / 60 * 2; if (tr.t >= 1.5) { tr.ok = true; aviso(`🎯 TRAVADO: ${r.meta?.nome || 'alvo'}`, 2); conexao?.enviar('travado', { de: jogador.perfil.id, alvo: tr.id }); } }
@@ -11938,4 +12002,142 @@ function atualizarMisseis(dt) {
   if (!jogador.carro?.jato) { const pn = $('painelJato'); if (pn) pn.style.display = 'none'; }
   // som dos caças dos outros
   for (const r of remotos.values()) if (r.carro?.visible && civico.CARROS[r.carroModelo]?.jato) sons.continuo('aviaoG_alto', 0.6 * sons.perto(r.carro.position.distanceTo(jogador.pos), 260), 1.4);
+}
+
+// ================================================================= MARINHA: Base Naval, navios e míssil de cruzeiro
+let baseNaval = null;
+const PORTOES_INTERNOS = [];   // passagens entre as bases: só militares passam
+function portoesInternos() {
+  if (PORTOES_INTERNOS.length) return;
+  const PS = mundo.PASSAGEM_BASES, g = new THREE.Group(); scene.add(g);
+  for (const x of [mundo.QUARTEL.x1, mundo.BASE_AEREA.x0, mundo.BASE_AEREA.x1, mundo.BASE_NAVAL.x0]) {
+    const col = { tipo: 'caixa', x0: x - 0.6, x1: x + 0.6, z0: PS.z0, z1: PS.z1 }; colisores.push(col);
+    PORTOES_INTERNOS.push({ col, braco: cancelaEm(g, x + 1, PS.z0, PS.z1 - PS.z0, 'z', '#2c5fd3'), x });
+  }
+  const chao = new THREE.Mesh(new THREE.PlaneGeometry(50, PS.z1 - PS.z0), new THREE.MeshStandardMaterial({ color: '#41454d', polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }));
+  chao.rotation.x = -Math.PI / 2; chao.position.set((mundo.QUARTEL.x1 + mundo.BASE_AEREA.x0) / 2, 0.03, (PS.z0 + PS.z1) / 2); g.add(chao);
+  const chao2 = chao.clone(); chao2.scale.x = 0.25; chao2.position.x = (mundo.BASE_AEREA.x1 + mundo.BASE_NAVAL.x0) / 2; g.add(chao2);
+}
+function atualizarPortoesInternos(dt) {
+  const ok = militar();
+  for (const p of PORTOES_INTERNOS) { p.col.off = ok; abrirCancela(p.braco, ok && Math.hypot(jogador.pos.x - p.x, jogador.pos.z - (mundo.PASSAGEM_BASES.z0 + mundo.PASSAGEM_BASES.z1) / 2) < 14, dt); }
+}
+// navio do GLB (proa +z) ou de caixas: comprimento 'comp', quilha 'cala' m abaixo d'água
+function navio(nomeGLB, comp, cala, cor) {
+  const glb = modelos[nomeGLB];
+  if (glb) {
+    const piv = new THREE.Group(), c = glb.clone(true); piv.add(c); piv.updateMatrixWorld(true);
+    const b = new THREE.Box3().setFromObject(piv), s = comp / Math.max(0.01, b.max.z - b.min.z);
+    c.position.set(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2); piv.scale.setScalar(s); piv.position.y = -cala;
+    c.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    const g = new THREE.Group(); g.add(piv); return g;
+  }
+  const g = new THREE.Group(), M = (k) => new THREE.MeshStandardMaterial({ color: k, roughness: 0.6, metalness: 0.3 });
+  const casco = new THREE.Mesh(new THREE.BoxGeometry(comp * 0.14, cala + 10, comp), M(cor)); casco.position.y = (10 - cala) / 2; g.add(casco);
+  const torre = new THREE.Mesh(new THREE.BoxGeometry(comp * 0.05, 14, comp * 0.12), M('#8a9097')); torre.position.set(comp * 0.04, 17, 0); g.add(torre);
+  return g;
+}
+function montarBaseNaval() {
+  const N = mundo.BASE_NAVAL, g = new THREE.Group(); scene.add(g);
+  const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, ...o });
+  const plano = (x, z, w, d, mat, ordem) => { mat.polygonOffset = true; mat.polygonOffsetFactor = -ordem; mat.polygonOffsetUnits = -ordem * 4; const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.02 + ordem * 0.01, z); m.receiveShadow = true; g.add(m); return m; };
+  const caixa = (x, y, z, w, h, d, mat, col = false) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); if (col) colisores.push({ tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 }); return m; };
+  const muro = M('#8c8a6e'), concreto = M('#a29f97'), azul = M('#2c4f7c');
+  plano((620 + N.x1 + 10) / 2, (938 + N.z1 + 2) / 2, N.x1 + 10 - 620, N.z1 + 2 - 938, M('#5d7a3e'), 0);
+  plano((N.x0 + N.x1) / 2, (N.z0 + N.z1) / 2, N.x1 - N.x0, N.z1 - N.z0, concreto, 1);
+  plano((405 + N.portao.x + 5) / 2, 945, N.portao.x + 5 - 405, 10, M('#41454d'), 2); plano(N.portao.x, (945 + N.z0) / 2, 10, N.z0 - 945, M('#41454d'), 2);
+  // muro (ao sul é o cais, aberto para o mar) com portão ao norte e a passagem para a Base Aérea a oeste
+  const H = 3.2, e = 0.6, gx = N.portao.x, PS = mundo.PASSAGEM_BASES;
+  const m = (x0, z0, x1, z1) => caixa((x0 + x1) / 2, H / 2, (z0 + z1) / 2, Math.max(e, x1 - x0), H, Math.max(e, z1 - z0), muro, true);
+  m(N.x0, N.z0, gx - 8, N.z0 + e); m(gx + 8, N.z0, N.x1, N.z0 + e); m(N.x0, N.z0, N.x0 + e, PS.z0); m(N.x0, PS.z1, N.x0 + e, N.z1); m(N.x1 - e, N.z0, N.x1, N.z1);
+  const portao = { tipo: 'caixa', x0: gx - 8, x1: gx + 8, z0: N.z0 - 0.6, z1: N.z0 + 0.6 }; colisores.push(portao);
+  const braco = cancelaEm(g, gx - 8, N.z0 - 1, 16, 'x', '#2c5fd3');
+  const pl = textoSprite('⚓ BASE NAVAL · ACESSO RESTRITO ÀS FORÇAS ARMADAS', { escala: 0.75, fundo: 'rgba(24,52,96,.95)' }); pl.position.set(gx, 6.5, N.z0 - 2); g.add(pl);
+  // comando naval com a central de mísseis, alojamento e cais com dois píeres até os navios
+  caixa(700, 4, 1030, 30, 8, 18, M('#d8d3c4'), true); caixa(700, 8.3, 1030, 31, 0.6, 19, azul);
+  const pl2 = textoSprite('⚓ Comando Naval · 🚀 Central de Mísseis', { escala: 0.55, fundo: 'rgba(24,52,96,.95)' }); pl2.position.set(700, 10.5, 1030); g.add(pl2);
+  caixa(820, 3, 1035, 36, 6, 14, M('#c9c3b2'), true);
+  caixa((N.x0 + N.x1) / 2, 0.4, 1112, N.x1 - N.x0, 0.8, 4, concreto);
+  for (const x of [675, 760, 845]) caixa(x, 0.35, 1140, 8, 0.7, 56, concreto);
+  for (const [x, z] of [[N.x0 + 6, N.z0 + 6], [N.x1 - 6, N.z0 + 6], [N.x0 + 6, N.z1 - 8], [N.x1 - 6, N.z1 - 8]]) caixa(x, 2, z, 3.2, 4, 3.2, M('#6b6f5e'), true);
+  // navios ancorados (proa para o mar)
+  const pa = navio('porta_avioes', N.porta.comp, 7, '#6b737c'); pa.position.set(N.porta.x, 0, N.porta.z); g.add(pa);
+  const destroieres = N.destroieres.map((d) => { const o = navio('destroier', d.comp, 4, '#5f666e'); o.position.set(d.x, 0, d.z); g.add(o); return o; });
+  const baterias = [[650, 1020], [870, 1020]].map(([x, z]) => criarBateria(g, x, z));
+  baseNaval = { g, portao, braco, pa, destroieres };
+  registrarBase({ id: 'naval', nome: 'Base Naval', rect: N, aviso: 30, tiro: 12, acesso: () => militar(), acessoAr: () => militar(),
+    aa: { cx: N.porta.x, cz: 1150, raio: 210 }, baterias, rotulo: 'Marinha · Sentinela',
+    postos: [{ parado: [gx - 9, N.z0 - 4, Math.PI] }, { parado: [gx + 9, N.z0 - 4, Math.PI] }, { parado: [gx - 10, N.z0 + 4, Math.PI] }, { parado: [gx + 10, N.z0 + 4, Math.PI] },
+      ...[[N.x0 + 6, N.z0 + 6], [N.x1 - 6, N.z0 + 6], [N.x0 + 6, N.z1 - 8], [N.x1 - 6, N.z1 - 8]].map(([x, z]) => ({ parado: [x, z, Math.atan2(x - (N.x0 + N.x1) / 2, z - (N.z0 + N.z1) / 2)], alto: 4.05 })),
+      ...[0, 1, 2, 3].map((k) => { const l = laco([[N.x0 + 12, N.z0 + 12], [N.x1 - 12, N.z0 + 12], [N.x1 - 12, N.z1 - 12], [N.x0 + 12, N.z1 - 12]]); return { l, fase: k * l.total / 4, vel: 1.1 }; }),
+      ...[[-8, -60], [8, -60], [-8, 40], [8, 70]].map(([dx, dz]) => ({ parado: [N.porta.x + dx, N.porta.z + dz, Math.PI], alto: CONVES_Y }))] });
+}
+function atualizarBaseNaval(dt) {
+  if (!baseNaval) return;
+  const N = mundo.BASE_NAVAL, ok = militar();
+  baseNaval.portao.off = ok;
+  abrirCancela(baseNaval.braco, ok && Math.hypot(jogador.pos.x - N.portao.x, jogador.pos.z - N.z0) < 18, dt);
+}
+// ---- míssil de cruzeiro: General da Marinha pede, o General Supremo autoriza. Alerta de 20 s no alvo.
+const CENTRAL_MISSEIS = { x: 700, z: 1020 };
+const AREAS_PROTEGIDAS = () => [{ ...civico.HOSPITAL, r: 60, nome: 'o hospital' }, { ...civico.PREFEITURA, r: 50, nome: 'a prefeitura' }, { ...civico.BOMBEIROS, r: 40, nome: 'os bombeiros' }];
+function menuCentralMisseis() {
+  const p = jogador.perfil, pode = p?.cargo === 'admin' || (militar() && p?.forca === 'marinha');
+  if (!pode) { aviso('🚀 Central de Mísseis: só a Marinha (General) e o General Supremo.', 3.5); return; }
+  if (!rastreio) { aviso('🚀 Marque o alvo: abra o mapa grande, toque no ponto e volte aqui.', 4.5); return; }
+  const { x, z } = rastreio, prot = AREAS_PROTEGIDAS().find((a) => Math.hypot(a.x - x, a.z - z) < a.r);
+  if (prot) { aviso(`🚫 Alvo proibido: perto de ${prot.nome}.`, 3.5); return; }
+  escolher('🚀 Míssil de cruzeiro', `Alvo: ${regiaoDe(x, z)} (${Math.round(x)}, ${Math.round(z)}). ${p.cargo === 'admin' ? 'Como General Supremo, você lança direto.' : 'O General Supremo precisa autorizar.'} Quem estiver perto recebe 20 s de alerta.`, [
+    { rotulo: p.cargo === 'admin' ? '🚀 Lançar agora' : '📨 Pedir autorização', fn: () => rede.marinha.pedirMissil(x, z).then((r) => {
+      if (r?.status === 'lancado') dispararCruzeiro(x, z, p.nome); else aviso('📨 Pedido enviado ao General Supremo. Ele decide em até 10 min.', 4);
+    }).catch((e) => aviso(e.message, 4)) },
+    { rotulo: 'Cancelar', fn: () => {} }]);
+}
+function dispararCruzeiro(x, z, autor) {
+  const ev = { x: Math.round(x), z: Math.round(z), autor, t: agoraServidor() };
+  conexao?.enviar('cruzeiro', ev); receberCruzeiro(ev);
+}
+const cruzeiros = [];
+function receberCruzeiro(e) {
+  const N = mundo.BASE_NAVAL, d0 = N.destroieres[Math.abs(Math.round(e.x)) % 2];
+  const mesh = jato.criarMissil(modelos.missil_cruzeiro); mesh.scale.setScalar(1.8); scene.add(mesh);
+  cruzeiros.push({ ...e, de: new THREE.Vector3(d0.x, 14, d0.z), mesh, fum: 0, avisado: 0 });
+  if (Math.hypot(jogador.pos.x - e.x, jogador.pos.z - e.z) > 200) aviso(`🚀 A Marinha lançou um míssil de cruzeiro em direção a: ${regiaoDe(e.x, e.z)}.`, 4);
+}
+function atualizarCruzeiros(dt) {
+  for (let i = cruzeiros.length - 1; i >= 0; i--) {
+    const c = cruzeiros[i], k = Math.min(1, (agoraServidor() - c.t) / 20000);
+    const alvo = new THREE.Vector3(c.x, alturaChao(c.x, c.z), c.z), pos = c.de.clone().lerp(alvo, k); pos.y += Math.sin(k * Math.PI) * 220 * (1 - k * 0.2);
+    const ant = c.mesh.position.clone(); c.mesh.position.copy(pos); if (k > 0.01) c.mesh.lookAt(pos.clone().add(pos.clone().sub(ant)));
+    if ((c.fum -= dt) <= 0) { c.fum = 0.06; fumacas.push(jato.fumaca(scene, pos.clone())); }
+    const dj = Math.hypot(jogador.pos.x - c.x, jogador.pos.z - c.z), resta = Math.ceil(20 * (1 - k));
+    if (dj < 160 && resta !== c.avisado) { c.avisado = resta; aviso(`🚨 MÍSSIL DE CRUZEIRO A CAMINHO DESTA ÁREA! Fuja: ${resta} s`, 1.2); if (resta % 3 === 0) sons.radio?.(); }
+    if (k >= 1) {
+      scene.remove(c.mesh); cruzeiros.splice(i, 1);
+      for (let n = 0; n < 6; n++) efeitoExplosao(c.x + (Math.random() - 0.5) * 16, alvo.y + Math.random() * 4, c.z + (Math.random() - 0.5) * 16, 2.2, false);
+      if (!jogador.dentroCasa && !jogador.morto) {
+        const carro = jogador.carro;
+        if (dj < 25) { if (carro && !carro.explodiu) acidenteVeiculo(carro, '💥 Atingido por um míssil de cruzeiro!'); jogador.ultimoAgressor = null; danoLocal(999); }
+        else if (dj < 45) { jogador.ultimoAgressor = null; danoLocal(40); aviso('💥 A explosão do míssil feriu você!', 3); }
+      }
+    }
+  }
+}
+// o General Supremo é avisado dos pedidos e decide ali mesmo
+let tMissilAdm = 8, missilVisto = 0;
+function pedidosMissilAdmin(dt) {
+  if (jogador.perfil?.cargo !== 'admin' || (tMissilAdm -= dt) > 0) return; tMissilAdm = 20;
+  rede.marinha.pendente().then((l) => {
+    const m = l?.[0]; if (!m || m.id === missilVisto) return; missilVisto = m.id;
+    escolher('🚀 Pedido de míssil de cruzeiro', `${esc(m.autor_nome)} quer lançar em: ${regiaoDe(m.x, m.z)} (${Math.round(m.x)}, ${Math.round(m.z)}).`, [
+      { rotulo: '🚀 Autorizar e lançar', fn: () => rede.marinha.decidir(m.id, true).then((r) => { dispararCruzeiro(r.x, r.z, r.autor); aviso('🚀 Míssil lançado.', 3); }).catch((e) => aviso(e.message, 4)) },
+      { rotulo: '❌ Recusar', fn: () => rede.marinha.decidir(m.id, false).then(() => aviso('Lançamento recusado.', 2.5)).catch((e) => aviso(e.message, 3)) },
+      { rotulo: 'Ver no mapa', fn: () => { rastrear({ nome: '🎯 Alvo do míssil', x: m.x, z: m.z }); missilVisto = 0; } }]);
+  }).catch(() => {});
+}
+function atualizarMarinha(dt) {
+  const p = jogador.pos;
+  if (!baseNaval && Math.hypot(p.x - 760, p.z - 1100) < 800) montarBaseNaval();
+  if (Math.hypot(p.x - 450, p.z - 1054) < 500) portoesInternos();
+  atualizarPortoesInternos(dt); atualizarBaseNaval(dt); atualizarCruzeiros(dt); pedidosMissilAdmin(dt);
 }

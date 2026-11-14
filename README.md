@@ -1293,3 +1293,33 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - asa furtiva: 20 m de comprimento e cerca de 33 m de envergadura;
   - míssil: 3,5 m.
 - Os dois caças ganharam a chama de pós-combustão atrás, que cresce ao acelerar.
+
+## Versão 14/11 · Marinha e pouso automático (20261114b)
+
+**Rode o SQL `supabase/77_forcas_marinha.sql`** (depois do 76). Modelos novos: `assets/modelos/porta_avioes.glb`, `destroier.glb` e `missil_cruzeiro.glb`.
+
+- **Forças Armadas**: no painel de promoções, o General Supremo escolhe a Força de cada militar: 🪖 Exército, ⚓ Marinha ou ✈️ Aeronáutica. A pessoa recebe um aviso.
+  - **Caças**: só a **Aeronáutica** (e o General Supremo) pilota.
+  - **Míssil de cruzeiro**: só um **General da Marinha** pede, e o **General Supremo autoriza**. O General Supremo também pode lançar direto.
+- **Base Naval**: no litoral, a leste da Base Aérea, com portão ao norte pela rua z = 945. Tem Comando Naval com a **🚀 Central de Mísseis**, alojamento, cais e 3 píeres. Ancorados no mar ficam o **porta-aviões** (200 m) e **2 destróieres** (110 m).
+- **Bases interligadas**: passagens com cancela azul ligam Quartel ↔ Base Aérea ↔ Base Naval (z de 1048 a 1060). Só militares passam.
+- **Míssil de cruzeiro**:
+  1. Marque o alvo tocando no mapa grande.
+  2. Vá à Central de Mísseis.
+  3. O General da Marinha pede. O General Supremo recebe a janela "Autorizar / Recusar / Ver no mapa".
+  - O míssil sai de um destróier, voa em arco com rastro e leva 20 s.
+  - Quem está a menos de 160 m do alvo recebe o alerta com contagem.
+  - No impacto: explosão grande, morte a menos de 25 m (com o veículo destruído) e ferimento até 45 m.
+  - Espera de 10 min entre lançamentos.
+  - Sem alvo no hospital, na prefeitura ou nos bombeiros.
+  - Todos os lançamentos ficam registrados no painel do General Supremo.
+- **🛬 Pouso automático**: voando a menos de 2 km da Base Aérea ou do porta-aviões, aparece o botão.
+  - O caça vai até a reta final, alinha, desce na rampa, pousa e freia até parar. Se chegar alto demais, arremete e tenta de novo.
+  - Mexer no manche cancela.
+  - No porta-aviões também dá para decolar. Os mísseis recarregam lá.
+- **Mais soldados**:
+  - Área 51: 28;
+  - Quartel: 16;
+  - Base Aérea: 16;
+  - Base Naval: 16, sendo 4 no convés do porta-aviões.
+  - A Base Naval também tem antiaéreo, com raio de 210 m cobrindo os navios.

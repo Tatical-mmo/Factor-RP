@@ -337,10 +337,15 @@ const PATENTES_EX = ['Recruta', 'Soldado', 'Cabo', '3º Sargento', '2º Sargento
 // General Supremo (administrador): promove ou rebaixa quem já está no Exército
 async function blocoGeneral() {
   const lista = await rede.exercito.membros().catch(() => []);
-  let h = '<div class="linha"><b>⭐ General Supremo · promoções</b><small>Escolha a patente de cada militar. O salário acompanha a patente.</small></div>';
+  const forcas = {}; try { for (const f of await rede.marinha.forcas((lista || []).map((m) => m.id))) forcas[f.id] = f.forca; } catch { /* sem forças */ }
+  const FORCAS = [['exercito', '🪖 Exército'], ['marinha', '⚓ Marinha'], ['aeronautica', '✈️ Aeronáutica']];
+  let h = '<div class="linha"><b>⭐ General Supremo · promoções e Forças</b><small>Escolha a patente e a Força de cada militar. Caças: só Aeronáutica. Míssil de cruzeiro: General da Marinha pede e você autoriza.</small></div>';
   h += (lista || []).length ? lista.map((m) => `<div class="linha item"><span class="ic">🎖️</span><span class="nm"><b>${esc(m.jogador)}</b><small>${esc(m.patente)} · ${Math.floor(m.minutos / 60)}h${String(m.minutos % 60).padStart(2, '0')} de serviço</small></span>
-    <span class="bts"><select data-patsel="${m.id}">${PATENTES_EX.map((n, i) => `<option value="${i + 1}" ${i + 1 === m.nivel ? 'selected' : ''}>${n}</option>`).join('')}</select><button data-promover="${m.id}">Salvar</button></span></div>`).join('')
+    <span class="bts"><select data-patsel="${m.id}">${PATENTES_EX.map((n, i) => `<option value="${i + 1}" ${i + 1 === m.nivel ? 'selected' : ''}>${n}</option>`).join('')}</select><button data-promover="${m.id}">Salvar</button>
+      <select data-forsel="${m.id}">${FORCAS.map(([v, n]) => `<option value="${v}" ${(forcas[m.id] || 'exercito') === v ? 'selected' : ''}>${n}</option>`).join('')}</select><button data-forca="${m.id}">Transferir</button></span></div>`).join('')
     : '<div class="linha"><small>Ninguém no Exército ainda.</small></div>';
+  const hist = await rede.marinha.historico().catch(() => []);
+  if (hist?.length) h += '<div class="linha"><b>🚀 Registro dos mísseis de cruzeiro</b></div>' + hist.map((m) => `<div class="linha item"><span class="nm"><b>${esc(m.autor_nome)}</b><small>${{ lancado: '🚀 lançado', recusado: '❌ recusado', pendente: '⏳ esperando', vencido: '⌛ venceu' }[m.status] || m.status} · alvo (${Math.round(m.x)}, ${Math.round(m.z)}) · ${new Date(m.criado).toLocaleString('pt-BR')}</small></span></div>`).join('');
   return h;
 }
 function ligarQuadroTrabalho(c) {
@@ -349,6 +354,7 @@ function ligarQuadroTrabalho(c) {
   c.querySelectorAll('[data-expulsar]').forEach((b) => { b.onclick = () => confirmar(b, () => executar(() => rede.exercito.expulsar(b.dataset.expulsar, true), 'Militar expulso do Exército.')); });
   c.querySelectorAll('[data-readmitir]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.expulsar(b.dataset.readmitir, false), 'Expulsão retirada.'); });
   c.querySelectorAll('[data-promover]').forEach((b) => { b.onclick = () => { const n = Number(c.querySelector(`[data-patsel="${b.dataset.promover}"]`).value); executar(() => rede.exercito.promover(b.dataset.promover, n), (nome) => `Patente salva: ${nome}.`); }; });
+  c.querySelectorAll('[data-forca]').forEach((b) => { b.onclick = () => { const f = c.querySelector(`[data-forsel="${b.dataset.forca}"]`).value; executar(() => rede.marinha.definirForca(b.dataset.forca, f), 'Militar transferido de Força.'); }; });
   c.querySelectorAll('[data-caca]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.ordenar(b.dataset.caca), 'Caçada autorizada! Os soldados estão a caminho.'); });
   c.querySelectorAll('[data-cancelacaca]').forEach((b) => { b.onclick = () => executar(() => rede.exercito.cancelar(b.dataset.cancelacaca), 'Caçada suspensa.'); });
   c.querySelectorAll('[data-rastrear]').forEach((b) => { b.onclick = () => { const l = ctx.locaisTrabalho?.()[b.dataset.rastrear]; if (l) { ctx.rastrear?.({ nome: 'Seu trabalho', x: l.x, z: l.z }); fechar(); } }; });

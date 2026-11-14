@@ -33,6 +33,11 @@ export function morro(x, z) {
 // Quartel do Exército (Porto Sul, na mata a leste da cidade): muro, portão a oeste, pátio no meio
 // Base Aérea: ao lado do quartel (a leste), com pista ao longo de x. Acesso pela rua z = 945 (vinda da rodovia).
 export const BASE_AEREA = { x0: 300, x1: 620, z0: 975, z1: 1105, portao: { x: 400, z: 975 }, pista: { x0: 330, x1: 610, z: 1080, larg: 20 } };
+// Base Naval (Marinha): no litoral, a leste da Base Aérea. Porta-aviões e destróieres ancorados no mar (proa para o sul, +z).
+export const BASE_NAVAL = { x0: 630, x1: 880, z0: 1000, z1: 1110, portao: { x: 755, z: 1000 },
+  porta: { x: 760, z: 1270, comp: 200 }, destroieres: [{ x: 675, z: 1215, comp: 110 }, { x: 845, z: 1215, comp: 110 }] };
+// passagem interna entre as bases (z de 1048 a 1060): muro leste do quartel, oeste e leste da Base Aérea e oeste da Naval
+export const PASSAGEM_BASES = { z0: 1048, z1: 1060 };
 // Área 51: base secreta do Exército no deserto, a oeste da metrópole (acesso pela Avenida Central, z = 0)
 export const AREA51 = { x0: -880, x1: -700, z0: -110, z1: 110, portao: { x: -700, z: 0 }, hangar: { x: -800, z: -20, w: 34, d: 30 }, deserto: { x0: -900, x1: -640, z0: -260, z1: 260 } };
 export const QUARTEL = { x0: 150, x1: 250, z0: 966, z1: 1104, portao: { x: 146, z: 1053 }, patio: { x: 190, z: 1026 } };
@@ -109,7 +114,7 @@ export function limitar(p) {
     if (md < 3) { p.x = melhor[0]; p.z = melhor[1]; return; }
   }
   if (p.x >= 110 && p.x <= 530 && p.z >= -880 && p.z <= -650) return;   // Aeroporto da Metrópole
-  if (p.x >= 296 && p.x <= BASE_AEREA.x1 + 8 && p.z >= 938 && p.z <= BASE_AEREA.z1 + 2) return;   // Base Aérea, o campo em volta e a rua até o portão
+  if (p.x >= 250 && p.x <= BASE_NAVAL.x1 + 10 && p.z >= 938 && p.z <= BASE_NAVAL.z1 + 2) return;   // Base Aérea, Base Naval, o campo em volta e a rua até os portões
   if (p.x >= AREA51.x0 - 15 && p.x <= -630 && p.z >= AREA51.z0 - 15 && p.z <= AREA51.z1 + 15) { p.x = Math.max(p.x, AREA51.x0 + 1); p.z = THREE.MathUtils.clamp(p.z, AREA51.z0 + 1, AREA51.z1 - 1); return; }   // deserto da Área 51 e a estrada até ela
   if (p.x >= 157 && p.x <= 167 && p.z >= -662 && p.z <= -630) return;   // acesso ao aeroporto
   if (p.x >= -167 && p.x <= -157 && p.z >= -950 && p.z <= -636) return;   // rodovia para Vila Serra
@@ -570,7 +575,7 @@ function montarQuartel() {
     extrasMesh.push({ geo: [w, 3, d], cor: '#8c8a6e', pos: [(x0 + x1) / 2, 1.5, (z0 + z1) / 2] });
     addCol({ tipo: 'caixa', x0, x1: x0 + w, z0, z1: z0 + d });
   };
-  muro(Q.x0, Q.z0, Q.x1, Q.z0 + 0.6); muro(Q.x0, Q.z1 - 0.6, Q.x1, Q.z1); muro(Q.x1 - 0.6, Q.z0, Q.x1, Q.z1);
+  muro(Q.x0, Q.z0, Q.x1, Q.z0 + 0.6); muro(Q.x0, Q.z1 - 0.6, Q.x1, Q.z1); muro(Q.x1 - 0.6, Q.z0, Q.x1, PASSAGEM_BASES.z0); muro(Q.x1 - 0.6, PASSAGEM_BASES.z1, Q.x1, Q.z1);   // passagem para a Base Aérea
   muro(Q.x0, Q.z0, Q.x0 + 0.6, pz - 6); muro(Q.x0, pz + 6, Q.x0 + 0.6, Q.z1);
   // guarita e cancela no portão
   extrasMesh.push({ geo: [3, 3.2, 3], cor: '#5e6b45', pos: [Q.x0 + 2, 1.6, pz - 8.5] });
