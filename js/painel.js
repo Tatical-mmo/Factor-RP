@@ -11,6 +11,7 @@ const PODERES = [
   ['prender', 'Prender e soltar'],
   ['teleportar', 'Teleportar'],
   ['imortal', 'Modo imortal'],
+  ['invisivel', 'Modo invisível'],
 ];
 const ACOES = {
   perdoar: 'perdoou',
@@ -364,6 +365,8 @@ function abaEu() {
   const c = $('painelConteudo'); const eu = ctx.perfil();
   let h = '';
   if (pode('imortal')) h += `<div class="sub">Modo imortal</div><div class="botoes"><button id="pImortal" class="${eu.imortal ? 'ativo' : ''}">${eu.imortal ? 'Imortal: ligado' : 'Imortal: desligado'}</button></div>`;
+  if (pode('invisivel')) h += `<div class="sub">Modo invisível</div><p class="dica">Os jogadores não veem você (nem no minimapa). A equipe continua vendo.</p><div class="botoes"><button id="pInvis" class="${eu.invisivel ? 'ativo' : ''}">${eu.invisivel ? '👻 Invisível: ligado' : '👻 Invisível: desligado'}</button></div>`;
+  if (eu.cargo === 'admin' || eu.cargo === 'moderador') h += '<div class="sub">🔊 Som das Saveiros (últimos links)</div><div id="pSons" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') h += '<div class="sub">Evento: arma dourada</div><p class="dica">Esconde a arma dourada (2 balas) exatamente onde você está. Quem achar pega; depois dos 2 tiros ela some.</p><div class="botoes"><button id="pArmaPd">✨ Esconder a arma dourada aqui</button></div>';
   if (eu.cargo === 'admin') h += '<div class="sub">🐀 Bueiro secreto dos Lixeiros</div><div id="pBueiro" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') h += '<div class="sub">⚖️ Perdoar crimes</div><div id="pPerdao" class="dica">Carregando…</div>';
@@ -398,6 +401,12 @@ function abaEu() {
   if ($('pBueiro')) blocoBueiro();
   const apd = $('pArmaPd'); if (apd) apd.onclick = () => executar(() => ctx.esconderArmaPd(), 'Arma dourada escondida aqui. Todos foram avisados do evento.');
   const b = $('pImortal'); if (b) b.onclick = () => executar(() => rede.painel.imortal(!eu.imortal), eu.imortal ? 'Modo imortal desligado.' : 'Modo imortal ligado.');
+  const bi = $('pInvis'); if (bi) bi.onclick = () => executar(() => rede.tatica.invisivel(!eu.invisivel), eu.invisivel ? 'Modo invisível desligado.' : 'Modo invisível ligado: os jogadores não veem você.');
+  if ($('pSons')) rede.tatica.sonsRecentes().then((l) => {
+    const el = $('pSons'); if (!el) return;
+    el.innerHTML = (l || []).length ? l.map((x) => `<div class="botoes"><span style="flex:1"><b>${esc(x.nome)}</b> · ${new Date(x.em).toLocaleString('pt-BR').slice(0, 17)}<br><small>${esc(x.texto || '')} · <a href="${esc(x.url)}" target="_blank" rel="noopener">ouvir</a></small></span>${pode('banir') ? `<button class="perigo" data-bansom="${x.jogador}" data-nome="${esc(x.nome)}">Banir</button>` : ''}</div>`).join('') : 'Nenhum som tocado ainda.';
+    el.querySelectorAll('[data-bansom]').forEach((k) => { k.onclick = () => { if (!k.dataset.conf) { k.dataset.conf = '1'; k.textContent = 'Confirmar ban'; return; } executar(() => rede.painel.banir(k.dataset.bansom, 'Música proibida no som da Saveiro'), `${k.dataset.nome} banido.`); }; });
+  }).catch((e) => { const el = $('pSons'); if (el) el.textContent = /sons_recentes|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 85 no Supabase.' : e.message; });
   c.querySelectorAll('[data-gsalvar]').forEach((x) => { x.onclick = () => { const id = x.dataset.gsalvar, n = Math.round(Number(c.querySelector(`[data-gnum="${id}"]`).value)); executar(() => ctx.definirGuardas(id, n), `Soldados na base: ${n}.`); }; });
   c.querySelectorAll('[data-tdef]').forEach((x) => { x.onclick = () => { const [base, tipo] = x.dataset.tdef.split(':'); const r = ctx.testeDefesa(base, tipo); msg(r || 'Teste iniciado.'); if (base !== 'parar') fechar(); }; });
   c.querySelectorAll('[data-local]').forEach((x) => { x.onclick = () => { const l = ctx.locais()[x.dataset.local]; if (l.navio && ctx.embarcarNavio) { ctx.embarcarNavio(l.navio); fechar(); return; } ctx.teleportar(l.x, l.z); msg('Teleportado: ' + l.nome); }; });

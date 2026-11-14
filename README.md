@@ -1440,3 +1440,25 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - **Todos veem ao mesmo tempo**: o jogo recebe o aviso do banco na hora (não espera a próxima leitura), e quem está a até 220 m recebe "🔥 Fogo na …, a X m de você!".
   - Sem bombeiros, a prefeitura apaga em 3 minutos; quem tem dono (empresa, casa, casa da favela) paga a taxa de 300.
 - **Casas da favela**: a parte de baixo agora é um alicerce de concreto liso (sem janelas), do chão do barranco até o piso da casa. À noite, as janelas da frente das casas acendem (também nas casas em 3D).
+
+## Versão 14/11 · polícia e armas, patrocinadores, Saveiro com som e equipe invisível (20261114u)
+
+**Rode o SQL `supabase/85_policia_armas_patrocinio.sql`** (depois do 84). Novo botão no menu: **🎯 Tático**.
+
+- **Armas airsoft**: **espingarda** (7 chumbos espalhados, forte de perto, alcance curto) e **fuzil** (rápido e de longe). Equipe pelo 🎯 Tático ou pela mochila e saque com o botão Arma.
+- **Granadas de airsoft**: botão 💣 na tela (no PC, tecla **H**). Estoura 2,3 s depois e mancha de tinta tudo num raio de 6 m (dano maior no centro). Estragam barricadas e a blindagem do Caveirão.
+- **Barricadas dos clãs** (🎯 Tático): membros de clã compram (2.000) e colocam na frente; bloqueiam a passagem de todos (a pé e de carro). Até 6 por clã, somem em 3 h; o clã recolhe.
+- **BOPE**: policiais de 3º Sargento para cima entram pelo 🎯 Tático. Etiqueta "💀 BOPE". Pegam o kit (espingarda, fuzil e granadas) perto da delegacia, a cada 10 min, do armamento da Polícia.
+- **Caveirão** (só BOPE, no botão de viatura): blindado, preto, com escotilha.
+  - Leva **5 atiradores** (policiais), que sacam a arma e atiram de dentro pela escotilha e descem quando quiserem.
+  - **Trocar de lugar**: o atirador toca em "🔄 Assumir o volante"; o motorista aceita e vira atirador.
+  - **Blindagem com limite** (mostrada na tela): tiros e granadas gastam; em 0, o Caveirão é destruído. Quem está dentro não leva tiro.
+  - **Rompe barricadas**: acelere contra ela; a barricada vai cedendo aos poucos (com dificuldade).
+- **Viaturas novas**: Polícia Civil (sedã cinza-chumbo com faixas brancas) e PRF (azul-escuro com faixa amarela), com giroflex.
+- **Forças Armadas** (Exército, Marinha e Aeronáutica): pegam espingarda, fuzil e granadas no Arsenal do Quartel, no Comando Naval ou na Base Aérea.
+- **Kit de armas de caminhão**: na Central de rações do Exército, "Caminhão cheio + kit de armas" (junto das jujubas) ou "Só o kit de armas". Cada kit põe 10 espingardas, 10 fuzis e 30 granadas no armamento da Polícia ou da PRF.
+- **Patrocinadores**: quem tem 1.000.000 de moedas pode virar patrocinador (100.000). Patrocina clãs (vai para o caixa do clã), fabrica espingardas (8.000), fuzis (15.000) e granadas (2.000) e vende na loja dele, com o preço que quiser; só membros de clã compram.
+  - **Radar da PRF** (🎯 Tático): toda fabricação, venda e patrocínio aparece no radar (sem o nome, com a região aproximada). A PRF investiga: se achar (65%), o patrocinador vira **procurado** (+2 estrelas e 5.000 de recompensa) e a PRF ganha 500.
+- **Saveiro** (55.000) e **Saveiro com som** (150.000) na concessionária. No som, o dono cola um link https de MP3 e um anúncio: quem está a até 80 m ouve e o anúncio aparece em cima do carro (festas, reuniões, empresas). Aviso de que música proibida dá ban; todo link fica registrado e a equipe vê a lista no Painel (com o botão Banir).
+- **Carros estacionam na ilha inteira** (antes eram puxados de volta para a metrópole).
+- **Equipe invisível**: o administrador e os moderadores com o poder "Modo invisível" ligam no Painel; os jogadores não veem (nem no minimapa), a equipe continua vendo. O modo imortal continua como antes.

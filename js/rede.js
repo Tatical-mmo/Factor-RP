@@ -111,6 +111,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'abducaoRes' }, ({ payload }) => eventos.abducaoRes?.(payload));
   canal.on('broadcast', { event: 'ovniVisto' }, ({ payload }) => eventos.ovniVisto?.(payload));
   canal.on('broadcast', { event: 'ovniAbducao' }, ({ payload }) => eventos.ovniAbducao?.(payload));
+  canal.on('broadcast', { event: 'tatica' }, ({ payload }) => eventos.tatica?.(payload));   // granadas, blindagem, troca de motorista
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });
@@ -145,6 +146,28 @@ async function rpc(nome, args = {}) {
 function traduzirRpc(m) {
   const t = {
     'sem permissao': 'Você não tem esse poder.',
+    'so policiais entram no bope': 'Só policiais em serviço entram no BOPE.',
+    'o bope aceita de 3o sargento para cima': 'O BOPE aceita policiais de 3º Sargento para cima.',
+    'so o bope': 'Só o BOPE pega o kit de armas.',
+    'aguarde para pegar o kit de novo': 'Você já pegou o kit há pouco. Espere 10 minutos.',
+    'armazem vazio ou voce ja esta equipado': 'O armamento está vazio ou você já está equipado.',
+    'so as forcas armadas': 'Só as Forças Armadas pegam armas no Arsenal.',
+    'so policia e prf recebem armas': 'Só Polícia e PRF recebem kit de armas.',
+    'so membros de cla': 'Só membros de clã.',
+    'so membros de cla compram': 'Só membros de clã compram na loja dos patrocinadores.',
+    'seu cla ja tem 6 barricadas': 'Seu clã já tem 6 barricadas na rua.',
+    'essa barricada nao e do seu cla': 'Essa barricada não é do seu clã.',
+    'precisa de 1.000.000 de moedas': 'Para ser patrocinador é preciso ter 1.000.000 de moedas (a inscrição custa 100.000).',
+    'servidor publico nao pode ser patrocinador': 'Polícia, PRF e militares não podem ser patrocinadores.',
+    'so patrocinadores': 'Só patrocinadores.',
+    'minimo de 1000': 'O patrocínio mínimo é 1.000.',
+    'fabrique primeiro': 'Fabrique esse item antes de definir o preço.',
+    'estoque insuficiente': 'Estoque insuficiente.',
+    'o estoque e seu': 'Esse estoque é seu.',
+    'so a prf': 'Só a PRF usa o radar.',
+    'ja investigada': 'Essa movimentação já foi investigada.',
+    'precisa de uma saveiro com som': 'Você precisa ter uma Saveiro com som.',
+    'link invalido (use https)': 'Link inválido: use um link https direto para o arquivo de música (MP3).',
     'chances invalidas': 'As chances somadas não podem passar de 100%.',
     'seu cla nao tem base': 'Seu clã precisa ser dono da Base Leste ou Oeste.',
     'cargueiro ja esta sendo assaltado': 'O cargueiro já está sendo assaltado por outro clã.',
@@ -843,6 +866,7 @@ export function escutarLogistica(eventos) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'casas' }, (p) => eventos.casa?.(p))
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'robos_policia' }, (p) => eventos.robo?.(p.new))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'incendios' }, () => eventos.incendio?.())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'barricadas' }, () => eventos.barricada?.())
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'arma_pd' }, (p) => eventos.armaPd?.(p.new))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'clas' }, (p) => eventos.cla?.(p))
     .subscribe();
@@ -953,9 +977,37 @@ export const jujuba = {
   lance: (empresa, valor) => rpc('dar_lance', { p_empresa: empresa, p_valor: valor }),
   valor: (v) => rpc('valor_caminhao_jujuba', { p_valor: v }),
   despachar: (pedido, modo, segundos) => rpc('despachar_jujubas', { p_pedido: pedido, p_modo: modo, p_segundos: segundos }),
+  despacharKit: (corp, pedido, segundos) => rpc('despachar_kit', { p_corp: corp, p_pedido: pedido ?? null, p_segundos: segundos }),
+  armamento: async () => { try { return await sel(sb.from('armamento_armazens').select('*')); } catch { return []; } },
   sequestrar: (id, x, z, ang) => rpc('sequestrar_jujubas', { p_viagem: id, p_x: x, p_z: z, p_ang: ang }),
   mover: (id, x, z, ang, largado) => rpc('mover_jujubas', { p_viagem: id, p_x: x, p_z: z, p_ang: ang, p_largado: largado }),
   pegarSeq: (id) => rpc('pegar_jujubas_seq', { p_viagem: id }),
   vender: (id, x, z) => rpc('vender_jujubas', { p_viagem: id, p_x: x, p_z: z }),
   comprar: (q) => rpc('comprar_jujubas', { p_qtd: q }),
+};
+
+// ---------------------------------------------------------------- polícia e armas, patrocinadores, Saveiro com som e equipe (85)
+export const tatica = {
+  entrarBope: () => rpc('entrar_bope'),
+  sairBope: () => rpc('sair_bope'),
+  kitBope: () => rpc('pegar_kit_bope'),
+  armasArsenal: () => rpc('pegar_armas_arsenal'),
+  usarGranada: () => rpc('usar_granada'),
+  barricadas: async () => { try { return await sel(sb.from('barricadas').select('*')); } catch { return []; } },
+  comprarBarricada: (q) => rpc('comprar_barricada', { p_qtd: q }),
+  colocarBarricada: (x, z, ang) => rpc('colocar_barricada', { p_x: x, p_z: z, p_ang: ang }),
+  recolherBarricada: (id) => rpc('recolher_barricada', { p_id: id }),
+  danificarBarricada: (id, dano) => rpc('danificar_barricada', { p_id: id, p_dano: dano }),
+  tornarPatrocinador: () => rpc('tornar_patrocinador'),
+  patrocinar: (cla, valor) => rpc('patrocinar_cla', { p_cla: cla, p_valor: valor }),
+  fabricar: (item, qtd) => rpc('fabricar_armas', { p_item: item, p_qtd: qtd }),
+  preco: (item, preco) => rpc('preco_patrocinio', { p_item: item, p_preco: preco }),
+  meuEstoque: async (id) => { try { return await sel(sb.from('patrocinio_estoque').select('*').eq('dono', id)); } catch { return []; } },
+  lojas: () => rpc('lojas_patrocinio'),
+  comprar: (dono, item, qtd) => rpc('comprar_patrocinio', { p_dono: dono, p_item: item, p_qtd: qtd }),
+  radar: () => rpc('radar_ilicito'),
+  investigar: (id) => rpc('investigar_ilicito', { p_id: id }),
+  registrarSom: (url, texto) => rpc('registrar_som', { p_url: url, p_texto: texto }),
+  sonsRecentes: () => rpc('sons_recentes'),
+  invisivel: (ligado) => rpc('staff_invisivel', { ligado }),
 };

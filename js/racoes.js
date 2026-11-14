@@ -20,7 +20,7 @@ export const aberto = () => !!modo;
 export function corpDe(p) { return p?.prf ? 'prf' : p?.policial ? 'policia' : p?.profissao === 'bombeiro' ? 'bombeiros' : null; }
 export async function recarregar() {
   try { await rede.jujuba.processar(); } catch (e) { /* o relógio é de todos: se falhar, outro roda */ }
-  try { est = await rede.jujuba.estado(); ctx.mudou?.(est); } catch (e) { /* tenta de novo depois */ }
+  try { est = await rede.jujuba.estado(); est.armas = await rede.jujuba.armamento(); ctx.mudou?.(est); } catch (e) { /* tenta de novo depois */ }
   if (modo) desenhar();
 }
 export function atualizar(dt) { if ((tempo -= dt) <= 0) { tempo = 15; recarregar(); } }
@@ -57,9 +57,12 @@ async function desenhar() {
       ${['policia', 'prf', 'bombeiros'].map((k) => { const pd = ped(k), vs = viag(k);
         return `<div class="linha" style="display:block;margin-bottom:8px"><b>${CORP_NOME[k]}</b>: ${fmt(arm(k))} / 10.000${barra(arm(k))}
           ${pd && pd.status === 'aberto' ? `<span class="dica">📋 Pedido aberto</span> <div class="botoes"><button data-desp="${pd.id}" data-m="faltante">Mandar o que falta</button><button data-desp="${pd.id}" data-m="cheio">1 caminhão cheio</button></div>` : pd ? '<span class="dica">🚚 Despachado</span>' : '<span class="dica">Sem pedido</span>'}
-          ${vs.map((v) => `<br><small>🚚 ${fmt(v.qtd)} a caminho (~${Math.max(0, Math.ceil((Date.parse(v.chegada) - ctx.agora()) / 1000))} s)</small>`).join('')}</div>`; }).join('')}
+          ${vs.map((v) => `<br><small>🚚 ${v.qtd ? `${fmt(v.qtd)} jujubas` : ''}${v.kit ? `${v.qtd ? ' + ' : ''}🔫 kit de armas` : ''} a caminho (~${Math.max(0, Math.ceil((Date.parse(v.chegada) - ctx.agora()) / 1000))} s)</small>`).join('')}
+          ${k !== 'bombeiros' ? (() => { const a = (est.armas || []).find((x) => x.corp === k); return `<br><small>🔫 Armamento: ${a ? `${a.espingarda} espingardas · ${a.fuzil} fuzis · ${a.granada} granadas` : '—'}</small>
+            <div class="botoes">${pd && pd.status === 'aberto' ? `<button data-kit="${k}" data-ped="${pd.id}">🚚 Caminhão cheio + kit de armas</button>` : ''}<button data-kit="${k}">🚚 Só o kit de armas</button></div>`; })() : ''}</div>`; }).join('')}
       ${est.viagens.filter((v) => v.status === 'sequestrada').map((v) => `<p class="dica" style="color:#ff8a80">🚨 Caminhão de rações (${fmt(v.qtd)}) SEQUESTRADO a caminho de ${CORP_NOME[v.corp]}.</p>`).join('')}
       <p class="dica">📄 Licitação do transporte: ${l ? (l.status === 'vigente' ? `contrato vigente (${l.entregas}/5 caminhões)` : `aberta até ${new Date(l.fecha_em).toLocaleTimeString('pt-BR').slice(0, 5)}`) : 'abrindo…'}</p>`;
+    c.querySelectorAll('[data-kit]').forEach((b) => { b.onclick = () => executar(() => rede.jujuba.despacharKit(b.dataset.kit, b.dataset.ped ? Number(b.dataset.ped) : null, ctx.duracaoViagem(b.dataset.kit)), '🚚 Kit de armas despachado (10 espingardas, 10 fuzis e 30 granadas).'); });
     c.querySelectorAll('[data-desp]').forEach((b) => { b.onclick = () => executar(() => rede.jujuba.despachar(Number(b.dataset.desp), b.dataset.m, ctx.duracaoViagem(est.pedidos.find((x) => x.id === Number(b.dataset.desp))?.corp)), (n) => `🚚 ${n} caminhão(ões) despachado(s).`); });
   } else if (modo === 'licitacao') {
     $('racoesTitulo').textContent = '📄 Licitação: transporte de rações do Exército';

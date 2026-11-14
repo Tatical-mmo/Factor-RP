@@ -154,6 +154,11 @@ export const CARROS = {
   asa_furtiva: { nome: 'Asa furtiva', preco: 0, vel: 80, voa: true, jato: true },
   helicoptero: { nome: 'Helicóptero executivo', preco: 1500000, vel: 24, voa: true },
   tanque: { nome: 'Tanque do Exército', preco: 0, vel: 7 },
+  caveirao: { nome: 'Caveirão do BOPE', preco: 0, vel: 11 },
+  viatura_civil: { nome: 'Viatura da Polícia Civil', preco: 0, vel: 13 },
+  viatura_prf: { nome: 'Viatura da PRF', preco: 0, vel: 14 },
+  saveiro: { nome: 'Saveiro', preco: 55000, vel: 11 },
+  saveiro_som: { nome: 'Saveiro com som', preco: 150000, vel: 10.5 },
   onibus: { nome: 'Ônibus', preco: 0, vel: 12 },
   van: { nome: 'Van', preco: 0, vel: 11 },
   caminhao_escola: { nome: 'Caminhão da autoescola', preco: 0, vel: 9 },
@@ -179,7 +184,7 @@ export function aceleracao(modelo, v, max) {
   return a0 * Math.max(0.2, 1 - 0.75 * x * x);
 }
 // quantos passageiros cada veículo leva (além do motorista); veículos do Exército só levam militares
-export const LUGARES = { ovni: 2, tanque: 1, militar: 3, exercito_caminhao: 8, helicoptero_exercito: 6, helicoptero: 4, suv: 3, popular: 3, classico: 3, esportivo: 1, presidencial: 3 };
+export const LUGARES = { caveirao: 5, viatura_civil: 3, viatura_prf: 3, saveiro: 2, saveiro_som: 2, ovni: 2, tanque: 1, militar: 3, exercito_caminhao: 8, helicoptero_exercito: 6, helicoptero: 4, suv: 3, popular: 3, classico: 3, esportivo: 1, presidencial: 3 };
 // veículos abertos: o motorista aparece sentado (banco: altura e posição no modelo, motorista do lado esquerdo)
 // lugares: [lado (1 = esquerda, -1 = direita), altura do assento, z]; o 1º é o do motorista
 export const ABERTOS = { militar: { lugares: [[1, 0.98, -0.28], [-1, 0.98, -0.28], [1, 1.0, -0.98], [-1, 1.0, -0.98]] } };
@@ -593,6 +598,9 @@ function modeloCarroBase(modelo, cor) {
   const pint = mat(cor, { roughness: 0.25, metalness: 0.55 }), vidro = mat('#1b2633', { roughness: 0.1, metalness: 0.6 }), pneu = mat('#161616', { roughness: 0.9 });
   const luz = mat('#fff6d0', { emissive: '#fff1c8', emissiveIntensity: 1.4 }), lanterna = mat('#c81e1e', { emissive: '#c81e1e', emissiveIntensity: 0.8 });
   if (modelo === 'onibus') { const o = modeloOnibus(cor); adicionarLuzes(o, modelo); cacheCarro.set(chave, o); return o.clone(); }
+  if (modelo === 'caveirao') { const o = modeloCaveirao(); adicionarLuzes(o, modelo); cacheCarro.set(chave, o); return o.clone(); }
+  if (modelo === 'viatura_civil' || modelo === 'viatura_prf') { const o = modeloViaturaNova(modelo); adicionarLuzes(o, modelo); cacheCarro.set(chave, o); return o.clone(); }
+  if (modelo === 'saveiro' || modelo === 'saveiro_som') { const o = modeloSaveiro(cor, modelo === 'saveiro_som'); adicionarLuzes(o, modelo); cacheCarro.set(chave, o); return o.clone(); }
   if (!{ popular: 1, suv: 1, esportivo: 1, presidencial: 1 }[modelo]) modelo = 'suv';
   const dims = { popular: [1.7, 0.6, 3.9, 1.5, 0.55, 2.0, 0.34], suv: [1.95, 0.85, 4.6, 1.8, 0.75, 2.7, 0.42], esportivo: [1.95, 0.5, 4.5, 1.6, 0.42, 1.8, 0.36], presidencial: [2.0, 0.7, 6.4, 1.85, 0.62, 3.6, 0.4] }[modelo];
   const [w, h, l, cw, ch, cl, r] = dims;
@@ -614,6 +622,70 @@ function modeloCarroBase(modelo, cor) {
   return g.clone();
 }
 
+// placa de texto pintada (letreiro na lataria)
+function letreiro(txt, cor, fundo, w, h) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64; const x = c.getContext('2d');
+  x.fillStyle = fundo; x.fillRect(0, 0, 256, 64); x.fillStyle = cor; x.font = 'bold 40px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(txt, 128, 34);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, toneMapped: false, side: THREE.DoubleSide }));
+}
+function rodasEm(g, pneu, r, xs, zs) {
+  for (const sx of xs) for (const sz of zs) { const p = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.34, 14).rotateZ(Math.PI / 2), pneu); p.position.set(sx, r, sz); p.castShadow = true; g.add(p); }
+}
+// Caveirão (blindado do BOPE): 6 m, preto fosco, frente inclinada, vigias estreitas, escotilha e torre no teto
+function modeloCaveirao() {
+  const g = new THREE.Group(), r = 0.55;
+  const aco = mat('#1b1d20', { roughness: 0.8, metalness: 0.35 }), vidro = mat('#0e151c', { roughness: 0.1, metalness: 0.6 }), pneu = mat('#121212', { roughness: 0.95 });
+  bloco(g, aco, 2.5, 1.9, 5.4, 0, r + 0.25 + 0.95, -0.2);                 // caixa blindada
+  const frente = bloco(g, aco, 2.45, 1.3, 1.4, 0, r + 0.25 + 0.65, 2.9); frente.rotation.x = -0.35;   // capô inclinado
+  bloco(g, vidro, 1.9, 0.28, 0.05, 0, r + 1.95, 2.42);                     // vigia do motorista
+  for (const sx of [-1.26, 1.26]) for (const sz of [-1.6, -0.2, 1.2]) bloco(g, vidro, 0.04, 0.18, 0.7, sx, r + 1.75, sz);   // seteiras laterais
+  bloco(g, mat('#26292d', { metalness: 0.4 }), 1.4, 0.55, 1.6, 0, r + 2.45, -0.6);   // torre/escotilha
+  bloco(g, mat('#3a3d42'), 2.7, 0.18, 0.4, 0, r + 0.35, 3.3);             // para-choque de aríete
+  const l1 = letreiro('BOPE', '#e8e8e8', '#1b1d20', 1.6, 0.4); l1.position.set(1.27, r + 1.35, -0.4); l1.rotation.y = Math.PI / 2; g.add(l1);
+  const l2 = l1.clone(); l2.position.x = -1.27; l2.rotation.y = -Math.PI / 2; g.add(l2);
+  rodasEm(g, pneu, r, [-1.15, 1.15], [-1.9, -0.7, 1.9]);
+  sirene(g, [r + 2.15, 1.6]);
+  g.userData.eixos = { zf: 1.9, zr: -1.3 };
+  return g;
+}
+// viaturas novas: Polícia Civil (sedã cinza-chumbo com faixas brancas) e PRF (SUV azul-escuro com faixa amarela)
+function modeloViaturaNova(modelo) {
+  const g = new THREE.Group(), prf = modelo === 'viatura_prf', r = prf ? 0.42 : 0.36;
+  const pint = mat(prf ? '#14213d' : '#2b2f36', { roughness: 0.3, metalness: 0.5 }), vidro = mat('#121a24', { roughness: 0.08, metalness: 0.6 }), pneu = mat('#151515', { roughness: 0.9 });
+  const faixa = mat(prf ? '#f2c230' : '#f2f2f0', { roughness: 0.5 });
+  const [w, h, l, ch] = prf ? [1.95, 0.85, 4.7, 0.75] : [1.8, 0.62, 4.6, 0.58];
+  bloco(g, pint, w, h, l, 0, r + h / 2 + 0.1, 0);
+  bloco(g, vidro, w * 0.9, ch, l * (prf ? 0.55 : 0.45), 0, r + h + ch / 2 + 0.08, -0.2);
+  bloco(g, pint, w * 0.88, 0.08, l * (prf ? 0.52 : 0.42), 0, r + h + ch + 0.1, -0.2);
+  bloco(g, faixa, w + 0.02, 0.16, l * 0.8, 0, r + h * 0.55, 0);
+  const t = letreiro(prf ? 'PRF' : 'POLÍCIA CIVIL', prf ? '#14213d' : '#2b2f36', prf ? '#f2c230' : '#f2f2f0', prf ? 1.0 : 1.9, 0.3);
+  for (const sx of [-1, 1]) { const m = t.clone(); m.position.set(sx * (w / 2 + 0.02), r + h * 0.55, 0); m.rotation.y = sx * Math.PI / 2; g.add(m); }
+  bloco(g, mat('#222'), 1.1, 0.12, 0.3, 0, r + h + ch + 0.2, -0.2);   // base do giroflex
+  rodasEm(g, pneu, r, [-w / 2 + 0.2, w / 2 - 0.2], [-l / 2 + 0.8, l / 2 - 0.8]);
+  sirene(g, [r + h + ch + 0.32, -0.2]);
+  g.userData.eixos = { zf: l / 2 - 0.8, zr: -l / 2 + 0.8 };
+  return g;
+}
+// Saveiro (picape): cabine e caçamba; a versão com som leva caixas e luz neon na caçamba
+function modeloSaveiro(cor, som) {
+  const g = new THREE.Group(), r = 0.36;
+  const pint = mat(cor || '#c0392b', { roughness: 0.3, metalness: 0.5 }), vidro = mat('#121a24', { roughness: 0.08, metalness: 0.6 }), pneu = mat('#151515', { roughness: 0.9 });
+  bloco(g, pint, 1.75, 0.6, 4.4, 0, r + 0.4, 0);                        // chassi e laterais
+  bloco(g, vidro, 1.6, 0.55, 1.3, 0, r + 0.98, 0.75);                   // cabine (vidros)
+  bloco(g, pint, 1.58, 0.07, 1.25, 0, r + 1.28, 0.7);                   // teto
+  bloco(g, mat('#2a2a2a', { roughness: 0.9 }), 1.55, 0.05, 1.8, 0, r + 0.72, -1.2);   // assoalho da caçamba
+  bloco(g, pint, 1.75, 0.35, 0.08, 0, r + 0.88, -2.16);                 // tampa traseira
+  rodasEm(g, pneu, r, [-0.78, 0.78], [-1.35, 1.35]);
+  if (som) {
+    const cx = mat('#111', { roughness: 0.7 }), cone = mat('#3a3a3a', { metalness: 0.5 });
+    bloco(g, cx, 1.5, 0.9, 0.7, 0, r + 1.2, -1.7);
+    for (const sx of [-0.45, 0.45]) for (const sy of [0.95, 1.4]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.04, 16).rotateX(Math.PI / 2), cone); c.position.set(sx, r + sy, -1.34); g.add(c); }
+    const neon = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.04, 1.9), new THREE.MeshBasicMaterial({ color: '#b45cff' })); neon.position.set(0, r + 0.12, -1.2); g.add(neon);
+  }
+  g.userData.eixos = { zf: 1.35, zr: -1.35 };
+  return g;
+}
 // ônibus feito por código (até chegar o modelo 3D): 11 m, frente em +Z, letreiro da linha
 function modeloOnibus(cor) {
   const g = new THREE.Group(), L = 11, W = 2.5, H = 2.9, r = 0.48;
