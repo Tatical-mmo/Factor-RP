@@ -762,6 +762,7 @@ const _maoArma = new THREE.Vector3();
 // Copiar as rotações direto deixava pés e corpo tortos, porque cada esqueleto tem a pose de descanso um pouco diferente.
 // Aqui elas são adaptadas "no mundo": cada osso faz o mesmo movimento que faz no robô, a partir da própria pose de descanso.
 const DO_ROBO = ['punch_combo', 'shoot', 'death', 'pickup', 'hit', 'idle', 'punch_left', 'idle_long', 'punch_right', 'walk_shoot', 'carry_walk'];
+const DA_BASE_PARA_TODOS = ['rendido', 'levantar_maos', 'algemado', 'algemado_andar', 'carregar_parado', 'arremessar'];
 let roboBase = null, baseAnimacoes = null;
 function obterBaseAnimacoes() {
   if (!baseAnimacoes) baseAnimacoes = carregarGLB('assets/personagens/_animacoes.glb').then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => null);
@@ -839,6 +840,12 @@ async function criarAvatar(pasta, id) {
       try {
         const novos = robo.animations.filter((c) => DO_ROBO.includes(c.name)).map((c) => adaptarClipe(c, robo.scene, gltf.scene));
         anims = [...gltf.animations.filter((a) => !DO_ROBO.includes(a.name)), ...novos];
+        // personagens antigos também ganham as animações novas (rendido, algemado, carregar caixa, arremessar)
+        const base2 = await obterBaseAnimacoes();
+        if (base2) {
+          const extras = base2.animations.filter((c) => DA_BASE_PARA_TODOS.includes(c.name)).map((c) => adaptarClipe(c, base2.scene, gltf.scene));
+          anims = [...anims.filter((a) => !DA_BASE_PARA_TODOS.includes(a.name)), ...extras];
+        }
       } catch (e) { console.warn('não adaptou as animações:', id, e); }
     }
     if (!gltf.userData.clipes) gltf.userData.clipes = prepararClipes(anims);
