@@ -114,6 +114,12 @@ export function limitar(p) {
     if (md < 3) { p.x = melhor[0]; p.z = melhor[1]; return; }
   }
   if (p.x >= 110 && p.x <= 530 && p.z >= -880 && p.z <= -650) return;   // Aeroporto da Metrópole
+  if (p.z > BASE_NAVAL.z1 - 4 && p.z < 1175 && p.x > BASE_NAVAL.x0 - 5 && p.x < BASE_NAVAL.x1 + 5) {   // cais e píeres da Base Naval
+    const areas = [{ x0: BASE_NAVAL.x0, x1: BASE_NAVAL.x1, z0: BASE_NAVAL.z1 - 4, z1: 1114 }, ...[675, 760, 845].map((x) => ({ x0: x - 3.6, x1: x + 3.6, z0: 1110, z1: 1167.5 }))];
+    let melhor = null, md = Infinity;
+    for (const r of areas) { const x = THREE.MathUtils.clamp(p.x, r.x0, r.x1), z = THREE.MathUtils.clamp(p.z, r.z0, r.z1), d = Math.hypot(x - p.x, z - p.z); if (d < md) { md = d; melhor = [x, z]; } }
+    p.x = melhor[0]; p.z = melhor[1]; return;
+  }
   if (p.x >= 250 && p.x <= BASE_NAVAL.x1 + 10 && p.z >= 938 && p.z <= BASE_NAVAL.z1 + 2) return;   // Base Aérea, Base Naval, o campo em volta e a rua até os portões
   if (p.x >= AREA51.x0 - 15 && p.x <= -630 && p.z >= AREA51.z0 - 15 && p.z <= AREA51.z1 + 15) { p.x = Math.max(p.x, AREA51.x0 + 1); p.z = THREE.MathUtils.clamp(p.z, AREA51.z0 + 1, AREA51.z1 - 1); return; }   // deserto da Área 51 e a estrada até ela
   if (p.x >= 157 && p.x <= 167 && p.z >= -662 && p.z <= -630) return;   // acesso ao aeroporto

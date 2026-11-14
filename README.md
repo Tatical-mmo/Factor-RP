@@ -1388,3 +1388,9 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Configuração no Supabase (uma vez)**:
   1. Em **Authentication → URL Configuration → Redirect URLs**, adicione o endereço do jogo com `**` no fim. Exemplo: `https://seu-usuario.github.io/factor-rp/**`.
   2. Opcional: em **Authentication → Emails → Reset Password**, troque o texto do e-mail para português.
+
+## Versão 14/11 · píeres da Marinha (20261114h)
+
+- **Teletransporte indo para os navios**: o cais e os 3 píeres da Base Naval não eram área andável. Quem passava do muro era jogado para a borda de Porto Sul. Agora dá para andar no cais e até a ponta de cada píer, onde se embarca.
+- **Onde estão os navios**: para militares e para o admin, a lista do mapa grande mostra cada navio **(agora)**, com rastreio até ele, e o **Píer do navio** com o estado. Exemplos: "atraca em 10 min", "atracado agora (sai em 1 min)", "voltando ao cais" ou "com piloto".
+- Na ponta do píer, o botão mostra o mesmo estado do navio, para saber quanto falta.

@@ -2030,6 +2030,11 @@ function alvosRastreio() {
   if (jogador.cla) for (const v of territorios.values()) if (v.d.dono_cla === jogador.cla) r.push({ icone: '🚩', nome: v.d.nome, x: v.d.x, z: v.d.z });
   for (const l of ferrovia.linhas) for (const lado of ['centro', 'destino']) { const p = l.plataformas[lado]; r.push({ icone: '🚆', nome: p.nome, x: 0, z: p.zSaida }); }
   if (contratante) r.push({ icone: '📋', nome: 'Contratante', x: contratante.x, z: contratante.z });
+  if (militar()) for (const n of Object.values(NAVIOS)) {   // navios: onde estão agora e o píer de embarque (com a hora que atracam)
+    const st = estadoCais(n);
+    r.push({ icone: '⚓', nome: `${n.nome} (agora)`, x: n.x, z: n.z });
+    r.push({ icone: '⚓', nome: `Píer do ${n.nome} · ${st}`, x: n.doca.x, z: 1164 });
+  }
   for (const o of ocorrencias) if (jogador.perfil?.policial || jogador.perfil?.prf) r.push({ icone: '🚨', nome: o.local, x: o.x, z: o.z });
   for (const a of AGENCIAS) r.push({ icone: '📦', nome: `Agência ${a.id === 'centro' ? (a.z < 0 ? 'Norte' : 'Sul') : NOMES_AGENCIA[a.id]}`, x: a.x, z: a.z });
   r.push({ icone: '🔩', nome: 'Oficina de Parafusos', x: OFICINA.x, z: OFICINA.z });
@@ -12426,7 +12431,7 @@ function contextoNavio() {
     return [podePilotarNavio(n.id) && !lemeOcupado(n) ? `a bordo do ${n.nome}: assumir o leme` : `a bordo do ${n.nome} (alto-mar)`, podePilotarNavio(n.id) && !lemeOcupado(n) ? 'Leme' : 'A bordo'];
   }
   const n = navioNoPier(); if (!n) return null;
-  if (!atracado(n)) return [`${n.nome} fora do cais (ele volta a cada volta da patrulha)`, '⚓ Píer'];
+  if (!atracado(n)) return [`${n.nome}: ${estadoCais(n)} (veja no mapa › Bases militares)`, '⚓ Píer'];
   return [`⚓ embarcar no ${n.nome} (${lotacaoNavio(n.id)}/15)`, 'Embarcar'];
 }
 function lemeOcupado(n) { const db = n.db; return db?.modo === 'pilotado' && db.piloto !== jogador.perfil?.id && agoraServidor() - Date.parse(db.t) < 40000; }
@@ -12440,7 +12445,7 @@ function acaoNavio() {
     return true;
   }
   const n = navioNoPier(); if (!n) return false;
-  if (!atracado(n)) { aviso(`O ${n.nome} está em patrulha. Espere ele voltar ao cais.`, 3); return true; }
+  if (!atracado(n)) { aviso(`⚓ ${n.nome}: ${estadoCais(n)}. Espere aqui no píer.`, 3.5); return true; }
   if (!militar()) { aviso('⚓ Só militares das Forças Armadas embarcam.', 3); return true; }
   if (lotacaoNavio(n.id) >= 15) { aviso(`⚓ O ${n.nome} está lotado (15 soldados).`, 3); return true; }
   const embarcar = (leme) => { jogador.embarcado = { id: n.id, slot: lotacaoNavio(n.id), leme: false }; if (jogador.armado) alternarArma(); conexao?.rastrear(metaPresenca()); aviso(`⚓ A bordo do ${n.nome}.`, 2.5); if (leme) assumirLeme(); };
@@ -12524,4 +12529,13 @@ function desenharBasesNoMapa(g, tela, esc, rotulos) {
     txt((R.x0 + R.x1) / 2, R.z0 - 12, '🛸 Área 51');
   }
   g.restore();
+}
+
+// quanto falta para o navio atracar (ou quanto tempo ainda fica atracado)
+function estadoCais(n) {
+  const fmt = (seg) => seg >= 60 ? `${Math.floor(seg / 60)} min` : `${Math.max(1, Math.round(seg))} s`;
+  if (n.db?.modo === 'pilotado' && agoraServidor() - Date.parse(n.db.t) < 40000) return 'com piloto';
+  const L = n.caminho.total, periodo = PARADA_CAIS + L / n.vel, u = ((agoraServidor() / 1000 + n.fase * periodo) % periodo + periodo) % periodo;
+  if (n.db?.modo === 'retorno' && !atracado(n)) return 'voltando ao cais';
+  return u < PARADA_CAIS ? `atracado agora (sai em ${fmt(PARADA_CAIS - u)})` : `atraca em ${fmt(periodo - u)}`;
 }
