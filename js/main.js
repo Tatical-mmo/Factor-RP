@@ -28,6 +28,7 @@ import * as semaforos from './semaforos.js';
 import * as eixos from './eixos.js';
 import * as racoes from './racoes.js';
 import { pecasCabine } from './cabine.js';
+import * as ovni from './ovni.js';
 import * as jornal from './jornal.js';
 import * as visual from './visual.js';
 import { nivelTexto } from './empresa.js';
@@ -1013,6 +1014,7 @@ function acaoContexto() {
     else if (a?.[0] === 'comprador') contextoComprador()?.[2]();
     else if (a?.[0] === 'jato') servicos.apagar(servicos.fogoProximo(15) || servicos.listaIncendios()[0]);
     else if (a?.[0] === 'socorrer') socorrerFerido(feridoProximo(7));
+    else if (a?.[0] === 'abduzir') abduzir(alvoAbducao());
     else sairCarro();
     return;
   }
@@ -1277,6 +1279,7 @@ function sairCarro() {
     jogador.pos.x += lx; jogador.pos.z += lz; resolverColisao(jogador.pos, jogador.raio);
     civico.atualizarSirenes(0, c.mesh); jogador.avatar.raiz.visible = true;
     c.mesh.position.y = alturaChao(c.mesh.position.x, c.mesh.position.z);
+    if (c.servico === 'ovni') { guardarOvni(c); return; }
     aviso(c.servico === 'ambulancia' ? 'Ambulância estacionada. Socorra o ferido (✚) e volte para ela.' : civico.DO_EXERCITO.has(c.servico) ? 'Veículo do Exército estacionado aqui. Volte para ele quando quiser.' : 'Caminhão estacionado aqui. Volte para ele quando terminar.', 3);
     return;
   }
@@ -2417,6 +2420,7 @@ function conectarMultiplayer(perfil) {
     explosao: (e) => receberExplosao(e),
     voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m),
+    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -2489,6 +2493,7 @@ function atualizarRemotos(dt) {
       const kc = Math.min(1, dt * 10);
       r.carro.position.x += (a.x - r.carro.position.x) * kc; r.carro.position.y += (a.y - r.carro.position.y) * kc; r.carro.position.z += (a.z - r.carro.position.z) * kc;
       r.carro.rotation.y = suavizarAngulo(r.carro.rotation.y, a.r, dt * 10);
+      r.carro.visible = !a.iv;   // óvni invisível
       if (mod === 'ambulancia' || mod === 'bombeiros') civico.atualizarSirenes(performance.now() / 1000, r.carro);
       raiz.position.copy(r.carro.position); raiz.visible = false; r.av.mixer.update(dt);
       if (sentarNoVeiculo(r.av, r.carro, mod)) { r.arma.visible = false; r.anim = 'idle'; }
@@ -2525,9 +2530,9 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? 1 : 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), iv: j.carro?.invisivel ? 1 : 0, mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? 1 : 0 };
   const u = ultimoEnvio;
-  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs || u.mh !== est.mh || u.ap !== est.ap || u.sg !== est.sg;
+  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs || u.iv !== est.iv || u.mh !== est.mh || u.ap !== est.ap || u.sg !== est.sg;
   if (!mudou && tempoKeepAlive > 0) return;
   conexao.enviar('pos', est); ultimoEnvio = est; tempoKeepAlive = 3;
 }
@@ -3377,7 +3382,7 @@ function servicoProximo() {
   if (militar()) {   // Exército (e o General Supremo): o veículo da exposição (ilimitado) ou o seu, onde você deixou
     const lista = [...civico.EXERCITO.veiculos, ...(meuMilitar ? [{ modelo: meuMilitar.modelo, mesh: meuMilitar.mesh, meu: true }] : [])];
     let melhor = null, dm = 6;
-    for (const v of lista) { const d = Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z); if (d < dm) { dm = d; melhor = v; } }
+    for (const v of lista) { if (v.modelo === 'ovni' && !acessoArea51()) continue; const d = Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z); if (d < (v.modelo === 'ovni' ? 8.5 : dm)) { dm = Math.min(dm, d); melhor = v; } }
     return melhor ? { exercito: melhor, modelo: melhor.modelo } : null;
   }
   const base = prof === 'medico' ? civico.HOSPITAL : prof === 'bombeiro' ? civico.BOMBEIROS : null;
@@ -3390,6 +3395,7 @@ function podePilotarHeliExercito() { return jogador.perfil?.cargo === 'admin' ||
 function entrarServico(sv) {
   if (jogador.carregando) { aviso('Largue a caixa antes de dirigir.'); return; }
   if (sv.exercito) {
+    if (sv.modelo === 'ovni' && !acessoArea51()) { aviso('Só oficiais do Exército (Tenente para cima) pilotam o óvni.', 3.5); return; }
     if (sv.modelo === 'helicoptero_exercito' && !podePilotarHeliExercito()) { aviso('Só Tenente para cima pilota o helicóptero do Exército. Você pode ir de passageiro.', 3.5); return; }
     if (!sv.exercito.meu) {   // pega uma cópia nova; a da vitrine continua lá
       if (meuMilitar) scene.remove(meuMilitar.mesh);
@@ -3409,6 +3415,7 @@ function entrarServico(sv) {
   document.body.classList.toggle('tanque', sv.modelo === 'tanque');
   if (sv.modelo === 'tanque' && TOQUE) $('btTiro').classList.remove('oculto');
   if (sv.modelo === 'tanque') aviso('Tanque: toque em Atirar (no PC, F) para disparar o canhão de tinta. Ele explode veículos; eles voltam para o dono em 30 s.', 4.5);
+  else if (sv.modelo === 'ovni') aviso('🛸 Óvni do Exército: acelere para subir e freie para descer. Pare em cima de alguém e toque em 👽 Abduzir. Leva 2 militares.', 5);
   else if (civico.DO_EXERCITO.has(sv.modelo)) aviso(sv.modelo === 'helicoptero_exercito' ? 'Helicóptero do Exército: acelere para decolar e pare para pousar. Leva até 6 militares.' : `${civico.CARROS[sv.modelo].nome}: leva até ${civico.LUGARES[sv.modelo]} militares de passageiro.`, 3.5);
   else aviso(sv.modelo === 'ambulancia' ? 'Ambulância: os feridos aparecem no mapa (✚). Pare perto, desça e socorra.' : 'Caminhão dos bombeiros: os incêndios aparecem no mapa (🔥). Pare perto e toque em Jato, sem descer.', 4);
   if (sv.modelo === 'bombeiros' && !rastreio) {   // já aponta o fogo mais perto
@@ -3426,6 +3433,7 @@ function acaoNoVeiculo() {
   if (c.jujuba) { const cj = contextoComprador(); if (cj) return ['comprador', cj[0], cj[1]]; }
   if (c.servico === 'bombeiros' && Math.abs(c.vel) < 2 && (servicos.estaApagando() || servicos.fogoProximo(15))) return ['jato', servicos.estaApagando() ? 'jogando água (toque para parar)' : 'jogar água no fogo (+400)', 'Jato'];
   if (c.servico === 'ambulancia' && Math.abs(c.vel) < 2 && feridoProximo(7)) return ['socorrer', 'socorrer o ferido (+250)', 'Socorrer'];
+  if (c.servico === 'ovni') { const alvo = alvoAbducao(); if (alvo) return ['abduzir', `abduzir ${alvo.r.meta?.nome || 'o jogador'} (ele não vê nada e acorda em outro lugar)`, '👽 Abduzir']; }
   return null;
 }
 function donoDoVeiculo(c) { return empresas.get(c.d.empresa)?.dono === jogador.perfil?.id; }
@@ -3932,10 +3940,12 @@ function atualizarSons() {
   }
   // helicópteros dos jogadores (executivo e do Exército): o mesmo som do helicóptero das empresas
   const somHeli = (alt, vol) => { const k = THREE.MathUtils.clamp(alt / 12, 0, 1); sons.continuo('helicoptero_baixo', vol * (1 - k)); sons.continuo('helicoptero_alto', vol * k); };
-  if (jogador.carro?.voa && !jogador.carro.caminhao && !jogador.carro.aviao) somHeli(jogador.carro.alt || 0, 0.6);
-  if (jogador.passageiro?.piloto) { const o = jogador.passageiro.c.obj; const mp = remotos.get(jogador.passageiro.piloto)?.carroModelo; if (civico.CARROS[mp]?.voa && !String(mp).startsWith('aviao')) somHeli(o.position.y - alturaChao(o.position.x, o.position.z), 0.6); }
+  if (jogador.carro?.servico === 'ovni') sons.zumbido(0.5);
+  else if (jogador.carro?.voa && !jogador.carro.caminhao && !jogador.carro.aviao) somHeli(jogador.carro.alt || 0, 0.6);
+  if (jogador.passageiro?.piloto) { const o = jogador.passageiro.c.obj; const mp = remotos.get(jogador.passageiro.piloto)?.carroModelo; if (mp === 'ovni') sons.zumbido(0.5); else if (civico.CARROS[mp]?.voa && !String(mp).startsWith('aviao')) somHeli(o.position.y - alturaChao(o.position.x, o.position.z), 0.6); }
   for (const r of remotos.values()) {
     if (!r.carro || !civico.CARROS[r.carroModelo]?.voa || String(r.carroModelo).startsWith('aviao') || jogador.passageiro?.piloto && remotos.get(jogador.passageiro.piloto) === r) continue;
+    if (r.carroModelo === 'ovni') { if (r.carro.visible) sons.zumbido(0.45 * sons.perto(dist(r.carro), 90)); continue; }
     somHeli(r.carro.position.y - alturaChao(r.carro.position.x, r.carro.position.z), 0.55 * sons.perto(dist(r.carro), 110));
   }
   // trem: barulho dentro e perto; buzina quando passa perto
@@ -5549,6 +5559,7 @@ function atualizarJogador(dt) {
   const j = jogador, av = j.avatar;
   for (let i = j.eventos.length - 1; i >= 0; i--) { j.eventos[i].t -= dt; if (j.eventos[i].t <= 0) { j.eventos[i].fn(); j.eventos.splice(i, 1); } }
   j.recarga = Math.max(0, j.recarga - dt);
+  if (j.abducao) { seguirAbducao(dt); return; }
   if (j.trem && seguirTrem()) {
     av.tocar(j.carregando ? 'carregar_parado' : 'idle'); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw;
     av.mixer.update(dt); av.raiz.updateMatrixWorld(true);
@@ -5689,9 +5700,9 @@ const CABINE = {
   tanque: { olho: [3.05, -0.6], nada: 1 },
   onibus_grande: { olho: [2.2, 4.6], capo: [1.15, 5.4], x: 0.7 , int: 'int_onibus'},
   onibus_urbano: { olho: [2.25, 5.0], capo: [1.05, 5.75], x: 0.7 , int: 'int_onibus'},
-  onibus_executivo: { olho: [2.35, 4.9], capo: [1.2, 5.6], x: 0.7 , int: 'int_rodoviario'},
-  onibus_executivo2: { olho: [2.4, 6.05], capo: [1.75, 6.88], x: 0.7, cor: '#fcd605' , int: 'int_rodoviario'},
-  onibus_dois_andares: { olho: [1.85, 5.9], capo: [1.0, 6.7], x: 0.7, cor: '#0fb9dd' , int: 'int_rodoviario'},
+  onibus_executivo: { olho: [2.35, 4.9], capo: [1.2, 5.6], x: 0.7 , int: 'int_onibus'},
+  onibus_executivo2: { olho: [2.4, 6.05], capo: [1.75, 6.88], x: 0.7, cor: '#fcd605' , int: 'int_onibus'},
+  onibus_dois_andares: { olho: [1.85, 5.9], capo: [1.0, 6.7], x: 0.7, cor: '#0fb9dd' , int: 'int_onibus'},
   onibus_apache: { olho: [2.2, 5.0], capo: [1.15, 5.8], x: 0.7, cor: '#4b5157' , int: 'int_onibus'},
   onibus_articulado: { olho: [2.25, 8.3], capo: [1.1, 9.05], x: 0.7, cor: '#6ccf3a' , int: 'int_onibus'},
   onibus_busscar: { olho: [2.4, 4.35], x: 0.8, interior: 1 },
@@ -5845,9 +5856,22 @@ function veiculoDoJogador() {
   return null;
 }
 const _dirOlhar = new THREE.Vector3();
+// os caminhões são desenhados dos dois lados (o modelo tem faces viradas para dentro); na visão de dentro,
+// o veículo do jogador volta a ter um lado só, senão o avesso da lataria aparece em volta do para-brisa
+let p1LadoUnico = null;
+function ladoUnicoP1(v) {
+  if (p1LadoUnico === v) return;
+  if (p1LadoUnico) p1LadoUnico.traverse((o) => { if (o.isMesh && o.userData.matDois) { o.material = o.userData.matDois; } });
+  p1LadoUnico = null;
+  if (!v) return;
+  v.traverse((o) => { if (!o.isMesh || !o.material || Array.isArray(o.material) || o.material.side !== THREE.DoubleSide) return;
+    o.userData.matDois = o.material; o.userData.matUm ||= Object.assign(o.material.clone(), { side: THREE.FrontSide }); o.material = o.userData.matUm; });
+  p1LadoUnico = v;
+}
 function cabecaDe(av) { if (!av) return null; if (av.ossoCabeca === undefined) { av.ossoCabeca = null; av.modelo.traverse((o) => { if (!av.ossoCabeca && o.isBone && /head$/i.test(o.name) && !/top/i.test(o.name)) av.ossoCabeca = o; }); } return av.ossoCabeca; }
 function atualizarCamera3D(dt) {
   camAtiva = camP;
+  if (modoCam !== 'p1' || !veiculoDoJogador()) ladoUnicoP1(null);
   const av = jogador.avatar;
   if (av && (atualizarCamera3D.t = (atualizarCamera3D.t || 0) - dt) <= 0) {   // refaz de tempos em tempos (arma, chapéu e etiqueta entram depois)
     atualizarCamera3D.t = 0.5; const cab = cabecaDe(av);
@@ -5862,6 +5886,7 @@ function atualizarCamera3D(dt) {
       const tc = tipoCabine(); olho = olhoDoVeiculo(v, tc); if (olhar.arrastou <= 0) olhar.veic *= Math.max(0, 1 - dt * 2);
       const cb = tc === 'aviao' || tc === 'heli' ? cabine(tc) : cabineVeiculo(v, tc);
       const int3 = interiorDoVeiculo(v);
+      ladoUnicoP1(v);   // por dentro, a lataria do próprio veículo não aparece pelo avesso
       for (const g of Object.values(cabines)) g.visible = !int3 && g === cb && (g.parent !== camP || Math.abs(olhar.veic) < 1.2);   // a do veículo fica presa nele
       if (int3) { v.updateMatrixWorld(); int3.matrix.multiplyMatrices(v.matrixWorld, int3.userData.local); int3.visible = true; cabine3D = int3; }
       if (cb?.userData.volante) cb.userData.volante.rotation.z = -(jogador.carro?.volante || 0) * 1.8;
@@ -5896,6 +5921,7 @@ function atualizarCamera3D(dt) {
 }
 function atualizarCamera(dt) {
   if (modo3D()) { atualizarCamera3D(dt); return; }
+  ladoUnicoP1(null);
   camAtiva = camera;
   if ($('mira1p')) $('mira1p').classList.add('oculto');
   // dirigindo, a câmera gira para ficar atrás do veículo: a frente dele aponta sempre para cima da tela
@@ -6133,6 +6159,7 @@ function quadroJogo() {
   atualizarExplosoes(dt); atualizarSemPiloto(dt); atualizarContagemMorte();
   atualizarMira();
   civico.atualizarQuartel(jogador.pos);
+  atualizarArea51(dt);
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   atualizarRemotos(dt);
@@ -9523,6 +9550,7 @@ function prepararTransporte() {
   mundo.limparArea(RODO.x0 - 1, RODO.z0 - 1, RODO.x1 + 1, RODO.z1 + 1);
   mundo.limparArea(CENTRAL.x0 - 1, CENTRAL.z0 - 1, CENTRAL.x1 + 1, CENTRAL.z1 + 1); for (const S of SETORES) mundo.semEstacionar(S.cam.pts);
   mundo.limparArea(AUTOESCOLA.x0 - 1, AUTOESCOLA.z0 - 1, AUTOESCOLA.x1 + 1, AUTOESCOLA.z1 + 1);
+  { const D = mundo.AREA51.deserto; mundo.limparArea(D.x0, D.z0, D.x1, D.z1); }   // deserto da Área 51
   mundo.limparArea(COMPRADOR.x - 9, COMPRADOR.z - 8, COMPRADOR.x + 9, COMPRADOR.z + 11);   // armazém do Seu Tonho: sem árvore na frente
   mundo.semEstacionar([[AUTOESCOLA.x0 - 12, AUTOESCOLA.saida.z], [AUTOESCOLA.x1 + 6, AUTOESCOLA.saida.z]]);
   for (const a of AEROPORTOS) {
@@ -10445,8 +10473,8 @@ function pilotarHeli(c, dt, max) {
   if (c.motorParado) sobe = false;
   const noAr = c.alt > 0.3, chao = alturaChao(jogador.pos.x, jogador.pos.z);
   // altura: sobe 3 m/s, desce 2,5 m/s (sem tranco); com o motor falhando, cai a 7 m/s
-  const vsAlvo = c.motorParado ? -7 : sobe ? 3 : desce ? -2.5 : 0;
-  c.vs = (c.vs || 0) + THREE.MathUtils.clamp(vsAlvo - (c.vs || 0), -4 * dt, 4 * dt);
+  const ufo = c.servico === 'ovni', vsAlvo = c.motorParado ? -7 : sobe ? (ufo ? 7 : 3) : desce ? (ufo ? -6 : -2.5) : 0;
+  c.vs = (c.vs || 0) + THREE.MathUtils.clamp(vsAlvo - (c.vs || 0), -(ufo ? 10 : 4) * dt, (ufo ? 10 : 4) * dt);
   const altAntes = c.alt; c.alt = Math.min(120, c.alt + c.vs * dt);
   if (c.alt <= 1.5 && c.vs < 0) {   // pousando: precisa de chão livre
     const t = jogador.pos.clone(); mundo.limitar(t);
@@ -10469,14 +10497,14 @@ function pilotarHeli(c, dt, max) {
   c.vel += THREE.MathUtils.clamp(alvoV - c.vel, -5 * dt, 4 * dt);
   c.volante = (c.volante || 0) + (lado - (c.volante || 0)) * Math.min(1, dt * 5);
   if (noAr) jogador.yaw -= c.volante * 1.3 * dt;
-  jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * dt, -700, 700);
+  jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * dt, -890, 700);
   jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * dt, -1200, 1200);
   // prédios: alarme e batida
   if (noAr && aeronaveEmPredio(c, chao)) return;
   if (noAr) alertaPredio(c, chao);
   const ch2 = alturaChao(jogador.pos.x, jogador.pos.z);
   jogador.pos.y = ch2; c.mesh.position.set(jogador.pos.x, ch2 + c.alt, jogador.pos.z);
-  c.mesh.rotation.set(noAr ? c.vel / Math.max(max, 1) * 0.18 : 0, jogador.yaw, noAr ? c.volante * 0.12 : 0, 'YXZ');   // inclina para a frente e para o lado da curva
+  c.mesh.rotation.set(noAr ? c.vel / Math.max(max, 1) * (ufo ? 0.06 : 0.18) : 0, jogador.yaw, noAr ? c.volante * (ufo ? 0.05 : 0.12) : 0, 'YXZ');   // inclina para a frente e para o lado da curva
   const ro = c.mesh.userData.rotor || rotorDe(c.mesh); if (ro) { ro.visible = true; ro.rotation.y += dt * (c.motorParado ? 8 : c.alt > 0.3 || sobe ? 28 : 12); }
   jogador.avatar.raiz.position.copy(jogador.pos);
   const bp = $('vPairar'), revisa = c.alt <= 0 && !!chaveHeli(c) && Math.hypot(MECANICO_HANGAR.x - jogador.pos.x, MECANICO_HANGAR.z - jogador.pos.z) < 35;
@@ -11185,4 +11213,253 @@ function atualizarCativeiro(dt) {
     eraCativo = false; conexao?.rastrear(metaPresenca());
     aviso('🔓 Você está livre! Saia da mata pela trilha.', 4);
   }
+}
+
+// ================================================================= ÁREA 51 E O ÓVNI
+// Base secreta do Exército no deserto, a oeste da metrópole. Só oficiais do Exército (Tenente para cima) entram;
+// o óvni fica no hangar (o teto abre no meio). Pilotando, parado em cima de alguém: 👽 Abduzir. O abduzido sobe
+// no feixe, não vê nada (tela branca e depois preta) e acorda numa rua qualquer. À noite, quem está perto vê
+// "luzes estranhas" e os jornalistas recebem o avistamento (região aproximada) para correr e fotografar.
+const A51 = mundo.AREA51;
+let area51 = null, avisoA51 = 0, tAvistamento = 0, ovniMarcaAte = 0, abducaoPronta = 0, ultimaAbducao = -1e9;
+const feixesOvni = [];
+function acessoArea51() { return jogador.perfil?.cargo === 'admin' || (militar() && podePilotarHeliExercito()); }
+function dentroArea51(x, z, m = 0) { return x > A51.x0 - m && x < A51.x1 + m && z > A51.z0 - m && z < A51.z1 + m; }
+function regiaoDe(x, z) {
+  if (x <= -640) return 'deserto a oeste da Metrópole';
+  if (Math.abs(z) > 700) return z < 0 ? 'Vila Serra' : 'Porto Sul';
+  const p = []; if (z < -150) p.push('norte'); else if (z > 150) p.push('sul'); if (x > 150) p.push('leste'); else if (x < -150) p.push('oeste');
+  return p.length ? `zona ${p.join('-')} da Metrópole` : 'centro da Metrópole';
+}
+function montarArea51() {
+  if (area51) return;
+  const g = new THREE.Group(); scene.add(g);
+  const M = (c, x = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, ...x });
+  const areiaTex = texturaCanvas(256, (c, t) => { c.fillStyle = '#d2b07a'; c.fillRect(0, 0, t, t); ruido(c, t, 9000, 0.07, 1.6, [150, 110, 60]);
+    c.strokeStyle = 'rgba(170,130,80,.35)'; c.lineWidth = 2; for (let y = 8; y < t; y += 22) { c.beginPath(); c.moveTo(0, y); for (let x = 0; x <= t; x += 16) c.lineTo(x, y + Math.sin(x / 20 + y) * 4); c.stroke(); } });
+  const D = A51.deserto; areiaTex.repeat.set((D.x1 - D.x0) / 18, (D.z1 - D.z0) / 18);
+  const plano = (x, z, w, d, mat, y) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; g.add(m); return m; };
+  const caixa = (x, y, z, w, h, d, mat, col = false, sombra = true) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = sombra; m.receiveShadow = true; g.add(m);
+    if (col) colisores.push({ tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 }); return m; };
+  plano((D.x0 + D.x1) / 2, (D.z0 + D.z1) / 2, D.x1 - D.x0, D.z1 - D.z0, M('#ffffff', { map: areiaTex }), 0.012);
+  // estrada até o portão (continua a Avenida Central) e o pátio de concreto
+  const asf = M('#3d4047'), amarelo = M('#e8c23a'), concreto = M('#9d9a92'), branco = M('#e8e8e8');
+  plano(-670, 0, 62, 10, asf, 0.02); for (let x = -697; x < -642; x += 6) plano(x, 0, 3, 0.25, amarelo, 0.03);
+  plano((A51.x0 + A51.x1) / 2, 0, A51.x1 - A51.x0, A51.z1 - A51.z0, concreto, 0.016);
+  plano(-790, 72, 150, 16, asf, 0.022); for (let x = -858; x < -722; x += 9) plano(x, 72, 5, 0.4, branco, 0.03);   // pista
+  { const hel = plano(-740, -62, 16, 16, asf, 0.022); void hel; const an = new THREE.Mesh(new THREE.RingGeometry(6.2, 6.8, 40), branco); an.rotation.x = -Math.PI / 2; an.position.set(-740, 0.03, -62); g.add(an);
+    caixa(-742, 0.03, -62, 0.8, 0.02, 6, branco, false, false); caixa(-738, 0.03, -62, 0.8, 0.02, 6, branco, false, false); caixa(-740, 0.03, -62, 3.2, 0.02, 0.8, branco, false, false); }
+  // muro com arame no topo; portão a leste (z de -6 a 6)
+  const muro = M('#8b8172'), arame = M('#2b2b2b'), H = 5, e = 0.7;
+  const muroDe = (x, z, w, d) => { caixa(x, H / 2, z, w, H, d, muro, true); caixa(x, H + 0.35, z, Math.max(w, 0.15), 0.7, Math.max(d, 0.15), arame, false, false); };
+  muroDe((A51.x0 + A51.x1) / 2, A51.z0, A51.x1 - A51.x0, e); muroDe((A51.x0 + A51.x1) / 2, A51.z1, A51.x1 - A51.x0, e);
+  muroDe(A51.x0, 0, e, A51.z1 - A51.z0);
+  muroDe(A51.x1, (A51.z0 - 6) / 2, e, -6 - A51.z0); muroDe(A51.x1, (A51.z1 + 6) / 2, e, A51.z1 - 6);
+  const portao = { tipo: 'caixa', x0: A51.x1 - 0.6, x1: A51.x1 + 0.6, z0: -6, z1: 6 }; colisores.push(portao);
+  const cancela = new THREE.Group(); cancela.position.set(A51.x1 + 1, 1.1, -6); g.add(cancela);
+  { const b = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 12), M('#d33a2c')); b.position.z = 6; cancela.add(b);
+    for (let k = 1; k < 12; k += 2) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.27, 1), M('#f2f2f2')); f.position.z = k; cancela.add(f); } }
+  caixa(A51.x1 + 1, 0.55, -6.6, 0.6, 1.1, 0.6, M('#555'));
+  // guarita e placas
+  caixa(A51.x1 - 6, 1.5, 10, 4, 3, 4, M('#7c8a6a'), true); caixa(A51.x1 - 6, 3.15, 10, 4.6, 0.3, 4.6, M('#4a5242'));
+  caixa(A51.x1 - 3.95, 1.8, 10, 0.05, 1, 2.6, M('#9fd0e8', { roughness: 0.1, emissive: '#29424f' }), false, false);
+  const placa = textoSprite('⚠️ ÁREA 51 · ACESSO RESTRITO AO EXÉRCITO', { escala: 0.8, fundo: 'rgba(150,30,20,.94)' }); placa.position.set(A51.x1 + 2, 7, 0); g.add(placa);
+  const placa2 = textoSprite('🚫 Proibido fotografar · uso de força autorizado', { escala: 0.55, fundo: 'rgba(40,40,40,.9)' }); placa2.position.set(-660, 3.2, 8); g.add(placa2);
+  // hangar: paredes altas e o teto aberto no meio (o óvni sai por cima)
+  const Hg = A51.hangar, hx0 = Hg.x - Hg.w / 2, hx1 = Hg.x + Hg.w / 2, hz0 = Hg.z - Hg.d / 2, hz1 = Hg.z + Hg.d / 2, HH = 11;
+  const chapa = M('#6f757b', { metalness: 0.5, roughness: 0.6 }), ferro = M('#3b3f44');
+  caixa(Hg.x, HH / 2, hz0, Hg.w, HH, 0.5, chapa, true); caixa(Hg.x, HH / 2, hz1, Hg.w, HH, 0.5, chapa, true);
+  caixa(hx0, HH / 2, Hg.z, 0.5, HH, Hg.d, chapa, true);
+  caixa(hx1, HH / 2, (hz0 + (Hg.z + 8)) / 2, 0.5, HH, Hg.z + 8 - hz0, chapa, true);       // parede leste com a porta de pessoal
+  caixa(hx1, HH / 2, (hz1 + (Hg.z + 12)) / 2, 0.5, HH, hz1 - (Hg.z + 12), chapa, true);
+  caixa(hx1, (HH + 3) / 2, Hg.z + 10, 0.5, HH - 3, 4, chapa, false);
+  caixa(hx1 + 0.3, 1.5, Hg.z + 10, 0.1, 3, 4, M('#2a2d31'), false, false).visible = false;
+  for (const zz of [hz0 + 3, hz1 - 3]) caixa(Hg.x, HH + 0.2, zz, Hg.w + 0.6, 0.4, 6.4, ferro);                     // faixas do teto (o meio fica aberto)
+  const folhas = [-1, 1].map((sg) => caixa(Hg.x, HH + 0.75, Hg.z + sg * 4.4, Hg.w + 0.4, 0.35, 8.9, chapa, false));   // teto que abre: as duas folhas deslizam para os lados
+  for (let x = hx0 + 3; x < hx1; x += 7) caixa(x, HH + 0.1, Hg.z, 0.35, 0.35, Hg.d - 12, ferro, false, false);     // vigas
+  plano(Hg.x, Hg.z, Hg.w, Hg.d, M('#55595e'), 0.03);
+  { const an = new THREE.Mesh(new THREE.RingGeometry(7, 7.5, 48), amarelo); an.rotation.x = -Math.PI / 2; an.position.set(Hg.x, 0.04, Hg.z); g.add(an); }
+  const pl3 = textoSprite('HANGAR 18', { escala: 0.6, fundo: 'rgba(40,46,40,.92)' }); pl3.position.set(hx1 + 0.6, HH - 1.5, Hg.z - 2); g.add(pl3);
+  // holofotes nas quinas (acendem à noite)
+  const lamp = new THREE.MeshBasicMaterial({ color: '#fff6d8', toneMapped: false }), luzCone = new THREE.MeshBasicMaterial({ color: '#fff3c4', transparent: true, opacity: 0.0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false });
+  for (const [x, z] of [[A51.x0 + 3, A51.z0 + 3], [A51.x0 + 3, A51.z1 - 3], [A51.x1 - 3, A51.z0 + 3], [A51.x1 - 3, A51.z1 - 3]]) {
+    caixa(x, 7, z, 0.5, 14, 0.5, ferro, false); caixa(x, 14.2, z, 1.4, 0.8, 1.4, ferro, false);
+    const l = new THREE.Mesh(new THREE.SphereGeometry(0.45, 10, 8), lamp); l.position.set(x, 14, z); g.add(l);
+    const alvoX = (A51.x0 + A51.x1) / 2, alvoZ = 0, dx = alvoX - x, dz = alvoZ - z, L = Math.hypot(dx, 14, dz) * 0.55;
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 9, L, 20, 1, true), luzCone);
+    cone.position.set(x + dx / Math.hypot(dx, 14, dz) * L / 2, 14 - 14 / Math.hypot(dx, 14, dz) * L / 2, z + dz / Math.hypot(dx, 14, dz) * L / 2);
+    cone.lookAt(x, 14, z); cone.rotateX(-Math.PI / 2); g.add(cone);
+  }
+  // deserto: dunas baixas e cactos (fora do muro e da estrada)
+  const duna = M('#c9a46c'), cacto = M('#4f7a3a');
+  let sd = 51; const rnd = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; };
+  for (let k = 0; k < 70; k++) {
+    const x = D.x0 + 6 + rnd() * (D.x1 - D.x0 - 12), z = D.z0 + 6 + rnd() * (D.z1 - D.z0 - 12);
+    if (dentroArea51(x, z, 10) || (Math.abs(z) < 12 && x > A51.x1 - 5)) continue;
+    if (k % 3) { const d = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 8), duna); d.scale.set(6 + rnd() * 10, 0.8 + rnd() * 1.6, 4 + rnd() * 8); d.position.set(x, -0.2, z); d.rotation.y = rnd() * 3; d.receiveShadow = true; g.add(d); }
+    else { const h = 2 + rnd() * 2.5; caixa(x, h / 2, z, 0.45, h, 0.45, cacto, true);
+      for (const s of [-1, 1]) if (rnd() < 0.7) { const bh = 0.6 + rnd(); caixa(x + s * 0.55, h * 0.45, z, 0.7, 0.3, 0.3, cacto, false, false); caixa(x + s * 0.85, h * 0.45 + bh / 2, z, 0.3, bh, 0.3, cacto, false, false); } }
+  }
+  area51 = { g, portao, cancela, luzCone, folhas, abertura: 0 };
+}
+function atualizarArea51(dt) {
+  if (!jogador.perfil) return;
+  const agora = performance.now(), p = jogador.pos, ok = acessoArea51();
+  if (!area51 && Math.hypot(p.x - (A51.x0 + A51.x1) / 2, p.z) < 700) montarArea51();
+  if (area51) {
+    area51.portao.off = ok;
+    const abre = ok && Math.hypot(p.x - A51.x1, p.z) < 18;
+    area51.cancela.rotation.x = THREE.MathUtils.lerp(area51.cancela.rotation.x, abre ? -Math.PI / 2 * 0.95 : 0, Math.min(1, dt * 3));
+    area51.luzCone.opacity = 0.16 * noiteAtual;
+  }
+  // de fora não entra (nem pousando)
+  if (!ok && !jogador.abducao && dentroArea51(p.x, p.z)) {
+    const c = jogador.carro;
+    if (c?.voa && !c.aviao) { if ((c.alt || 0) < 9) { c.alt = 9; c.vs = Math.max(0, c.vs || 0); } }
+    else if (!c?.aviao) teleportar(A51.x1 + 8, 0);
+    if (agora - avisoA51 > 4000) { avisoA51 = agora; aviso('🚫 Área 51: acesso restrito ao Exército (Tenente para cima). Espaço aéreo fechado para pouso.', 4); }
+  }
+  if (jogador.carro?.servico !== 'ovni') { const bt = $('btOvniInv'); if (bt) bt.style.display = 'none'; }
+  tetoHangar(dt);
+  // o óvni da exposição só aparece para quem tem acesso
+  const vit = civico.EXERCITO.veiculos.find((v) => v.modelo === 'ovni');
+  if (vit && !ok) vit.mesh.visible = false;
+  // luzes de todos os óvnis
+  const lista = []; if (vit?.mesh.visible) lista.push(vit.mesh);
+  if (meuMilitar?.modelo === 'ovni') lista.push(meuMilitar.mesh);
+  for (const r of remotos.values()) if (r.carroModelo === 'ovni' && r.carro?.visible) lista.push(r.carro);
+  if (lista.length) ovni.animar(agora / 1000, lista, noiteAtual);
+  for (let i = feixesOvni.length - 1; i >= 0; i--) { const f = feixesOvni[i]; if (agora > f.ate) { f.g.parent?.remove(f.g); feixesOvni.splice(i, 1); } else ovni.animarFeixe(f.g, agora / 1000); }
+  // à noite, voando, o óvni é avistado
+  const c = jogador.carro;
+  if (c?.servico === 'ovni') controlesOvni(c, dt);
+  if (c?.servico === 'ovni' && !c.invisivel && (c.alt || 0) > 10 && noiteAtual > 0.45 && (tAvistamento -= dt) <= 0) {
+    tAvistamento = 45;
+    const x = p.x + (Math.random() - 0.5) * 120, z = p.z + (Math.random() - 0.5) * 120;
+    conexao?.enviar('ovniVisto', { x: Math.round(x), z: Math.round(z), lugar: regiaoDe(p.x, p.z) });
+  }
+  if (rastreio?.ovni && agora > ovniMarcaAte) rastrear(null);
+}
+// ---- abdução
+function alvoAbducao() {
+  const c = jogador.carro; if (c?.servico !== 'ovni' || (c.alt || 0) < 3 || c.alt > 45 || Math.abs(c.vel) > 5) return null;
+  let melhor = null, dm = 7.5;
+  for (const [id, r] of remotos) {
+    const a = r.alvo; if (!a || !r.av?.raiz.visible || a.cv || a.vc || a.pg || a.tr || a.x > 1500) continue;
+    const d = Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z); if (d < dm) { dm = d; melhor = { id, r }; }
+  }
+  return melhor;
+}
+function feixeEm(pai, h, seg = 6.5) { const f = ovni.feixe(h); pai.add(f); feixesOvni.push({ g: f, ate: performance.now() + seg * 1000 }); }
+function abduzir(alvo) {
+  if (!alvo || !conexao) return;
+  const agora = performance.now();
+  if (agora < abducaoPronta) { aviso(`👽 O feixe está recarregando: ${Math.ceil((abducaoPronta - agora) / 1000)} s.`, 2.5); return; }
+  abducaoPronta = agora + 120000;
+  const c = jogador.carro;
+  feixeEm(c.mesh, c.alt || 10); sons.abducao?.();
+  conexao.enviar('abducao', { alvo: alvo.id, de: jogador.perfil.id, x: r2(jogador.pos.x), z: r2(jogador.pos.z), y: r2(c.mesh.position.y), h: r2(c.alt || 10) });
+  aviso(`👽 Feixe ligado em ${alvo.r.meta?.nome || 'alguém'}…`, 3);
+}
+function r2(v) { return Math.round(v * 100) / 100; }
+function receberAbducao(e) {
+  if (!jogador.perfil) return;
+  const r = remotos.get(e.de);   // o feixe sai do óvni de quem abduziu (todos veem)
+  if (r?.carro?.visible) feixeEm(r.carro, Number(e.h) || 10);
+  else { const o = new THREE.Group(); o.position.set(e.x, e.y, e.z); scene.add(o); feixeEm(o, Number(e.h) || 10); setTimeout(() => scene.remove(o), 7000); }
+  if (Math.hypot(e.x - jogador.pos.x, e.z - jogador.pos.z) < 120) sons.abducao?.();
+  if (e.alvo !== jogador.perfil.id) return;
+  const j = jogador, agora = performance.now();
+  const motivo = j.dentroCasa ? 'está dentro de um lugar fechado' : j.carro || j.trem || j.passageiro || j.onibus || j.voo ? 'está num veículo' : j.morto ? 'está caído'
+    : j.pena > 0 || cativo() || presoMilitar() || j.algemado ? 'está preso' : j.abducao ? 'já está sendo levado' : agora - ultimaAbducao < 600000 ? 'foi abduzido há pouco' : null;
+  conexao?.enviar('abducaoRes', { para: e.de, ok: !motivo, nome: j.perfil.nome, motivo });
+  if (motivo) return;
+  iniciarAbducao(e);
+}
+function receberAbducaoRes(e) {
+  if (e.para !== jogador.perfil?.id) return;
+  if (e.ok) aviso(`👽 ${e.nome} está subindo no feixe…`, 3);
+  else { abducaoPronta = 0; aviso(`👽 Não deu: ${e.nome} ${e.motivo}.`, 3); }
+}
+function iniciarAbducao(e) {
+  const j = jogador; if (j.armado) alternarArma();
+  const chao = alturaChao(j.pos.x, j.pos.z);
+  j.abducao = { t: 0, chao, topo: Math.max(chao + 3, Number(e.y) - 1.5), fim: false };
+  j.alvo = null; ultimaAbducao = performance.now();
+  let tela = $('telaAbducao');
+  if (!tela) { tela = document.createElement('div'); tela.id = 'telaAbducao'; tela.style.cssText = 'position:fixed;inset:0;z-index:60;pointer-events:auto;background:#fff;opacity:0;transition:background-color 1.2s, opacity .6s'; document.body.appendChild(tela); }
+  tela.style.display = 'block'; tela.style.background = '#fff'; setTimeout(() => { tela.style.opacity = "1"; }, 20);
+  conexao?.enviar('ovniAbducao', { x: Math.round(j.pos.x), z: Math.round(j.pos.z), lugar: regiaoDe(j.pos.x, j.pos.z) });
+}
+function seguirAbducao(dt) {
+  const j = jogador, A = j.abducao, av = j.avatar; A.t += dt;
+  const tela = $('telaAbducao');
+  if (A.t > 1.2 && tela && !A.preto) { A.preto = true; tela.style.background = '#000'; }
+  j.pos.y = A.chao + Math.min(1, A.t / 4.5) * (A.topo - A.chao);
+  av.tocar('idle'); av.raiz.position.copy(j.pos); av.raiz.rotation.y += dt * 1.5; j.yaw = av.raiz.rotation.y;
+  av.mixer.update(dt); av.raiz.updateMatrixWorld(true);
+  if (A.t > 5.5 && !A.fim) {
+    A.fim = true; j.abducao = null;
+    // acorda numa rua qualquer da metrópole
+    const R = mundo.ruaC, i = Math.floor(Math.random() * 15) - 5, longe = (Math.random() * 2 - 1) * 380;
+    const [x, z] = Math.random() < 0.5 ? [R(i), longe] : [longe, R(i)];
+    j.pos.y = 0; teleportar(x, z);
+    av.raiz.position.copy(j.pos); av.raiz.visible = true;
+    setTimeout(() => { if (tela) { tela.style.opacity = '0'; setTimeout(() => { tela.style.display = 'none'; }, 700); } aviso('😵 Você acordou no meio da rua… não lembra de nada.', 5); }, 900);
+  }
+}
+// ---- avistamentos (jornalistas)
+function receberOvniVisto(e) {
+  if (!jogador.perfil) return;
+  const d = Math.hypot(e.x - jogador.pos.x, e.z - jogador.pos.z);
+  if (jogador.perfil.profissao === 'jornalista') {
+    if (!rastreio || rastreio.ovni) { rastrear({ nome: '🛸 Avistamento de óvni (região aproximada)', x: e.x, z: e.z, ovni: true }); ovniMarcaAte = performance.now() + 180000; }
+    aviso(`📰 Avistamento de óvni: ${e.lugar}! Corra para fotografar (Jornal › Tirar foto).`, 5);
+  } else if (d < 320 && !jogador.dentroCasa) aviso('🛸 Luzes estranhas no céu…', 4);
+}
+function receberOvniAbducao(e) {
+  if (jogador.perfil?.profissao !== 'jornalista') return;
+  if (!rastreio || rastreio.ovni) { rastrear({ nome: '👽 Relato de abdução', x: e.x, z: e.z, ovni: true }); ovniMarcaAte = performance.now() + 180000; }
+  aviso(`📰 Relato de abdução: ${e.lugar}. Alguém diz ter sido levado por uma luz no céu!`, 5);
+}
+
+// teto do Hangar 18: abre quando um óvni está perto (o seu ou o de outro piloto) e fecha depois
+function tetoHangar(dt) {
+  if (!area51) return;
+  const H = A51.hangar, perto = (o) => o && Math.hypot(o.position.x - H.x, o.position.z - H.z) < 70;
+  let abre = jogador.carro?.servico === 'ovni' && perto(jogador.carro.mesh);
+  for (const r of remotos.values()) if (r.carroModelo === 'ovni' && perto(r.carro)) abre = true;
+  area51.abertura = THREE.MathUtils.clamp(area51.abertura + (abre ? 1 : -1) * dt / 3, 0, 1);   // 3 s para abrir ou fechar
+  const k = area51.abertura * area51.abertura * (3 - 2 * area51.abertura);
+  area51.folhas.forEach((f, i) => { f.position.z = H.z + (i ? 1 : -1) * (4.4 + 8.8 * k); });
+}
+function dentroHangar(x, z) { const H = A51.hangar; return Math.abs(x - H.x) < H.w / 2 - 1 && Math.abs(z - H.z) < H.d / 2 - 1; }
+// botão de invisibilidade (e pousado fora do hangar ele fica invisível sozinho)
+function controlesOvni(c) {
+  let bt = $('btOvniInv');
+  if (!bt) {
+    bt = document.createElement('button'); bt.id = 'btOvniInv';
+    bt.style.cssText = 'position:fixed;right:calc(env(safe-area-inset-right,0px) + 14px);top:calc(env(safe-area-inset-top,0px) + 46vh);z-index:12;border-radius:14px;border:2px solid #7ff6ff;background:rgba(14,30,40,.85);color:#dffcff;font:800 13px system-ui;padding:9px 12px;min-width:92px';
+    bt.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); alternarInvisivel(); });
+    document.body.appendChild(bt);
+    window.addEventListener('keydown', (ev) => { if (ev.key?.toLowerCase() === 'i' && jogador.carro?.servico === 'ovni' && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) alternarInvisivel(); });
+  }
+  bt.style.display = 'block';
+  if ((c.alt || 0) <= 0.2 && !dentroHangar(jogador.pos.x, jogador.pos.z) && !c.invisivel) { c.invisivel = true; aviso('👻 Pousado fora do hangar: o óvni ficou invisível sozinho.', 3); }
+  const txt = c.invisivel ? '👻 Invisível<br><small>ligado</small>' : '👁️ Visível<br><small>toque p/ sumir</small>';
+  if (bt.dataset.t !== txt) { bt.dataset.t = txt; bt.innerHTML = txt; bt.style.borderColor = c.invisivel ? '#b48cff' : '#7ff6ff'; }
+  const h = c.mesh.getObjectByName?.('ovniHalo'); if (h) h.visible = !c.invisivel;   // para você: sem o halo quando está invisível
+}
+function alternarInvisivel() {
+  const c = jogador.carro; if (c?.servico !== 'ovni') return;
+  if (c.invisivel && (c.alt || 0) <= 0.2 && !dentroHangar(jogador.pos.x, jogador.pos.z)) { aviso('Pousado fora do hangar ele fica invisível. Decole para aparecer.', 3); return; }
+  c.invisivel = !c.invisivel;
+  aviso(c.invisivel ? '👻 Óvni invisível: ninguém vê você (o feixe de abdução ainda aparece).' : '🛸 Óvni visível de novo.', 3);
+}
+// descer do óvni: no hangar ele fica guardado; fora dele, volta sozinho (invisível) para o Hangar 18
+function guardarOvni(c) {
+  c.invisivel = false;
+  if (dentroHangar(c.mesh.position.x, c.mesh.position.z)) { aviso('🛸 Óvni guardado no Hangar 18.', 3); return; }
+  scene.remove(c.mesh); if (meuMilitar?.mesh === c.mesh) meuMilitar = null;
+  aviso('🛸 O óvni voltou sozinho, invisível, para o Hangar 18.', 3.5);
 }

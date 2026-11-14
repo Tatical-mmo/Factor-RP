@@ -91,6 +91,10 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'onibusSeq' }, ({ payload }) => eventos.onibusSeq?.(payload));
   canal.on('broadcast', { event: 'denuncia' }, ({ payload }) => eventos.denuncia?.(payload));
   canal.on('broadcast', { event: 'reset' }, ({ payload }) => eventos.reset?.(payload));
+  canal.on('broadcast', { event: 'abducao' }, ({ payload }) => eventos.abducao?.(payload));
+  canal.on('broadcast', { event: 'abducaoRes' }, ({ payload }) => eventos.abducaoRes?.(payload));
+  canal.on('broadcast', { event: 'ovniVisto' }, ({ payload }) => eventos.ovniVisto?.(payload));
+  canal.on('broadcast', { event: 'ovniAbducao' }, ({ payload }) => eventos.ovniAbducao?.(payload));
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await canal.track(eventos.meta ? eventos.meta() : { nome: perfil.nome, personagem: perfil.personagem, cargo: perfil.cargo });

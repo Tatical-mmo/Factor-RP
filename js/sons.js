@@ -66,6 +66,7 @@ export function continuo(nome, vol, velocidade) {
 }
 export function atualizar() {
   if (!ac) return;
+  atualizarZumbido();
   for (const n of CONTINUOS) {
     const l = lacos[n]; if (!l) continue;
     const alvo = Math.min(1, desejado[n] || 0);
@@ -96,4 +97,28 @@ export function radio() {
   const o = ac.createOscillator(), go = ac.createGain(); o.type = 'square'; o.frequency.value = 1250;
   go.gain.setValueAtTime(0.0001, t + 0.1); go.gain.exponentialRampToValueAtTime(0.06, t + 0.11); go.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
   o.connect(go); go.connect(mestre); o.start(t + 0.1); o.stop(t + 0.22);
+}
+
+// óvni: zumbido grave que pulsa (gerado na hora, sem arquivo). O jogo pede o volume a cada quadro.
+let zum = null, zumVol = 0;
+export function zumbido(vol) { zumVol = Math.max(zumVol, vol); }
+function atualizarZumbido() {
+  if (!ac) return;
+  if (!zum && zumVol > 0.01) {
+    const o1 = ac.createOscillator(), o2 = ac.createOscillator(), lfo = ac.createOscillator(), lg = ac.createGain(), g = ac.createGain(), f = ac.createBiquadFilter();
+    o1.type = 'sawtooth'; o1.frequency.value = 62; o2.type = 'sine'; o2.frequency.value = 124.7; lfo.frequency.value = 3.2; lg.gain.value = 14;
+    lfo.connect(lg); lg.connect(o1.frequency); f.type = 'lowpass'; f.frequency.value = 420; g.gain.value = 0;
+    o1.connect(f); o2.connect(f); f.connect(g); g.connect(mestre); o1.start(); o2.start(); lfo.start();
+    zum = { g };
+  }
+  if (zum) zum.g.gain.setTargetAtTime(Math.min(0.5, zumVol) * 0.5, ac.currentTime, 0.3);
+  zumVol = 0;
+}
+// feixe de abdução: varredura subindo com chiado
+export function abducao() {
+  if (!ac || !ligado) return;
+  const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(180, t); o.frequency.exponentialRampToValueAtTime(1400, t + 4.5);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.22, t + 0.4); g.gain.setValueAtTime(0.22, t + 4); g.gain.exponentialRampToValueAtTime(0.0001, t + 5.2);
+  o.connect(g); g.connect(mestre); o.start(t); o.stop(t + 5.3);
 }

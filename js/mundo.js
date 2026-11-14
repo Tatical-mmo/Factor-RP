@@ -31,6 +31,8 @@ export function morro(x, z) {
   return base * 46 * ondas + picos * base;
 }   // cidade + a mata em volta
 // Quartel do Exército (Porto Sul, na mata a leste da cidade): muro, portão a oeste, pátio no meio
+// Área 51: base secreta do Exército no deserto, a oeste da metrópole (acesso pela Avenida Central, z = 0)
+export const AREA51 = { x0: -880, x1: -700, z0: -110, z1: 110, portao: { x: -700, z: 0 }, hangar: { x: -800, z: -20, w: 34, d: 30 }, deserto: { x0: -900, x1: -640, z0: -260, z1: 260 } };
 export const QUARTEL = { x0: 150, x1: 250, z0: 966, z1: 1104, portao: { x: 146, z: 1053 }, patio: { x: 190, z: 1026 } };
 
 let ctx = null;
@@ -105,6 +107,7 @@ export function limitar(p) {
     if (md < 3) { p.x = melhor[0]; p.z = melhor[1]; return; }
   }
   if (p.x >= 110 && p.x <= 530 && p.z >= -880 && p.z <= -650) return;   // Aeroporto da Metrópole
+  if (p.x >= AREA51.x0 - 15 && p.x <= -630 && p.z >= AREA51.z0 - 15 && p.z <= AREA51.z1 + 15) { p.x = Math.max(p.x, AREA51.x0 + 1); p.z = THREE.MathUtils.clamp(p.z, AREA51.z0 + 1, AREA51.z1 - 1); return; }   // deserto da Área 51 e a estrada até ela
   if (p.x >= 157 && p.x <= 167 && p.z >= -662 && p.z <= -630) return;   // acesso ao aeroporto
   if (p.x >= -167 && p.x <= -157 && p.z >= -950 && p.z <= -636) return;   // rodovia para Vila Serra
   if (p.x >= 211 && p.x <= 221 && p.z >= 636 && p.z <= 950) return;     // rodovia para Porto Sul

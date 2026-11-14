@@ -1190,3 +1190,27 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - Tocar na barra minimiza ou abre. Minimizada, ela vira uma pílula pequena de uma linha. A escolha fica salva no aparelho.
 - Quando a torre fala, ou na autorização de decolagem e na arremetida, a barra abre por uns 3 segundos, mesmo minimizada.
 - Fora do avião o rádio e os avisos continuam como antes.
+
+## Versão 13/11 · cabines do caminhão e do rodoviário (20261113zk)
+
+- **Visão de dentro do caminhão**: desde que a lataria passou a ser desenhada dos dois lados, o avesso dela aparecia em volta do para-brisa. Agora, só no veículo que você dirige e só na visão de dentro, a lataria volta a ter um lado só. Por fora o caminhão continua inteiro.
+- **Ônibus rodoviários** (executivo, executivo 2 e dois andares): o interior `int_rodoviario.glb` tem o volante ao lado do banco do motorista. Por enquanto eles usam o interior do ônibus urbano, que tem o volante na frente do banco. Se o `int_rodoviario.glb` for refeito, é só trocar `int: 'int_onibus'` por `int: 'int_rodoviario'` nesses três ônibus, na tabela CABINE do `main.js`.
+
+## Versão 13/11 · Área 51 e o óvni (20261113zl)
+
+- **Área 51**: base secreta do Exército no deserto, a oeste da Metrópole. Para chegar, siga a Avenida Central (z = 0) para o oeste até o fim. Tem muro com arame, portão com cancela, guarita, placas de acesso restrito, pista, heliponto, holofotes que acendem à noite, dunas e cactos.
+- **Quem entra**: só militares do Exército de Tenente para cima (e o admin). Para os outros, o portão não abre e quem cair lá dentro volta para fora. Helicóptero de fora não consegue pousar.
+- **Óvni do Exército** (novo `js/ovni.js`): fica guardado no Hangar 18. É um disco metálico com cúpula, anel de luzes coloridas girando, luzes piscando por baixo e um halo que brilha mais à noite.
+  - Voa como o helicóptero, mas sobe, desce e anda mais rápido e quase não inclina.
+  - Faz um zumbido próprio, gerado na hora, sem arquivo de som.
+  - Só Tenente para cima pilota. Leva mais 2 militares de passageiro.
+  - Todos os jogadores veem o óvni voando.
+  - Se existir `assets/modelos/ovni.glb`, o casco vem dele e as luzes ficam por cima.
+- **Invisível**: pilotando, o botão **👻 Invisível** (no PC, tecla I) faz o óvni sumir para todo mundo, no céu ou em qualquer lugar: sem luzes, sem zumbido e sem avistamento. Quem pilota continua vendo o óvni, sem o halo. Pousado fora do hangar, ele fica invisível sozinho.
+- **Nunca fica exposto**: o teto do Hangar 18 tem duas folhas que abrem em 3 s quando um óvni chega perto e fecham quando ele vai embora. Se o piloto desce do óvni fora do hangar, ele volta sozinho, invisível, para o Hangar 18.
+- **Abdução**: com o óvni a menos de 45 m de altura, devagar e em cima de um jogador, aparece **👽 Abduzir**. Sai um feixe de luz que todos veem. O abduzido sobe no feixe, a tela dele fica branca e depois preta, e ele acorda numa rua qualquer da Metrópole sem lembrar de nada.
+  - Não funciona em quem está num lugar fechado, num veículo, caído, preso ou algemado.
+  - O mesmo jogador só pode ser abduzido de novo depois de 10 min. O feixe recarrega em 2 min.
+- **Jornalistas**: à noite, com o óvni voando alto, quem está a menos de 320 m recebe "🛸 Luzes estranhas no céu…".
+  - Os jornalistas recebem o avistamento com a região aproximada, cerca de 60 m de erro, e uma marca no mapa por 3 min, para correr e fotografar pelo Jornal › Tirar foto.
+  - Cada abdução vira um "Relato de abdução" para os jornalistas, com a região, sem dizer quem foi.
