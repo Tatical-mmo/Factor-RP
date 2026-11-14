@@ -842,6 +842,7 @@ export function escutarLogistica(eventos) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'territorios' }, (p) => eventos.territorio?.(p))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'casas' }, (p) => eventos.casa?.(p))
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'robos_policia' }, (p) => eventos.robo?.(p.new))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'incendios' }, () => eventos.incendio?.())
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'arma_pd' }, (p) => eventos.armaPd?.(p.new))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'clas' }, (p) => eventos.cla?.(p))
     .subscribe();

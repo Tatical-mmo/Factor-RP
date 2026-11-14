@@ -1424,3 +1424,18 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Casas 3D no barranco**: o modelo fica em cima de um alicerce (do ponto mais baixo ao mais alto do terreno), sem afundar no morro.
 - **Veículos na ladeira**: carros, ônibus, caminhões, viaturas e vans inclinam acompanhando o morro (frente/trás e de lado), inclusive os parados e os dos outros jogadores.
 - **Prédios em 3D**: os modelos `predio_*.glb` agora ficam em pé no chão e do tamanho certo (antes ficavam meio enterrados), e mais prédios perto do jogador viram 3D (Baixa 10, Média 26, Alta 48).
+
+## Versão 14/11 · mapa novo e incêndios em qualquer lugar (20261114s)
+
+**Rode o SQL `supabase/84_incendios_aleatorios.sql`** (depois do 83).
+
+- **Mapa (toque no minimapa)**:
+  - **Zoom**: com dois dedos (pinça), com a roda do mouse ou com os botões ＋ e －. **⌖** centraliza em você.
+  - **Arrastar** com um dedo move o mapa; **um toque** (sem arrastar) marca o ponto e começa o rastreio.
+  - **Busca**: procura qualquer lugar pelo nome (sem precisar de acento), inclusive os pontos de ônibus.
+  - **Em destaque (dourado)**: **Minha empresa “nome”**, **Empresa onde trabalho “nome”**, **Minha casa** e **Casa alugada**. Aparecem no mapa, no topo da lista e como pontos dourados no minimapa.
+  - **Rota do rastreio (estilo GTA)**: uma linha roxa mostra o caminho pelas ruas até o destino, no mapa e no minimapa, e se refaz conforme você anda.
+  - O mapa de Bases militares agora inclui o Morro do Porto (o minimapa não fica mais vazio lá).
+- **Incêndios em qualquer lugar**: além de empresas e casas, o fogo começa em ruas da metrópole (lixo e entulho), na mata de Vila Serra e de Porto Sul e em qualquer casa das favelas. Até 3 focos ao mesmo tempo, no máximo 1 novo a cada 4 minutos.
+  - **Todos veem ao mesmo tempo**: o jogo recebe o aviso do banco na hora (não espera a próxima leitura), e quem está a até 220 m recebe "🔥 Fogo na …, a X m de você!".
+  - Sem bombeiros, a prefeitura apaga em 3 minutos; quem tem dono (empresa, casa, casa da favela) paga a taxa de 300.

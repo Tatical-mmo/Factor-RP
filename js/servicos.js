@@ -188,6 +188,10 @@ function carregarFogo() {
       if (vistos.has(f.id)) continue;
       vistos.add(f.id);
       if (bombeiro) { ctx.aviso(`🔥 Incêndio na ${f.nome}! Vá até lá apagar (+400).`, 5); if (!ctx.rastreio()) ctx.rastrear({ nome: `🔥 ${f.nome}`, x: f.x, z: f.z }); }
+      else if (f.tipo !== 'veiculo') {   // quem está perto também vê o aviso (o fogo aparece para todos no mesmo lugar)
+        const p = ctx.jogador()?.pos, d = p ? Math.hypot(f.x - p.x, f.z - p.z) : Infinity;
+        if (d < 220) ctx.aviso(`🔥 Fogo na ${f.nome}, a ${Math.round(d)} m de você!`, 4);
+      }
     }
   }).catch(() => {});
 }
@@ -356,7 +360,7 @@ export function veiculosNpc() { const r = []; for (const n of npcs.values()) if 
 export function atualizar(dt) {
   if (!ctx) return;
   tempoFogo -= dt; tempoProc -= dt; tempoPonto -= dt; tempoGuerra -= dt; esperaPonto -= dt;
-  if (tempoFogo <= 0) { tempoFogo = 6; carregarFogo(); }
+  if (tempoFogo <= 0) { tempoFogo = 8; carregarFogo(); }   // e na hora, quando o banco avisa (incendio)
   if (tempoGuerra <= 0) { tempoGuerra = 15; carregarGuerras(); }
   if (tempoProc <= 0) { tempoProc = 60; rede.saude.processar().catch(() => {}); rede.banco.cobrarFin().catch(() => {}); rede.guerra.processar().catch(() => {}); }
   if (tempoPonto <= 0) { tempoPonto = 60; baterPonto(); }

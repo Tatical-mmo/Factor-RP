@@ -2011,7 +2011,7 @@ const REGIOES_MAPA = [
   { x0: -320, z0: -1400, x1: 320, z1: -640 },     // Vila Serra (com a rodovia)
   { x0: -320, z0: 640, x1: 320, z1: 1190 },      // Porto Sul (com a rodovia)
   { x0: 100, z0: -900, x1: 560, z1: -640 },     // aeroporto da Metrópole
-  { x0: 100, z0: 900, x1: 900, z1: 1420 },      // bases militares (Quartel, Base Aérea, Base Naval e o mar)
+  { x0: 100, z0: 900, x1: 1120, z1: 1420 },     // bases militares (Quartel, Base Aérea, Base Naval, Morro do Porto e o mar)
   { x0: -900, z0: -270, x1: -630, z1: 270 },     // Área 51 (só aparece para quem tem acesso)
 ];
 let fundosMapa = [];
@@ -2049,9 +2049,10 @@ function alvosRastreio() {
   for (const [lote, u] of unidades) {
     const e = empresas.get(u.empresa); if (!e || (e.dono !== eu && e.id !== emprego)) continue;
     const l = LOTES_VENDA.find((x) => x.id === lote); if (!l) continue;
-    r.push({ icone: '🏭', nome: e.nome, x: l.portao.x, z: l.portao.z - 1.5 });
+    r.push({ icone: '🏭', nome: e.dono === eu ? `Minha empresa “${e.nome}”` : `Empresa onde trabalho “${e.nome}”`, x: l.portao.x, z: l.portao.z - 1.5, destaque: true });
   }
-  for (const d of casasLista) if (moraEm(d)) r.push({ icone: '🏠', nome: d.rotulo || 'Sua casa', x: d.x, z: d.z });
+  for (const d of casasLista) if (moraEm(d)) r.push({ icone: '🏠', nome: d.dono === eu ? `Minha casa${d.rotulo ? ` · ${d.rotulo}` : ''}` : `Casa alugada${d.rotulo ? ` · ${d.rotulo}` : ''}`, x: d.x, z: d.z, destaque: true });
+  for (const f of Object.values(mundo.FAVELAS)) { r.push({ icone: '🏚️', nome: f.nome, x: f.entrada.x + 6, z: f.entrada.z }); r.push({ icone: '🏴', nome: `Base de clã · ${f.nome.replace('Favela do ', '')}`, x: f.base.x, z: f.base.z + (f.base.z < 0 ? 26 : -24) }); }
   if (jogador.cla) for (const v of territorios.values()) if (v.d.dono_cla === jogador.cla) r.push({ icone: '🚩', nome: v.d.nome, x: v.d.x, z: v.d.z });
   for (const l of ferrovia.linhas) for (const lado of ['centro', 'destino']) { const p = l.plataformas[lado]; r.push({ icone: '🚆', nome: p.nome, x: 0, z: p.zSaida }); }
   if (contratante) r.push({ icone: '📋', nome: 'Contratante', x: contratante.x, z: contratante.z });
@@ -2101,10 +2102,30 @@ function proximoPasso() {
   const lado = rp === 0 ? 'centro' : 'destino', p = linha.plataformas[lado];
   return { x: 0, z: p.zSaida, nome: `${p.nome} (trem para ${ra === 0 ? 'a Metrópole' : NOMES_REGIAO[ra]})`, estacao: true };
 }
+let rotaGps = null, tRotaGps = 0, rotaDe = null;
+function atualizarRotaGps(dt, passo) {
+  if (!passo || jogador.carro?.voa) { rotaGps = null; return; }
+  tRotaGps -= dt;
+  const andou = !rotaDe || Math.hypot(jogador.pos.x - rotaDe.x, jogador.pos.z - rotaDe.z) > 12;
+  if (tRotaGps > 0 && !andou && rotaGps?.alvo === passo) return;
+  tRotaGps = 2.5; rotaDe = { x: jogador.pos.x, z: jogador.pos.z };
+  const c = mundo.caminhoRuas({ x: jogador.pos.x, z: jogador.pos.z }, { x: passo.x, z: passo.z });
+  rotaGps = c ? { pts: [...c, { x: passo.x, z: passo.z }], alvo: passo } : null;
+}
+function desenharRotaGps(g, tela, larg) {
+  if (!rotaGps) return;
+  g.save(); g.lineJoin = 'round'; g.lineCap = 'round';
+  for (const [cor, l] of [['rgba(20,10,40,.85)', larg + 3], ['#b45cff', larg]]) {
+    g.strokeStyle = cor; g.lineWidth = l; g.beginPath();
+    rotaGps.pts.forEach((p, i) => { const [mx, mz] = tela(p.x, p.z); if (i) g.lineTo(mx, mz); else g.moveTo(mx, mz); }); g.stroke();
+  }
+  g.restore();
+}
 function atualizarRastreio(dt) {
-  if (!rastreio) return;
+  if (!rastreio) { rotaGps = null; return; }
   seguirFugitivoRastreado(); if (!rastreio) return;
   const passo = proximoPasso(), d = Math.hypot(passo.x - jogador.pos.x, passo.z - jogador.pos.z);
+  atualizarRotaGps(dt, passo);
   if (beacon) {
     beacon.position.set(passo.x, alturaChao(passo.x, passo.z), passo.z);
     beacon.children[0].material.opacity = 0.22 + Math.sin(performance.now() / 300) * 0.08;
@@ -2117,39 +2138,121 @@ function atualizarRastreio(dt) {
   }
   if (!passo.estacao && d < 5) { aviso(`Você chegou: ${rastreio.nome}`); rastrear(null); }
 }
+const vistaMapa = { zoom: 1, cx: null, cz: null, reg: -1 };
 function abrirMapaGrande() {
   regiaoMapaG = Math.max(0, regiaoMapa(jogador.pos.x, jogador.pos.z)); if (regiaoMapaG === 5 && !acessoArea51()) regiaoMapaG = 0;
+  vistaMapa.reg = -1;
   $('mapaJanela').classList.remove('oculto');
+  montarControlesMapa();
   desenharMapaGrande();
+}
+// botões de zoom, busca e atalhos (criados uma vez, por cima do mapa)
+function montarControlesMapa() {
+  if ($('mapaBusca')) return;
+  const c = $('mapaG'), caixa = document.createElement('div');
+  caixa.style.cssText = 'position:relative';
+  c.parentNode.insertBefore(caixa, c); caixa.appendChild(c);
+  const zoom = document.createElement('div');
+  zoom.style.cssText = 'position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:6px';
+  zoom.innerHTML = ['＋|1.6', '－|0.625', '⌖|eu'].map((t) => { const [r, v] = t.split('|'); return `<button data-z="${v}" style="width:40px;height:40px;border-radius:10px;border:1px solid var(--borda);background:rgba(20,26,38,.88);color:#fff;font:700 20px system-ui">${r}</button>`; }).join('');
+  caixa.appendChild(zoom);
+  zoom.querySelectorAll('[data-z]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation();
+    if (b.dataset.z === 'eu') { const ri = regiaoMapa(jogador.pos.x, jogador.pos.z); if (ri >= 0) regiaoMapaG = ri; vistaMapa.reg = regiaoMapaG; vistaMapa.cx = jogador.pos.x; vistaMapa.cz = jogador.pos.z; vistaMapa.zoom = Math.max(vistaMapa.zoom, 3); }
+    else vistaMapa.zoom = THREE.MathUtils.clamp(vistaMapa.zoom * Number(b.dataset.z), 1, 10);
+    desenharMapaGrande(); }; });
+  const busca = document.createElement('input');
+  busca.id = 'mapaBusca'; busca.type = 'search'; busca.placeholder = '🔎 Procurar lugar (empresa, casa, ponto de ônibus, favela…)';
+  busca.style.cssText = 'width:100%;margin-top:8px;padding:9px 11px;border-radius:10px;border:1px solid var(--borda);background:#141a26;color:var(--texto);font:15px system-ui;box-sizing:border-box';
+  busca.oninput = () => desenharMapaGrande();
+  caixa.after(busca);
+  // tocar e arrastar move o mapa; dois dedos dão zoom; um toque sem arrastar marca o ponto
+  const dedos = new Map(); let gesto = null;
+  c.onpointerdown = (ev) => {
+    ev.preventDefault(); c.setPointerCapture(ev.pointerId); dedos.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    gesto = { moveu: false, ini: { x: ev.clientX, y: ev.clientY }, dist: dedos.size === 2 ? distDedos(dedos) : 0, zoom: vistaMapa.zoom, dois: dedos.size === 2 || gesto?.dois };
+  };
+  c.onpointermove = (ev) => {
+    const d0 = dedos.get(ev.pointerId); if (!d0 || !gesto) return;
+    const b = c.getBoundingClientRect(), esc = c.width / b.width / mapaGEsc;
+    if (dedos.size === 2) {
+      dedos.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      if (gesto.dist > 0) { vistaMapa.zoom = THREE.MathUtils.clamp(gesto.zoom * distDedos(dedos) / gesto.dist, 1, 10); gesto.moveu = true; desenharMapaGrande(); }
+      return;
+    }
+    const dx = ev.clientX - d0.x, dz = ev.clientY - d0.y;
+    if (!gesto.moveu && Math.hypot(ev.clientX - gesto.ini.x, ev.clientY - gesto.ini.y) < 8) return;
+    gesto.moveu = true; dedos.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    vistaMapa.cx -= dx * esc; vistaMapa.cz -= dz * esc; desenharMapaGrande();
+  };
+  const soltar = (ev) => {
+    const tinha = dedos.has(ev.pointerId); dedos.delete(ev.pointerId); if (!tinha || !gesto) return;
+    if (!gesto.moveu && !gesto.dois && dedos.size === 0) {
+      const b = c.getBoundingClientRect(), mx = (ev.clientX - b.left) / b.width * c.width, mz = (ev.clientY - b.top) / b.height * c.width;
+      rastrear({ nome: 'Ponto marcado', x: mx / mapaGEsc + mapaGO.x, z: mz / mapaGEsc + mapaGO.z }); desenharMapaGrande();
+    }
+    if (dedos.size === 0) gesto = null;
+  };
+  c.onpointerup = soltar; c.onpointercancel = soltar;
+  c.onwheel = (ev) => { ev.preventDefault(); vistaMapa.zoom = THREE.MathUtils.clamp(vistaMapa.zoom * (ev.deltaY < 0 ? 1.2 : 1 / 1.2), 1, 10); desenharMapaGrande(); };
+}
+const distDedos = (m) => { const [a, b] = [...m.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
+let mapaGEsc = 1, mapaGO = { x: 0, z: 0 };
+const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+// fundo da região recortado na parte visível (alguns navegadores não desenham o que sai da borda)
+function desenharFundoRecortado(g, f, r, tela, esc, w) {
+  const [ax, az] = tela(r.x0, r.z0), k = esc / MAPA_ESC;
+  let sx = 0, sy = 0, dx = ax, dy = az, sw = f.width, sh = f.height;
+  if (dx < 0) { sx = -dx / k; sw -= sx; dx = 0; } if (dy < 0) { sy = -dy / k; sh -= sy; dy = 0; }
+  sw = Math.min(sw, (w - dx) / k); sh = Math.min(sh, (w - dy) / k);
+  if (sw > 1 && sh > 1) g.drawImage(f, sx, sy, sw, sh, dx, dy, sw * k, sh * k);
 }
 function desenharMapaGrande() {
   const abas = $('mapaAbas');
   abas.innerHTML = NOMES_REGIAO.map((n, i) => i === 5 && !acessoArea51() ? '' : `<button data-reg="${i}" class="${i === regiaoMapaG ? 'sel' : ''}">${n}</button>`).join('');
-  abas.querySelectorAll('[data-reg]').forEach((b) => { b.onclick = () => { regiaoMapaG = Number(b.dataset.reg); desenharMapaGrande(); }; });
+  abas.querySelectorAll('[data-reg]').forEach((b) => { b.onclick = () => { regiaoMapaG = Number(b.dataset.reg); vistaMapa.reg = -1; desenharMapaGrande(); }; });
   const c = $('mapaG'), g = c.getContext('2d'), w = c.width, r = REGIOES_MAPA[regiaoMapaG];
-  g.fillStyle = '#86a95c'; g.fillRect(0, 0, w, w);
-  const lado = Math.max(r.x1 - r.x0, r.z1 - r.z0), esc = w / lado, ox = (r.x0 + r.x1) / 2 - lado / 2, oz = (r.z0 + r.z1) / 2 - lado / 2;
-  if (fundosMapa[regiaoMapaG]) g.drawImage(fundosMapa[regiaoMapaG], ((r.x1 - r.x0) - lado) / 2 > 0 ? 0 : 0, 0, fundosMapa[regiaoMapaG].width, fundosMapa[regiaoMapaG].height, (r.x0 - ox) * esc, (r.z0 - oz) * esc, (r.x1 - r.x0) * esc, (r.z1 - r.z0) * esc);
-  const tela = (x, z) => [(x - ox) * esc, (z - oz) * esc];
-  desenharBasesNoMapa(g, tela, esc, true);
-  desenharLinhasMapaGrande(g, tela, esc);
+  const lado0 = Math.max(r.x1 - r.x0, r.z1 - r.z0);
+  if (vistaMapa.reg !== regiaoMapaG || vistaMapa.cx === null) Object.assign(vistaMapa, { reg: regiaoMapaG, zoom: 1, cx: (r.x0 + r.x1) / 2, cz: (r.z0 + r.z1) / 2 });
+  const lado = lado0 / vistaMapa.zoom;   // o centro não deixa o mapa sair da região
+  vistaMapa.cx = THREE.MathUtils.clamp(vistaMapa.cx, Math.min(r.x0 + lado / 2, (r.x0 + r.x1) / 2), Math.max(r.x1 - lado / 2, (r.x0 + r.x1) / 2));
+  vistaMapa.cz = THREE.MathUtils.clamp(vistaMapa.cz, Math.min(r.z0 + lado / 2, (r.z0 + r.z1) / 2), Math.max(r.z1 - lado / 2, (r.z0 + r.z1) / 2));
+  const escM = w / lado, ox = vistaMapa.cx - lado / 2, oz = vistaMapa.cz - lado / 2;
+  mapaGEsc = escM; mapaGO = { x: ox, z: oz };
+  g.fillStyle = '#3e7ea6'; g.fillRect(0, 0, w, w);
+  const tela = (x, z) => [(x - ox) * escM, (z - oz) * escM];
+  if (fundosMapa[regiaoMapaG]) desenharFundoRecortado(g, fundosMapa[regiaoMapaG], r, tela, escM, w);
+  desenharBasesNoMapa(g, tela, escM, true);
+  desenharLinhasMapaGrande(g, tela, escM);
+  desenharRotaGps(g, tela, Math.max(4, escM * 3));
   const ponto = (x, z, cor, raio, txt) => {
     const [mx, mz] = tela(x, z); if (mx < 0 || mz < 0 || mx > w || mz > w) return;
     g.fillStyle = cor; g.strokeStyle = '#111'; g.lineWidth = 2; g.beginPath(); g.arc(mx, mz, raio, 0, 7); g.fill(); g.stroke();
     if (txt) { g.font = 'bold 20px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#fff'; g.strokeStyle = 'rgba(0,0,0,.8)'; g.lineWidth = 4; g.strokeText(txt, mx, mz - raio - 6); g.fillText(txt, mx, mz - raio - 6); }
   };
-  const alvos = alvosRastreio();
-  for (const a of alvos) ponto(a.x, a.z, '#f2f2f2', 7, a.icone);
-  if (rastreio) ponto(rastreio.x, rastreio.z, '#ffd23e', 10, '📍');
-  ponto(jogador.pos.x, jogador.pos.z, '#5cc28a', 9, 'Você');
-  c.onpointerdown = (ev) => {
-    const b = c.getBoundingClientRect(), mx = (ev.clientX - b.left) / b.width * w, mz = (ev.clientY - b.top) / b.height * w;
-    rastrear({ nome: 'Ponto marcado', x: mx / esc + ox, z: mz / esc + oz }); desenharMapaGrande();
+  // etiqueta grande e dourada: minha empresa e minha casa
+  const etiqueta = (x, z, txt) => {
+    const [mx, mz] = tela(x, z); if (mx < -40 || mz < -40 || mx > w + 40 || mz > w + 40) return;
+    g.font = 'bold 22px sans-serif'; const tw = g.measureText(txt).width + 18;
+    g.fillStyle = 'rgba(25,20,8,.88)'; g.strokeStyle = '#ffd23e'; g.lineWidth = 3;
+    g.beginPath(); g.roundRect?.(mx - tw / 2, mz - 50, tw, 32, 9); if (!g.roundRect) g.rect(mx - tw / 2, mz - 50, tw, 32); g.fill(); g.stroke();
+    g.fillStyle = '#ffd23e'; g.textAlign = 'center'; g.fillText(txt, mx, mz - 27);
+    g.beginPath(); g.arc(mx, mz, 10, 0, 7); g.fill(); g.strokeStyle = '#111'; g.lineWidth = 2; g.stroke();
   };
+  const alvos = alvosRastreio();
+  for (const a of alvos) if (!a.destaque) ponto(a.x, a.z, '#f2f2f2', 7, vistaMapa.zoom >= 2.5 ? `${a.icone} ${a.nome.length > 22 ? a.nome.slice(0, 21) + '…' : a.nome}` : a.icone);
+  for (const a of alvos) if (a.destaque) etiqueta(a.x, a.z, `${a.icone} ${a.nome}`);
+  if (rastreio) ponto(rastreio.x, rastreio.z, '#b45cff', 11, '📍');
+  ponto(jogador.pos.x, jogador.pos.z, '#5cc28a', 9, 'Você');
+  // lista: atalhos (destaques) primeiro, depois o resto; a busca filtra por qualquer parte do nome (sem acento)
+  const termo = semAcento($('mapaBusca')?.value).trim();
+  const extras = termo ? LINHAS.flatMap((L) => L.pontos.map((pp) => { const q = pontoCaminho(L, pp.s); return { icone: '🚏', nome: `${pp.nome} · ${L.curto}`, x: q.x, z: q.z }; })) : [];
+  const todos = [...alvos.filter((a) => a.destaque), ...alvos.filter((a) => !a.destaque), ...extras]
+    .filter((a) => !termo || semAcento(a.nome).includes(termo));
   const lista = $('mapaAlvos');
-  lista.innerHTML = alvos.map((a, i) => `<button data-alvo="${i}" class="${rastreio && rastreio.nome === a.nome ? 'sel' : ''}">${a.icone} ${a.nome}</button>`).join('')
+  lista.innerHTML = (todos.length ? '' : '<span class="dica">Nada encontrado.</span>')
+    + todos.slice(0, 80).map((a, i) => `<button data-alvo="${i}" class="${rastreio && rastreio.nome === a.nome ? 'sel' : ''}"${a.destaque ? ' style="border-color:#ffd23e;color:#ffd23e"' : ''}>${a.icone} ${esc(a.nome)}</button>`).join('')
     + (rastreio ? '<button data-parar="1">✕ Parar rastreio</button>' : '');
-  lista.querySelectorAll('[data-alvo]').forEach((b) => { b.onclick = () => { rastrear(alvos[Number(b.dataset.alvo)]); $('mapaJanela').classList.add('oculto'); }; });
+  lista.querySelectorAll('[data-alvo]').forEach((b) => { b.onclick = () => { rastrear(todos[Number(b.dataset.alvo)]); $('mapaJanela').classList.add('oculto'); }; });
   const pr = lista.querySelector('[data-parar]'); if (pr) pr.onclick = () => { rastrear(null); desenharMapaGrande(); };
 }
 
@@ -2165,13 +2268,17 @@ function desenharMapa() {
     sw = Math.min(sw, f.width - sx); sh = Math.min(sh, f.height - sy);
     if (sw > 1 && sh > 1) g.drawImage(f, sx, sy, sw, sh, dx, dy, sw * k, sh * k);
   }
-  desenharBasesNoMapa(g, (x, z) => [((x - px) / MAPA_R * 0.5 + 0.5) * w, ((z - pz) / MAPA_R * 0.5 + 0.5) * w], w / (MAPA_R * 2), false);
+  { const telaMini = (x, z) => [((x - px) / MAPA_R * 0.5 + 0.5) * w, ((z - pz) / MAPA_R * 0.5 + 0.5) * w];
+    desenharBasesNoMapa(g, telaMini, w / (MAPA_R * 2), false);
+    desenharRotaGps(g, telaMini, 4); }   // rota do rastreio pelas ruas (roxa, como o GPS do GTA)
   const desenhar = (x, z, cor, raio) => {
     const mx = ((x - px) / MAPA_R * 0.5 + 0.5) * w, mz = ((z - pz) / MAPA_R * 0.5 + 0.5) * w;
     if (mx < -8 || mz < -8 || mx > w + 8 || mz > w + 8) return;
     g.fillStyle = cor; g.beginPath(); g.arc(mx, mz, raio, 0, 7); g.fill();
   };
   for (const n of npcs) desenhar(n.av.raiz.position.x, n.av.raiz.position.z, '#ffffffaa', 3.5);
+  if ((desenharMapa.t = (desenharMapa.t || 0) - 1) <= 0) { desenharMapa.t = 60; desenharMapa.meus = alvosRastreio().filter((x) => x.destaque); }
+  for (const a of desenharMapa.meus || []) desenhar(a.x, a.z, '#ffd23e', 7);
   for (const v of viaturas) desenhar(v.obj.position.x, v.obj.position.z, v.perseguindo || v.pe || remotoAtivo(v) ? '#ff3030' : '#3a6bff', 5);
   for (const r of remotos.values()) if (r.av?.raiz.visible) desenhar(r.av.raiz.position.x, r.av.raiz.position.z, '#4fa3ff', 5);
   if (caminhaoMovel) desenhar(caminhaoMovel.obj.position.x, caminhaoMovel.obj.position.z, '#e39b3a', 5);
@@ -3166,6 +3273,7 @@ async function iniciarLogistica() {
     unidade: () => recarregar(),
     caminhao: ({ eventType, new: n }) => { if (eventType !== 'DELETE') sincronizarCaminhao(n); else recarregar(); },
     robo: (r) => aoRobo(r),
+    incendio: () => servicos.recarregarFogo(),   // fogo novo ou apagado: todos veem na hora
     armaPd: (a) => aoArmaPd(a),
     membro: () => { recarregar(); atualizarJanelaEmpresa(); },
     pedido: () => atualizarJanelaEmpresa(),
