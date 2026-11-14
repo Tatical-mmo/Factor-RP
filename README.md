@@ -1407,3 +1407,16 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - Cada opção mostra o estado do navio.
   - O navio chamado sai da patrulha, vem direto ao cais (aparece o tempo estimado) e fica atracado esperando o próximo ciclo da patrulha.
   - Chama quem pode pilotar aquele navio: Marinha, Tenente para cima nos destróieres, Capitão para cima no porta-aviões, e o General Supremo.
+
+## Versão 14/11 · favelas e mar em volta da ilha (20261114n)
+
+**Rode o SQL `supabase/82_favelas.sql`** (depois do 81, que corrige a vigia). Mudam `js/main.js`, `js/mundo.js`, `js/config.js` e `index.html`.
+
+- **Favela do Morro da Serra**: no morro atrás de Vila Serra. Rua principal subindo do centro da cidade, três travessas e becos entre as casas.
+- **Favela do Morro do Porto**: no litoral leste, depois da Base Naval (siga a rua z = 945). Termina num paredão de pedra sobre o mar.
+- As casas já existem e ninguém constrói. Se existirem `assets/modelos/favela_casa1.glb` a `favela_casa4.glb`, as casas perto do jogador usam esses modelos.
+- **Base de clã no alto** de cada morro: laje com mureta, QG, caixa d'água e mastro. São territórios novos (Morro da Serra e Morro do Porto) que os clãs capturam como os outros.
+- **8 lotes de empresa** (4 na rua de baixo de cada favela).
+- **Ônibus**: Linha 9 · Morro da Serra (sai do centro de Vila Serra) e Linha 10 · Morro do Porto (sai do centro de Porto Sul).
+- **Mar em volta da ilha inteira**. O destróier 2 agora dá a volta na ilha, e o navio que volta sozinho ao cais contorna a terra.
+- **Teleportar** (painel): entrada e base de cada favela.

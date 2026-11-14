@@ -2268,7 +2268,7 @@ async function iniciarJogo(perfil) {
   // objetos de rua em 3D (leves): bancos de praça, hidrantes e semáforos — carregam em segundo plano
   for (const n of ['banco', 'hidrante']) Promise.resolve(carregarGLB(`assets/modelos/prop_${n}.glb`)).then((g) => { if (g?.scene) mundo.montarProps(n, g.scene, scene); }).catch(() => {});
   // prédios 3D (perto do jogador): carregam em segundo plano
-  { const nomes = ['predio_casa1', 'predio_casa2', 'predio_sobrado', 'predio_residencial', 'predio_escritorio', 'predio_galpao'];
+  { const nomes = ['predio_casa1', 'predio_casa2', 'predio_sobrado', 'predio_residencial', 'predio_escritorio', 'predio_galpao', 'favela_casa1', 'favela_casa2', 'favela_casa3', 'favela_casa4'];
     Promise.all(nomes.map((n) => Promise.resolve(carregarGLB(`assets/modelos/${n}.glb`)).then((g) => [n, g?.scene]).catch(() => [n, null]))).then((l) => { const m = Object.fromEntries(l.filter(([, c]) => c)); if (Object.keys(m).length) mundo.ativarPredios3d(m); }); }
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
@@ -2640,6 +2640,7 @@ const agoraServidor = () => Date.now() + offsetServidor;
 const LOTE_L = (QB - CW * 2) / 2;  // 19 m
 
 function centroLote(l) {
+  if (l.c) return l.c;
   const [cx, cz] = l.q.split(',').map(Number);
   const c = LOTE_L / 2, x = quadC(cx), z = quadC(cz);
   return { x: l.lote === 'SO' ? x - c : x + c, z: l.lote === 'NE' || l.lote === 'NO' ? z - c : z + c };
@@ -5212,7 +5213,7 @@ function montarFortaleza(v, t, nivel, cor) {
     const band = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.4), new THREE.MeshStandardMaterial({ color: cor, side: THREE.DoubleSide, roughness: 0.7 }));
     band.position.set(mastro.position.x + 2, 14.6, 8); g.add(band);
   }
-  g.position.set(t.x, 0, t.z); scene.add(g);
+  g.position.set(t.x, alturaChao(t.x, t.z), t.z); scene.add(g);
   colisores.push(...cols);
   v.forte = { g, cols };
 }
@@ -5231,14 +5232,14 @@ async function carregarCidadeSocial() {
     if (v) { scene.remove(v.placa); removerFortaleza(v); }
     else {
       const anel = new THREE.Mesh(new THREE.RingGeometry(23, 24, 64), new THREE.MeshBasicMaterial({ color: '#888888', transparent: true, opacity: 0.6 }));
-      anel.rotation.x = -Math.PI / 2; anel.position.set(t.x, 0.05, t.z); scene.add(anel);
+      anel.rotation.x = -Math.PI / 2; anel.position.set(t.x, alturaChao(t.x, t.z) + 0.05, t.z); scene.add(anel);
       v = { anel }; territorios.set(t.id, v);
       if (!itensMapa.some((it) => it.tipo === 'territorio' && it.x === t.x && it.z === t.z)) { itensMapa.push({ tipo: 'territorio', x: t.x, z: t.z, r: 23 }); tempoFundoMapa = 0.5; }
     }
     v.d = t; v.chave = chave;
     v.anel.material.color.set(t.dono_cla ? corDoCla(t.dono_cla) : '#888888');
     v.placa = textoSprite(nome ? `${t.nome}: ${nome}${t.defesa ? ` · ${t.defesa} robôs` : ''}` : `${t.nome}: livre`, { escala: 1.05, cor: '#ffd9a0' });
-    v.placa.position.set(t.x, 13.5, t.z); scene.add(v.placa);
+    v.placa.position.set(t.x, alturaChao(t.x, t.z) + 13.5, t.z); scene.add(v.placa);
     if (t.dono_cla && nivelCla >= 5) montarFortaleza(v, t, nivelCla, corDoCla(t.dono_cla));
   }
   const eu = jogador.perfil.id, agoraMs = agoraServidor();
@@ -5531,6 +5532,10 @@ function montarLocais() {
   for (const e of ESCONDERIJOS) LOCAIS.push({ nome: `⛺ ${e.nome}`, x: e.x + 3.5, z: e.z + 3.5 });
   for (const [id, p] of Object.entries(PORTAS_QG)) LOCAIS.push({ nome: `🏴 QG do clã (${id === 'leste' ? 'Leste' : 'Oeste'})`, x: p.x + (p.x > 0 ? -2 : 2), z: p.z });
   LOCAIS.push({ nome: '🚢 Píer do cargueiro', x: 48, z: 1112 });
+  for (const f of Object.values(mundo.FAVELAS)) {
+    LOCAIS.push({ nome: `🏚️ ${f.nome} (entrada)`, x: f.entrada.x + 6, z: f.entrada.z });
+    LOCAIS.push({ nome: `🏴 ${f.nome} (base de clã no alto)`, x: f.base.x, z: f.base.z });
+  }
   LOCAIS.push({ nome: 'Prefeitura', x: civico.PREFEITURA.porta.x, z: civico.PREFEITURA.porta.z + 3 });
 }
 
@@ -8955,6 +8960,13 @@ const LINHAS = [
   { id: 6, nome: 'Linha 6 · Territórios', curto: 'Territórios', cor: '#16a085', k: 4, fase: 2, modelos: URB, circular: true,
     rua: [[162, -260], [162, -216], [108, -216], [108, -108], [-270, -108], [-270, -270], [-324, -270], [-324, 54], [-108, 54], [270, 54], [270, 324], [324, 324], [324, -270], [162, -270], [162, -260]],
     paradas: [ROD, [-297, -270, 'Praça do Território (NO)', 'o'], [-324, -100, 'Zona Oeste', 's'], [-162, 54, 'Território Oeste', 'l'], [297, 324, 'Praça do Território (SE)', 'l'], [324, 0, 'Zona Leste', 'n']] },
+  // favelas: circulares que saem do centro de cada cidade vizinha e sobem o morro
+  { id: 9, nome: 'Linha 9 · Morro da Serra', curto: 'Morro da Serra', cor: '#d35400', k: 2, fase: 4, modelos: URB, circular: true,
+    rua: [[27, -999], [27, -1107], [0, -1107], [0, -1260], [90, -1260], [90, -1190], [0, -1190], [0, -1107], [-27, -1107], [-27, -999], [27, -999]],
+    paradas: [[0, -999, 'Vila Serra · Centro'], [0, -1150, 'Morro da Serra · Entrada'], [0, -1230, 'Morro da Serra · Meio'], [45, -1260, 'Morro da Serra · Parte Alta'], [90, -1225, 'Morro da Serra · Travessa']] },
+  { id: 10, nome: 'Linha 10 · Morro do Porto', curto: 'Morro do Porto', cor: '#b03a2e', k: 3, fase: 8, modelos: URB, circular: true,
+    rua: [[27, 999], [27, 945], [1050, 945], [1050, 1045], [960, 1045], [960, 945], [-27, 945], [-27, 999], [27, 999]],
+    paradas: [[0, 999, 'Porto Sul · Centro'], [600, 945, 'Base Naval'], [1050, 975, 'Morro do Porto · Entrada'], [1050, 1020, 'Morro do Porto · Meio'], [1005, 1045, 'Morro do Porto · Parte Alta'], [960, 990, 'Morro do Porto · Baixada']] },
 ];
 const V_ONIBUS = 10, ESPERA_PONTO = 6, FOLGA_FILA = 25;
 // caminho de direção (faixa da direita, curvas arredondadas) de uma linha: da plataforma, pela cidade, de volta à fila e à plataforma
@@ -10609,8 +10621,8 @@ function pilotarHeli(c, dt, max) {
   c.vel += THREE.MathUtils.clamp(alvoV - c.vel, -5 * dt, 4 * dt);
   c.volante = (c.volante || 0) + (lado - (c.volante || 0)) * Math.min(1, dt * 5);
   if (noAr) jogador.yaw -= c.volante * 1.3 * dt;
-  jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * dt, -890, 1100);
-  jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * dt, -1200, 1900);
+  jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * dt, -1500, 1600);
+  jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * dt, -2000, 1900);
   // prédios: alarme e batida
   if (noAr && aeronaveEmPredio(c, chao)) return;
   if (noAr) alertaPredio(c, chao);
@@ -12401,11 +12413,12 @@ function atualizarTesteDefesa(dt) {
 // (5 vezes por segundo para os outros, e a cada 4 s para o servidor); ao largar, o navio volta sozinho.
 const NAVIOS = {};
 const ROTA_EXTERNA = [[900, 1350], [1050, 1560], [600, 1820], [-200, 1840], [-900, 1760], [-1060, 1460], [-700, 1260], [0, 1300], [500, 1330]];
+const ROTA_ILHA = [[1000, 1350], [1320, 1250], [1340, 0], [1320, -1700], [0, -1760], [-1250, -1700], [-1270, 0], [-1220, 1300], [-500, 1340], [500, 1330]];
 const ROTA_INTERNA = [[950, 1320], [700, 1520], [0, 1540], [-700, 1500], [-920, 1360], [-400, 1260], [300, 1280]];
 const DEF_NAVIOS = {
   porta: { nome: 'porta-aviões', glb: 'porta_avioes', comp: 200, cala: 7, convés: CONVES_Y, vel: 4, max: 7, rota: ROTA_INTERNA, fase: 0, cor: '#6b737c' },
   d1: { nome: 'destróier 1', glb: 'destroier', comp: 110, cala: 4, convés: 9, vel: 6, max: 10, rota: ROTA_EXTERNA, fase: 0, cor: '#5f666e' },
-  d2: { nome: 'destróier 2', glb: 'destroier', comp: 110, cala: 4, convés: 9, vel: 6, max: 10, rota: ROTA_EXTERNA, fase: 0.5, cor: '#5f666e' },
+  d2: { nome: 'destróier 2', glb: 'destroier', comp: 110, cala: 4, convés: 9, vel: 6, max: 10, rota: ROTA_ILHA, fase: 0.5, cor: '#5f666e' },
 };
 const PARADA_CAIS = 120;   // s atracado
 function docaDe(id) { const N = mundo.BASE_NAVAL; return id === 'porta' ? { x: N.porta.x, z: N.porta.z } : { ...N.destroieres[id === 'd1' ? 0 : 1] }; }
@@ -12436,9 +12449,27 @@ function patrulhaNavio(n, t) {
   return { x: q.x, z: q.z, ang: q.ang, v: n.vel, cais: false };
 }
 // depois de largar o leme: vai em linha reta até o cais e espera o próximo ciclo da patrulha
+function caminhoVolta(n, x, z) {   // pelos cantos da ilha, se for preciso, até o cais
+  const I = mundo.ILHA, SE = [I.x1 + 160, I.z1 + 130], SO = [I.x0 - 160, I.z1 + 130], NE = [I.x1 + 160, I.z0 - 140], NO = [I.x0 - 160, I.z0 - 140];
+  const pts = [[x, z]];
+  if (z < I.z1 + 60) {
+    if (x >= I.x1) pts.push(...(z < I.z0 ? [NE] : []), SE);
+    else if (x <= I.x0) pts.push(...(z < I.z0 ? [NO] : []), SO);
+    else pts.push(...(x > 50 ? [NE, SE] : [NO, SO]));
+  }
+  pts.push([n.doca.x, n.doca.z]);
+  const acum = [0]; for (let i = 1; i < pts.length; i++) acum.push(acum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  return { pts, acum, total: acum[acum.length - 1] };
+}
 function retorno(n, t) {
-  const d = n.db, t0 = Date.parse(d.t), dist = Math.hypot(n.doca.x - d.x, n.doca.z - d.z), tChega = t0 + dist / n.vel * 1000;
-  if (t < tChega) { const k = (t - t0) / (tChega - t0 || 1); return { x: d.x + (n.doca.x - d.x) * k, z: d.z + (n.doca.z - d.z) * k, ang: Math.atan2(n.doca.x - d.x, n.doca.z - d.z), v: n.vel, cais: false }; }
+  const d = n.db, t0 = Date.parse(d.t);
+  if (!n.volta || n.volta.t0 !== t0) n.volta = { t0, ...caminhoVolta(n, d.x, d.z) };
+  const V = n.volta, tChega = t0 + V.total / n.vel * 1000;
+  if (t < tChega) {
+    const sv = (t - t0) / 1000 * n.vel; let i = 1; while (i < V.pts.length - 1 && V.acum[i] < sv) i++;
+    const a = V.pts[i - 1], b = V.pts[i], k = THREE.MathUtils.clamp((sv - V.acum[i - 1]) / ((V.acum[i] - V.acum[i - 1]) || 1), 0, 1);
+    return { x: a[0] + (b[0] - a[0]) * k, z: a[1] + (b[1] - a[1]) * k, ang: Math.atan2(b[0] - a[0], b[1] - a[1]), v: n.vel, cais: false };
+  }
   const L = n.caminho.total, periodo = (PARADA_CAIS + L / n.vel) * 1000, fase = n.fase * periodo;
   const prox = Math.ceil((tChega + fase) / periodo) * periodo - fase;
   if (t < prox) return { x: n.doca.x, z: n.doca.z, ang: 0, v: 0, cais: true };
@@ -12601,7 +12632,7 @@ function pilotarNavio(n, dt) {
   n.ang -= lado * 0.09 * Math.min(1, Math.abs(n.v) / 3) * Math.sign(n.v || 1) * dt;
   let nx = n.x + Math.sin(n.ang) * n.v * dt, nz = n.z + Math.cos(n.ang) * n.v * dt;
   const meia = n.comp / 2, proaX = nx + Math.sin(n.ang) * meia * Math.sign(n.v || 1), proaZ = nz + Math.cos(n.ang) * meia * Math.sign(n.v || 1);
-  const naAgua = (x, z) => Math.abs(x) < 1080 && z > 1135 && z < 1895;
+  const I = mundo.ILHA, naAgua = (x, z) => Math.abs(x) < 2600 && Math.abs(z) < 2600 && !(x > I.x0 - 25 && x < I.x1 + 25 && z > I.z0 - 25 && z < I.z1 + 23);
   let bate = !naAgua(proaX, proaZ) && !(Math.hypot(nx - n.doca.x, nz - n.doca.z) < 30);
   for (const o of Object.values(NAVIOS)) if (o !== n && Math.hypot(o.x - nx, o.z - nz) < (o.comp + n.comp) * 0.32) bate = true;
   if (bate) { n.v = 0; if (performance.now() - (n.avisoBate || 0) > 3000) { n.avisoBate = performance.now(); aviso('⚓ Aí não dá: terra ou outro navio à frente.', 2); } }
