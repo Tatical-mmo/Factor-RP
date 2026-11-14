@@ -380,6 +380,8 @@ function abaEu() {
   if (eu.cargo === 'admin' && ctx.testeDefesa) h += `<div class="sub">🧪 Teste de defesa das bases</div><p class="dica">Um NPC tenta invadir: só na sua tela, não vale para os outros nem para o banco. Teleporte para perto da base para assistir.</p>
     ${[['a51', '👽 Área 51'], ['quartel', '🪖 Quartel'], ['aerea', '✈️ Base Aérea'], ['naval', '⚓ Base Naval']].map(([id, n]) => `<div class="botoes"><b style="min-width:110px">${n}</b><button data-tdef="${id}:pe">🚶 A pé</button><button data-tdef="${id}:heli">🚁 Helicóptero</button><button data-tdef="${id}:aviao">✈️ Avião</button></div>`).join('')}
     <div class="botoes"><button data-tdef="parar">⏹ Parar teste</button></div>`;
+  if (eu.cargo === 'admin' && ctx.guardasBases) { const gb = ctx.guardasBases(); h += `<div class="sub">💂 Soldados vigiando cada base (0 a 60)</div><p class="dica">Vale para todos os jogadores. Muitos soldados juntos pesam no celular: quem passa perto do Quartel, da Base Aérea e da Base Naval vê os três grupos.</p>
+    ${[['a51', '👽 Área 51'], ['quartel', '🪖 Quartel'], ['aerea', '✈️ Base Aérea'], ['naval', '⚓ Base Naval']].map(([id, n]) => `<div class="botoes"><b style="min-width:110px">${n}</b><input type="number" min="0" max="60" value="${gb[id]}" data-gnum="${id}" style="width:70px"><button data-gsalvar="${id}">Salvar</button></div>`).join('')}`; }
   if (pode('teleportar')) h += `<div class="sub">Teleportar para</div><div class="botoes">${ctx.locais().map((l, i) => `<button data-local="${i}">${esc(l.nome)}</button>`).join('')}</div>`;
   h += `<div class="sub">Skin (grátis para a equipe)</div><div class="skins">${[...ROBOS.map((id) => ({ id, nome: id === 'Rusty_Scout_Bot' ? 'Robô Batedor' : 'Robô Sentinela' })), ...PERSONAGENS, ...(eu.cargo === 'admin' ? PERSONAGENS_EVENTO : [])]
     .map((p) => `<button class="skin ${p.id === eu.personagem ? 'sel' : ''}" data-skin="${p.id}"><img src="assets/miniaturas/${p.id}.webp" alt=""><span>${esc(p.nome)}</span></button>`).join('')}</div>`;
@@ -387,6 +389,7 @@ function abaEu() {
   if ($('pBueiro')) blocoBueiro();
   const apd = $('pArmaPd'); if (apd) apd.onclick = () => executar(() => ctx.esconderArmaPd(), 'Arma dourada escondida aqui. Todos foram avisados do evento.');
   const b = $('pImortal'); if (b) b.onclick = () => executar(() => rede.painel.imortal(!eu.imortal), eu.imortal ? 'Modo imortal desligado.' : 'Modo imortal ligado.');
+  c.querySelectorAll('[data-gsalvar]').forEach((x) => { x.onclick = () => { const id = x.dataset.gsalvar, n = Math.round(Number(c.querySelector(`[data-gnum="${id}"]`).value)); executar(() => ctx.definirGuardas(id, n), `Soldados na base: ${n}.`); }; });
   c.querySelectorAll('[data-tdef]').forEach((x) => { x.onclick = () => { const [base, tipo] = x.dataset.tdef.split(':'); const r = ctx.testeDefesa(base, tipo); msg(r || 'Teste iniciado.'); if (base !== 'parar') fechar(); }; });
   c.querySelectorAll('[data-local]').forEach((x) => { x.onclick = () => { const l = ctx.locais()[x.dataset.local]; ctx.teleportar(l.x, l.z); msg('Teleportado: ' + l.nome); }; });
   if (ctx.objetosNaRua && $('pNaRuaCopiar')) {

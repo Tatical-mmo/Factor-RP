@@ -374,6 +374,8 @@ function traduzirRpc(m) {
     'caminhao sem carga': 'Esse caminhão não está levando carga.',
     'esse caminhao e seu': 'Esse caminhão é seu.',
     'quem tem crimes nao entra na policia': 'Quem está procurado não entra na polícia.',
+    'entre 0 e 60 soldados': 'Escolha entre 0 e 60 soldados por base.',
+    'base invalida': 'Base inválida.',
     'so general da marinha': 'Só um General da Marinha (ou o General Supremo) usa a Central de Mísseis.',
     'missil recarregando': 'O míssil de cruzeiro está recarregando: espere 10 min entre lançamentos.',
     'ja tem pedido esperando': 'Já tem um pedido de míssil esperando o General Supremo.',
@@ -619,6 +621,10 @@ export const jornal = {
   redacao: () => rpc('materias_redacao'),
   salvar: (id, titulo, texto, imagem, quando) => rpc('salvar_materia', { p_id: id || null, p_titulo: titulo, p_texto: texto, p_imagem: imagem || null, p_publicar_em: quando || null }),
   apagar: (id) => rpc('apagar_materia', { p_id: id }),
+};
+export const guardas = {
+  lista: () => sel(sb.from('guardas_bases').select('base,guardas')),
+  definir: (base, n) => rpc('definir_guardas', { p_base: base, p_guardas: n }),
 };
 export const marinha = {
   pedirMissil: (x, z) => rpc('pedir_missil', { p_x: x, p_z: z }),

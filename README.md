@@ -1331,3 +1331,14 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Helicóptero e avião**: a aeronave nasce fora da base, entra no espaço aéreo e fica rodando por cima. O radar detecta e os canhões seguem a aeronave. Depois de 10 s, o antiaéreo dispara 5 vezes e ela cai girando e explode.
 - No fim aparece o **relatório** com os tempos de cada etapa. Se ninguém for abatido em 90 s, o relatório marca "a defesa falhou".
 - É tudo só na tela do admin: não mexe no banco e os outros não veem.
+
+## Versão 14/11 · soldados no seu controle (20261114d)
+
+**Rode o SQL `supabase/78_guardas_bases.sql`** (depois do 77).
+
+- No painel de admin entrou a seção **💂 Soldados vigiando cada base**. Para cada base (Área 51, Quartel, Base Aérea e Base Naval) há um número de **0 a 60** e o botão **Salvar**. A mudança vale para todos os jogadores.
+- Os números de agora continuam como padrão: 28 na Área 51 e 16 em cada uma das outras.
+  - Soldados acima do padrão ficam espalhados no contorno de dentro do muro, olhando para fora, e um em cada três faz ronda.
+  - Abaixo do padrão, o jogo tira primeiro os da ronda e deixa os do portão.
+- **Economia para o celular**: soldado a mais de 120 m de você fica parado em pose de guarda, sem animação. Ele continua aparecendo até 260 m.
+- Os jogadores recebem o número novo em até 1 minuto. Você vê na hora.

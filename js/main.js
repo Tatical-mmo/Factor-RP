@@ -2364,6 +2364,8 @@ async function iniciarJogo(perfil) {
     locais: () => LOCAIS,
     objetosNaRua: () => objetosNaRua(),
     testeDefesa: (base, tipo) => testeDefesa(base, tipo),
+    guardasBases: () => ({ a51: 28, quartel: 16, aerea: 16, naval: 16, ...GUARDAS_CONF }),
+    definirGuardas: (base, n) => rede.guardas.definir(base, n).then(() => { GUARDAS_CONF[base] = n; const B = BASES.find((b) => b.id === base); if (B) ajustarGuardas(B); }),
     veiculosTeste: () => Object.entries(civico.CARROS).map(([id, c]) => ({ id, nome: `${c.voa ? (id.startsWith('aviao') ? '✈️' : '🚁') : id.includes('onibus') ? '🚌' : id.includes('caminhao') || id === 'bombeiros' ? '🚚' : id === 'tanque' ? '🪖' : '🚗'} ${c.nome}${id === 'onibus_executivo2' ? ' 2' : ''}` })),
     testarVeiculo,
     bueiro: (k) => BUEIROS[k], irPara: (x, z) => { jogador.dentroCasa = null; teleportar(x, z); }, marcar: (a) => rastrear(a),
@@ -11568,7 +11570,7 @@ function atualizarPerdao(dt) {
 // por 5 min: os caças podem travar míssil nele (além dos procurados).
 const BASES = [];
 let invasorAte = 0, invasorAntes = false;
-function registrarBase(B) { B.guardas = []; B.st = { tiro: 0, aviso: 0, rajada: 0 }; B.aaSt = { t: 0, aviso: 0, disparo: 0, tiros: 0 }; BASES.push(B); criarGuardas(B); return B; }
+function registrarBase(B) { B.guardas = []; B.postosBase = B.postos || []; B.pedidos = 0; B.st = { tiro: 0, aviso: 0, rajada: 0 }; B.aaSt = { t: 0, aviso: 0, disparo: 0, tiros: 0 }; BASES.push(B); ajustarGuardas(B); return B; }
 function criarBateria(g, x, z) {
   const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, ...o }), ferro = M('#3b3f44');
   const base = new THREE.Mesh(new THREE.BoxGeometry(6, 1.2, 6), M('#5b6150')); base.position.set(x, 0.6, z); base.castShadow = true; g.add(base);
@@ -11584,17 +11586,46 @@ function criarBateria(g, x, z) {
   const luz = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff2020', toneMapped: false })); luz.position.set(x, 4.3, z); g.add(luz);
   return { x, z, giro, canos, radar, luz };
 }
-async function criarGuardas(B) {
-  for (const d of B.postos || []) {
-    try {
-      const av = await criarAvatar('robos', 'Rusty_Scout_Bot');
-      const et = textoSprite(B.rotulo || 'Exército', { escala: 0.5, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
-      try { av.arma = novaArma('militar', av); } catch { /* sem arma */ }
-      av.raiz.visible = false; scene.add(av.raiz);
-      if (d.parado) { av.raiz.position.set(d.parado[0], d.alto || alturaChao(d.parado[0], d.parado[1]), d.parado[1]); av.raiz.rotation.y = d.parado[2]; d.rumo = d.parado[2]; av.tocar('idle'); } else av.tocar('walk', { velocidade: 0.8 });
-      B.guardas.push({ av, ...d });
-    } catch { /* sem guardas */ }
+// quantos soldados cada base tem: o General Supremo define no painel (tabela guardas_bases); sem ela, o padrão
+const GUARDAS_CONF = {};
+let tGuardasConf = 0;
+function ajustarGuardas(B) {
+  const alvo = Math.max(0, Math.min(60, GUARDAS_CONF[B.id] ?? B.postosBase.length));
+  const postos = gerarPostos(B, alvo);
+  while (B.guardas.length > alvo) { const s = B.guardas.pop(); scene.remove(s.av.raiz); B.pedidos--; }
+  if (B.pedidos > alvo) B.pedidos = alvo;   // os que ainda carregam além do número desistem
+  for (let k = B.pedidos; k < alvo; k++) { B.pedidos++; criarGuarda(B, postos[k], k); }
+}
+// postos a mais: espalhados no contorno de dentro, olhando para fora; um em cada três faz ronda
+function gerarPostos(B, n) {
+  const base = B.postosBase; if (n <= base.length) return base.slice(0, n);
+  const R = B.rect, extra = n - base.length, out = base.slice(), ins = 5;
+  const x0 = R.x0 + ins, x1 = R.x1 - ins, z0 = R.z0 + ins, z1 = R.z1 - ins, W = x1 - x0, D = z1 - z0, per = 2 * (W + D);
+  const ronda = laco([[R.x0 + 12, R.z0 + 12], [R.x1 - 12, R.z0 + 12], [R.x1 - 12, R.z1 - 12], [R.x0 + 12, R.z1 - 12]]);
+  for (let k = 0; k < extra; k++) {
+    if (k % 3 === 2) { out.push({ l: ronda, fase: (k / extra) * ronda.total, vel: 1.1 }); continue; }
+    let u = ((k + 0.5) / extra) * per, x, z, ang;
+    if (u < W) { x = x0 + u; z = z0; ang = Math.PI; } else if ((u -= W) < D) { x = x1; z = z0 + u; ang = Math.PI / 2; }
+    else if ((u -= D) < W) { x = x1 - u; z = z1; ang = 0; } else { u -= W; x = x0; z = z1 - u; ang = -Math.PI / 2; }
+    out.push({ parado: [x, z, ang] });
   }
+  return out;
+}
+async function criarGuarda(B, d, idx) {
+  try {
+    const av = await criarAvatar('robos', 'Rusty_Scout_Bot');
+    if (idx >= B.pedidos) return;   // o número diminuiu enquanto carregava
+    const et = textoSprite(B.rotulo || 'Exército', { escala: 0.5, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+    try { av.arma = novaArma('militar', av); } catch { /* sem arma */ }
+    av.raiz.visible = false; scene.add(av.raiz);
+    const s = { av, ...d };
+    if (d.parado) { av.raiz.position.set(d.parado[0], d.alto || alturaChao(d.parado[0], d.parado[1]), d.parado[1]); av.raiz.rotation.y = d.parado[2]; s.rumo = d.parado[2]; av.tocar('idle'); } else av.tocar('walk', { velocidade: 0.8 });
+    B.guardas.push(s);
+  } catch { B.pedidos--; }
+}
+function lerGuardasConf(dt) {
+  if (!BASES.length || (tGuardasConf -= dt) > 0) return; tGuardasConf = 60;
+  rede.guardas.lista().then((l) => { for (const r of l || []) GUARDAS_CONF[r.base] = r.guardas; for (const B of BASES) ajustarGuardas(B); }).catch(() => {});
 }
 function distRect(R, x, z) { const dx = Math.max(R.x0 - x, 0, x - R.x1), dz = Math.max(R.z0 - z, 0, z - R.z1); return Math.hypot(dx, dz); }
 function marcarInvasor() { invasorAte = performance.now() + 300000; }
@@ -11604,6 +11635,7 @@ function atualizarBases(dt) {
   if (!quartelExtras && Math.hypot(p.x - 200, p.z - 1035) < 650) montarQuartelExtras();
   if (!baseAerea && Math.hypot(p.x - 460, p.z - 1040) < 700) montarBaseAerea();
   for (const B of BASES) { vigiarBase(B, dt); antiaereoBase(B, dt); }
+  lerGuardasConf(dt);
   const inv = performance.now() < invasorAte; if (inv !== invasorAntes) { invasorAntes = inv; conexao?.rastrear(metaPresenca()); }
 }
 function vigiarBase(B, dt) {
@@ -11614,6 +11646,7 @@ function vigiarBase(B, dt) {
   const naMira = alvo && d < B.tiro, avisar = alvo && d < B.aviso && !(B.livre && B.livre());
   for (const s of B.guardas) {
     const r = s.av.raiz; r.visible = perto; if (!perto) continue;
+    if (Math.hypot(r.position.x - p.x, r.position.z - p.z) > 120) continue;   // longe: parado em pose de guarda (economiza o celular)
     if (s.l && !(naMira && Math.hypot(r.position.x - p.x, r.position.z - p.z) < 90)) {
       const q = pontoNoLaco(s.l, agoraServidor() / 1000 * s.vel + s.fase);
       r.position.set(q.x, alturaChao(q.x, q.z), q.z); r.rotation.y = suavizarAngulo(r.rotation.y, q.ang, dt * 6);
