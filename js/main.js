@@ -69,6 +69,31 @@ function montarLogin() {
   };
   $('btEntrar').onclick = () => acao(rede.entrar);
   $('btCriar').onclick = () => acao(rede.cadastrar);
+  // esqueci minha senha: manda o link; a resposta é a mesma para qualquer e-mail (não revela quem tem conta)
+  $('btEsqueci').onclick = async () => {
+    const email = $('email').value.trim();
+    if (!/^\S+@\S+\.\S+$/.test(email)) { msgLogin('Digite o e-mail da sua conta no campo de cima e toque de novo em "Esqueci minha senha".'); $('email').focus(); return; }
+    let ult = 0; try { ult = Number(localStorage.getItem('fr_recup') || 0); } catch { /* sem armazenamento */ }
+    if (Date.now() - ult < 60000) { msgLogin('Espere 1 minuto para pedir outro link.'); return; }
+    $('btEsqueci').disabled = true; msgLogin('Enviando…', true);
+    try { await rede.recuperarSenha(email); try { localStorage.setItem('fr_recup', String(Date.now())); } catch { /* ok */ } msgLogin('📧 Se esse e-mail tiver conta, o link para criar uma senha nova chegou. Veja também a caixa de spam.', true); }
+    catch (e) { msgLogin(e.message); }
+    finally { $('btEsqueci').disabled = false; }
+  };
+  $('btSalvarSenha').onclick = async () => {
+    const a1 = $('novaSenha1').value, a2 = $('novaSenha2').value;
+    if (a1.length < 6) { msgLogin('A senha precisa ter pelo menos 6 caracteres.'); return; }
+    if (a1 !== a2) { msgLogin('As duas senhas não são iguais.'); return; }
+    $('btSalvarSenha').disabled = true; msgLogin('Salvando…', true);
+    try {
+      await rede.trocarSenha(a1); recuperando = false;
+      history.replaceState(null, '', location.pathname);
+      $('novaSenhaBox').classList.add('oculto'); for (const id of ['email', 'senha', 'btEsqueci']) $(id).classList.remove('oculto'); document.querySelector('#login .linha').classList.remove('oculto');
+      msgLogin('✅ Senha trocada!', true);
+      const s2 = await rede.sessaoAtual(); if (s2) await aposLogin(s2);
+    } catch (e) { msgLogin(e.message); }
+    finally { $('btSalvarSenha').disabled = false; }
+  };
   $('senha').addEventListener('keydown', (e) => { if (e.key === 'Enter') acao(rede.entrar); });
 }
 
@@ -108,7 +133,16 @@ function comecar(perfil) {
 
 montarLogin();
 montarEscolha();
-rede.sessaoAtual().then((s) => { if (s) aposLogin(s).catch((e) => { mostrar('login'); msgLogin(e.message); }); });
+// voltando pelo link de "esqueci minha senha": mostra a tela de senha nova em vez de entrar direto
+let recuperando = /type=recovery/.test(location.hash) || /[?&]recuperar=1/.test(location.search);
+function telaNovaSenha() {
+  recuperando = true; mostrar('login');
+  for (const id of ['email', 'senha', 'btEsqueci']) $(id).classList.add('oculto'); document.querySelector('#login .linha').classList.add('oculto');
+  $('novaSenhaBox').classList.remove('oculto'); msgLogin('Digite a senha nova duas vezes.', true);
+}
+rede.aoRecuperarSenha(() => telaNovaSenha());
+if (recuperando) telaNovaSenha();
+rede.sessaoAtual().then((s) => { if (s && !recuperando) aposLogin(s).catch((e) => { mostrar('login'); msgLogin(e.message); }); });
 
 // ================================================================= MOTOR
 const canvas = $('jogo');

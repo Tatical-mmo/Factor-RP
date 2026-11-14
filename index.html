@@ -272,32 +272,32 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261114f",
-  "./js/mundo.js": "./js/mundo.js?v=20261114f",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261114f",
-  "./js/cla.js": "./js/cla.js?v=20261114f",
-  "./js/config.js": "./js/config.js?v=20261114f",
-  "./js/empresa.js": "./js/empresa.js?v=20261114f",
-  "./js/loja.js": "./js/loja.js?v=20261114f",
-  "./js/painel.js": "./js/painel.js?v=20261114f",
-  "./js/rede.js": "./js/rede.js?v=20261114f",
-  "./js/sedes.js": "./js/sedes.js?v=20261114f",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261114f",
-  "./js/civico.js": "./js/civico.js?v=20261114f",
-  "./js/ovni.js": "./js/ovni.js?v=20261114f",
-  "./js/jato.js": "./js/jato.js?v=20261114f",
-  "./js/governo.js": "./js/governo.js?v=20261114f",
-  "./js/servicos.js": "./js/servicos.js?v=20261114f",
-  "./js/sons.js": "./js/sons.js?v=20261114f",
-  "./js/voz.js": "./js/voz.js?v=20261114f",
-  "./js/clima.js": "./js/clima.js?v=20261114f",
-  "./js/ceu.js": "./js/ceu.js?v=20261114f",
-  "./js/semaforos.js": "./js/semaforos.js?v=20261114f",
-  "./js/cabine.js": "./js/cabine.js?v=20261114f",
-  "./js/eixos.js": "./js/eixos.js?v=20261114f",
-  "./js/racoes.js": "./js/racoes.js?v=20261114f",
-  "./js/jornal.js": "./js/jornal.js?v=20261114f",
-  "./js/visual.js": "./js/visual.js?v=20261114f"
+  "./js/main.js": "./js/main.js?v=20261114g",
+  "./js/mundo.js": "./js/mundo.js?v=20261114g",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261114g",
+  "./js/cla.js": "./js/cla.js?v=20261114g",
+  "./js/config.js": "./js/config.js?v=20261114g",
+  "./js/empresa.js": "./js/empresa.js?v=20261114g",
+  "./js/loja.js": "./js/loja.js?v=20261114g",
+  "./js/painel.js": "./js/painel.js?v=20261114g",
+  "./js/rede.js": "./js/rede.js?v=20261114g",
+  "./js/sedes.js": "./js/sedes.js?v=20261114g",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261114g",
+  "./js/civico.js": "./js/civico.js?v=20261114g",
+  "./js/ovni.js": "./js/ovni.js?v=20261114g",
+  "./js/jato.js": "./js/jato.js?v=20261114g",
+  "./js/governo.js": "./js/governo.js?v=20261114g",
+  "./js/servicos.js": "./js/servicos.js?v=20261114g",
+  "./js/sons.js": "./js/sons.js?v=20261114g",
+  "./js/voz.js": "./js/voz.js?v=20261114g",
+  "./js/clima.js": "./js/clima.js?v=20261114g",
+  "./js/ceu.js": "./js/ceu.js?v=20261114g",
+  "./js/semaforos.js": "./js/semaforos.js?v=20261114g",
+  "./js/cabine.js": "./js/cabine.js?v=20261114g",
+  "./js/eixos.js": "./js/eixos.js?v=20261114g",
+  "./js/racoes.js": "./js/racoes.js?v=20261114g",
+  "./js/jornal.js": "./js/jornal.js?v=20261114g",
+  "./js/visual.js": "./js/visual.js?v=20261114g"
 } }
 </script>
 </head>
@@ -313,6 +313,13 @@
     <div class="linha">
       <button class="btn" id="btEntrar">Entrar</button>
       <button class="btn sec" id="btCriar">Criar conta</button>
+    </div>
+    <button id="btEsqueci" type="button" style="background:none;border:0;color:#9fc3ff;text-decoration:underline;font-size:14px;margin-top:8px;cursor:pointer">Esqueci minha senha</button>
+    <div id="novaSenhaBox" class="oculto">
+      <p class="sub" style="margin:8px 0">🔑 Crie uma senha nova para a sua conta.</p>
+      <input id="novaSenha1" type="password" placeholder="Senha nova (mínimo 6 caracteres)" autocomplete="new-password">
+      <input id="novaSenha2" type="password" placeholder="Repita a senha nova" autocomplete="new-password">
+      <div class="linha"><button class="btn" id="btSalvarSenha">Salvar e entrar</button></div>
     </div>
     <div id="msgLogin"></div>
     <button id="instalarLogin" class="oculto">📲 Instalar o jogo</button>
@@ -449,7 +456,7 @@
 </div>
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 14/11 · bases no mapa</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 14/11 · recuperar senha</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

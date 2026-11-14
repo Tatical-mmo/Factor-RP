@@ -42,6 +42,17 @@ export async function cadastrar(email, senha) {
   return data.session;
 }
 export async function sair() { await sb.auth.signOut(); }
+// recuperação de senha: manda o link por e-mail (volta para esta página) e troca a senha com a sessão do link
+export async function recuperarSenha(email) {
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname + '?recuperar=1' });
+  if (error && !/user not found/i.test(error.message)) throw new Error(traduzir(error));
+}
+export async function trocarSenha(senha) {
+  const { data, error } = await sb.auth.updateUser({ password: senha });
+  if (error) throw new Error(traduzir(error));
+  return data;
+}
+export function aoRecuperarSenha(fn) { sb.auth.onAuthStateChange((ev, s) => { if (ev === 'PASSWORD_RECOVERY') fn(s); }); }
 
 export async function carregarPerfil(id) {
   const { data, error } = await sb.from('perfis').select('*').eq('id', id).maybeSingle();

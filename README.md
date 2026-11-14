@@ -1377,3 +1377,14 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - Nova aba **Área 51**: só aparece para quem tem acesso.
   - O minimapa também desenha as bases e os navios.
 - **Teleportar** (painel): entraram **🪖 Quartel do Exército (portão)**, **✈️ Base Aérea (portão)** e **⚓ Base Naval (portão)**.
+
+## Versão 14/11 · recuperar senha (20261114g)
+
+- Na tela de login entrou o **Esqueci minha senha**. A pessoa digita o e-mail no campo de cima e toca nele.
+  - O Supabase manda o link por e-mail.
+  - A resposta na tela é a mesma para qualquer e-mail, para não revelar quem tem conta.
+  - Dá para pedir 1 link por minuto em cada aparelho.
+- O link abre o jogo na tela **🔑 Senha nova**, com dois campos. Ao salvar, a pessoa entra no jogo direto.
+- **Configuração no Supabase (uma vez)**:
+  1. Em **Authentication → URL Configuration → Redirect URLs**, adicione o endereço do jogo com `**` no fim. Exemplo: `https://seu-usuario.github.io/factor-rp/**`.
+  2. Opcional: em **Authentication → Emails → Reset Password**, troque o texto do e-mail para português.
