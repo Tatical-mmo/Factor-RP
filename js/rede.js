@@ -91,6 +91,9 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'onibusSeq' }, ({ payload }) => eventos.onibusSeq?.(payload));
   canal.on('broadcast', { event: 'denuncia' }, ({ payload }) => eventos.denuncia?.(payload));
   canal.on('broadcast', { event: 'reset' }, ({ payload }) => eventos.reset?.(payload));
+  canal.on('broadcast', { event: 'missil' }, ({ payload }) => eventos.missil?.(payload));
+  canal.on('broadcast', { event: 'travado' }, ({ payload }) => eventos.travado?.(payload));
+  canal.on('broadcast', { event: 'missilAcerto' }, ({ payload }) => eventos.missilAcerto?.(payload));
   canal.on('broadcast', { event: 'abducao' }, ({ payload }) => eventos.abducao?.(payload));
   canal.on('broadcast', { event: 'abducaoRes' }, ({ payload }) => eventos.abducaoRes?.(payload));
   canal.on('broadcast', { event: 'ovniVisto' }, ({ payload }) => eventos.ovniVisto?.(payload));
@@ -370,6 +373,12 @@ function traduzirRpc(m) {
     'caminhao sem carga': 'Esse caminhão não está levando carga.',
     'esse caminhao e seu': 'Esse caminhão é seu.',
     'quem tem crimes nao entra na policia': 'Quem está procurado não entra na polícia.',
+    'alistamento precisa de aprovacao': 'O Exército exige aprovação: peça o alistamento na guarita do lado de fora do portão do quartel.',
+    'voce ja e do exercito': 'Você já é do Exército.',
+    'alistamento recusado: tente de novo mais tarde': 'Seu alistamento foi recusado há pouco. Tente de novo mais tarde.',
+    'so oficiais do exercito': 'Só oficiais do Exército (Tenente para cima) aprovam alistamentos.',
+    'o candidato nao pode entrar agora': 'O candidato não pode entrar agora (procurado, na polícia ou expulso).',
+    'pedido invalido': 'Esse pedido já foi decidido.',
     'a equipe nao entra na policia': 'A equipe não entra na polícia.',
     'saia do cla para entrar na policia': 'Saia do clã para entrar na polícia.',
     'voce nao esta em servico': 'Você não está em serviço.',
@@ -605,6 +614,9 @@ export const jornal = {
   apagar: (id) => rpc('apagar_materia', { p_id: id }),
 };
 export const exercito = {
+  pedirAlistamento: () => rpc('pedir_alistamento'),
+  alistamentosPendentes: () => rpc('alistamentos_pendentes'),
+  decidirAlistamento: (id, aprovar) => rpc('decidir_alistamento', { p_id: id, p_aprovar: !!aprovar }),
   prisao: (id, min) => rpc('prender_militar', { p_jogador: id, p_minutos: min }),
   procurados: () => sel(sb.from('perfis').select('id,nome,crimes,recompensa').gt('crimes', 0).eq('cargo', 'jogador')
     .gt('visto_em', new Date(Date.now() - 10 * 60000).toISOString()).order('crimes', { ascending: false }).limit(20)),

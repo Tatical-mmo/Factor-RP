@@ -42,7 +42,7 @@ export const PRECO_PERSONAGEM = 8000, PRECO_NOME = 1000;
 export const ROBOS = ['Rusty_Scout_Bot', 'Rustbolt_Sentinel'];
 
 export const MODELOS = [
-  'caminhao', 'caminhao_danificado', 'ovni', 'viatura', 'van_policia', 'caixa', 'arma_paintball', 'algemas',
+  'caminhao', 'caminhao_danificado', 'ovni', 'caca_leve', 'caca_furtivo', 'asa_furtiva', 'missil', 'viatura', 'van_policia', 'caixa', 'arma_paintball', 'algemas',
   'bancada', 'base_cla', 'loja', 'delegacia', 'transportadora', 'casa', 'empresa', 'arvore', 'poste',
   'carro_classico', 'roda_classico', 'roda_carro', 'roda_esporte', 'roda_suv', 'roda_pesado', 'roda_militar',
   'van', 'helicoptero', 'carro_popular', 'carro_suv', 'carro_esportivo', 'carro_presidencial', 'robo_motorista', 'ambulancia', 'caminhao_bombeiros',

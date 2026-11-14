@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { criarOvni } from './ovni.js';
+import { criarJato, JATOS } from './jato.js';
 
 let ctx = null;
 export const PREFEITURA = { x: -135, z: -135, porta: { x: -135, z: -120.5 }, prf: { x: -146, z: -115 }, jornal: { x: -124, z: -115 } };
@@ -20,6 +21,8 @@ export const EXERCITO = {
     { modelo: 'helicoptero_exercito', x: 232, z: 1027, ang: -Math.PI / 2 },
     { modelo: 'tanque', x: 200, z: 1059, ang: -Math.PI / 2 },
     { modelo: 'ovni', x: -800, z: -20, ang: Math.PI / 2, area51: true },   // escondido no hangar da Área 51
+    // Base Aérea (ao lado do quartel): os caças ficam no pátio, na frente dos hangares, de nariz para a pista
+    { modelo: 'caca_leve', x: 350, z: 1040, ang: 0, aerea: true }, { modelo: 'caca_furtivo', x: 395, z: 1040, ang: 0, aerea: true }, { modelo: 'asa_furtiva', x: 455, z: 1040, ang: 0, aerea: true },
   ],
   arsenal: { x: 163, z: 986 },
   estande: { x0: 150, x1: 250, z0: 1087, z1: 1103, linha: 157, entrada: { x: 199, z: 1084 } },
@@ -146,6 +149,9 @@ export const CARROS = {
   exercito_caminhao: { nome: 'Caminhão do Exército', preco: 0, vel: 11 },
   helicoptero_exercito: { nome: 'Helicóptero do Exército', preco: 0, vel: 26, voa: true },
   ovni: { nome: 'Óvni do Exército', preco: 0, vel: 42, voa: true },
+  caca_leve: { nome: 'Caça leve', preco: 0, vel: 95, voa: true, jato: true },
+  caca_furtivo: { nome: 'Caça furtivo', preco: 0, vel: 120, voa: true, jato: true },
+  asa_furtiva: { nome: 'Asa furtiva', preco: 0, vel: 80, voa: true, jato: true },
   helicoptero: { nome: 'Helicóptero executivo', preco: 1500000, vel: 24, voa: true },
   tanque: { nome: 'Tanque do Exército', preco: 0, vel: 7 },
   onibus: { nome: 'Ônibus', preco: 0, vel: 12 },
@@ -177,7 +183,7 @@ export const LUGARES = { ovni: 2, tanque: 1, militar: 3, exercito_caminhao: 8, h
 // veículos abertos: o motorista aparece sentado (banco: altura e posição no modelo, motorista do lado esquerdo)
 // lugares: [lado (1 = esquerda, -1 = direita), altura do assento, z]; o 1º é o do motorista
 export const ABERTOS = { militar: { lugares: [[1, 0.98, -0.28], [-1, 0.98, -0.28], [1, 1.0, -0.98], [-1, 1.0, -0.98]] } };
-export const DO_EXERCITO = new Set(['ovni', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'tanque']);
+export const DO_EXERCITO = new Set(['caca_leve', 'caca_furtivo', 'asa_furtiva', 'ovni', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'tanque']);
 export const CORES_CARRO = ['#c0392b', '#2c3e50', '#ecf0f1', '#f1c40f', '#2980b9', '#16a085', '#8e44ad', '#1f1f1f', '#d35400'];
 
 const mat = (cor, ex = {}) => new THREE.MeshStandardMaterial({ color: cor, roughness: 0.6, ...ex });
@@ -558,6 +564,11 @@ function dobrarSanfona(m, u, gr) {
 const cacheCarro = new Map();
 export function modeloCarro(modelo, cor) { const o = modeloCarroBase(modelo, cor); if (o.getObjectByName('luzes')) comLuz.add(o); if (o.getObjectByName('rodas')) comRodas.add(o); return o; }
 function modeloCarroBase(modelo, cor) {
+  if (JATOS[modelo]) {   // caças: por código ou do GLB, sem pintura
+    const glb = ctx?.modelo?.(modelo), k = modelo + (glb ? 1 : 0);
+    if (!cacheCarro.has(k)) cacheCarro.set(k, criarJato(modelo, glb));
+    return cacheCarro.get(k).clone();
+  }
   if (modelo === 'ovni') {   // feito por código (ou casco do ovni.glb, se existir) e sem pintura
     const glb = ctx?.modelo?.('ovni'), k = 'ovni' + (glb ? 1 : 0);
     if (!cacheCarro.has(k)) cacheCarro.set(k, criarOvni(glb));

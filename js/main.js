@@ -29,6 +29,8 @@ import * as eixos from './eixos.js';
 import * as racoes from './racoes.js';
 import { pecasCabine } from './cabine.js';
 import * as ovni from './ovni.js';
+import * as jato from './jato.js';
+import { JATOS } from './jato.js';
 import * as jornal from './jornal.js';
 import * as visual from './visual.js';
 import { nivelTexto } from './empresa.js';
@@ -1061,6 +1063,7 @@ function acaoContexto() {
   if (perto(civico.EXERCITO.arsenal, 3.2)) { usarArsenal(); return; }
   if (perto(CONTRABANDISTA, 3.2)) { falarContrabandista(); return; }
   if (BANCAS.some((b) => perto(b, 3.2))) { abrirServico('jornal'); return; }
+  if (perto(GUARITA_ALIST, 3.2)) { menuGuarita(); return; }
   if (perto(civico.EXERCITO.balcao, 3.2)) { abrirServico(jogador.perfil?.profissao === 'exercito' ? 'trabalho' : 'empregos'); return; }
   if (jogador.perfil.profissao === 'jornalista') { const rp = reportagemProxima(); if (rp) { reportar(rp); return; } }
   if (perto(civico.PREFEITURA.jornal, 3.2)) { abrirServico('jornal'); return; }
@@ -1263,6 +1266,7 @@ function entrarCarro(v) {
 }
 function sairCarro() {
   const c = jogador.carro; if (!c) return;
+  if (c.jato && (c.noAr || c.vel > 2)) { aviso('Pouse e pare o caça antes de sair.', 2); return; }
   if (c.servico === 'lixo' && minhaColeta) { encerrarColeta(); return; }
   if (c.aula && c.aula === aula) { if (c.aula.voo && c.alt > 1.5) { aviso('Pouse antes de sair.', 2); return; } encerrarAula(false, 'Você saiu do veículo da prova.'); return; }
   if (c.voa && !c.caminhao) {
@@ -1280,6 +1284,7 @@ function sairCarro() {
     civico.atualizarSirenes(0, c.mesh); jogador.avatar.raiz.visible = true;
     c.mesh.position.y = alturaChao(c.mesh.position.x, c.mesh.position.z);
     if (c.servico === 'ovni') { guardarOvni(c); return; }
+    if (JATOS[c.servico]) { guardarJato(c); return; }
     aviso(c.servico === 'ambulancia' ? 'Ambulância estacionada. Socorra o ferido (✚) e volte para ela.' : civico.DO_EXERCITO.has(c.servico) ? 'Veículo do Exército estacionado aqui. Volte para ele quando quiser.' : 'Caminhão estacionado aqui. Volte para ele quando terminar.', 3);
     return;
   }
@@ -1321,6 +1326,7 @@ function dirigir(dt) {
   const c = jogador.carro, max = c.max || civico.CARROS[c.modelo]?.vel || 15;
   if (c.dano === undefined) c.dano = danoGuardado(c);
   if (c.voa !== voandoUI) { voandoUI = !!c.voa; document.body.classList.toggle('voando', voandoUI); }
+  if (c.jato) { pilotarJato(c, dt); return; }
   if (c.aviao) { pilotarAviao(c, dt); return; }
   if (c.voa) { pilotarHeli(c, dt, max); return; }
   const acel = pedais.acel || teclas.has('w') || teclas.has('arrowup'), freio = pedais.freio || teclas.has('s') || teclas.has('arrowdown');
@@ -2421,7 +2427,7 @@ function conectarMultiplayer(perfil) {
     explosao: (e) => receberExplosao(e),
     voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m),
-    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e),
+    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -3166,7 +3172,7 @@ const SKIN_POLICIA = 'Rustbolt_Sentinel';
 const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfil?.personagem);
 function metaPresenca() {
   const p = jogador.perfil;
-  return { nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
+  return { inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
     prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
@@ -3383,7 +3389,7 @@ function servicoProximo() {
   if (militar()) {   // Exército (e o General Supremo): o veículo da exposição (ilimitado) ou o seu, onde você deixou
     const lista = [...civico.EXERCITO.veiculos, ...(meuMilitar ? [{ modelo: meuMilitar.modelo, mesh: meuMilitar.mesh, meu: true }] : [])];
     let melhor = null, dm = 6;
-    for (const v of lista) { if (v.modelo === 'ovni' && !acessoArea51()) continue; const d = Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z); if (d < (v.modelo === 'ovni' ? 8.5 : dm)) { dm = Math.min(dm, d); melhor = v; } }
+    for (const v of lista) { if (v.modelo === 'ovni' && !acessoArea51()) continue; const d = Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z); if (d < (v.modelo === 'ovni' || JATOS[v.modelo] ? 9 : dm)) { dm = Math.min(dm, d); melhor = v; } }
     return melhor ? { exercito: melhor, modelo: melhor.modelo } : null;
   }
   const base = prof === 'medico' ? civico.HOSPITAL : prof === 'bombeiro' ? civico.BOMBEIROS : null;
@@ -3396,6 +3402,7 @@ function podePilotarHeliExercito() { return jogador.perfil?.cargo === 'admin' ||
 function entrarServico(sv) {
   if (jogador.carregando) { aviso('Largue a caixa antes de dirigir.'); return; }
   if (sv.exercito) {
+    if (JATOS[sv.modelo] && !podePilotarHeliExercito()) { aviso('Só oficiais do Exército (Tenente para cima) pilotam os caças.', 3.5); return; }
     if (sv.modelo === 'ovni' && !acessoArea51()) { aviso('Só oficiais do Exército (Tenente para cima) pilotam o óvni.', 3.5); return; }
     if (sv.modelo === 'helicoptero_exercito' && !podePilotarHeliExercito()) { aviso('Só Tenente para cima pilota o helicóptero do Exército. Você pode ir de passageiro.', 3.5); return; }
     if (!sv.exercito.meu) {   // pega uma cópia nova; a da vitrine continua lá
@@ -3416,6 +3423,7 @@ function entrarServico(sv) {
   document.body.classList.toggle('tanque', sv.modelo === 'tanque');
   if (sv.modelo === 'tanque' && TOQUE) $('btTiro').classList.remove('oculto');
   if (sv.modelo === 'tanque') aviso('Tanque: toque em Atirar (no PC, F) para disparar o canhão de tinta. Ele explode veículos; eles voltam para o dono em 30 s.', 4.5);
+  else if (JATOS[sv.modelo]) prepararJato(jogador.carro);
   else if (sv.modelo === 'ovni') aviso('🛸 Óvni do Exército: acelere para subir e freie para descer. Pare em cima de alguém e toque em 👽 Abduzir. Leva 2 militares.', 5);
   else if (civico.DO_EXERCITO.has(sv.modelo)) aviso(sv.modelo === 'helicoptero_exercito' ? 'Helicóptero do Exército: acelere para decolar e pare para pousar. Leva até 6 militares.' : `${civico.CARROS[sv.modelo].nome}: leva até ${civico.LUGARES[sv.modelo]} militares de passageiro.`, 3.5);
   else aviso(sv.modelo === 'ambulancia' ? 'Ambulância: os feridos aparecem no mapa (✚). Pare perto, desça e socorra.' : 'Caminhão dos bombeiros: os incêndios aparecem no mapa (🔥). Pare perto e toque em Jato, sem descer.', 4);
@@ -3942,10 +3950,10 @@ function atualizarSons() {
   // helicópteros dos jogadores (executivo e do Exército): o mesmo som do helicóptero das empresas
   const somHeli = (alt, vol) => { const k = THREE.MathUtils.clamp(alt / 12, 0, 1); sons.continuo('helicoptero_baixo', vol * (1 - k)); sons.continuo('helicoptero_alto', vol * k); };
   if (jogador.carro?.servico === 'ovni') sons.zumbido(0.5);
-  else if (jogador.carro?.voa && !jogador.carro.caminhao && !jogador.carro.aviao) somHeli(jogador.carro.alt || 0, 0.6);
+  else if (jogador.carro?.voa && !jogador.carro.caminhao && !jogador.carro.aviao && !jogador.carro.jato) somHeli(jogador.carro.alt || 0, 0.6);
   if (jogador.passageiro?.piloto) { const o = jogador.passageiro.c.obj; const mp = remotos.get(jogador.passageiro.piloto)?.carroModelo; if (mp === 'ovni') sons.zumbido(0.5); else if (civico.CARROS[mp]?.voa && !String(mp).startsWith('aviao')) somHeli(o.position.y - alturaChao(o.position.x, o.position.z), 0.6); }
   for (const r of remotos.values()) {
-    if (!r.carro || !civico.CARROS[r.carroModelo]?.voa || String(r.carroModelo).startsWith('aviao') || jogador.passageiro?.piloto && remotos.get(jogador.passageiro.piloto) === r) continue;
+    if (!r.carro || !civico.CARROS[r.carroModelo]?.voa || civico.CARROS[r.carroModelo]?.jato || String(r.carroModelo).startsWith('aviao') || jogador.passageiro?.piloto && remotos.get(jogador.passageiro.piloto) === r) continue;
     if (r.carroModelo === 'ovni') { if (r.carro.visible) sons.zumbido(0.45 * sons.perto(dist(r.carro), 90)); continue; }
     somHeli(r.carro.position.y - alturaChao(r.carro.position.x, r.carro.position.z), 0.55 * sons.perto(dist(r.carro), 110));
   }
@@ -6040,6 +6048,7 @@ function contexto() {
   if (perto(civico.EXERCITO.arsenal, 3.2)) return [jogador.armaPesada ? 'guardar a arma pesada' : 'arsenal: pegar a arma pesada (com autorização)', 'Arsenal'];
   if (BANCAS.some((b) => perto(b, 3.2))) return ['banca de jornal: ler as notícias', 'Jornal'];
   if (perto(CONTRABANDISTA, 3.2)) return ['contrabandista: arma militar e alicate de corte', 'Negociar'];
+  if (perto(GUARITA_ALIST, 3.2)) return [militar() ? 'guarita do Exército: pedidos de alistamento' : 'guarita do Exército: alistamento e licitação de rações', 'Guarita'];
   if (perto(civico.EXERCITO.balcao, 3.2)) return [jogador.perfil?.profissao === 'exercito' ? 'comando do Exército: ordens e caçadas' : 'comando do Exército: alistar-se', 'Comando'];
   if (jogador.perfil?.profissao === 'jornalista' && reportagemProxima()) return [`reportar: ${reportagemProxima().titulo} (+200)`, 'Reportar'];
   if (perto(civico.PREFEITURA.jornal, 3.2)) return ['Jornal da Cidade: virar jornalista e ler as notícias', 'Jornal'];
@@ -6161,7 +6170,7 @@ function quadroJogo() {
   atualizarExplosoes(dt); atualizarSemPiloto(dt); atualizarContagemMorte();
   atualizarMira();
   civico.atualizarQuartel(jogador.pos);
-  atualizarArea51(dt);
+  atualizarArea51(dt); atualizarBases(dt); atualizarQuartelExtras(dt); atualizarBaseAerea(dt); atualizarMisseis(dt); avisarAlistamentos(dt);
   atualizarPerdao(dt);
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
@@ -9554,6 +9563,8 @@ function prepararTransporte() {
   mundo.limparArea(CENTRAL.x0 - 1, CENTRAL.z0 - 1, CENTRAL.x1 + 1, CENTRAL.z1 + 1); for (const S of SETORES) mundo.semEstacionar(S.cam.pts);
   mundo.limparArea(AUTOESCOLA.x0 - 1, AUTOESCOLA.z0 - 1, AUTOESCOLA.x1 + 1, AUTOESCOLA.z1 + 1);
   { const D = mundo.AREA51.deserto; mundo.limparArea(D.x0, D.z0, D.x1, D.z1); }   // deserto da Área 51
+  mundo.abrirTrilha([[216, 945], [405, 945], [405, 975]], 7); mundo.limparArea(296, 938, 630, 1108);   // Base Aérea e a rua até ela
+  mundo.limparArea(118, 1061, 126, 1069);   // guarita de alistamento (GUARITA_ALIST)
   mundo.limparArea(COMPRADOR.x - 9, COMPRADOR.z - 8, COMPRADOR.x + 9, COMPRADOR.z + 11);   // armazém do Seu Tonho: sem árvore na frente
   mundo.semEstacionar([[AUTOESCOLA.x0 - 12, AUTOESCOLA.saida.z], [AUTOESCOLA.x1 + 6, AUTOESCOLA.saida.z]]);
   for (const a of AEROPORTOS) {
@@ -11241,7 +11252,8 @@ function montarArea51() {
   const areiaTex = texturaCanvas(256, (c, t) => { c.fillStyle = '#d2b07a'; c.fillRect(0, 0, t, t); ruido(c, t, 9000, 0.07, 1.6, [150, 110, 60]);
     c.strokeStyle = 'rgba(170,130,80,.35)'; c.lineWidth = 2; for (let y = 8; y < t; y += 22) { c.beginPath(); c.moveTo(0, y); for (let x = 0; x <= t; x += 16) c.lineTo(x, y + Math.sin(x / 20 + y) * 4); c.stroke(); } });
   const D = A51.deserto; areiaTex.repeat.set((D.x1 - D.x0) / 18, (D.z1 - D.z0) / 18);
-  const plano = (x, z, w, d, mat, y) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; g.add(m); return m; };
+  const plano = (x, z, w, d, mat, y) => { mat.polygonOffset = true; mat.polygonOffsetFactor = Math.min(mat.polygonOffsetFactor || 0, -Math.round(y * 100)); mat.polygonOffsetUnits = mat.polygonOffsetFactor * 2;   // sem cintilar com o chão
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; g.add(m); return m; };
   const caixa = (x, y, z, w, h, d, mat, col = false, sombra = true) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = sombra; m.receiveShadow = true; g.add(m);
     if (col) colisores.push({ tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 }); return m; };
   plano((D.x0 + D.x1) / 2, (D.z0 + D.z1) / 2, D.x1 - D.x0, D.z1 - D.z0, M('#ffffff', { map: areiaTex }), 0.012);
@@ -11307,21 +11319,14 @@ function montarArea51() {
   for (const [x, z] of [[A51.x0 + 9, A51.z0 + 9], [A51.x0 + 9, A51.z1 - 9], [A51.x1 - 9, A51.z0 + 9], [A51.x1 - 9, A51.z1 - 9]]) {
     caixa(x, 2, z, 3.2, 4, 3.2, M('#6b6f5e'), true); caixa(x, 4.6, z, 3.4, 1.2, 0.15, ferro, false, false);
   }
-  const baterias = [[-860, -85], [-860, 35]].map(([x, z]) => {
-    caixa(x, 0.6, z, 6, 1.2, 6, M('#5b6150'), true);
-    const giro = new THREE.Group(); giro.position.set(x, 1.2, z); g.add(giro);
-    const torre = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2, 1.6, 16), M('#55603f')); torre.position.y = 0.8; giro.add(torre);
-    const canos = new THREE.Group(); canos.position.y = 1.4; giro.add(canos);
-    for (const sx of [-0.45, 0.45]) { const cn = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 5, 10), ferro); cn.rotation.x = Math.PI / 2; cn.position.set(sx, 0, 2.4); canos.add(cn); }
-    canos.rotation.x = -0.6;
-    const radar = new THREE.Group(); radar.position.set(x + 3.6, 1.2, z + 3.6); g.add(radar);
-    const haste = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3, 8), ferro); haste.position.y = 1.5; radar.add(haste);
-    const prato = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.4, 0.15), M('#c9ccd0', { metalness: 0.5 })); prato.position.y = 3.1; radar.add(prato);
-    const luz = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff2020', toneMapped: false })); luz.position.set(x, 4.3, z); g.add(luz);
-    return { x, z, giro, canos, radar, luz };
-  });
-  area51 = { g, portao, cancela, luzCone, folhas, abertura: 0, baterias, guardas: [] };
-  criarGuardasA51();
+  const baterias = [[-860, -85], [-860, 35]].map(([x, z]) => criarBateria(g, x, z));
+  area51 = { g, portao, cancela, luzCone, folhas, abertura: 0 };
+  const x0 = A51.x0, x1 = A51.x1, z0 = A51.z0, z1 = A51.z1, ronda = laco([[x0 + 28, z0 + 15], [x1 - 15, z0 + 15], [x1 - 15, z1 - 15], [x0 + 28, z1 - 15]]);
+  registrarBase({ id: 'a51', nome: 'Área 51', rect: A51, aviso: 40, tiro: 15, acesso: acessoArea51, acessoAr: (c) => c.servico === 'ovni' || acessoArea51(),
+    aa: { cx: (x0 + x1) / 2, cz: 0, raio: 250 }, baterias, rotulo: 'Exército · Área 51',
+    postos: [{ parado: [x1 + 3, -8, Math.PI / 2] }, { parado: [x1 + 3, 8, Math.PI / 2] }, { parado: [x1 - 3, -9, Math.PI / 2] }, { parado: [x1 - 3, 9, Math.PI / 2] },
+      ...[[x0 + 9, z0 + 9], [x0 + 9, z1 - 9], [x1 - 9, z0 + 9], [x1 - 9, z1 - 9]].map(([x, z]) => ({ parado: [x, z, Math.atan2(x - (x0 + x1) / 2, z)], alto: 4.05 })),
+      ...[0, 1, 2, 3].map((k) => ({ l: ronda, fase: k * ronda.total / 4, vel: 1.2 }))] });
 }
 function atualizarArea51(dt) {
   if (!jogador.perfil) return;
@@ -11360,7 +11365,6 @@ function atualizarArea51(dt) {
     conexao?.enviar('ovniVisto', { x: Math.round(x), z: Math.round(z), lugar: regiaoDe(p.x, p.z) });
   }
   if (rastreio?.ovni && agora > ovniMarcaAte) rastrear(null);
-  if (area51) { guardasA51(dt); antiaereo(dt); }
 }
 // ---- abdução
 function alvoAbducao() {
@@ -11552,97 +11556,386 @@ function atualizarPerdao(dt) {
   el.textContent = `· próxima some em ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-// ---- soldados da Área 51: atiram em quem avança sem permissão (avisam antes)
-async function criarGuardasA51() {
-  const x0 = A51.x0, x1 = A51.x1, z0 = A51.z0, z1 = A51.z1;
-  const ronda = laco([[x0 + 28, z0 + 15], [x1 - 15, z0 + 15], [x1 - 15, z1 - 15], [x0 + 28, z1 - 15]]);
-  const lista = [
-    { parado: [x1 + 3, -8, Math.PI / 2] }, { parado: [x1 + 3, 8, Math.PI / 2] }, { parado: [x1 - 3, -9, Math.PI / 2] }, { parado: [x1 - 3, 9, Math.PI / 2] },
-    ...[[x0 + 9, z0 + 9], [x0 + 9, z1 - 9], [x1 - 9, z0 + 9], [x1 - 9, z1 - 9]].map(([x, z]) => ({ parado: [x, z, Math.atan2(x - (x0 + x1) / 2, z) ], alto: 4.05 })),
-    ...[0, 1, 2, 3].map((k) => ({ l: ronda, fase: k * ronda.total / 4, vel: 1.2 })),
-  ];
-  for (const d of lista) {
+// ================================================================= BASES MILITARES: Área 51, Quartel e Base Aérea
+// Cada base tem soldados armados (avisam a 'aviso' m do muro; a menos de 'tiro' m, 3 s de último aviso e depois atiram)
+// e antiaéreo (aeronave sem permissão no raio: 10 s para sair, depois é abatida). Quem insiste vira "invasor"
+// por 5 min: os caças podem travar míssil nele (além dos procurados).
+const BASES = [];
+let invasorAte = 0, invasorAntes = false;
+function registrarBase(B) { B.guardas = []; B.st = { tiro: 0, aviso: 0, rajada: 0 }; B.aaSt = { t: 0, aviso: 0, disparo: 0, tiros: 0 }; BASES.push(B); criarGuardas(B); return B; }
+function criarBateria(g, x, z) {
+  const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, ...o }), ferro = M('#3b3f44');
+  const base = new THREE.Mesh(new THREE.BoxGeometry(6, 1.2, 6), M('#5b6150')); base.position.set(x, 0.6, z); base.castShadow = true; g.add(base);
+  colisores.push({ tipo: 'caixa', x0: x - 3, x1: x + 3, z0: z - 3, z1: z + 3 });
+  const giro = new THREE.Group(); giro.position.set(x, 1.2, z); g.add(giro);
+  const torre = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2, 1.6, 16), M('#55603f')); torre.position.y = 0.8; giro.add(torre);
+  const canos = new THREE.Group(); canos.position.y = 1.4; giro.add(canos);
+  for (const sx of [-0.45, 0.45]) { const cn = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 5, 10), ferro); cn.rotation.x = Math.PI / 2; cn.position.set(sx, 0, 2.4); canos.add(cn); }
+  canos.rotation.x = -0.6;
+  const radar = new THREE.Group(); radar.position.set(x + 3.6, 1.2, z + 3.6); g.add(radar);
+  const haste = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3, 8), ferro); haste.position.y = 1.5; radar.add(haste);
+  const prato = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.4, 0.15), M('#c9ccd0', { metalness: 0.5 })); prato.position.y = 3.1; radar.add(prato);
+  const luz = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff2020', toneMapped: false })); luz.position.set(x, 4.3, z); g.add(luz);
+  return { x, z, giro, canos, radar, luz };
+}
+async function criarGuardas(B) {
+  for (const d of B.postos || []) {
     try {
       const av = await criarAvatar('robos', 'Rusty_Scout_Bot');
-      const et = textoSprite('Exército · Área 51', { escala: 0.5, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+      const et = textoSprite(B.rotulo || 'Exército', { escala: 0.5, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
       try { av.arma = novaArma('militar', av); } catch { /* sem arma */ }
       av.raiz.visible = false; scene.add(av.raiz);
-      if (d.parado) { av.raiz.position.set(d.parado[0], d.alto || 0.12, d.parado[1]); av.raiz.rotation.y = d.parado[2]; d.rumo = d.parado[2]; av.tocar('idle'); } else av.tocar('walk', { velocidade: 0.8 });
-      area51.guardas.push({ av, ...d });
+      if (d.parado) { av.raiz.position.set(d.parado[0], d.alto || alturaChao(d.parado[0], d.parado[1]), d.parado[1]); av.raiz.rotation.y = d.parado[2]; d.rumo = d.parado[2]; av.tocar('idle'); } else av.tocar('walk', { velocidade: 0.8 });
+      B.guardas.push({ av, ...d });
     } catch { /* sem guardas */ }
   }
 }
-const A51_CENTRO = { x: (A51.x0 + A51.x1) / 2, z: 0 };
-let alertaA51 = { tiro: 0, aviso: 0, rajada: 0 };
-function distMuroA51(x, z) { const dx = Math.max(A51.x0 - x, 0, x - A51.x1), dz = Math.max(A51.z0 - z, 0, z - A51.z1); return Math.hypot(dx, dz); }
-function guardasA51(dt) {
-  const j = jogador, p = j.pos, agora = performance.now();
-  const perto = Math.hypot(p.x - A51_CENTRO.x, p.z) < 320;
-  const ok = acessoArea51(), noAr = j.carro?.voa && (j.carro.alt || 0) > 6;
-  const d = distMuroA51(p.x, p.z), alvo = !ok && !j.morto && !j.abducao && !noAr && !j.dentroCasa && !j.passageiro && !j.voo && perto;
-  const naMira = alvo && d < 15, avisar = alvo && d < 40;
-  for (const s of area51.guardas) {
+function distRect(R, x, z) { const dx = Math.max(R.x0 - x, 0, x - R.x1), dz = Math.max(R.z0 - z, 0, z - R.z1); return Math.hypot(dx, dz); }
+function marcarInvasor() { invasorAte = performance.now() + 300000; }
+function atualizarBases(dt) {
+  if (!jogador.perfil) return;
+  const p = jogador.pos;
+  if (!quartelExtras && Math.hypot(p.x - 200, p.z - 1035) < 650) montarQuartelExtras();
+  if (!baseAerea && Math.hypot(p.x - 460, p.z - 1040) < 700) montarBaseAerea();
+  for (const B of BASES) { vigiarBase(B, dt); antiaereoBase(B, dt); }
+  const inv = performance.now() < invasorAte; if (inv !== invasorAntes) { invasorAntes = inv; conexao?.rastrear(metaPresenca()); }
+}
+function vigiarBase(B, dt) {
+  const j = jogador, p = j.pos, agora = performance.now(), R = B.rect;
+  const d = distRect(R, p.x, p.z), perto = d < 260;
+  const ok = B.acesso(), noAr = j.carro?.voa && (j.carro.alt || 0) > 6;
+  const alvo = !ok && !j.morto && !j.abducao && !noAr && !j.dentroCasa && !j.passageiro && !j.voo && perto;
+  const naMira = alvo && d < B.tiro, avisar = alvo && d < B.aviso && !(B.livre && B.livre());
+  for (const s of B.guardas) {
     const r = s.av.raiz; r.visible = perto; if (!perto) continue;
     if (s.l && !(naMira && Math.hypot(r.position.x - p.x, r.position.z - p.z) < 90)) {
       const q = pontoNoLaco(s.l, agoraServidor() / 1000 * s.vel + s.fase);
       r.position.set(q.x, alturaChao(q.x, q.z), q.z); r.rotation.y = suavizarAngulo(r.rotation.y, q.ang, dt * 6);
       if (s.anim !== 'walk') { s.anim = 'walk'; s.av.tocar('walk', { velocidade: 0.8 }); }
     } else {
-      const mira = avisar && Math.hypot(r.position.x - p.x, r.position.z - p.z) < 110;
+      const mira = (avisar || naMira) && Math.hypot(r.position.x - p.x, r.position.z - p.z) < 110;
       r.rotation.y = suavizarAngulo(r.rotation.y, mira ? Math.atan2(p.x - r.position.x, p.z - r.position.z) : s.rumo ?? r.rotation.y, dt * 5);
       if (s.anim !== 'idle') { s.anim = 'idle'; s.av.tocar('idle'); }
     }
     s.av.mixer.update(dt);
   }
-  if (!avisar) { alertaA51.tiro = Math.max(0, alertaA51.tiro - dt * 2); return; }
+  if (!avisar && !naMira) { B.st.tiro = Math.max(0, B.st.tiro - dt * 2); return; }
   const fardado = militar() || j.perfil?.policial || j.perfil?.prf;
   if (!naMira) {
-    if (agora - alertaA51.aviso > 6000) { alertaA51.aviso = agora; aviso(fardado ? '⚠️ Área 51: nem polícia nem praça entra. Dê meia-volta ou os soldados atiram.' : '⚠️ Área militar restrita. Dê meia-volta ou será abatido.', 4); sons.radio?.(); }
-    alertaA51.tiro = Math.max(0, alertaA51.tiro - dt);
+    if (agora - B.st.aviso > 6000) { B.st.aviso = agora; aviso(fardado ? `⚠️ ${B.nome}: acesso só para quem é autorizado. Dê meia-volta ou os soldados atiram.` : `⚠️ ${B.nome}: área militar restrita. Dê meia-volta ou será abatido.`, 4); sons.radio?.(); }
+    B.st.tiro = Math.max(0, B.st.tiro - dt);
     return;
   }
-  alertaA51.tiro += dt;
-  if (alertaA51.tiro < 3) { if (agora - alertaA51.aviso > 1200) { alertaA51.aviso = agora; aviso(`🔫 ÚLTIMO AVISO: recue agora! (${Math.ceil(3 - alertaA51.tiro)})`, 1.2); } return; }
-  if ((alertaA51.rajada -= dt) > 0) return;
-  alertaA51.rajada = 0.7;
-  // o soldado mais perto atira (todos veem o tiro)
+  B.st.tiro += dt;
+  if (B.st.tiro < 3) { if (agora - B.st.aviso > 1200) { B.st.aviso = agora; aviso(`🔫 ÚLTIMO AVISO: recue agora! (${Math.ceil(3 - B.st.tiro)})`, 1.2); } return; }
+  marcarInvasor();
+  if ((B.st.rajada -= dt) > 0) return;
+  B.st.rajada = 0.7;
   let melhor = null, dm = 120;
-  for (const s of area51.guardas) { const r = s.av.raiz; if (!r.visible) continue; const dd = Math.hypot(r.position.x - p.x, r.position.z - p.z); if (dd < dm) { dm = dd; melhor = s; } }
+  for (const s of B.guardas) { const r = s.av.raiz; if (!r.visible) continue; const dd = Math.hypot(r.position.x - p.x, r.position.z - p.z); if (dd < dm) { dm = dd; melhor = s; } }
   if (!melhor) return;
   const de = melhor.av.raiz.position.clone(); de.y += 1.3;
   const para = new THREE.Vector3(p.x, (p.y || 0) + 1.1, p.z), v = para.clone().sub(de).normalize().multiplyScalar(60);
   criarBola(de, v, '#ffcf3a', false, 0.7);
   conexao?.enviar('tiro', { x: r2(de.x), y: r2(de.y), z: r2(de.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: '#ffcf3a', s: 0.7 });
   j.ultimoAgressor = null; danoLocal(25);
-  if (j.morto) aviso('💀 Abatido pelos soldados da Área 51.', 5);
+  if (j.morto) aviso(`💀 Abatido pelos soldados (${B.nome}).`, 5);
 }
-// ---- antiaéreo: derruba avião ou helicóptero sem permissão a menos de 250 m da base
-let aa = { t: 0, aviso: 0, disparo: 0, tiros: 0 };
-function antiaereo(dt) {
-  const c = jogador.carro, agora = performance.now(), B = area51.baterias;
-  for (const b of B) { b.radar.rotation.y += dt * 1.8; b.luz.visible = (agora / 500) % 1 < 0.5; }
-  const alvo = c?.voa && !c.caminhao && c.servico !== 'ovni' && !acessoArea51() && !c.explodiu && Math.hypot(jogador.pos.x - A51_CENTRO.x, jogador.pos.z) < 250 && ((c.alt || 0) > 1 || c.aviao);
+function antiaereoBase(B, dt) {
+  if (!B.baterias?.length) return;
+  const c = jogador.carro, agora = performance.now(), S = B.aaSt, A = B.aa;
+  for (const b of B.baterias) { b.radar.rotation.y += dt * 1.8; b.luz.visible = (agora / 500) % 1 < 0.5; }
+  const alvo = c?.voa && !c.caminhao && !B.acessoAr(c) && !c.explodiu && Math.hypot(jogador.pos.x - A.cx, jogador.pos.z - A.cz) < A.raio && ((c.alt || 0) > 1 || c.aviao || c.jato);
   if (!alvo) {
-    if (aa.t > 0) { aa.t = 0; aa.tiros = 0; if (c?.voa) aviso('Você saiu do espaço aéreo restrito.', 2.5); }
-    for (const b of B) b.giro.rotation.y += dt * 0.3;
+    if (S.t > 0) { S.t = 0; S.tiros = 0; if (c?.voa) aviso(`Você saiu do espaço aéreo restrito (${B.nome}).`, 2.5); }
+    for (const b of B.baterias) b.giro.rotation.y += dt * 0.3;
     return;
   }
-  const y = (c.mesh?.position.y ?? 0);
-  for (const b of B) {   // os canhões seguem a aeronave
+  const y = c.mesh?.position.y ?? 0;
+  for (const b of B.baterias) {
     b.giro.rotation.y = suavizarAngulo(b.giro.rotation.y, Math.atan2(jogador.pos.x - b.x, jogador.pos.z - b.z), dt * 4);
     b.canos.rotation.x = -Math.atan2(y - 2.6, Math.hypot(jogador.pos.x - b.x, jogador.pos.z - b.z));
   }
-  aa.t += dt;
-  if (aa.t < 10) {
-    if (agora - aa.aviso > 2000) { aa.aviso = agora; aviso(`🚨 Espaço aéreo restrito da Área 51: saia em ${Math.ceil(10 - aa.t)} s ou será abatido!`, 2); sons.radio?.(); }
-    return;
-  }
-  if ((aa.disparo -= dt) > 0) return;
-  aa.disparo = 0.35; aa.tiros++;
-  const p = jogador.pos, b = B[aa.tiros % B.length];
+  S.t += dt;
+  if (S.t < 10) { if (agora - S.aviso > 2000) { S.aviso = agora; aviso(`🚨 Espaço aéreo restrito (${B.nome}): saia em ${Math.ceil(10 - S.t)} s ou será abatido!`, 2); sons.radio?.(); } return; }
+  marcarInvasor();
+  if ((S.disparo -= dt) > 0) return;
+  S.disparo = 0.35; S.tiros++;
+  const p = jogador.pos, b = B.baterias[S.tiros % B.baterias.length];
   const de = new THREE.Vector3(b.x, 4, b.z), para = new THREE.Vector3(p.x, y + 1, p.z), v = para.clone().sub(de).normalize().multiplyScalar(90);
   criarBola(de, v, '#ff7a2a', false, 0.9);
   conexao?.enviar('tiro', { x: r2(de.x), y: r2(de.y), z: r2(de.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: '#ff7a2a', s: 0.9 });
-  efeitoExplosao(p.x + (Math.random() - 0.5) * 8, y + (Math.random() - 0.5) * 5, p.z + (Math.random() - 0.5) * 8, 0.5, false);   // estouros no céu
-  if (aa.tiros >= 5) { aa.t = 0; aa.tiros = 0; acidenteVeiculo(c, '💥 Abatido pela defesa antiaérea da Área 51!'); }
+  efeitoExplosao(p.x + (Math.random() - 0.5) * 8, y + (Math.random() - 0.5) * 5, p.z + (Math.random() - 0.5) * 8, 0.5, false);
+  if (S.tiros >= 5) { S.t = 0; S.tiros = 0; acidenteVeiculo(c, `💥 Abatido pela defesa antiaérea (${B.nome})!`); }
+}
+// cancela que abre sozinha para quem tem acesso (a colisão do portão some para ele)
+function cancelaEm(g, x, z, larg, eixo, cor = '#d33a2c') {
+  const grupo = new THREE.Group(); grupo.position.set(x, 1.1, z); g.add(grupo);
+  const braco = new THREE.Group(); grupo.add(braco);
+  const b = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, larg), new THREE.MeshStandardMaterial({ color: cor })); b.position.z = larg / 2; braco.add(b);
+  for (let k = 1; k < larg; k += 2) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.27, 1), new THREE.MeshStandardMaterial({ color: '#f2f2f2' })); f.position.z = k; braco.add(f); }
+  if (eixo === 'x') grupo.rotation.y = Math.PI / 2;
+  return braco;
+}
+function abrirCancela(braco, abre, dt) { braco.rotation.x = THREE.MathUtils.lerp(braco.rotation.x, abre ? -Math.PI / 2 * 0.95 : 0, Math.min(1, dt * 3)); }
+
+// ---- Quartel: cancela, guarita de alistamento do lado de fora, soldados com ordem de atirar e antiaéreo
+const GUARITA_ALIST = { x: 122, z: 1063.5 };
+let quartelExtras = null;
+function montarQuartelExtras() {
+  const Q = mundo.QUARTEL, pz = Q.portao.z, g = new THREE.Group(); scene.add(g);
+  const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, ...o });
+  const portao = { tipo: 'caixa', x0: Q.x0 - 0.6, x1: Q.x0 + 0.6, z0: pz - 6, z1: pz + 6 }; colisores.push(portao);
+  const braco = cancelaEm(g, Q.x0 - 1, pz - 6, 12, 'z');
+  // guarita de alistamento (fora do portão, ao lado da estrada)
+  const G = GUARITA_ALIST, cx = (o, c) => { const m = new THREE.Mesh(o, c); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
+  cx(new THREE.BoxGeometry(4.6, 3, 3.6), M('#6d7a52')).position.set(G.x, 1.5, G.z + 1.4);
+  cx(new THREE.BoxGeometry(5.4, 0.3, 4.4), M('#3f4733')).position.set(G.x, 3.15, G.z + 1.4);
+  cx(new THREE.BoxGeometry(3, 0.9, 0.6), M('#4b5238')).position.set(G.x, 0.45, G.z - 0.6);
+  colisores.push({ tipo: 'caixa', x0: G.x - 2.3, x1: G.x + 2.3, z0: G.z - 0.3, z1: G.z + 3.2 });
+  const pl = textoSprite('🎖️ Alistamento do Exército', { escala: 0.6, fundo: 'rgba(52,62,34,.94)' }); pl.position.set(G.x, 4.2, G.z); g.add(pl);
+  criarAvatar('robos', 'Rusty_Scout_Bot').then((av) => { av.raiz.position.set(G.x, alturaChao(G.x, G.z), G.z + 0.6); av.raiz.rotation.y = Math.PI; scene.add(av.raiz); av.tocar('idle'); quartelExtras.recrutador = av; }).catch(() => {});
+  const baterias = [[243, 1003], [160, 1001]].map(([x, z]) => criarBateria(g, x, z));
+  quartelExtras = { g, portao, braco, recrutador: null };
+  registrarBase({ id: 'quartel', nome: 'Quartel do Exército', rect: Q, aviso: 22, tiro: 10, acesso: () => militar(), acessoAr: () => militar(),
+    livre: () => Math.hypot(jogador.pos.x - G.x, jogador.pos.z - G.z) < 8,
+    aa: { cx: (Q.x0 + Q.x1) / 2, cz: (Q.z0 + Q.z1) / 2, raio: 120 }, baterias, rotulo: 'Exército · Sentinela',
+    postos: [{ parado: [Q.x0 - 4, pz - 8, -Math.PI / 2] }, { parado: [Q.x0 - 4, pz + 8, -Math.PI / 2] }, { parado: [Q.x0 + 4, pz - 9, -Math.PI / 2] }, { parado: [Q.x0 + 4, pz + 9, -Math.PI / 2] },
+      ...[[Q.x0 + 2, Q.z0 + 2], [Q.x1 - 2, Q.z0 + 2], [Q.x0 + 2, Q.z1 - 2], [Q.x1 - 2, Q.z1 - 2]].map(([x, z]) => ({ parado: [x, z, Math.atan2(x - (Q.x0 + Q.x1) / 2, z - (Q.z0 + Q.z1) / 2)], alto: 10.5 }))] });
+}
+function atualizarQuartelExtras(dt) {
+  if (!quartelExtras) return;
+  const Q = mundo.QUARTEL, ok = militar();
+  quartelExtras.portao.off = ok;
+  abrirCancela(quartelExtras.braco, ok && Math.hypot(jogador.pos.x - Q.x0, jogador.pos.z - Q.portao.z) < 16, dt);
+  quartelExtras.recrutador?.mixer.update(dt);
+}
+// ---- Base Aérea (a leste do quartel): pista, hangares, torre, cancela, soldados e antiaéreo
+let baseAerea = null;
+function montarBaseAerea() {
+  const B = mundo.BASE_AEREA, g = new THREE.Group(); scene.add(g);
+  const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, ...o });
+  const plano = (x, z, w, d, mat, ordem) => { mat.polygonOffset = true; mat.polygonOffsetFactor = -ordem; mat.polygonOffsetUnits = -ordem * 4; const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.02 + ordem * 0.01, z); m.receiveShadow = true; g.add(m); return m; };
+  const caixa = (x, y, z, w, h, d, mat, col = false) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); if (col) colisores.push({ tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 }); return m; };
+  const grama = M('#5d7a3e'), concreto = M('#a29f97'), asf = M('#3b3e45'), branco = M('#ececec'), amarelo = M('#e8c23a'), muro = M('#8c8a6e'), chapa = M('#6f757b', { metalness: 0.4, roughness: 0.6 });
+  plano((296 + B.x1 + 8) / 2, (938 + B.z1 + 2) / 2, B.x1 + 8 - 296, B.z1 + 2 - 938, grama, 0);
+  plano((B.x0 + B.x1) / 2, (B.z0 + B.z1) / 2, B.x1 - B.x0, B.z1 - B.z0, concreto, 1);
+  // rua da rodovia até o portão
+  plano((216 + 405) / 2, 945, 405 - 216, 10, M('#41454d'), 2); plano(B.portao.x, (945 + B.z0) / 2, 10, B.z0 - 945, M('#41454d'), 2);
+  // pista com marcas, taxiway e pátio
+  const P = B.pista; plano((P.x0 + P.x1) / 2, P.z, P.x1 - P.x0, P.larg, asf, 3);
+  for (let x = P.x0 + 12; x < P.x1 - 12; x += 14) plano(x, P.z, 7, 0.5, branco, 4);
+  for (const x of [P.x0 + 4, P.x1 - 4]) for (let k = -3; k <= 3; k++) plano(x, P.z + k * 2.4, 6, 1, branco, 4);
+  plano((P.x0 + P.x1) / 2, 1055, P.x1 - P.x0, 14, asf, 3); for (let x = P.x0; x < P.x1; x += 6) plano(x, 1055, 3, 0.3, amarelo, 4);
+  // muro com portão ao norte (x 392..408)
+  const H = 3.2, e = 0.6, gx = B.portao.x;
+  const m = (x0, z0, x1, z1) => caixa((x0 + x1) / 2, H / 2, (z0 + z1) / 2, Math.max(e, x1 - x0), H, Math.max(e, z1 - z0), muro, true);
+  m(B.x0, B.z0, gx - 8, B.z0 + e); m(gx + 8, B.z0, B.x1, B.z0 + e); m(B.x0, B.z1 - e, B.x1, B.z1); m(B.x0, B.z0, B.x0 + e, B.z1); m(B.x1 - e, B.z0, B.x1, B.z1);
+  const portao = { tipo: 'caixa', x0: gx - 8, x1: gx + 8, z0: B.z0 - 0.6, z1: B.z0 + 0.6 }; colisores.push(portao);
+  const braco = cancelaEm(g, gx - 8, B.z0 - 1, 16, 'x');
+  caixa(gx + 11, 1.5, B.z0 + 4, 4, 3, 4, M('#6d7a52'), true); caixa(gx + 11, 3.15, B.z0 + 4, 4.6, 0.3, 4.6, M('#3f4733'));
+  const pl = textoSprite('✈️ BASE AÉREA · ACESSO RESTRITO AO EXÉRCITO', { escala: 0.75, fundo: 'rgba(30,60,110,.94)' }); pl.position.set(gx, 6.5, B.z0 - 2); g.add(pl);
+  // hangares abertos para o pátio (um para cada caça) e a torre
+  for (const [hx, w] of [[350, 26], [395, 28], [455, 40]]) {
+    const z0 = 990, d = 30, HH = 10;
+    caixa(hx, HH / 2, z0, w, HH, 0.5, chapa, true); caixa(hx - w / 2, HH / 2, z0 + d / 2, 0.5, HH, d, chapa, true); caixa(hx + w / 2, HH / 2, z0 + d / 2, 0.5, HH, d, chapa, true);
+    caixa(hx, HH + 0.3, z0 + d / 2, w + 1, 0.6, d + 1, M('#55595e'));
+    plano(hx, z0 + d / 2, w, d, M('#5a5d62'), 2);
+  }
+  caixa(560, 9, 1005, 6, 18, 6, M('#d9d4c8'), true); caixa(560, 19.5, 1005, 9, 3, 9, M('#2a3a4a', { roughness: 0.15, metalness: 0.6, emissive: '#10202c' })); caixa(560, 21.3, 1005, 10, 0.6, 10, M('#4a4f55'));
+  const pl2 = textoSprite('Torre · Base Aérea', { escala: 0.55, fundo: 'rgba(30,60,110,.94)' }); pl2.position.set(560, 23.5, 1005); g.add(pl2);
+  // plataformas de vigia
+  for (const [x, z] of [[B.x0 + 6, B.z0 + 6], [B.x1 - 6, B.z0 + 6], [B.x0 + 6, B.z1 - 6], [B.x1 - 6, B.z1 - 6]]) caixa(x, 2, z, 3.2, 4, 3.2, M('#6b6f5e'), true);
+  const baterias = [[318, 1000], [604, 1030]].map(([x, z]) => criarBateria(g, x, z));
+  baseAerea = { g, portao, braco };
+  registrarBase({ id: 'aerea', nome: 'Base Aérea', rect: B, aviso: 30, tiro: 12, acesso: () => militar(), acessoAr: () => militar(),
+    aa: { cx: (B.x0 + B.x1) / 2, cz: (B.z0 + B.z1) / 2, raio: 120 }, baterias, rotulo: 'Base Aérea · Sentinela',
+    postos: [{ parado: [gx - 9, B.z0 - 4, Math.PI] }, { parado: [gx + 9, B.z0 - 4, Math.PI] }, { parado: [gx - 10, B.z0 + 4, Math.PI] }, { parado: [gx + 6, B.z0 + 9, Math.PI] },
+      ...[[B.x0 + 6, B.z0 + 6], [B.x1 - 6, B.z0 + 6], [B.x0 + 6, B.z1 - 6], [B.x1 - 6, B.z1 - 6]].map(([x, z]) => ({ parado: [x, z, Math.atan2(x - (B.x0 + B.x1) / 2, z - (B.z0 + B.z1) / 2)], alto: 4.05 }))] });
+}
+function atualizarBaseAerea(dt) {
+  if (!baseAerea) return;
+  const B = mundo.BASE_AEREA, ok = militar();
+  baseAerea.portao.off = ok;
+  abrirCancela(baseAerea.braco, ok && Math.hypot(jogador.pos.x - B.portao.x, jogador.pos.z - B.z0) < 18, dt);
+}
+
+// ---- alistamento: a guarita pede; um oficial (Tenente para cima) aprova
+function oficialExercito() { return jogador.perfil?.cargo === 'admin' || (militar() && podePilotarHeliExercito()); }
+function menuGuarita() {
+  const ops = [];
+  if (!militar()) ops.push({ rotulo: '🎖️ Pedir alistamento no Exército', fn: () => rede.exercito.pedirAlistamento().then((r) => aviso(r === 'pendente' ? '⏳ Seu pedido já está esperando a aprovação de um oficial.' : '📨 Pedido enviado! Um oficial do Exército (Tenente para cima) precisa aprovar.', 4.5)).catch((e) => aviso(e.message, 4)) });
+  if (oficialExercito()) ops.push({ rotulo: '📋 Pedidos de alistamento', fn: () => menuAlistamentos() });
+  if (!militar()) ops.push({ rotulo: '📄 Licitação do transporte de rações', fn: () => racoes.abrir('licitacao') });
+  if (!ops.length) ops.push({ rotulo: 'Ok', fn: () => {} });
+  escolher('🎖️ Guarita do Exército', militar() ? 'Guarita de alistamento. Oficiais aprovam aqui os novos recrutas.' : 'Quer servir? Peça o alistamento: um oficial do Exército analisa e aprova.', ops);
+}
+function menuAlistamentos() {
+  rede.exercito.alistamentosPendentes().then((l) => {
+    if (!l?.length) { aviso('Nenhum pedido de alistamento esperando.', 3); return; }
+    escolher('📋 Pedidos de alistamento', 'Toque para decidir:', l.map((a) => ({ rotulo: `${esc(a.nome)} · há ${Math.max(1, Math.round((Date.now() - Date.parse(a.criado)) / 60000))} min`,
+      fn: () => escolher(`Alistar ${esc(a.nome)}?`, 'Aprovado, ele vira Recruta do Exército na hora.', [
+        { rotulo: '✅ Aprovar', fn: () => rede.exercito.decidirAlistamento(a.id, true).then(() => aviso(`✅ ${a.nome} agora é Recruta.`, 3)).catch((e) => aviso(e.message, 3)) },
+        { rotulo: '❌ Recusar', fn: () => rede.exercito.decidirAlistamento(a.id, false).then(() => aviso('Pedido recusado.', 2.5)).catch((e) => aviso(e.message, 3)) }]) })));
+  }).catch((e) => aviso(e.message, 3));
+}
+let tAlist = 20, alistVistos = 0;
+function avisarAlistamentos(dt) {
+  if (!oficialExercito() || (tAlist -= dt) > 0) return; tAlist = 90;
+  rede.exercito.alistamentosPendentes().then((l) => { const n = l?.length || 0; if (n > alistVistos) aviso(`📋 ${n} pedido(s) de alistamento esperando: aprove na guarita do quartel.`, 5); alistVistos = n; }).catch(() => {});
+}
+
+// ================================================================= CAÇAS E MÍSSEIS
+function pistaMilitar(x, z) { const P = mundo.BASE_AEREA.pista; return x > P.x0 && x < P.x1 && Math.abs(z - P.z) < P.larg / 2 + 2; }
+function prepararJato(c) {
+  const J = JATOS[c.servico]; c.jato = true; c.noAr = false; c.alt = 0; c.pitch = 0; c.vs = 0; c.misseis = J.misseis; c.trava = null;
+  document.body.classList.add('aviao');
+  aviso(`✈️ ${J.nome}: taxie até a pista, acelere até ${J.vdec} m/s e puxe o manche (▼). ${J.misseis ? `${J.misseis} mísseis: 🎯 Travar e 🚀 Disparar (só em procurados e invasores).` : 'Botão 👻 Invisível.'}`, 6);
+}
+function pilotarJato(c, dt) {
+  const J = JATOS[c.servico];
+  const acel = pedais.acel || teclas.has('w'), freio = pedais.freio || teclas.has('s');
+  const lado = THREE.MathUtils.clamp(manche.x + (pedais.dir || teclas.has('d') || teclas.has('arrowright') ? 1 : 0) - (pedais.esq || teclas.has('a') || teclas.has('arrowleft') ? 1 : 0), -1, 1);
+  const puxa = THREE.MathUtils.clamp(manche.y + (teclas.has('arrowdown') ? 1 : 0) - (teclas.has('arrowup') ? 1 : 0), -1, 1);
+  c.volante = (c.volante || 0) + (lado - (c.volante || 0)) * Math.min(1, dt * 4);
+  const naPista = pistaMilitar(jogador.pos.x, jogador.pos.z) || !!pistaEm(jogador.pos.x, jogador.pos.z);
+  const suave = (alvo, taxa) => { c.pitch += THREE.MathUtils.clamp(alvo - c.pitch, -taxa * dt, taxa * dt); };
+  if (!c.noAr) {
+    const lim = naPista ? J.vmax * 0.7 : 12;
+    if (acel && !freio) c.vel = Math.min(lim, c.vel + (naPista ? 14 : 4) * dt); else if (freio) c.vel = Math.max(0, c.vel - 16 * dt); else c.vel = Math.max(0, c.vel - 3 * dt);
+    jogador.yaw -= c.volante * 1.1 * Math.min(1, c.vel / 3) / (1 + c.vel / 15) * dt;
+    jogador.pos.x += Math.sin(jogador.yaw) * c.vel * dt; jogador.pos.z += Math.cos(jogador.yaw) * c.vel * dt;
+    resolverColisao(jogador.pos, Math.min(3, J.raio));
+    suave(c.vel >= J.vdec * 0.85 && puxa > 0.15 ? 0.18 * puxa : 0, 0.6);
+    if (!naPista && c.vel > 18) { acidenteVeiculo(c, '💥 O caça saiu da pista em alta velocidade!'); return; }
+    if (naPista && c.vel >= J.vdec && c.pitch > 0.08) { c.noAr = true; c.alt = 0.5; aviso('🛫 Decolou! Manche puxado sobe, empurrado desce. Pouse numa pista, devagar.', 3.5); }
+    c.vs = 0;
+  } else {
+    const estol = c.vel < J.vdec * 0.75;
+    let alvo = estol ? -0.25 : THREE.MathUtils.clamp(puxa * 0.45, -0.45, 0.45);
+    if (c.alt > 400 && alvo > 0) alvo = 0;
+    suave(alvo, 0.8);
+    if (acel && !freio) c.vel += 18 * dt; else if (freio) c.vel -= 16 * dt;
+    c.vel = THREE.MathUtils.clamp(c.vel - Math.sin(c.pitch) * 9 * dt, J.vdec * 0.6, J.vmax);
+    c.vs = estol ? Math.min(c.vel * Math.sin(c.pitch), -8) : c.vel * Math.sin(c.pitch);
+    jogador.yaw -= c.volante * J.giro * dt;
+    jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, -1300, 1300);
+    jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, -1400, 1400);
+    c.alt = Math.min(420, c.alt + c.vs * dt);
+    { const ch = alturaChao(jogador.pos.x, jogador.pos.z); if (aeronaveEmPredio(c, ch)) return; alertaPredio(c, ch); }
+    if (c.alt <= 0.3) {
+      const ok = naPista && c.vs > -7 && c.vel <= J.vdec * 1.5;
+      if (!ok) { acidenteVeiculo(c, !naPista ? '💥 O caça caiu fora da pista!' : '💥 Pouso rápido demais: o caça se despedaçou!'); return; }
+      c.noAr = false; c.alt = 0; c.vs = 0; c.pitch = 0; c.vel = Math.min(c.vel, J.vdec);
+      if (pistaMilitar(jogador.pos.x, jogador.pos.z) && c.misseis < J.misseis) { c.misseis = J.misseis; aviso('🛬 Pousou na Base Aérea: mísseis recarregados.', 3); } else aviso('🛬 Pousou.', 2.5);
+    }
+  }
+  const chao = alturaChao(jogador.pos.x, jogador.pos.z);
+  jogador.pos.y = chao;
+  c.mesh.position.set(jogador.pos.x, chao + c.alt, jogador.pos.z);
+  c.mesh.rotation.set(-c.pitch, jogador.yaw, c.noAr ? c.volante * 0.6 : 0, 'YXZ');
+  jato.chamas(c.mesh, acel ? 1 : c.vel / J.vmax * 0.35);
+  jogador.avatar.raiz.position.copy(jogador.pos);
+  sons.continuo('aviaoG_alto', c.invisivel ? 0.15 : 0.35 + 0.4 * c.vel / J.vmax, 1.2 + c.vel / J.vmax * 0.5);
+  controlesJato(c, dt);
+}
+// descer do caça: só parado no chão; fora da Base Aérea ele volta sozinho para o pátio
+function guardarJato(c) {
+  c.invisivel = false; document.body.classList.remove('aviao');
+  const B = mundo.BASE_AEREA, naBase = jogador.pos.x > B.x0 && jogador.pos.x < B.x1 && jogador.pos.z > B.z0 && jogador.pos.z < B.z1;
+  if (naBase) { aviso('✈️ Caça estacionado na Base Aérea.', 3); return; }
+  scene.remove(c.mesh); if (meuMilitar?.mesh === c.mesh) meuMilitar = null;
+  aviso('✈️ O caça voltou com a equipe de solo para a Base Aérea.', 3.5);
+}
+// ---- painel do caça: Travar, Disparar e (na asa furtiva) Invisível
+function controlesJato(c) {
+  let pn = $('painelJato');
+  if (!pn) {
+    pn = document.createElement('div'); pn.id = 'painelJato';
+    pn.style.cssText = 'position:fixed;left:calc(env(safe-area-inset-left,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 36vh);z-index:30;display:flex;flex-direction:column;gap:8px';
+    const bt = (id, fn) => { const b = document.createElement('button'); b.id = id; b.style.cssText = 'border-radius:14px;border:2px solid #8fd3ff;background:rgba(14,24,40,.88);color:#e3f4ff;font:800 13px system-ui;padding:8px 10px;min-width:100px;line-height:1.15;touch-action:none';
+      b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); fn(); }); pn.appendChild(b); return b; };
+    bt('btJTravar', () => travarAlvo()); bt('btJDisparar', () => dispararMissil()); bt('btJInv', () => { const k = jogador.carro; if (!k?.jato || !JATOS[k.servico].invisivel) return; k.invisivel = !k.invisivel; aviso(k.invisivel ? '👻 Asa furtiva invisível: ninguém vê você.' : '✈️ Visível de novo.', 3); });
+    document.body.appendChild(pn);
+  }
+  const J = JATOS[c.servico];
+  pn.style.display = 'flex';
+  $('btJTravar').style.display = $('btJDisparar').style.display = J.misseis ? 'block' : 'none';
+  $('btJInv').style.display = J.invisivel ? 'block' : 'none';
+  const tr = c.trava, r = tr && remotos.get(tr.id);
+  if (tr && (!r?.carro || !alvoMissilValido(r, c, 900))) { c.trava = null; }
+  else if (tr && !tr.ok) { tr.t += 1 / 60 * 2; if (tr.t >= 1.5) { tr.ok = true; aviso(`🎯 TRAVADO: ${r.meta?.nome || 'alvo'}`, 2); conexao?.enviar('travado', { de: jogador.perfil.id, alvo: tr.id }); } }
+  const t1 = !c.trava ? '🎯 Travar<br><small>procurar alvo</small>' : c.trava.ok ? `🎯 Travado<br><small>${esc((remotos.get(c.trava.id)?.meta?.nome || 'alvo').slice(0, 12))}</small>` : '🎯 Travando…<br><small>mantenha à frente</small>';
+  const t2 = `🚀 Disparar<br><small>${c.misseis} míssei${c.misseis === 1 ? 'l' : 's'}</small>`, t3 = c.invisivel ? '👻 Invisível<br><small>ligado</small>' : '👁️ Visível<br><small>toque p/ sumir</small>';
+  for (const [id, t] of [['btJTravar', t1], ['btJDisparar', t2], ['btJInv', t3]]) { const b = $(id); if (b.dataset.t !== t) { b.dataset.t = t; b.innerHTML = t; } }
+  $('btJDisparar').style.opacity = c.trava?.ok && c.misseis > 0 ? '1' : '.55';
+  const h = c.mesh; if (h) h.traverse((o) => { if (o.isMesh && J.invisivel) { o.material.transparent = !!c.invisivel; o.material.opacity = c.invisivel ? 0.35 : 1; } });
+}
+// alvo válido: aeronave de outro jogador no ar, visível, procurada ou invasora, à frente e no alcance
+function alvoMissilValido(r, c, alcance = 700) {
+  const o = r.carro; if (!o || !o.visible || !civico.CARROS[r.carroModelo]?.voa) return false;
+  if (o.position.y - alturaChao(o.position.x, o.position.z) < 3) return false;
+  if (!(r.meta?.crimes > 0 || r.meta?.inv)) return false;
+  const dx = o.position.x - jogador.pos.x, dz = o.position.z - jogador.pos.z, d = Math.hypot(dx, dz); if (d > alcance) return false;
+  const ang = Math.abs(Math.atan2(Math.sin(Math.atan2(dx, dz) - jogador.yaw), Math.cos(Math.atan2(dx, dz) - jogador.yaw)));
+  return ang < 0.75;
+}
+function travarAlvo() {
+  const c = jogador.carro; if (!c?.jato || !JATOS[c.servico].misseis) return;
+  if (!c.noAr) { aviso('🎯 Decole primeiro.', 2); return; }
+  let melhor = null, dm = Infinity;
+  for (const [id, r] of remotos) { if (!alvoMissilValido(r, c)) continue; const d = r.carro.position.distanceTo(c.mesh.position); if (d < dm) { dm = d; melhor = id; } }
+  if (!melhor) { aviso('🎯 Nenhum alvo: só aeronaves de procurados ou de invasores de área militar, à sua frente, a até 700 m.', 4); c.trava = null; return; }
+  c.trava = { id: melhor, t: 0, ok: false };
+}
+const misseis = [], fumacas = [];
+function dispararMissil() {
+  const c = jogador.carro; if (!c?.jato) return;
+  if (!c.trava?.ok) { aviso('🚀 Trave um alvo antes (🎯).', 2); return; }
+  if (c.misseis <= 0) { aviso('🚀 Sem mísseis: pouse na Base Aérea para recarregar.', 3); return; }
+  c.misseis--;
+  const f = new THREE.Vector3(Math.sin(jogador.yaw), Math.sin(c.pitch), Math.cos(jogador.yaw)).normalize();
+  const pos = c.mesh.position.clone().addScaledVector(f, 6).add(new THREE.Vector3(0, -0.6, 0)), vel = f.multiplyScalar(Math.max(60, c.vel + 20));
+  const id = jogador.perfil.id.slice(0, 6) + Date.now().toString(36);
+  lancarMissil({ id, de: jogador.perfil.id, alvo: c.trava.id, pos, vel, meu: true });
+  conexao?.enviar('missil', { id, de: jogador.perfil.id, alvo: c.trava.id, x: r2(pos.x), y: r2(pos.y), z: r2(pos.z), vx: r2(vel.x), vy: r2(vel.y), vz: r2(vel.z) });
+  aviso('🚀 Míssil disparado!', 1.5);
+}
+function lancarMissil(m) {
+  const mesh = jato.criarMissil(modelos.missil); mesh.position.copy(m.pos); scene.add(mesh);
+  misseis.push({ ...m, mesh, t: 0, fum: 0 });
+  sons.tocar('tiro', { vol: 0.9, dist: m.pos.distanceTo(jogador.pos), raio: 200, velocidade: 0.5 });
+}
+function receberMissil(e) {
+  if (!jogador.perfil) return;
+  lancarMissil({ id: e.id, de: e.de, alvo: e.alvo, pos: new THREE.Vector3(e.x, e.y, e.z), vel: new THREE.Vector3(e.vx, e.vy, e.vz), meu: false });
+  if (e.alvo === jogador.perfil.id) { aviso('🚀 MÍSSIL A CAMINHO! Acelere e faça curva fechada!', 4); sons.radio?.(); }
+}
+function receberTravado(e) { if (e.alvo === jogador.perfil?.id) { aviso('⚠️ Um caça TRAVOU míssil em você!', 4); sons.radio?.(); } }
+function receberMissilAcerto(e) {
+  const m = misseis.find((x) => x.id === e.id); if (m) { efeitoExplosao(m.mesh.position.x, m.mesh.position.y, m.mesh.position.z, 1.2, false); scene.remove(m.mesh); misseis.splice(misseis.indexOf(m), 1); }
+  if (e.alvo !== jogador.perfil?.id) return;
+  const c = jogador.carro; if (c?.voa && !c.explodiu) acidenteVeiculo(c, '💥 Abatido por um míssil do Exército!');
+}
+function atualizarMisseis(dt) {
+  jato.animarFumaca(scene, fumacas, dt);
+  for (let i = misseis.length - 1; i >= 0; i--) {
+    const m = misseis[i]; m.t += dt;
+    const alvoPos = m.alvo === jogador.perfil?.id ? (jogador.carro?.mesh?.position || jogador.pos) : remotos.get(m.alvo)?.carro?.position;
+    const v = m.vel, vel = Math.min(150, v.length() + 60 * dt);
+    if (alvoPos && m.t > 0.4) {   // persegue: vira no máximo 1,1 rad/s
+      const quer = alvoPos.clone().sub(m.mesh.position).normalize(), atual = v.clone().normalize(), ang = atual.angleTo(quer), max = 1.1 * dt;
+      if (ang > 1e-4) atual.lerp(quer, Math.min(1, max / ang)).normalize();
+      v.copy(atual.multiplyScalar(vel));
+    } else v.setLength(vel);
+    m.mesh.position.addScaledVector(v, dt);
+    m.mesh.lookAt(m.mesh.position.clone().add(v));
+    if ((m.fum -= dt) <= 0) { m.fum = 0.04; fumacas.push(jato.fumaca(scene, m.mesh.position.clone().addScaledVector(v.clone().normalize(), -2.4))); }
+    const acertou = alvoPos && m.mesh.position.distanceTo(alvoPos) < 7, fim = m.t > 9 || m.mesh.position.y < alturaChao(m.mesh.position.x, m.mesh.position.z);
+    if (acertou && m.meu) { conexao?.enviar('missilAcerto', { id: m.id, alvo: m.alvo, de: m.de }); aviso('💥 Alvo abatido!', 3); }
+    if ((acertou && m.meu) || fim) { efeitoExplosao(m.mesh.position.x, m.mesh.position.y, m.mesh.position.z, acertou ? 1.2 : 0.6, false); scene.remove(m.mesh); misseis.splice(i, 1); }
+  }
+  if (!jogador.carro?.jato) { const pn = $('painelJato'); if (pn) pn.style.display = 'none'; }
+  // som dos caças dos outros
+  for (const r of remotos.values()) if (r.carro?.visible && civico.CARROS[r.carroModelo]?.jato) sons.continuo('aviaoG_alto', 0.6 * sons.perto(r.carro.position.distanceTo(jogador.pos), 260), 1.4);
 }

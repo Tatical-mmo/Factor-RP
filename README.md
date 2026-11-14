@@ -1252,3 +1252,34 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - Depois disso, o antiaéreo dispara traçantes e estouros no céu e derruba a aeronave, com explosão, carcaça e incêndio. Dá para ejetar com paraquedas.
 - O óvni, o admin e o Exército de Tenente para cima passam livres.
 - Quem cai dentro da base sem permissão volta para 30 m do portão, ainda na zona de aviso.
+
+## Versão 13/11 · Base Aérea e caças (20261113zq)
+
+**Rode o SQL `supabase/76_alistamento.sql`** (depois do 75). Arquivo novo no jogo: **`js/jato.js`**.
+
+- **Base Aérea**: fica a leste do quartel, em Porto Sul. Para chegar, siga pela rua z = 945 a partir da rodovia até o portão norte.
+  - Tem pista com marcações, pátio, 3 hangares, torre, muro e cancela.
+  - Guardas: 8 soldados armados. Antiaéreo: 2 baterias com raio de 120 m.
+  - Todos do Exército entram.
+- **Quartel**: ganhou cancela no portão (abre só para o Exército), 8 sentinelas armadas (4 no portão e 4 nas torres) e antiaéreo de 120 m.
+- **Regra das bases** (Área 51, Quartel e Base Aérea): primeiro vem o aviso. Na zona de tiro há 3 s de último aviso, e depois os soldados atiram.
+  - Aeronave sem permissão tem 10 s para sair e depois é abatida.
+  - Quem insiste fica marcado como **invasor** por 5 min.
+- **Alistamento com aprovação**: o balcão saiu de dentro do quartel e foi para a **guarita do lado de fora do portão**.
+  - O civil pede ali. Um **oficial do Exército** (Tenente para cima) ou o admin aprova ou recusa, também na guarita.
+  - Os oficiais online recebem aviso de pedidos pendentes a cada 1,5 min.
+  - A licitação das rações também foi para a guarita.
+- **Caças** (só Tenente para cima pilota):
+  - **Caça leve**: 95 m/s, 4 mísseis.
+  - **Caça furtivo**: 120 m/s, 6 mísseis.
+  - **Asa furtiva**: 80 m/s, sem mísseis e com botão 👻 Invisível.
+  - Decolagem e pouso na pista da Base Aérea ou de qualquer aeroporto. Fora da pista em velocidade alta, eles batem.
+  - Ao descer fora da base, o caça volta sozinho para a Base Aérea.
+  - Se existirem `assets/modelos/caca_leve.glb`, `caca_furtivo.glb`, `asa_furtiva.glb` ou `missil.glb`, o jogo usa esses modelos.
+- **Mísseis teleguiados**:
+  - **🎯 Travar** mira a aeronave mais próxima à frente, a até 700 m. Só vale para aeronave de **procurado** (com estrelas) ou de **invasor** de base militar.
+  - Depois de 1,5 s fica travado, e o alvo recebe "⚠️ Um caça TRAVOU míssil em você!".
+  - **🚀 Disparar** lança o míssil, que persegue o alvo com rastro de fumaça visível para todos e derruba a aeronave.
+  - Um caça rápido em curva fechada escapa; helicóptero e avião em linha reta não.
+  - Os mísseis recarregam ao pousar na Base Aérea.
+- **Correção**: o chão da Área 51 não cintila mais.
