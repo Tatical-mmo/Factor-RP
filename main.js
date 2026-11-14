@@ -1303,7 +1303,11 @@ function entrarCarro(v) {
 function sairCarro() {
   const c = jogador.carro; if (!c) return;
   if (c.jato && (c.noAr || c.vel > 2)) { aviso('Pouse e pare o caça antes de sair.', 2); return; }
-  if (c.jato && c.alt > 1) { aviso('No porta-aviões não dá para descer: decole e pouse na Base Aérea.', 3); return; }
+  if (c.voa && !c.caminhao && !c.aviao && !c.teste && (c.jato ? c.alt > 1 : c.alt <= 1.5)) {   // pousado num navio
+    const dk = convesEm(jogador.pos.x, jogador.pos.z);
+    if (dk && (c.jato || Math.abs((jogador.pos.y || 0) - dk.h) < 1)) { descerNoConves(c, dk); return; }
+  }
+  if (c.jato && c.alt > 1) { aviso('Pare o caça no convés para descer.', 3); return; }
   if (c.servico === 'lixo' && minhaColeta) { encerrarColeta(); return; }
   if (c.aula && c.aula === aula) { if (c.aula.voo && c.alt > 1.5) { aviso('Pouse antes de sair.', 2); return; } encerrarAula(false, 'Você saiu do veículo da prova.'); return; }
   if (c.voa && !c.caminhao) {
@@ -5638,7 +5642,6 @@ function atualizarJogador(dt) {
   for (let i = j.eventos.length - 1; i >= 0; i--) { j.eventos[i].t -= dt; if (j.eventos[i].t <= 0) { j.eventos[i].fn(); j.eventos.splice(i, 1); } }
   j.recarga = Math.max(0, j.recarga - dt);
   if (j.abducao) { seguirAbducao(dt); return; }
-  if (j.embarcado) { seguirNavio(dt); return; }
   if (j.trem && seguirTrem()) {
     av.tocar(j.carregando ? 'carregar_parado' : 'idle'); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw;
     av.mixer.update(dt); av.raiz.updateMatrixWorld(true);
@@ -5665,6 +5668,7 @@ function atualizarJogador(dt) {
     const d = dir.length();
     if (d < 0.25) { j.alvo = null; forca = 0; } else { dir.normalize(); forca = 1; }
   }
+  if (j.embarcado) { seguirNavio(dt, dir, forca); return; }
   { const ej = !!(j.carro?.voa && !j.carro.caminhao && (j.carro.alt || 0) >= 8 && qtdItem('paraquedas') > 0); if (ej !== document.body.classList.contains('ejetar')) document.body.classList.toggle('ejetar', ej); }
   if (j.paraquedas) { descerParaquedas(dt, dir, forca); return; }
   if (j.voo) { seguirVoo(); return; }
@@ -10556,12 +10560,18 @@ function pilotarHeli(c, dt, max) {
   const lado = THREE.MathUtils.clamp((toque ? manche.x : 0) + (teclas.has('d') || teclas.has('arrowright') ? 1 : 0) - (teclas.has('a') || teclas.has('arrowleft') ? 1 : 0), -1, 1);
   let sobe = pedais.acel || teclas.has('r'); const desce = pedais.freio || teclas.has('f');
   if (c.motorParado) sobe = false;
-  const noAr = c.alt > 0.3, chao = alturaChao(jogador.pos.x, jogador.pos.z);
+  // em cima de um navio: o convés é o chão, e parado nele o navio leva o helicóptero junto
+  const chaoHeli = (x, z) => { const dk = convesEm(x, z); return dk ? dk.h : alturaChao(x, z); };
+  if (c.alt < 0.5 && c.navio) {
+    const n = NAVIOS[c.navio];
+    if (n?.dx !== undefined) { const rx = jogador.pos.x - n.x0, rz = jogador.pos.z - n.z0, ca = Math.cos(n.dang), sa = Math.sin(n.dang); jogador.pos.x = n.x + rx * ca + rz * sa; jogador.pos.z = n.z - rx * sa + rz * ca; jogador.yaw += n.dang; }
+  }
+  const noAr = c.alt > 0.3, chao = chaoHeli(jogador.pos.x, jogador.pos.z);
   // altura: sobe 3 m/s, desce 2,5 m/s (sem tranco); com o motor falhando, cai a 7 m/s
   const ufo = c.servico === 'ovni', vsAlvo = c.motorParado ? -7 : sobe ? (ufo ? 7 : 3) : desce ? (ufo ? -6 : -2.5) : 0;
   c.vs = (c.vs || 0) + THREE.MathUtils.clamp(vsAlvo - (c.vs || 0), -(ufo ? 10 : 4) * dt, (ufo ? 10 : 4) * dt);
   const altAntes = c.alt; c.alt = Math.min(120, c.alt + c.vs * dt);
-  if (c.alt <= 1.5 && c.vs < 0) {   // pousando: precisa de chão livre
+  if (c.alt <= 1.5 && c.vs < 0 && !convesEm(jogador.pos.x, jogador.pos.z)) {   // pousando: precisa de chão livre (no convés pode)
     const t = jogador.pos.clone(); mundo.limitar(t);
     const livre = jogador.pos.clone(); resolverColisao(livre, c.raio || 2.2);
     const ocupado = Math.hypot(t.x - jogador.pos.x, t.z - jogador.pos.z) > 2 || Math.hypot(livre.x - jogador.pos.x, livre.z - jogador.pos.z) > 0.6;
@@ -10582,12 +10592,14 @@ function pilotarHeli(c, dt, max) {
   c.vel += THREE.MathUtils.clamp(alvoV - c.vel, -5 * dt, 4 * dt);
   c.volante = (c.volante || 0) + (lado - (c.volante || 0)) * Math.min(1, dt * 5);
   if (noAr) jogador.yaw -= c.volante * 1.3 * dt;
-  jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * dt, -890, 700);
-  jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * dt, -1200, 1200);
+  jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * dt, -890, 1100);
+  jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * dt, -1200, 1900);
   // prédios: alarme e batida
   if (noAr && aeronaveEmPredio(c, chao)) return;
   if (noAr) alertaPredio(c, chao);
-  const ch2 = alturaChao(jogador.pos.x, jogador.pos.z);
+  const ch2 = chaoHeli(jogador.pos.x, jogador.pos.z);
+  if (ch2 !== chao) { c.alt = Math.max(0, c.alt - (ch2 - chao)); if (c.alt === 0) c.vs = 0; }   // passou por cima da borda do navio: a altura real não muda
+  { const dk = c.alt < 0.5 ? convesEm(jogador.pos.x, jogador.pos.z) : null; c.navio = dk ? dk.n.id : null; }
   jogador.pos.y = ch2; c.mesh.position.set(jogador.pos.x, ch2 + c.alt, jogador.pos.z);
   c.mesh.rotation.set(noAr ? c.vel / Math.max(max, 1) * (ufo ? 0.06 : 0.18) : 0, jogador.yaw, noAr ? c.volante * (ufo ? 0.05 : 0.12) : 0, 'YXZ');   // inclina para a frente e para o lado da curva
   const ro = c.mesh.userData.rotor || rotorDe(c.mesh); if (ro) { ro.visible = true; ro.rotation.y += dt * (c.motorParado ? 8 : c.alt > 0.3 || sobe ? 28 : 12); }
@@ -12492,13 +12504,67 @@ function desembarcarNavio() {
   aviso('⚓ Desembarcou no píer.', 2.5);
 }
 let tLemeRede = 0, tLemeDB = 0;
-function seguirNavio(dt) {
+// área andável do convés (coordenadas do navio: lx para o lado, lz para a proa)
+function limitesConves(n) { return n.id === 'porta' ? { x: 13, z: n.comp * 0.45 } : { x: 5, z: n.comp * 0.42 }; }
+function localNoNavio(n, x, z) { const dx = x - n.x, dz = z - n.z, c = Math.cos(n.ang), s = Math.sin(n.ang); return { lx: dx * c - dz * s, lz: dx * s + dz * c }; }
+// algum navio embaixo deste ponto? devolve o navio e a altura do convés
+function convesEm(x, z) {
+  for (const n of Object.values(NAVIOS)) {
+    const { lx, lz } = localNoNavio(n, x, z), L = limitesConves(n);
+    if (Math.abs(lx) < L.x + 1 && Math.abs(lz) < L.z + 1) return { n, h: n.convés };
+  }
+  return null;
+}
+// o convés funciona como chão: dá para andar e correr em cima, e o navio leva você junto quando anda e vira
+function seguirNavio(dt, dir, forca) {
   const j = jogador, e = j.embarcado, n = NAVIOS[e.id]; if (!n) { j.embarcado = null; return; }
-  if (e.leme) pilotarNavio(n, dt);
-  const lx = e.leme ? 0 : ((e.slot % 4) - 1.5) * (n.id === 'porta' ? 4 : 1.6), lz = e.leme ? n.comp * 0.05 : (Math.floor(e.slot / 4) - 1.5) * (n.id === 'porta' ? 8 : 5);
-  const p = pontoNoNavio(n, lx, lz);
-  j.pos.set(p.x, n.convés, p.z); j.yaw = n.ang;
-  j.avatar.raiz.position.copy(j.pos); j.avatar.raiz.rotation.y = n.ang; j.avatar.tocar('idle'); j.avatar.mixer.update(dt);
+  const av = j.avatar;
+  if (e.leme) {
+    pilotarNavio(n, dt);
+    const p = pontoNoNavio(n, 0, n.comp * 0.05);
+    j.pos.set(p.x, n.convés, p.z); j.yaw = n.ang;
+    av.raiz.position.copy(j.pos); av.raiz.rotation.y = n.ang; av.tocar('idle'); av.mixer.update(dt);
+    return;
+  }
+  if (e.lx === undefined) { e.lx = ((e.slot % 4) - 1.5) * (n.id === 'porta' ? 4 : 1.6); e.lz = (Math.floor(e.slot / 4) - 1.5) * (n.id === 'porta' ? 8 : 5); e.lyaw = 0; }
+  let vel = 0;
+  const correr = !j.armado && (teclas.has('shift') || (joy.ativo && forca > 0.92));
+  if (forca > 0.15 && !j.morto && !(j.trava > 0)) {
+    vel = j.armado ? VELOCIDADE.armado : correr ? VELOCIDADE.correr : VELOCIDADE.andar;
+    if (joy.ativo && !correr) vel *= THREE.MathUtils.clamp(forca * 1.3, 0.5, 1);
+    const c = Math.cos(n.ang), s = Math.sin(n.ang);
+    const dlx = dir.x * c - dir.z * s, dlz = dir.x * s + dir.z * c;   // direção da tela → direção no navio
+    const L = limitesConves(n);
+    e.lx = THREE.MathUtils.clamp(e.lx + dlx * vel * dt, -L.x, L.x);
+    e.lz = THREE.MathUtils.clamp(e.lz + dlz * vel * dt, -L.z, L.z);
+    e.lyaw = suavizarAngulo(e.lyaw, Math.atan2(dir.x, dir.z) - n.ang, dt * 12);
+  }
+  if (j.trava > 0) j.trava -= dt;
+  const p = pontoNoNavio(n, e.lx, e.lz);
+  j.pos.set(p.x, n.convés, p.z); j.yaw = n.ang + e.lyaw;
+  av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw;
+  if (vel > 0) av.tocar(j.armado ? 'walk_shoot' : correr ? 'run' : 'walk', { velocidade: j.armado ? 1.25 : correr ? 1 : vel / VELOCIDADE.andar });
+  else av.tocar(j.armado ? 'mirar' : 'idle');
+  av.mixer.update(dt);
+}
+// pousou no convés e desceu: você fica a bordo, andando; a aeronave é levada pela equipe de solo
+function descerNoConves(c, dk) {
+  const n = dk.n;
+  jogador.carro = null; modoVolante(false); document.body.classList.remove('aviao'); if (typeof modoHeli === 'function') modoHeli(false);
+  if (c.servico) {
+    scene.remove(c.mesh); if (meuMilitar?.mesh === c.mesh) meuMilitar = null;
+    aviso(`⚓ Você desceu no ${n.nome}. A equipe de solo levou a aeronave de volta para a base.`, 4);
+  } else {
+    const P = { x: 760, z: 1080 };   // pátio da Base Naval
+    c.mesh.position.set(P.x, alturaChao(P.x, P.z), P.z); c.mesh.rotation.y = 0;
+    const v = carrosMundo.get(c.id); if (v) v.d = { ...v.d, x: P.x, z: P.z, ang: 0 };
+    rede.carros.estacionar(c.id, P.x, P.z, 0).catch(() => {});
+    aviso(`⚓ Você desceu no ${n.nome}. O helicóptero foi rebocado para o pátio da Base Naval.`, 4);
+  }
+  const { lx, lz } = localNoNavio(n, jogador.pos.x, jogador.pos.z), L = limitesConves(n);
+  jogador.embarcado = { id: n.id, slot: lotacaoNavio(n.id), leme: false, lx: THREE.MathUtils.clamp(lx + 2.5, -L.x, L.x), lz: THREE.MathUtils.clamp(lz, -L.z, L.z), lyaw: jogador.yaw - n.ang };
+  jogador.avatar.raiz.visible = true; if (jogador.armado) alternarArma();
+  conexao?.rastrear(metaPresenca());
 }
 function pilotarNavio(n, dt) {
   const acel = pedais.acel || teclas.has('w'), freio = pedais.freio || teclas.has('s');
