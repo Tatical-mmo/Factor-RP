@@ -1240,3 +1240,15 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - No painel aparece "próxima some em 4:32" ou "perdão pausado".
 - A conta é feita no servidor (`perdao_tick`, chamado a cada 30 s). Um intervalo maior que 50 s, por estar offline, não conta. Não dá para apressar mexendo no jogo.
 - A recompensa (🎯) não é mexida: ela só sai quando alguém cobra ou pelo perdão do admin.
+
+## Versão 13/11 · Área 51 vigiada (20261113zp)
+
+- **12 soldados robôs armados** ("Exército · Área 51"): 4 no portão (2 fora e 2 dentro), 4 em plataformas de vigia nas quinas e 4 fazendo ronda por dentro. Eles se viram e apontam para quem se aproxima.
+- **Quem não tem acesso** (civil, polícia, PRF ou Exército abaixo de Tenente):
+  - a menos de **40 m do muro**: aviso "⚠️ Área militar restrita. Dê meia-volta ou será abatido";
+  - a menos de **15 m do muro**, no portão: 3 s de **ÚLTIMO AVISO** com contagem. Depois disso, o soldado mais perto atira a cada 0,7 s, com tiros que todos veem, tirando 25 de vida por tiro. A morte segue o fluxo normal, sem crime. Recuando para fora da zona, eles param.
+- **Antiaéreo**: 2 baterias com canhão duplo que acompanha o alvo, radar girando e luz vermelha.
+  - Avião ou helicóptero sem permissão a menos de **250 m** da base recebe o alerta com contagem de 10 s.
+  - Depois disso, o antiaéreo dispara traçantes e estouros no céu e derruba a aeronave, com explosão, carcaça e incêndio. Dá para ejetar com paraquedas.
+- O óvni, o admin e o Exército de Tenente para cima passam livres.
+- Quem cai dentro da base sem permissão volta para 30 m do portão, ainda na zona de aviso.

@@ -5423,7 +5423,7 @@ function montarLocais() {
   LOCAIS.push({ nome: 'Transportadora', x: quadC(2) + 9, z: ruaC(2) + 2.5 });
   LOCAIS.push({ nome: 'Avenida Central', x: 0, z: ruaC(2) });
   for (const a of AEROPORTOS) LOCAIS.push({ nome: `✈️ ${a.nome}`, x: a.balcao.x, z: a.balcao.z + (a.eixo === 'x' ? 4 : 0) });
-  LOCAIS.push({ nome: '🛸 Área 51 (portão)', x: mundo.AREA51.x1 + 8, z: 0 });
+  LOCAIS.push({ nome: '🛸 Área 51 (portão)', x: mundo.AREA51.x1 + 8, z: 0 });   // o admin entra; os outros levam tiro
   LOCAIS.push({ nome: '🛩️ Aviões dos pilotos (frota)', x: 444, z: -728 });
   LOCAIS.push({ nome: '🚌 Rodoviária', x: RODO.guiche.x - 2, z: RODO.guiche.z });
   LOCAIS.push({ nome: '♻️ Central de Reciclagem', x: CENTRAL.garagem.x, z: CENTRAL.garagem.z + 2 });
@@ -11303,7 +11303,25 @@ function montarArea51() {
     else { const h = 2 + rnd() * 2.5; caixa(x, h / 2, z, 0.45, h, 0.45, cacto, true);
       for (const s of [-1, 1]) if (rnd() < 0.7) { const bh = 0.6 + rnd(); caixa(x + s * 0.55, h * 0.45, z, 0.7, 0.3, 0.3, cacto, false, false); caixa(x + s * 0.85, h * 0.45 + bh / 2, z, 0.3, bh, 0.3, cacto, false, false); } }
   }
-  area51 = { g, portao, cancela, luzCone, folhas, abertura: 0 };
+  // plataformas de vigia nas quinas e as baterias antiaéreas
+  for (const [x, z] of [[A51.x0 + 9, A51.z0 + 9], [A51.x0 + 9, A51.z1 - 9], [A51.x1 - 9, A51.z0 + 9], [A51.x1 - 9, A51.z1 - 9]]) {
+    caixa(x, 2, z, 3.2, 4, 3.2, M('#6b6f5e'), true); caixa(x, 4.6, z, 3.4, 1.2, 0.15, ferro, false, false);
+  }
+  const baterias = [[-860, -85], [-860, 35]].map(([x, z]) => {
+    caixa(x, 0.6, z, 6, 1.2, 6, M('#5b6150'), true);
+    const giro = new THREE.Group(); giro.position.set(x, 1.2, z); g.add(giro);
+    const torre = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2, 1.6, 16), M('#55603f')); torre.position.y = 0.8; giro.add(torre);
+    const canos = new THREE.Group(); canos.position.y = 1.4; giro.add(canos);
+    for (const sx of [-0.45, 0.45]) { const cn = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 5, 10), ferro); cn.rotation.x = Math.PI / 2; cn.position.set(sx, 0, 2.4); canos.add(cn); }
+    canos.rotation.x = -0.6;
+    const radar = new THREE.Group(); radar.position.set(x + 3.6, 1.2, z + 3.6); g.add(radar);
+    const haste = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3, 8), ferro); haste.position.y = 1.5; radar.add(haste);
+    const prato = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.4, 0.15), M('#c9ccd0', { metalness: 0.5 })); prato.position.y = 3.1; radar.add(prato);
+    const luz = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff2020', toneMapped: false })); luz.position.set(x, 4.3, z); g.add(luz);
+    return { x, z, giro, canos, radar, luz };
+  });
+  area51 = { g, portao, cancela, luzCone, folhas, abertura: 0, baterias, guardas: [] };
+  criarGuardasA51();
 }
 function atualizarArea51(dt) {
   if (!jogador.perfil) return;
@@ -11319,7 +11337,7 @@ function atualizarArea51(dt) {
   if (!ok && !jogador.abducao && dentroArea51(p.x, p.z)) {
     const c = jogador.carro;
     if (c?.voa && !c.aviao) { if ((c.alt || 0) < 9) { c.alt = 9; c.vs = Math.max(0, c.vs || 0); } }
-    else if (!c?.aviao) teleportar(A51.x1 + 8, 0);
+    else if (!c?.aviao) teleportar(A51.x1 + 30, 0);
     if (agora - avisoA51 > 4000) { avisoA51 = agora; aviso('🚫 Área 51: acesso restrito ao Exército (Tenente para cima). Espaço aéreo fechado para pouso.', 4); }
   }
   if (jogador.carro?.servico !== 'ovni') { const pn = $('painelOvni'); if (pn) pn.style.display = 'none'; }
@@ -11342,6 +11360,7 @@ function atualizarArea51(dt) {
     conexao?.enviar('ovniVisto', { x: Math.round(x), z: Math.round(z), lugar: regiaoDe(p.x, p.z) });
   }
   if (rastreio?.ovni && agora > ovniMarcaAte) rastrear(null);
+  if (area51) { guardasA51(dt); antiaereo(dt); }
 }
 // ---- abdução
 function alvoAbducao() {
@@ -11531,4 +11550,99 @@ function atualizarPerdao(dt) {
   if (perdaoInfo.pausa) { el.textContent = '· perdão pausado'; return; }
   const s = Math.max(0, Math.round(perdaoInfo.falta - (performance.now() - perdaoInfo.t) / 1000));
   el.textContent = `· próxima some em ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// ---- soldados da Área 51: atiram em quem avança sem permissão (avisam antes)
+async function criarGuardasA51() {
+  const x0 = A51.x0, x1 = A51.x1, z0 = A51.z0, z1 = A51.z1;
+  const ronda = laco([[x0 + 28, z0 + 15], [x1 - 15, z0 + 15], [x1 - 15, z1 - 15], [x0 + 28, z1 - 15]]);
+  const lista = [
+    { parado: [x1 + 3, -8, Math.PI / 2] }, { parado: [x1 + 3, 8, Math.PI / 2] }, { parado: [x1 - 3, -9, Math.PI / 2] }, { parado: [x1 - 3, 9, Math.PI / 2] },
+    ...[[x0 + 9, z0 + 9], [x0 + 9, z1 - 9], [x1 - 9, z0 + 9], [x1 - 9, z1 - 9]].map(([x, z]) => ({ parado: [x, z, Math.atan2(x - (x0 + x1) / 2, z) ], alto: 4.05 })),
+    ...[0, 1, 2, 3].map((k) => ({ l: ronda, fase: k * ronda.total / 4, vel: 1.2 })),
+  ];
+  for (const d of lista) {
+    try {
+      const av = await criarAvatar('robos', 'Rusty_Scout_Bot');
+      const et = textoSprite('Exército · Área 51', { escala: 0.5, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+      try { av.arma = novaArma('militar', av); } catch { /* sem arma */ }
+      av.raiz.visible = false; scene.add(av.raiz);
+      if (d.parado) { av.raiz.position.set(d.parado[0], d.alto || 0.12, d.parado[1]); av.raiz.rotation.y = d.parado[2]; d.rumo = d.parado[2]; av.tocar('idle'); } else av.tocar('walk', { velocidade: 0.8 });
+      area51.guardas.push({ av, ...d });
+    } catch { /* sem guardas */ }
+  }
+}
+const A51_CENTRO = { x: (A51.x0 + A51.x1) / 2, z: 0 };
+let alertaA51 = { tiro: 0, aviso: 0, rajada: 0 };
+function distMuroA51(x, z) { const dx = Math.max(A51.x0 - x, 0, x - A51.x1), dz = Math.max(A51.z0 - z, 0, z - A51.z1); return Math.hypot(dx, dz); }
+function guardasA51(dt) {
+  const j = jogador, p = j.pos, agora = performance.now();
+  const perto = Math.hypot(p.x - A51_CENTRO.x, p.z) < 320;
+  const ok = acessoArea51(), noAr = j.carro?.voa && (j.carro.alt || 0) > 6;
+  const d = distMuroA51(p.x, p.z), alvo = !ok && !j.morto && !j.abducao && !noAr && !j.dentroCasa && !j.passageiro && !j.voo && perto;
+  const naMira = alvo && d < 15, avisar = alvo && d < 40;
+  for (const s of area51.guardas) {
+    const r = s.av.raiz; r.visible = perto; if (!perto) continue;
+    if (s.l && !(naMira && Math.hypot(r.position.x - p.x, r.position.z - p.z) < 90)) {
+      const q = pontoNoLaco(s.l, agoraServidor() / 1000 * s.vel + s.fase);
+      r.position.set(q.x, alturaChao(q.x, q.z), q.z); r.rotation.y = suavizarAngulo(r.rotation.y, q.ang, dt * 6);
+      if (s.anim !== 'walk') { s.anim = 'walk'; s.av.tocar('walk', { velocidade: 0.8 }); }
+    } else {
+      const mira = avisar && Math.hypot(r.position.x - p.x, r.position.z - p.z) < 110;
+      r.rotation.y = suavizarAngulo(r.rotation.y, mira ? Math.atan2(p.x - r.position.x, p.z - r.position.z) : s.rumo ?? r.rotation.y, dt * 5);
+      if (s.anim !== 'idle') { s.anim = 'idle'; s.av.tocar('idle'); }
+    }
+    s.av.mixer.update(dt);
+  }
+  if (!avisar) { alertaA51.tiro = Math.max(0, alertaA51.tiro - dt * 2); return; }
+  const fardado = militar() || j.perfil?.policial || j.perfil?.prf;
+  if (!naMira) {
+    if (agora - alertaA51.aviso > 6000) { alertaA51.aviso = agora; aviso(fardado ? '⚠️ Área 51: nem polícia nem praça entra. Dê meia-volta ou os soldados atiram.' : '⚠️ Área militar restrita. Dê meia-volta ou será abatido.', 4); sons.radio?.(); }
+    alertaA51.tiro = Math.max(0, alertaA51.tiro - dt);
+    return;
+  }
+  alertaA51.tiro += dt;
+  if (alertaA51.tiro < 3) { if (agora - alertaA51.aviso > 1200) { alertaA51.aviso = agora; aviso(`🔫 ÚLTIMO AVISO: recue agora! (${Math.ceil(3 - alertaA51.tiro)})`, 1.2); } return; }
+  if ((alertaA51.rajada -= dt) > 0) return;
+  alertaA51.rajada = 0.7;
+  // o soldado mais perto atira (todos veem o tiro)
+  let melhor = null, dm = 120;
+  for (const s of area51.guardas) { const r = s.av.raiz; if (!r.visible) continue; const dd = Math.hypot(r.position.x - p.x, r.position.z - p.z); if (dd < dm) { dm = dd; melhor = s; } }
+  if (!melhor) return;
+  const de = melhor.av.raiz.position.clone(); de.y += 1.3;
+  const para = new THREE.Vector3(p.x, (p.y || 0) + 1.1, p.z), v = para.clone().sub(de).normalize().multiplyScalar(60);
+  criarBola(de, v, '#ffcf3a', false, 0.7);
+  conexao?.enviar('tiro', { x: r2(de.x), y: r2(de.y), z: r2(de.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: '#ffcf3a', s: 0.7 });
+  j.ultimoAgressor = null; danoLocal(25);
+  if (j.morto) aviso('💀 Abatido pelos soldados da Área 51.', 5);
+}
+// ---- antiaéreo: derruba avião ou helicóptero sem permissão a menos de 250 m da base
+let aa = { t: 0, aviso: 0, disparo: 0, tiros: 0 };
+function antiaereo(dt) {
+  const c = jogador.carro, agora = performance.now(), B = area51.baterias;
+  for (const b of B) { b.radar.rotation.y += dt * 1.8; b.luz.visible = (agora / 500) % 1 < 0.5; }
+  const alvo = c?.voa && !c.caminhao && c.servico !== 'ovni' && !acessoArea51() && !c.explodiu && Math.hypot(jogador.pos.x - A51_CENTRO.x, jogador.pos.z) < 250 && ((c.alt || 0) > 1 || c.aviao);
+  if (!alvo) {
+    if (aa.t > 0) { aa.t = 0; aa.tiros = 0; if (c?.voa) aviso('Você saiu do espaço aéreo restrito.', 2.5); }
+    for (const b of B) b.giro.rotation.y += dt * 0.3;
+    return;
+  }
+  const y = (c.mesh?.position.y ?? 0);
+  for (const b of B) {   // os canhões seguem a aeronave
+    b.giro.rotation.y = suavizarAngulo(b.giro.rotation.y, Math.atan2(jogador.pos.x - b.x, jogador.pos.z - b.z), dt * 4);
+    b.canos.rotation.x = -Math.atan2(y - 2.6, Math.hypot(jogador.pos.x - b.x, jogador.pos.z - b.z));
+  }
+  aa.t += dt;
+  if (aa.t < 10) {
+    if (agora - aa.aviso > 2000) { aa.aviso = agora; aviso(`🚨 Espaço aéreo restrito da Área 51: saia em ${Math.ceil(10 - aa.t)} s ou será abatido!`, 2); sons.radio?.(); }
+    return;
+  }
+  if ((aa.disparo -= dt) > 0) return;
+  aa.disparo = 0.35; aa.tiros++;
+  const p = jogador.pos, b = B[aa.tiros % B.length];
+  const de = new THREE.Vector3(b.x, 4, b.z), para = new THREE.Vector3(p.x, y + 1, p.z), v = para.clone().sub(de).normalize().multiplyScalar(90);
+  criarBola(de, v, '#ff7a2a', false, 0.9);
+  conexao?.enviar('tiro', { x: r2(de.x), y: r2(de.y), z: r2(de.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: '#ff7a2a', s: 0.9 });
+  efeitoExplosao(p.x + (Math.random() - 0.5) * 8, y + (Math.random() - 0.5) * 5, p.z + (Math.random() - 0.5) * 8, 0.5, false);   // estouros no céu
+  if (aa.tiros >= 5) { aa.t = 0; aa.tiros = 0; acidenteVeiculo(c, '💥 Abatido pela defesa antiaérea da Área 51!'); }
 }
