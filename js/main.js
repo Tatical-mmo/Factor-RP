@@ -477,7 +477,7 @@ function addColisorCaixa(obj, encolher = 0.6) {
   return b;
 }
 
-const CORES_MAPA = { ferro_velho: '#7a4a2a', delegacia: '#4f7bd8', loja: '#e05a4f', empresa: '#9aa0a8', transportadora: '#e39b3a', casa: '#8c5a3c', base_cla: '#c43b3b' };
+const CORES_MAPA = { ferro_velho: '#7a4a2a', delegacia: '#4f7bd8', loja: '#e05a4f', empresa: '#9aa0a8', transportadora: '#e39b3a', casa: '#8c5a3c', base_cla: '#c43b3b', sede_bope: '#111111' };
 
 function colocarPredio(nome, x, z, rotY) {
   const obj = clonar(nome);
@@ -1090,6 +1090,7 @@ function acaoContexto() {
   if (pl && pl.trem !== null && pl.resta > 2) { embarcar(pl); return; }
   if (pl) { aviso(contexto()[0]); return; }
   if (jogador.perfil.policial) { const alvo = procuradoProximo(2.4); if (alvo) { prenderProcurado(alvo); return; } }
+  if (pertoSedeBope()) { entrarSedeBope(); return; }
   if (pertoDelegacia()) { entrarPublico('delegacia', () => salaDelegacia('delegacia', 1100 + 0, 'Delegacia', '#f1c40f'), pontos.delegacia, '🚓 Delegacia: balcão de serviço, procurados, celas e estande de tiro.'); return; }
   if (pertoContratante()) { abrirMissoes(); return; }
   if (jogador.perfil.prf) { const alvo = eleitoralProximo(2.4); if (alvo) { prenderEleitoral(alvo); return; } }
@@ -1979,6 +1980,7 @@ async function criarNPCs(excluir) {
 }
 function atualizarNPCs(dt) {
   for (const n of npcs) {
+    if (n.bope) continue;   // BOPE: passoBot
     if (n.abduzido) { npcAbduzido(n, dt); continue; }
     if (n.ordem !== undefined) { const off = n.ordem >= configJogo.policia_robo; if (off !== !!n.fora) { n.fora = off; n.av.raiz.visible = !off; if (off) { n.perseguindo = false; n.cerco = null; } } if (off) continue; }
     if (n.bandido && banditoAtivo(n)) { atualizarBandido(n, dt); continue; }
@@ -2110,6 +2112,9 @@ function alvosRastreio() {
   r.push({ icone: '🚗', nome: 'Concessionária (carros)', x: civico.CONCESSIONARIA.balcao.x, z: civico.CONCESSIONARIA.balcao.z + 3 });
   r.push({ icone: '🏦', nome: 'Banco e Agência de Empregos', x: civico.BANCO.balcao.x, z: civico.BANCO.balcao.z + 2 });
   r.push({ icone: '✝', nome: 'Cemitério', x: civico.CEMITERIO.x, z: civico.CEMITERIO.z - 23 });
+  if (pontos.delegacia) r.push({ icone: '🚓', nome: 'Delegacia', x: pontos.delegacia.x, z: pontos.delegacia.z + 1 });
+  if (pontos.sedeBope) r.push({ icone: '💀', nome: 'Sede do BOPE', x: pontos.sedeBope.x, z: pontos.sedeBope.z + 2 });
+  if (souBope()) for (const a of radarLista) r.push({ icone: '📡', nome: `Radar do BOPE: ${a.nome} ${estrelas(a.crimes)}`, x: a.x, z: a.z });
   r.push({ icone: '🏥', nome: 'Hospital', x: civico.HOSPITAL.balcao.x, z: civico.HOSPITAL.balcao.z - 2 });
   r.push({ icone: '🚒', nome: 'Bombeiros', x: civico.BOMBEIROS.balcao.x, z: civico.BOMBEIROS.balcao.z - 2 });
   for (const f of servicos.listaIncendios()) r.push({ icone: '🔥', nome: f.nome, x: f.x, z: f.z });
@@ -2956,7 +2961,7 @@ function criarInterior(casaId) {
   return i;
 }
 function entrarEmCasa(c) {
-  if (npcs.some((n) => n.policia && n.perseguindo) && (jogador.perfil?.crimes || 0) > 0) iniciarCerco(c.x + 2, c.z);
+  if (npcs.some((n) => n.policia && !n.bope && n.perseguindo) && (jogador.perfil?.crimes || 0) > 0) iniciarCerco(c.x + 2, c.z);
   const i = criarInterior(c.id);
   jogador.dentroCasa = c.id;
   if (jogador.carregando) { scene.remove(jogador.carregando); jogador.carregando = null; }
@@ -3524,6 +3529,7 @@ function acertoDaBola(b) {
     const q = n.av.raiz.position;
     if (n.caido <= 0 && Math.hypot(p.x - q.x, p.z - q.z) < 0.55 && p.y > q.y + 0.1 && p.y < q.y + 2) { acertarPoliciaNPC(n, b.pd ? 100 : b.dano || 20); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
   }
+  if (fantasmasBope.size && acertoFantasmaBope(p, b.pd ? 100 : b.dano || 20)) { manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
   for (const [id, r] of remotos) {
     if (r.carroModelo !== 'caveirao' || !r.carro || id === jogador.passageiro?.piloto) continue;
     const q = r.carro.position;
@@ -3649,7 +3655,7 @@ function entrarServico(sv) {
   const m = sv.base.veiculo;
   jogador.carro = { id: 's' + jogador.perfil.id.slice(0, 8), servico: sv.modelo, modelo: sv.modelo, cor: '#ffffff', vel: 0, mesh: m, salvar: 1e9, max: civico.CARROS[sv.modelo].vel,
     raio: sv.modelo === 'bombeiros' || sv.modelo === 'exercito_caminhao' || sv.modelo === 'caveirao' ? 1.9 : 1.6, voa: !!civico.CARROS[sv.modelo].voa, alt: 0 };
-  if (sv.modelo === 'caveirao') { jogador.carro.blindagem = sv.blindagem ?? 100; aviso('🛡️ Caveirão: blindado (a blindagem acaba com muitos tiros e granadas), leva 5 atiradores e rompe barricadas empurrando.', 5); }
+  if (sv.modelo === 'caveirao') { jogador.carro.blindagem = sv.blindagem ?? 100; aviso('🛡️ Caveirão: blindado (a blindagem acaba com muitos tiros e granadas), leva 6 (motorista e 5 atiradores) e rompe barricadas empurrando.', 5); }
   jogador.pos.set(m.position.x, alturaChao(m.position.x, m.position.z), m.position.z); jogador.yaw = m.rotation.y; jogador.alvo = null;
   jogador.avatar.raiz.visible = false;
   document.body.classList.toggle('tanque', sv.modelo === 'tanque');
@@ -3817,6 +3823,7 @@ function danoLocal(v) {
 }
 // polícia NPC: apanha, cai e revida (atira em quem bateu nela)
 function acertarPoliciaNPC(n, dano) {
+  if (n.bope) { acertarBope(n, dano); return; }
   if (n.caido > 0) return;
   n.vida -= dano; n.hostil = 60;
   // quem atira em um policial vira alvo de todos os policiais por perto e das viaturas
@@ -4599,14 +4606,14 @@ function atualizarProcurados(dt) {
   rede.recompensas.procurados().then((l) => civico.procuradosNosOutdoors(l)).catch(() => {});
   // cerco salvo no banco (voltou ao jogo dentro de casa ou perto dela): o robô continua na porta
   const p = jogador.perfil;
-  const pol = npcs.find((n) => n.policia);
+  const pol = npcs.find((n) => n.policia && !n.bope);
   if (p?.cerco_ate && Date.parse(p.cerco_ate) > agoraServidor() && pol && !npcs.some((n) => n.cerco)) {
     pol.cerco = { x: p.cerco_x, z: p.cerco_z, ate: Date.parse(p.cerco_ate) };
     pol.av.raiz.position.set(p.cerco_x + 1.5, alturaChao(p.cerco_x, p.cerco_z), p.cerco_z + 1.5);
   }
 }
 function iniciarCerco(x, z) {
-  const n = npcs.find((k) => k.policia && !k.fora && k.perseguindo) || npcs.find((k) => k.policia && !k.fora); if (!n) return;
+  const n = npcs.find((k) => k.policia && !k.bope && !k.fora && k.perseguindo) || npcs.find((k) => k.policia && !k.bope && !k.fora); if (!n) return;
   n.cerco = { x, z, ate: agoraServidor() + 1920000 };
   rede.recompensas.cercar(x, z).then((ate) => { if (ate) n.cerco.ate = Date.parse(ate); }).catch(() => {});
   aviso('🚓 Você se escondeu, mas a polícia robô vai ficar esperando na porta (até 1 ciclo).', 4);
@@ -4686,6 +4693,11 @@ async function morrerLocal(pd = false) {
   if (j.carro) sairCarro();
   if (armaPd?.dono === j.perfil?.id) rede.pd.soltar(j.pos.x, j.pos.z).catch(() => {});
   j.morto = true; j.vida = 0; j.alvo = null;
+  { const kr = remotos.get(j.ultimoAgressor)?.meta;   // abatido pelo BOPE (robô ou jogador): volta e vai preso
+    if ((j.perfil?.crimes || 0) > 0 && (performance.now() - (j.danoBopeT || 0) < 2000 || (kr?.bope && kr?.policial))) {
+      j.presoBope = { por: kr?.bope ? j.ultimoAgressor : null };
+      setTimeout(() => { if (j.morto) aviso('💀 Abatido pelo BOPE: a equipe cerca você até a ambulância chegar. Depois, prisão.', 5); }, 3500);
+    } }
   if (j.armado) alternarArmaForcado(false);
   if (j.carregando) { scene.remove(j.carregando); j.carregando = null; }
   j.avatar.tocar('death', { umaVez: true, velocidade: 1, fade: 0.1 });
@@ -4744,6 +4756,10 @@ function levantar(vida) {
   j.vida = vida; j.morto = false; j.trava = 0; j.ultimoAgressor = null;
   j.avatar.tocar('idle', { fade: 0.3 }); desenharFome();
   conexao?.rastrear(metaPresenca());
+  if (j.presoBope) {   // abatido pelo BOPE: voltou e vai preso
+    const por = j.presoBope.por; j.presoBope = null;
+    setTimeout(() => rede.tatica.presoPeloBope(por).then((m) => { if (m) aviso(`💀 Preso pelo BOPE: ${m} min de pena.`, 5); }).catch(() => {}), 1500);
+  }
 }
 // sem socorro: acorda no hospital e paga a conta (até 100)
 function renascer() {
@@ -6363,6 +6379,7 @@ function contexto() {
   { const cj = caronaDeJogador(); if (cj) return [`embarcar no ${(civico.CARROS[cj.r.carroModelo]?.nome || 'veículo').replace(' do Exército', ' do Exército').toLowerCase()} de ${cj.r.meta?.nome || 'outro jogador'}`, 'Embarcar']; }
   if (agenciaProxima() && !jogador.carregando) return ['pegar uma encomenda para outra cidade', 'Encomenda'];
   if (pertoOficina()) return ['fazer parafusos (3 sucatas = 2 parafusos)', 'Fazer'];
+  if (pertoSedeBope()) return ['entrar na sede do BOPE (armaria, tática, treino)', 'BOPE'];
   if (pertoDelegacia()) return ['entrar na delegacia (serviço, procurados e estande de tiro)', 'Delegacia'];
   if (pertoContratante()) return ['ver missões do Contratante', 'Falar'];
   if (ocorrenciaProxima()) return ['atender a ocorrência (+300)', 'Atender'];
@@ -8838,8 +8855,9 @@ const UNIFORMES = {
   medico: { cor: '#f4f4f4', texto: '✚ RESGATE', letra: '#c0392b', faixa: '#c0392b', chapeu: '#f4f4f4' },
   exercito: { cor: '#4b5d33', texto: 'EXÉRCITO', letra: '#e8e3c8', faixa: null, chapeu: '#3c4a28' },
   jornalista: { cor: '#1f4f8a', texto: 'IMPRENSA', letra: '#ffffff', faixa: '#ffffff', chapeu: '#1f4f8a' },
+  bope: { cor: '#0c0c0c', texto: 'BOPE', letra: '#e8e8e8', faixa: null, chapeu: '#0a0a0a' },   // colete e capacete pretos, BOPE nas costas
 };
-const NOME_FARDA = { policia: 'Polícia', prf: 'PRF', bombeiro: 'Bombeiros', medico: 'Resgate (Hospital)', exercito: 'Exército', jornalista: 'Imprensa' };
+const NOME_FARDA = { policia: 'Polícia', prf: 'PRF', bombeiro: 'Bombeiros', medico: 'Resgate (Hospital)', exercito: 'Exército', jornalista: 'Imprensa', bope: 'BOPE' };
 function papelDe(m) { return m?.policial ? 'policia' : m?.prf ? 'prf' : UNIFORMES[m?.profissao] ? m.profissao : null; }
 const _texUni = new Map();
 function texturaUniforme(u) {
@@ -8860,7 +8878,8 @@ const PECAS_FARDA = {
   bombeiro: { arq: 'farda_capacete_bombeiro', copa: 0.7, cx: 0.016, topo: 0.465, folga: 0.88, subir: 0.05 },   // aba larga: menor e mais alto, senão engole a cabeça,
   militar: { arq: 'farda_capacete_militar', copa: 0.78, cx: 0.014, topo: 0.5, folga: 1.12, subir: 0 },
 };
-const CHAPEU_DE = { policia: 'bone', prf: 'bone', bombeiro: 'bombeiro', medico: 'bone', exercito: 'militar', jornalista: 'bone' };
+const CHAPEU_DE = { policia: 'bone', prf: 'bone', bombeiro: 'bombeiro', medico: 'bone', exercito: 'militar', jornalista: 'bone', bope: 'militar' };
+const fardaDe = (m) => { const p = papelDe(m); return p === 'policia' && m?.bope ? 'bope' : p; };   // policial do BOPE veste preto
 const pecasFarda = {}; let pecasPedidas = false;
 function carregarPecasFarda() {
   if (pecasPedidas) return; pecasPedidas = true;
@@ -9029,7 +9048,7 @@ function definirFarda(papel, silencioso) {
 }
 function seguirExpediente() {
   if (!jogador.perfil) return;
-  const p = papelDe(jogador.perfil);
+  const p = fardaDe(jogador.perfil);
   if (papelVisto === undefined) {   // ao abrir o jogo: volta com a farda que estava
     papelVisto = p; let salva = null; try { salva = localStorage.getItem(chaveFarda()); } catch { /* nada */ }
     jogador.farda = salva && UNIFORMES[salva] && (salva === p || souEquipe()) ? salva : p;
@@ -9071,7 +9090,7 @@ function desenharEscudo() {
 }
 function trocarColete() { escudo = ESCUDO_MAX; guardarEscudo(); desenharEscudo(); aviso('🛡️ Colete novo! Escudo 100%.', 2.5); }
 function vestiario(trabalho) {
-  const p = papelDe(jogador.perfil), opcoes = [];
+  const p = fardaDe(jogador.perfil), opcoes = [];
   if (souEquipe()) for (const k of Object.keys(UNIFORMES)) opcoes.push({ rotulo: `${jogador.farda === k ? '✔️ ' : ''}${NOME_FARDA[k]}`, fn: () => definirFarda(k) });
   else if (p) opcoes.push({ rotulo: jogador.farda === p ? `Tirar a farda (${NOME_FARDA[p]})` : `Vestir a farda: ${NOME_FARDA[p]}`, fn: () => definirFarda(jogador.farda === p ? null : p) });
   else { aviso(`Só quem está no expediente ${trabalho ? `(${trabalho}) ` : ''}veste a farda. Entre em serviço primeiro.`, 3.5); return; }
@@ -9082,7 +9101,7 @@ function vestiario(trabalho) {
 function atualizarUniformes() {
   seguirExpediente();
   if (jogador.avatar) { vestir(jogador.avatar, jogador.carro || jogador.passageiro ? null : jogador.farda || null); posicionarUniforme(jogador.avatar); }
-  for (const r of remotos.values()) { if (!r.av) continue; vestir(r.av, r.meta && 'farda' in r.meta ? r.meta.farda : papelDe(r.meta)); posicionarUniforme(r.av); }
+  for (const r of remotos.values()) { if (!r.av) continue; vestir(r.av, r.meta && 'farda' in r.meta ? r.meta.farda : fardaDe(r.meta)); posicionarUniforme(r.av); }
 }
 // nome com o símbolo do clã (escudo na cor do clã com as iniciais)
 function corDoClaNome(nome) { for (const c of clasCache.values()) if (c.nome === nome) return c.cor || '#c43b3b'; return '#c43b3b'; }
@@ -11424,7 +11443,7 @@ function desenharBotaoViatura() {
 function pedirViatura(escolhido) {
   const pap = papelDe(jogador.perfil); let modelo = escolhido || VEICULO_SERVICO[pap]; if (!modelo) return;
   if (!escolhido && pap === 'policia' && (jogador.perfil?.bope || jogador.perfil?.cargo === 'admin')) {   // BOPE escolhe: viatura ou Caveirão
-    escolher('🚓 Veículo do expediente', 'O Caveirão é blindado, leva 5 atiradores e rompe barricadas.', [
+    escolher('🚓 Veículo do expediente', 'O Caveirão é blindado, leva 6 (motorista e 5 atiradores) e rompe barricadas.', [
       { rotulo: '🚓 Viatura da Polícia Civil', fn: () => pedirViatura('viatura_civil') }, { rotulo: '🛡️ Caveirão do BOPE', fn: () => pedirViatura('caveirao') }, { rotulo: 'Cancelar', fn: () => {} }]);
     return;
   }
@@ -11889,7 +11908,7 @@ function atualizarPerdao(dt) {
   if ((p.crimes || 0) <= 0) { perdaoInfo = null; return; }
   if ((tPerdao -= dt) <= 0) {
     tPerdao = 30;
-    const perseguido = npcs.some((n) => n.policia && (n.perseguindo || n.cerco)) || !!jogador.algemado || jogador.pena > 0;
+    const perseguido = !!(opBope && opBope.fase !== 'alerta') || npcs.some((n) => n.policia && (n.perseguindo || n.cerco)) || !!jogador.algemado || jogador.pena > 0;
     rede.crime.perdaoTick(perseguido).then((r) => {
       if (!r) return;
       perdaoInfo = { falta: Number(r.falta) || 0, pausa: !!r.pausa, t: performance.now() };
@@ -12970,14 +12989,14 @@ function atirarDoCaveirao(alvo) {
 // ---------------------------------------------------------------- granadas de airsoft: estouram 2,3 s depois, tinta num raio de 6 m
 const granadas = [];
 const geoGranada = new THREE.SphereGeometry(0.13, 10, 8), matGranada = new THREE.MeshStandardMaterial({ color: '#3d4a2a', roughness: 0.6, metalness: 0.2 });
-function lancarGranada() {
+function lancarGranada(mira) {
   if (jogador.morto || jogador.carro || !jogador.avatar || qtdItem('granada') < 1) return;
   if (armasProibidas()) { aviso('🚫 Armas não são permitidas aqui.'); return; }
   if (performance.now() - (lancarGranada.t || 0) < 2000) return; lancarGranada.t = performance.now();
   const ps = jogador.passageiro, r = ps?.piloto && remotos.get(ps.piloto);
-  const de = r?.carro ? r.carro.position : jogador.pos, yaw = ps ? yawDaCamera() : jogador.yaw;
-  const pos = new THREE.Vector3(de.x + Math.sin(yaw) * 0.8, (de.y || 0) + (ps ? 3 : 1.7), de.z + Math.cos(yaw) * 0.8);
-  const v = new THREE.Vector3(Math.sin(yaw) * 11, 6.5, Math.cos(yaw) * 11);
+  const yaw = mira ? mira.yaw : ps ? yawDaCamera() : jogador.yaw;
+  if (!ps) jogador.yaw = yaw;
+  const pos = origemGranada(yaw), v = velGranada(yaw, mira ? mira.forca : 0.6);
   rede.tatica.usarGranada().then(() => recarregarInventario()).catch((e) => aviso(e.message, 2.5));
   criarGranada(pos, v, true);
   conexao?.enviar('tatica', { k: 'gr', x: r2t(pos.x), y: r2t(pos.y), z: r2t(pos.z), vx: r2t(v.x), vy: r2t(v.y), vz: r2t(v.z), de: jogador.perfil.id });
@@ -13004,7 +13023,8 @@ function explodirGranada(p) {
     const d = Math.hypot(p.x - r.av.raiz.position.x, p.z - r.av.raiz.position.z);
     if (d < 6) aplicarDanoRemoto(id, Math.round(10 + 60 * (1 - d / 6)));
   }
-  for (const n of npcs) { if (!n.policia || n.caido > 0) continue; const q = n.av.raiz.position; if (Math.hypot(p.x - q.x, p.z - q.z) < 6) acertarPoliciaNPC(n, 60); }
+  for (const n of [...npcs]) { if (!n.policia || n.caido > 0) continue; const q = n.av.raiz.position; if (Math.hypot(p.x - q.x, p.z - q.z) < 6) acertarPoliciaNPC(n, 60); }
+  acertoFantasmaBope(p, 60, 6);
   for (const [id, b] of barricadasMundo) if (Math.hypot(p.x - b.d.x, p.z - b.d.z) < 5) rede.tatica.danificarBarricada(id, 35).catch(() => {});
   const dm = Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z);
   if (dm < 6 && !jogador.carro && !jogador.passageiro) danoLocal(Math.round(10 + 50 * (1 - dm / 6)));
@@ -13062,6 +13082,8 @@ function romperBarricada(c, dt, acel) {
 let trocaEspera = null;
 function receberTatica(e) {
   const eu = jogador.perfil?.id; if (!e || !eu) return;
+  if (e.k === 'bope' && e.de !== eu) receberBope(e);
+  if (e.k === 'bopeHit' && e.para === eu && opBope?.id === e.op) { const b = opBope.bots.find((x) => x.i === e.i); if (b) acertarBope(b, Math.min(100, Math.max(0, Number(e.v) || 0)), true); }
   if (e.k === 'gr' && e.de !== eu) criarGranada(new THREE.Vector3(e.x, e.y, e.z), new THREE.Vector3(e.vx, e.vy, e.vz), false);
   if (e.k === 'bl' && e.alvo === eu && jogador.carro?.modelo === 'caveirao') {
     const c = jogador.carro; c.blindagem = (c.blindagem ?? 100) - Math.min(25, Math.max(0, Number(e.v) || 0));
@@ -13143,12 +13165,13 @@ function painelRapido() {
     pn = document.createElement('div'); pn.id = 'painelRapido';
     pn.style.cssText = 'position:fixed;left:12px;bottom:330px;z-index:30;display:flex;flex-direction:column;gap:8px';
     const bt = (id, fn) => { const b = document.createElement('button'); b.id = id; b.style.cssText = 'padding:9px 12px;border-radius:14px;border:2px solid rgba(255,255,255,.5);background:rgba(40,46,30,.9);color:#fff;font:800 13px system-ui;pointer-events:auto;touch-action:none'; b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); fn(); }); pn.appendChild(b); return b; };
-    bt('btGranada', lancarGranada); bt('btTroca', pedirTroca); bt('btSomCarro', () => abrirTatica('som'));
+    botaoGranadaMira(bt('btGranada', () => {})); bt('btTroca', pedirTroca); bt('btSomCarro', () => abrirTatica('som'));
     document.body.appendChild(pn);
   }
   const g = qtdItem('granada'), cav = jogador.passageiro && remotos.get(jogador.passageiro.piloto)?.carroModelo === 'caveirao';
   const bg = $('btGranada'), mg = g > 0 && !jogador.carro && !jogador.morto && !jogador.dentroCasa && (!jogador.passageiro || cav);
-  bg.style.display = mg ? 'block' : 'none'; if (mg) { const t = `💣 Granada (${g})`; if (bg.textContent !== t) bg.textContent = t; }
+  bg.style.display = mg ? 'block' : 'none'; if (mg) { const t = `💣 Granada (${g}) · arraste`; if (bg.textContent !== t) bg.textContent = t; }
+  if (!mg && miraG) soltarMiraG(null, true);
   $('btTroca').style.display = cav ? 'block' : 'none'; if (cav && !$('btTroca').textContent) $('btTroca').textContent = '🔄 Assumir o volante';
   const sv = jogador.carro?.modelo === 'saveiro_som'; $('btSomCarro').style.display = sv ? 'block' : 'none'; if (sv) $('btSomCarro').textContent = somAtivo ? '🔊 Som: ligado' : '🔊 Som';
 }
@@ -13160,7 +13183,7 @@ function atualizarTatica(dt) {
   try { tiqueTatica(dt); } catch (e) { if (!atualizarTatica.erro) { atualizarTatica.erro = true; console.warn('tático:', e); } }   // nunca trava o jogo
 }
 function tiqueTatica(dt) {
-  atualizarGranadas(dt); atualizarSons2(dt);
+  atualizarGranadas(dt); atualizarSons2(dt); atualizarBope(dt);
   if ((tBarricadas -= dt) <= 0) { tBarricadas = 12; rede.tatica.barricadas().then(sincronizarBarricadas).catch(() => {}); }
   if ((atualizarTatica.t = (atualizarTatica.t || 0) - dt) <= 0) { atualizarTatica.t = 0.3; painelRapido(); }
   // blindagem do Caveirão na tela
@@ -13227,11 +13250,20 @@ async function desenharTatica() {
       ${minhas.map((b) => `<div class="botoes"><span style="flex:1">Barricada a ${Math.round(Math.hypot(b.d.x - jogador.pos.x, b.d.z - jogador.pos.z))} m · ${b.d.vida}%</span><button data-recolher="${b.d.id}">Recolher</button></div>`).join('')}`;
   }
   if (p.policial || p.cargo === 'admin') {
-    const pertoDp = pontos.delegacia && Math.hypot(pontos.delegacia.x - jogador.pos.x, pontos.delegacia.z - jogador.pos.z) < 14;
+    const pertoDp = [pontos.delegacia, pontos.sedeBope].some((q) => q && Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z) < 14);
     let arm = null; try { arm = (await rede.jujuba.armamento()).find((a) => a.corp === 'policia'); } catch { /* sem tabela */ }
-    h += `<div class="sub">💀 BOPE</div><p class="dica">${p.bope ? 'Você é do <b>BOPE</b>: pega o kit de armas na delegacia e pede o <b>Caveirão</b> no botão de viatura.' : 'Policiais de <b>3º Sargento para cima</b> podem entrar no BOPE: kit de armas (espingarda, fuzil e granadas) e o Caveirão.'}
+    let indicado = null; if (!p.bope) indicado = await rede.tatica.minhaIndicacao(eu);
+    h += `<div class="sub">💀 BOPE</div><p class="dica">${p.bope ? `Você é do <b>BOPE</b> (farda e capacete pretos). Kit de armas na <b>Sede do BOPE</b> (ao pé do Morro do Porto) ou na delegacia; o <b>Caveirão</b> vem pelo botão de viatura (leva 6). O BOPE não patrulha: sai quando o radar mostra crime nas favelas e cidades menores, ou de 3 estrelas para cima.${bopeTreinado() ? '' : ' <b>Treine a tática</b> no quadro tático da sede.'}`
+      : indicado ? '✅ Você foi <b>indicado</b> para o BOPE. Pode entrar.' : 'Para entrar no BOPE é preciso <b>indicação</b> do General Supremo ou de um oficial (Polícia de Tenente para cima, PRF de Inspetor para cima, Forças Armadas de Tenente para cima).'}
       ${arm ? `<br>Armamento da Polícia: ${arm.espingarda} espingardas · ${arm.fuzil} fuzis · ${arm.granada} granadas (o Exército repõe de caminhão).` : ''}</p>
-      <div class="botoes">${p.bope ? `<button id="tKit" ${pertoDp ? '' : 'disabled'}>${pertoDp ? '🔫 Pegar o kit' : '🔫 Kit: vá até a delegacia'}</button><button id="tSairBope">Sair do BOPE</button>` : '<button id="tEntrarBope">💀 Entrar no BOPE</button>'}</div>`;
+      <div class="botoes">${p.bope ? `<button id="tKit" ${pertoDp ? '' : 'disabled'}>${pertoDp ? '🔫 Pegar o kit' : '🔫 Kit: vá à sede ou à delegacia'}</button><button id="tSedeBope">📍 Sede do BOPE</button><button id="tSairBope">Sair do BOPE</button>` : (indicado || p.cargo === 'admin') ? '<button id="tEntrarBope">💀 Entrar no BOPE</button>' : ''}</div>`;
+    if (souBope()) h += `<div class="sub">📡 Radar do BOPE</div><div class="lista">${radarLista.length ? radarLista.map((a) => `<div class="linha item"><span class="nm"><b>${esc(a.nome)} <span style="color:#ffd23e">${estrelas(a.crimes)}</span></b><small>${esc(a.area)} · ${Math.round(Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z))} m</small></span><span class="bts"><button data-rbope="${a.id}">📍 Ir</button></span></div>`).join('') : '<span class="vazio">Nada no radar: nenhum crime nas favelas e cidades menores, nem procurado de 3 estrelas.</span>'}</div>`;
+  }
+  let podeIndicar = false; if (p.policial || p.prf || militar() || p.cargo === 'admin') { try { podeIndicar = !!(await rede.tatica.podeIndicarBope(eu)); } catch { podeIndicar = false; } }
+  if (podeIndicar) {
+    const cands = [...remotos].filter(([, r]) => r.meta?.policial && !r.meta?.bope);
+    h += `<div class="sub">🎖️ Indicar para o BOPE</div><p class="dica">Como ${p.cargo === 'admin' ? 'General Supremo' : 'oficial'}, você indica policiais para o BOPE. Aparecem os policiais em serviço online.</p>
+      <div class="lista">${cands.length ? cands.map(([id, r]) => `<div class="linha item"><span class="nm"><b>${esc(r.meta.nome)}</b><small>${esc(r.meta.patente || 'Polícia')}</small></span><span class="bts"><button data-indicar="${id}">💀 Indicar</button></span></div>`).join('') : '<span class="vazio">Nenhum policial em serviço online.</span>'}</div>`;
   }
   if (militar()) {
     const pontosArsenal = [civico.EXERCITO.arsenal, CENTRAL_MISSEIS, { x: (mundo.BASE_AEREA.x0 + mundo.BASE_AEREA.x1) / 2, z: (mundo.BASE_AEREA.z0 + mundo.BASE_AEREA.z1) / 2 }];
@@ -13271,6 +13303,9 @@ async function desenharTatica() {
   on('tEntrarBope', () => fazerTatica(() => rede.tatica.entrarBope(), '💀 Bem-vindo ao BOPE.'));
   on('tSairBope', () => fazerTatica(() => rede.tatica.sairBope(), 'Você saiu do BOPE.'));
   on('tKit', () => fazerTatica(() => rede.tatica.kitBope(), (t) => `Kit pego: ${t}.`));
+  on('tSedeBope', () => { if (pontos.sedeBope) { rastrear({ nome: '💀 Sede do BOPE', x: pontos.sedeBope.x, z: pontos.sedeBope.z + 2 }); msgTatica('Rota até a Sede do BOPE no mapa.'); } });
+  c.querySelectorAll('[data-rbope]').forEach((b) => { b.onclick = () => { const a = radarLista.find((x) => x.id === b.dataset.rbope); if (a) { rastrear({ nome: `📡 ${a.nome}`, x: a.x, z: a.z }); msgTatica('Marcado no mapa.'); } }; });
+  c.querySelectorAll('[data-indicar]').forEach((b) => { b.onclick = () => fazerTatica(() => rede.tatica.indicarBope(b.dataset.indicar), (n) => `💀 ${n} foi indicado para o BOPE.`); });
   on('tArsenal', () => fazerTatica(() => rede.tatica.armasArsenal(), (t) => `Você pegou ${t}.`));
   c.querySelectorAll('[data-invest]').forEach((b) => { b.onclick = () => fazerTatica(() => rede.tatica.investigar(Number(b.dataset.invest)), (n) => (n ? `🚨 Achado: ${n}. Agora ele é procurado (+500 para você).` : 'Pista fria: não deu para achar o responsável.')); });
   c.querySelectorAll('[data-rmapa]').forEach((b) => { b.onclick = () => { rastrear({ nome: '📡 Movimentação ilícita (aprox.)', x: Number(b.dataset.x), z: Number(b.dataset.z) }); msgTatica('Marcado no mapa.'); }; });
@@ -13279,4 +13314,454 @@ async function desenharTatica() {
   on('tFabricar', () => fazerTatica(() => rede.tatica.fabricar($('tFabItem').value, Number($('tFabQtd').value)), (n) => `Fabricado. Estoque: ${n}.`));
   c.querySelectorAll('[data-salvarp]').forEach((b) => { b.onclick = () => fazerTatica(() => rede.tatica.preco(b.dataset.salvarp, Number(c.querySelector(`[data-preco="${b.dataset.salvarp}"]`).value)), 'Preço salvo.'); });
   c.querySelectorAll('[data-compr]').forEach((b) => { b.onclick = () => { const [dono, item] = JSON.parse(c.dataset.lojas || '[]')[Number(b.dataset.compr)] || []; if (dono) fazerTatica(() => rede.tatica.comprar(dono, item, 1), `Comprado: 1 ${NOME_ITEM_T[item]}.`); }; });
+}
+
+// ================================================================= BOPE (86): sede preta, farda preta, radar e incursão dos robôs
+// Sede do BOPE: a delegacia pintada de preto ao pé do Morro do Porto (rua z = 945, ao lado dos lotes da favela).
+// O BOPE não patrulha: sai quando o radar mostra crime nas favelas e cidades menores, ou de 3 estrelas para cima.
+// Incursão: Caveirão com 6 (2 distraem com tiros não letais, 2 abatem, 2 cercam). Abatido o criminoso, cercam o corpo
+// e esperam a ambulância; ele volta e vai preso. Se um policial do BOPE cair, os outros se abrigam e chamam +12.
+// Quem simula a incursão é o jogo do procurado; os outros jogadores veem pelo canal (fantasmas).
+const SEDE_BOPE = { x: 1030, frente: 940 };
+let sedeBopeFeita = false;
+function montarSedeBope() {
+  if (sedeBopeFeita || !modelos?.delegacia) return; sedeBopeFeita = true;
+  const obj = clonar('delegacia'); obj.position.set(SEDE_BOPE.x, 0.18, 925); scene.add(obj); obj.updateMatrixWorld(true);
+  const b0 = new THREE.Box3().setFromObject(obj);
+  obj.position.z += SEDE_BOPE.frente - b0.max.z; obj.position.x += SEDE_BOPE.x - (b0.min.x + b0.max.x) / 2; obj.updateMatrixWorld(true);
+  const mats = [];
+  obj.traverse((o) => {
+    if (!o.isMesh) return;
+    const pint = (m) => { const c = m.clone(); if (c.color) c.color.multiplyScalar(0.15); mats.push(c); return c; };
+    o.material = Array.isArray(o.material) ? o.material.map(pint) : pint(o.material);
+  });
+  const caixa = addColisorCaixa(obj, 0.8);
+  predios.push({ obj, caixa, mats, opac: 1 });
+  itensMapa.push({ tipo: 'sede_bope', x0: caixa.min.x, x1: caixa.max.x, z0: caixa.min.z, z1: caixa.max.z });
+  pontos.sedeBope = { x: (caixa.min.x + caixa.max.x) / 2, z: caixa.max.z + 1.3 };
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128; const g = cv.getContext('2d');
+  g.fillStyle = '#0a0a0a'; g.fillRect(0, 0, 512, 128); g.strokeStyle = '#d8d8d8'; g.lineWidth = 6; g.strokeRect(6, 6, 500, 116);
+  g.fillStyle = '#e8e8e8'; g.font = '900 76px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('💀 BOPE', 256, 68);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
+  const letreiro = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshStandardMaterial({ map: tx, roughness: 0.6 }));
+  letreiro.position.set(pontos.sedeBope.x, Math.max(2.8, Math.min(caixa.max.y - 0.8, 4.4)), caixa.max.z + 0.06); scene.add(letreiro);
+  const sp = textoSprite('💀 Sede do BOPE', { escala: 0.7, fundo: 'rgba(8,8,8,.95)' }); sp.position.set(pontos.sedeBope.x, 2.6, pontos.sedeBope.z); scene.add(sp);
+}
+function pertoSedeBope() { return pontos.sedeBope && Math.hypot(pontos.sedeBope.x - jogador.pos.x, pontos.sedeBope.z - jogador.pos.z) < 3.2; }
+function entrarSedeBope() { entrarPublico('sede_bope', () => salaDelegacia('sede_bope', 2800, 'Sede do BOPE · armaria', '#111111'), pontos.sedeBope, '💀 Sede do BOPE: armaria (kit), quadro tático, treino, celas e estande.'); }
+const souBope = () => !!(jogador.perfil?.bope && (jogador.perfil.policial || jogador.perfil.cargo === 'admin'));
+SALAS.sede_bope = {
+  contexto: () => {
+    if (naPorta()) return ['sair da sede do BOPE', 'Sair'];
+    if (pontoInterior('balcao', 1.8)) return [souBope() ? 'armaria do BOPE: pegar o kit (espingarda, fuzil e granadas)' : 'armaria do BOPE (só o BOPE)', 'Kit'];
+    if (pontoInterior('quadro', 1.8)) return ['quadro tático: treino de incursão do BOPE', 'Tática'];
+    return SALAS.delegacia.contexto();
+  },
+  acao: () => {
+    if (naPorta()) { sairSala(); return; }
+    if (pontoInterior('balcao', 1.8)) {
+      if (!souBope()) { aviso('A armaria é só do BOPE.', 2.5); return; }
+      rede.tatica.kitBope().then((t) => { aviso(`🔫 Kit pego: ${t}.`, 3); recarregarInventario(); }).catch((e) => aviso(e.message, 3)); return;
+    }
+    if (pontoInterior('quadro', 1.8)) { treinoTaticoBope(); return; }
+    SALAS.delegacia.acao();
+  },
+};
+const PAPEIS_BOPE = ['distrair', 'distrair', 'abater', 'abater', 'cercar', 'cercar'];
+const NOME_PAPEL = { distrair: '💥 Distrair (tiros não letais)', abater: '🎯 Abater (força letal)', cercar: '🔒 Cercar e prender' };
+const bopeTreinado = () => { try { return localStorage.getItem('fatorBopeTatica') === '1'; } catch { return false; } };
+function treinoTaticoBope() {
+  escolher('💀 Tática de incursão do BOPE', 'O BOPE age em equipe de <b>6 ou mais</b>, sempre junto e rápido:<br>• 2 <b>distraem</b> com tiros não letais;<br>• 2 <b>abatem</b> (força letal);<br>• 2 <b>cercam</b> e fecham a fuga.<br><br>Abatido o criminoso, a equipe <b>cerca o corpo</b> e espera a ambulância reviver: aí ele é <b>preso</b>. Se um policial cair, os outros se <b>abrigam</b> atrás do Caveirão e chamam <b>reforço de 12</b>.<br><br>O BOPE não fica rodando: sai quando o <b>radar</b> mostra crime nas favelas e cidades menores, ou de <b>3 estrelas</b> para cima.',
+    [{ rotulo: '✅ Aprendi a tática', fn: () => { try { localStorage.setItem('fatorBopeTatica', '1'); } catch { /* sem armazenamento */ } aviso('💀 Tática aprendida: nas incursões o jogo mostra a sua função na equipe.', 4); } }]);
+}
+function areaBope(x, z) {
+  for (const f of Object.values(mundo.FAVELAS)) if (x > f.x0 - 15 && x < f.x1 + 15 && z > f.z0 - 15 && z < f.z1 + 15) return f.nome;
+  if (x > -640 && Math.abs(z) > 700) return z < 0 ? 'Vila Serra' : 'Porto Sul';
+  return null;
+}
+const bopeQuer = (crimes, x, z) => crimes > 0 && (crimes >= 3 || !!areaBope(x, z));
+const bopeOnline = () => [...remotos.values()].filter((r) => r.meta?.bope && r.meta?.policial);
+const posRemoto = (r) => r?.carro?.position || r?.av?.raiz.position || null;
+
+// ---------------------------------------------------------------- radar do BOPE (jogadores do BOPE)
+const avisadosBope = new Map(); let radarLista = [], funcaoAvisada = new Map();
+function radarBope(dt) {
+  if (!souBope()) { radarLista = []; return; }
+  if ((radarBope.t = (radarBope.t || 0) - dt) > 0) return; radarBope.t = 3;
+  const agora = performance.now(), eu = jogador.perfil.id; radarLista = [];
+  for (const [id, r] of remotos) {
+    const m = r.meta, q = posRemoto(r); if (!m || !q || !(m.crimes > 0) || m.ferido) continue;
+    const area = areaBope(q.x, q.z); if (!(m.crimes >= 3 || area)) continue;
+    const it = { id, nome: m.nome, crimes: m.crimes, x: q.x, z: q.z, area: area || regiaoDe(q.x, q.z) }; radarLista.push(it);
+    if (agora - (avisadosBope.get(id) || 0) > 180000) { avisadosBope.set(id, agora); aviso(`📡 Radar do BOPE: ${m.nome} ${estrelas(m.crimes)} em ${it.area}. Veja no 🎯 Tático.`, 4.5); }
+    // função na equipe (quem treinou a tática): pela ordem dos policiais do BOPE perto do alvo
+    if (bopeTreinado() && Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z) < 70 && agora - (funcaoAvisada.get(id) || 0) > 120000) {
+      const equipe = [eu, ...bopeOnline().filter((x) => { const w = posRemoto(x); return w && Math.hypot(w.x - q.x, w.z - q.z) < 70; }).map((x) => [...remotos].find(([, v]) => v === x)?.[0])].filter(Boolean).sort();
+      const papel = PAPEIS_BOPE[equipe.indexOf(eu) % 6]; funcaoAvisada.set(id, agora);
+      aviso(`🎯 Incursão contra ${m.nome}: sua função é ${NOME_PAPEL[papel]}.${equipe.length < 6 ? ` Equipe com ${equipe.length}: o BOPE age com 6 ou mais.` : ''}`, 5);
+    }
+  }
+  radarLista.sort((a, b) => b.crimes - a.crimes);
+}
+
+// ---------------------------------------------------------------- incursão dos robôs (simulada pelo jogo do procurado)
+let opBope = null, bopeFim = 0;
+function atualizarBope(dt) {
+  montarSedeBope();
+  radarBope(dt);
+  atualizarFantasmasBope(dt);
+  const j = jogador, p = j.perfil; if (!p || !j.avatar) return;
+  if (opBope) { passoBope(dt); return; }
+  if ((atualizarBope.t = (atualizarBope.t || 0) - dt) > 0) return; atualizarBope.t = 2;
+  if (Number(configJogo.policia_robo ?? 12) <= 0 || (p.cargo && p.cargo !== 'jogador') || p.imortal) return;
+  if (j.morto || j.pena > 0 || j.dentroCasa || performance.now() < bopeFim || !bopeQuer(p.crimes || 0, j.pos.x, j.pos.z)) return;
+  const humanos = bopeOnline().length > 0;   // com BOPE de verdade online, ele tem 90 s para chegar; senão os robôs saem
+  opBope = { id: Math.random().toString(36).slice(2, 9), fase: 'alerta', ate: performance.now() + (humanos ? 90000 : 12000), humanos, cavs: [], bots: [], t0: performance.now(), visto: performance.now(), ultFora: { x: j.pos.x, z: j.pos.z }, disparos: [], pub: 0 };
+  aviso(`📡 O radar do BOPE detectou você${areaBope(j.pos.x, j.pos.z) ? ` (${areaBope(j.pos.x, j.pos.z)})` : ''}!`, 3.5);
+}
+function despacharBope(qtd, atrasoSeg, reforco = false) {
+  const op = opBope, alvo = { x: op.ultFora.x, z: op.ultFora.z };
+  const sede = { x: pontos.sedeBope?.x ?? SEDE_BOPE.x, z: 947 };
+  for (let k = 0; k < Math.ceil(qtd / 6); k++) {
+    let ini = sede; const ds = Math.hypot(sede.x - alvo.x, sede.z - alvo.z);
+    if (ds > 600) { const f = (160 + k * 25) / ds; ini = { x: alvo.x + (sede.x - alvo.x) * f, z: alvo.z + (sede.z - alvo.z) * f }; }   // longe da sede: o Caveirão já vinha na região
+    const obj = civico.modeloCarro('caveirao', '#151515'); obj.visible = false; scene.add(obj);
+    const c = { obj, ini, rota: servicos.rotaRuas(ini, alvo, 9 + k * 8), t0: performance.now() + (atrasoSeg + k * 3) * 1000, vel: 17, s: 0, v: 0, chegou: false, volta: null, foi: false, reforco };
+    op.cavs.push(c);
+    for (let i = 0; i < 6; i++) criarBotBope(c, op, reforco);
+  }
+}
+function criarBotBope(c, op, reforco) {
+  const i = op.bots.length;
+  const b = { bope: true, policia: true, papel: PAPEIS_BOPE[i % 6], c, op, i, vida: 140, caido: 0, morto: false, tiro: 0.5 + Math.random(), fora: false, av: null, reforco, hostil: 0 };
+  op.bots.push(b);
+  criarAvatar('robos', SKIN_POLICIA).then((av) => {
+    if (opBope !== op || b.removido) return;
+    b.av = av; av.raiz.visible = false; scene.add(av.raiz);
+    const et = textoSprite('💀 BOPE', { escala: 0.55, fundo: 'rgba(8,8,8,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+    try { vestir(av, 'bope'); } catch { /* sem farda */ }
+    if (b.fora) { colocarNaPorta(b); npcs.push(b); av.tocar('run'); }
+  }).catch(() => {});
+}
+function colocarNaPorta(b) {   // atrás do Caveirão, lado a lado
+  const o = b.c.obj, a = o.rotation.y, k = b.i % 6, lado = (k % 3) - 1, fila = Math.floor(k / 3);
+  const x = o.position.x - Math.sin(a) * (3.6 + fila * 1.2) + Math.cos(a) * lado * 1.1, z = o.position.z - Math.cos(a) * (3.6 + fila * 1.2) - Math.sin(a) * lado * 1.1;
+  b.av.raiz.position.set(x, alturaChao(x, z), z); b.av.raiz.rotation.y = a;
+}
+function desembarcarBope(c) {
+  for (const b of opBope.bots) {
+    if (b.c !== c || b.morto) continue;
+    b.fora = true; b.embarcar = false; b.fecha = 12;
+    if (b.av) { colocarNaPorta(b); if (!npcs.includes(b)) npcs.push(b); b.av.tocar('run'); }
+  }
+  if (!opBope.desceu) { opBope.desceu = true; aviso('💀 O BOPE desceu do Caveirão!', 2.5); }
+}
+function embarcarBot(b) {
+  b.fora = false; b.embarcar = false; if (b.av) b.av.raiz.visible = false;
+  const k = npcs.indexOf(b); if (k >= 0) npcs.splice(k, 1);
+}
+function removerBotBope(b) {
+  b.removido = true; const k = npcs.indexOf(b); if (k >= 0) npcs.splice(k, 1);
+  if (b.av) { scene.remove(b.av.raiz); if (b.av.uniforme && !b.av.uniforme.preso) scene.remove(b.av.uniforme.colete, b.av.uniforme.chapeu); }
+}
+function moverCaveirao(c, dt) {
+  const agora = performance.now(); if (agora < c.t0 || c.foi || c.parado) return;
+  const r = c.volta || c.rota;
+  c.v = Math.min(c.vel, c.v + 7 * dt); c.s += c.v * dt;
+  const p = servicos.pontoNaRota(r, c.s);
+  if (!c.obj.visible) { c.obj.visible = true; c.obj.rotation.y = p.ang; }
+  c.obj.position.set(p.x, alturaChao(p.x, p.z), p.z); c.obj.rotation.y = suavizarAngulo(c.obj.rotation.y, p.ang, dt * 6);
+  civico.atualizarSirenes(c.volta ? 0 : agora / 1000, c.obj);
+  if (!c.volta) sons.continuo('sirene_policia', 0.5 * sons.perto(Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z), 90));
+  if (!p.fim) return;
+  if (c.volta) { scene.remove(c.obj); c.foi = true; return; }
+  c.chegou = true; c.parado = true; c.v = 0; desembarcarBope(c);
+}
+// onde está o alvo: vivo, caído (corpo) ou escondido (última posição fora)
+function alvoBope(op) {
+  const j = jogador;
+  if (j.dentroCasa) return { x: op.ultFora.x, z: op.ultFora.z, y: alturaChao(op.ultFora.x, op.ultFora.z), modo: 'casa' };
+  return { x: j.pos.x, z: j.pos.z, y: j.pos.y, modo: j.morto ? 'corpo' : 'vivo' };
+}
+function danoBope(v) { jogador.danoBopeT = performance.now(); danoLocal(v); }
+function atirarBot(b, T, cor, letal) {
+  const p = b.av.raiz.position, de = new THREE.Vector3(p.x, p.y + 1.4, p.z), dx = T.x - p.x, dz = T.z - p.z, d = Math.hypot(dx, dz), t = Math.max(0.12, d / 32);
+  criarBola(de, new THREE.Vector3(dx / t, (T.y + 1 - de.y) / t + 4.9 * t, dz / t), cor);
+  b.op.disparos.push([b.i, r2t(T.x), r2t(T.y + 1), r2t(T.z), letal ? 1 : 0]);
+  const j = jogador;
+  if (letal) { const acerto = j.carro ? 0.5 : d < 12 ? 0.8 : 0.6; setTimeout(() => { if (Math.random() < acerto && !j.morto) danoBope(20); }, t * 1000); }
+  else setTimeout(() => { if (Math.random() < 0.7 && !j.morto) { danoBope(3); tremor = Math.max(tremor, 0.18); } }, t * 1000);
+}
+function andarBot(b, gx, gz, vel, dt, olhar) {
+  const p = b.av.raiz.position, dx = gx - p.x, dz = gz - p.z, d = Math.hypot(dx, dz);
+  b.movendo = d > 0.6;
+  if (b.movendo) { const s = Math.min(d, vel * dt); p.x += dx / d * s; p.z += dz / d * s; resolverColisaoNPC(p); b.av.tocar('run', { velocidade: vel > 6 ? 1.2 : 1 }); }
+  else b.av.tocar('idle');
+  p.y = alturaChao(p.x, p.z);
+  const alvoAng = olhar ? Math.atan2(olhar.x - p.x, olhar.z - p.z) : b.movendo ? Math.atan2(dx, dz) : b.av.raiz.rotation.y;
+  b.av.raiz.rotation.y = suavizarAngulo(b.av.raiz.rotation.y, alvoAng, dt * 8);
+}
+function passoBot(b, dt) {
+  const av = b.av; if (!av) { if (b.embarcar || b.op.fase === 'retirada') b.fora = false; return; }
+  posicionarUniforme(av);
+  if (!b.fora) { av.raiz.visible = false; return; }
+  av.raiz.visible = true;
+  if (b.morto) { av.mixer.update(dt); return; }
+  const op = b.op, j = jogador, p = av.raiz.position, cp = b.c.obj.position;
+  if (op.fase === 'retirada' || b.embarcar) {   // volta correndo e embarca
+    const d = Math.hypot(cp.x - p.x, cp.z - p.z);
+    if (d < 2.2) { embarcarBot(b); return; }
+    andarBot(b, cp.x, cp.z, 6.5, dt); av.mixer.update(dt); return;
+  }
+  const T = alvoBope(op);
+  if (op.abrigo && !b.reforco) {   // policial abatido: abrigados atrás do Caveirão até o reforço chegar
+    const ax = cp.x - T.x, az = cp.z - T.z, l = Math.hypot(ax, az) || 1;
+    andarBot(b, cp.x + ax / l * 3.3 + (b.i % 2 ? 1.3 : -1.3), cp.z + az / l * 3.3, 6.5, dt, T); av.mixer.update(dt); return;
+  }
+  if (T.modo !== 'vivo') {   // corpo no chão ou escondido: cercam e esperam (ambulância, ou a saída)
+    const vivos = op.bots.filter((x) => x.fora && !x.morto), k = vivos.indexOf(b), n = Math.max(1, vivos.length), r = T.modo === 'corpo' ? 3.2 : 7;
+    const a = k / n * Math.PI * 2;
+    andarBot(b, T.x + Math.sin(a) * r, T.z + Math.cos(a) * r, 6, dt, T); av.mixer.update(dt); return;
+  }
+  const dT = Math.hypot(T.x - p.x, T.z - p.z), base = Math.atan2(cp.x - T.x, cp.z - T.z), lado = b.i % 2 ? 1 : -1;
+  let r, a, vel = dT > 40 ? 7.5 : 5.8;
+  if (b.papel === 'distrair') { r = 13; a = base + lado * 0.35; }
+  else if (b.papel === 'abater') { r = 17; a = base + lado * 0.8; }
+  else { b.fecha = Math.max(0.9, (b.fecha ?? 12) - dt * 1.7); r = b.fecha; a = base + lado * Math.PI * 0.72; vel += 0.6; }
+  andarBot(b, T.x + Math.sin(a) * r, T.z + Math.cos(a) * r, vel, dt, dT < 35 ? T : null);
+  b.tiro -= dt;
+  if (b.papel === 'distrair' && dT < 28 && b.tiro <= 0) { b.tiro = 0.45 + Math.random() * 0.2; atirarBot(b, T, '#f4f4f4', false); }
+  if (b.papel === 'abater' && dT < 32 && b.tiro <= 0) { b.tiro = 0.9 + Math.random() * 0.3; atirarBot(b, T, '#c0392b', true); }
+  if (b.papel === 'cercar' && dT < 1.4 && !j.carro && !j.passageiro && !j.morto && !op.prendendo) {
+    op.prendendo = true;
+    rede.tatica.presoPeloBope(null).then((min) => { if (min) aviso(`💀 Cercado e preso pelo BOPE: ${min} min de pena.`, 5); }).catch((e) => aviso(e.message, 3)).finally(() => { if (opBope === op) op.prendendo = false; });
+  }
+  av.mixer.update(dt);
+}
+function iniciarRetirada() {
+  const op = opBope; if (!op || op.fase === 'retirada') return;
+  op.fase = 'retirada'; op.fimRet = performance.now() + 45000;
+  for (const c of op.cavs) if (!c.chegou) { c.foi = true; scene.remove(c.obj); }   // ainda a caminho: dá meia-volta longe da vista
+}
+function encerrarBope() {
+  const op = opBope; if (!op) return;
+  for (const b of op.bots) removerBotBope(b);
+  for (const c of op.cavs) if (!c.foi) scene.remove(c.obj);
+  conexao?.enviar('tatica', { k: 'bope', op: op.id, de: jogador.perfil?.id, fim: 1 });
+  opBope = null; bopeFim = performance.now() + 180000;   // 3 min até a próxima incursão
+}
+function passoBope(dt) {
+  const op = opBope, j = jogador, agora = performance.now(), crimes = j.perfil?.crimes || 0;
+  if (!j.dentroCasa && !j.morto) { op.ultFora.x = j.pos.x; op.ultFora.z = j.pos.z; }
+  const acabou = j.pena > 0 || (crimes <= 0 && !j.morto) || agora - op.t0 > 480000;
+  if (op.fase === 'alerta') {
+    if (acabou || (!j.dentroCasa && !bopeQuer(crimes, j.pos.x, j.pos.z))) { opBope = null; bopeFim = agora + 30000; return; }
+    if (agora < op.ate) return;
+    if (op.humanos && bopeOnline().some((r) => { const q = posRemoto(r); return q && Math.hypot(q.x - j.pos.x, q.z - j.pos.z) < 90; })) { opBope = null; bopeFim = agora + 180000; return; }   // o BOPE de verdade já chegou
+    op.fase = 'assalto'; despacharBope(6, 0);
+    aviso('🚨 BOPE a caminho: o Caveirão está vindo atrás de você!', 4);
+    return;
+  }
+  for (const c of op.cavs) moverCaveirao(c, dt);
+  for (const b of op.bots) passoBot(b, dt);
+  if (op.fase === 'retirada') {
+    for (const c of op.cavs) if (c.chegou && !c.volta && !c.foi && !op.bots.some((b) => b.c === c && b.fora && !b.morto)) {
+      for (const b of op.bots) if (b.c === c && b.morto) removerBotBope(b);   // recolhem os caídos
+      c.parado = false; c.s = 0; c.v = 0; c.volta = servicos.rotaRuas({ x: c.obj.position.x, z: c.obj.position.z }, c.ini);
+    }
+    if (op.cavs.every((c) => c.foi) || agora > op.fimRet) encerrarBope();
+  } else {
+    const T = alvoBope(op), vivos = op.bots.filter((b) => !b.morto);
+    if (op.abrigo && op.cavs.filter((c) => c.reforco).every((c) => c.chegou)) { op.abrigo = false; aviso('📻 BOPE: o reforço chegou!', 3); }
+    if (vivos.some((b) => b.fora && Math.hypot(b.av?.raiz.position.x - T.x, b.av?.raiz.position.z - T.z) < 150) || op.cavs.some((c) => !c.chegou)) op.visto = agora;
+    if (acabou || !vivos.length || agora - op.visto > 45000 || (T.modo === 'casa' && agora - (op.casaDesde ||= agora) > 120000)) iniciarRetirada();
+    if (T.modo !== 'casa') op.casaDesde = 0;
+    // o alvo fugiu para longe do Caveirão: a equipe embarca e o Caveirão vai atrás
+    if (T.modo === 'vivo') for (const c of op.cavs) {
+      if (!c.chegou || c.volta || Math.hypot(c.obj.position.x - T.x, c.obj.position.z - T.z) < 110) { if (c.reemb) { c.reemb = false; for (const b of op.bots) if (b.c === c) b.embarcar = false; } continue; }
+      const deles = op.bots.filter((b) => b.c === c && !b.morto);
+      if (!c.reemb) { c.reemb = true; for (const b of deles) b.embarcar = true; }
+      if (deles.every((b) => !b.fora)) { c.reemb = false; c.chegou = false; c.parado = false; c.s = 0; c.v = 0; c.rota = servicos.rotaRuas({ x: c.obj.position.x, z: c.obj.position.z }, { x: T.x, z: T.z }, 9); }
+    }
+  }
+  if ((op.pub -= dt) <= 0) { op.pub = 0.35; publicarBope(op); }
+}
+// policial do BOPE (robô) atingido: colete segura parte; se cair, os outros se abrigam e chamam +12
+function acertarBope(b, dano, deFora = false) {
+  if (b.morto || !b.fora || opBope !== b.op) return;
+  if (!deFora) { jogador.atacouPolicia = performance.now(); rede.crime.agredirNpc().catch(() => {}); }
+  b.vida -= dano * 0.7;
+  if (b.vida > 0) { b.av?.tocar('hit', { umaVez: true, velocidade: 1.4, fade: 0.08 }); return; }
+  b.morto = true; b.caido = 1e9; b.av?.tocar('death', { umaVez: true, velocidade: 1, fade: 0.1 });
+  const op = b.op;
+  if (!deFora) aviso('💀 Um policial do BOPE caiu!', 2.5);
+  if (!op.reforco && op.fase !== 'retirada') {
+    op.reforco = true; op.abrigo = true;
+    setTimeout(() => { if (opBope === op) aviso('📻 BOPE: "Policial abatido! Abriguem-se, mandem reforço!" Mais 12 a caminho.', 4.5); }, 600);
+    despacharBope(12, 10, true);
+  }
+}
+// ---------------------------------------------------------------- os outros jogadores veem a incursão (fantasmas)
+function publicarBope(op) {
+  const r1 = (n) => Math.round(n * 10) / 10;
+  conexao?.enviar('tatica', { k: 'bope', op: op.id, de: jogador.perfil.id,
+    c: op.cavs.map((c) => (c.obj.visible && !c.foi ? [r1(c.obj.position.x), r1(c.obj.position.z), r2t(c.obj.rotation.y), c.volta ? 0 : 1] : 0)),
+    b: op.bots.filter((b) => b.av && b.fora).map((b) => [b.i, r1(b.av.raiz.position.x), r1(b.av.raiz.position.z), r2t(b.av.raiz.rotation.y), b.morto ? 2 : b.movendo ? 1 : 0]),
+    f: op.disparos.splice(0, 12) });
+}
+const fantasmasBope = new Map();   // op -> { de, t, cavs: [obj], bots: Map(i -> { av, alvo }) }
+function receberBope(e) {
+  let f = fantasmasBope.get(e.op);
+  if (e.fim) { if (f) removerFantasma(e.op); return; }
+  if (!f) { f = { de: e.de, t: 0, cavs: [], bots: new Map() }; fantasmasBope.set(e.op, f); }
+  f.t = performance.now();
+  (e.c || []).forEach((c, k) => {
+    let o = f.cavs[k];
+    if (!c) { if (o) o.visible = false; return; }
+    if (!o) { o = civico.modeloCarro('caveirao', '#151515'); o.position.set(c[0], alturaChao(c[0], c[1]), c[1]); o.rotation.y = c[2]; scene.add(o); f.cavs[k] = o; }
+    o.visible = true; o.userData.alvo = c;
+  });
+  const vistos = new Set();
+  for (const [i, x, z, ang, st] of e.b || []) {
+    vistos.add(i); let g = f.bots.get(i);
+    if (!g) {
+      g = { av: null, alvo: null, st: -1 }; f.bots.set(i, g);
+      criarAvatar('robos', SKIN_POLICIA).then((av) => {
+        if (!fantasmasBope.has(e.op)) return;
+        g.av = av; scene.add(av.raiz); av.raiz.position.set(x, alturaChao(x, z), z);
+        const et = textoSprite('💀 BOPE', { escala: 0.55, fundo: 'rgba(8,8,8,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+        try { vestir(av, 'bope'); } catch { /* sem farda */ }
+      }).catch(() => {});
+    }
+    g.alvo = [x, z, ang]; g.visto = true;
+    if (g.av && st !== g.st) { g.st = st; g.av.tocar(st === 2 ? 'death' : st === 1 ? 'run' : 'idle', st === 2 ? { umaVez: true, fade: 0.1 } : {}); }
+  }
+  for (const [i, g] of f.bots) if (!vistos.has(i) && g.av) g.av.raiz.visible = false; else if (g.av) g.av.raiz.visible = true;
+  // tiros: bolas só de enfeite, do policial até onde ele mirou
+  for (const [i, tx, ty, tz, letal] of e.f || []) {
+    const g = f.bots.get(i); if (!g?.av) continue;
+    const p = g.av.raiz.position, de = new THREE.Vector3(p.x, p.y + 1.4, p.z), d = Math.hypot(tx - p.x, tz - p.z), t = Math.max(0.12, d / 32);
+    criarBola(de, new THREE.Vector3((tx - p.x) / t, (ty - de.y) / t + 4.9 * t, (tz - p.z) / t), letal ? '#c0392b' : '#f4f4f4');
+  }
+}
+function removerFantasma(id) {
+  const f = fantasmasBope.get(id); if (!f) return;
+  for (const o of f.cavs) if (o) scene.remove(o);
+  for (const g of f.bots.values()) if (g.av) { scene.remove(g.av.raiz); if (g.av.uniforme && !g.av.uniforme.preso) scene.remove(g.av.uniforme.colete, g.av.uniforme.chapeu); }
+  fantasmasBope.delete(id);
+}
+function atualizarFantasmasBope(dt) {
+  const agora = performance.now();
+  for (const [id, f] of fantasmasBope) {
+    if (agora - f.t > 5000) { removerFantasma(id); continue; }
+    for (const o of f.cavs) {
+      const c = o?.userData.alvo; if (!c || !o.visible) continue;
+      o.position.x += (c[0] - o.position.x) * Math.min(1, dt * 6); o.position.z += (c[1] - o.position.z) * Math.min(1, dt * 6);
+      o.position.y = alturaChao(o.position.x, o.position.z); o.rotation.y = suavizarAngulo(o.rotation.y, c[2], dt * 6);
+      civico.atualizarSirenes(c[3] ? agora / 1000 : 0, o);
+      if (c[3]) sons.continuo('sirene_policia', 0.5 * sons.perto(Math.hypot(o.position.x - jogador.pos.x, o.position.z - jogador.pos.z), 90));
+    }
+    for (const g of f.bots.values()) {
+      if (!g.av || !g.alvo) continue;
+      const p = g.av.raiz.position;
+      p.x += (g.alvo[0] - p.x) * Math.min(1, dt * 6); p.z += (g.alvo[1] - p.z) * Math.min(1, dt * 6); p.y = alturaChao(p.x, p.z);
+      g.av.raiz.rotation.y = suavizarAngulo(g.av.raiz.rotation.y, g.alvo[2], dt * 8);
+      posicionarUniforme(g.av); g.av.mixer.update(dt);
+    }
+  }
+}
+// tiro ou granada de outro jogador num policial do BOPE fantasma: avisa quem controla a incursão
+function acertoFantasmaBope(p, dano, raio = 0.6) {
+  for (const [id, f] of fantasmasBope) for (const [i, g] of f.bots) {
+    if (!g.av?.raiz.visible || g.st === 2) continue;
+    const q = g.av.raiz.position;
+    if (Math.hypot(p.x - q.x, p.z - q.z) < raio && (raio > 1 || (p.y > q.y + 0.1 && p.y < q.y + 2))) {
+      conexao?.enviar('tatica', { k: 'bopeHit', op: id, para: f.de, i, v: Math.min(100, Math.round(dano)), de: jogador.perfil?.id });
+      rede.crime.agredirNpc().catch(() => {});
+      if (raio <= 1) return true;
+    }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------- granada com mira: segure o botão e arraste
+// A direção é a do arrasto (para cima = para frente da câmera) e o quanto arrasta é a força. Uma linha mostra o
+// caminho e um círculo mostra onde cai e o raio da tinta. Solte para lançar; volte o dedo para o botão para cancelar.
+let miraG = null, previaG = null;
+const RAIO_CANCELA = 26;
+function origemGranada(yaw) {
+  const ps = jogador.passageiro, r = ps?.piloto && remotos.get(ps.piloto);
+  const de = r?.carro ? r.carro.position : jogador.pos;
+  return new THREE.Vector3(de.x + Math.sin(yaw) * 0.8, (de.y || 0) + (ps ? 3 : 1.7), de.z + Math.cos(yaw) * 0.8);
+}
+const velGranada = (yaw, forca) => { const h = 5 + 10 * forca; return new THREE.Vector3(Math.sin(yaw) * h, 5 + 2.5 * forca, Math.cos(yaw) * h); };
+function podeGranada() {
+  if (jogador.morto || jogador.carro || !jogador.avatar || qtdItem('granada') < 1 || jogador.dentroCasa) return false;
+  if (jogador.passageiro && remotos.get(jogador.passageiro.piloto)?.carroModelo !== 'caveirao') return false;
+  return true;
+}
+function mostrarPreviaG(yaw, forca, cancela) {
+  if (!previaG) {
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(48 * 3), 3));
+    const linha = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: '#ffd23e', depthTest: false, transparent: true }));
+    linha.renderOrder = 999; linha.frustumCulled = false;
+    const anel = new THREE.Mesh(new THREE.RingGeometry(5.6, 6, 40), new THREE.MeshBasicMaterial({ color: '#ff5a3c', transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthTest: false }));
+    anel.rotation.x = -Math.PI / 2; anel.renderOrder = 999;
+    const miolo = new THREE.Mesh(new THREE.CircleGeometry(0.6, 20), new THREE.MeshBasicMaterial({ color: '#ffd23e', transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthTest: false }));
+    miolo.rotation.x = -Math.PI / 2; miolo.renderOrder = 999;
+    scene.add(linha, anel, miolo); previaG = { linha, anel, miolo };
+  }
+  const { linha, anel, miolo } = previaG;
+  linha.visible = anel.visible = miolo.visible = !cancela; if (cancela) return;
+  const pos = origemGranada(yaw), v = velGranada(yaw, forca), a = linha.geometry.attributes.position, q = pos.clone();
+  if (!Number.isFinite(pos.x + pos.z + yaw)) { linha.visible = anel.visible = miolo.visible = false; return; }
+  let n = 0;
+  for (; n < 48; n++) {
+    a.setXYZ(n, q.x, q.y, q.z);
+    const chao = alturaChao(q.x, q.z) + 0.13; if (n > 0 && q.y <= chao) break;
+    q.addScaledVector(v, 0.05); v.y -= 9.8 * 0.05;
+  }
+  for (let k = n + 1; k < 48; k++) a.setXYZ(k, q.x, q.y, q.z);
+  a.needsUpdate = true;
+  const y = alturaChao(q.x, q.z) + 0.08; anel.position.set(q.x, y, q.z); miolo.position.set(q.x, y, q.z);
+}
+function esconderPreviaG() { if (previaG) previaG.linha.visible = previaG.anel.visible = previaG.miolo.visible = false; }
+function dicaMiraG(txt) {
+  let el = $('dicaMiraG');
+  if (!el) { el = document.createElement('div'); el.id = 'dicaMiraG'; el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 70px);z-index:31;background:rgba(15,15,15,.9);color:#fff;padding:6px 12px;border-radius:12px;font:700 13px system-ui;pointer-events:none'; document.body.appendChild(el); }
+  el.style.display = txt ? 'block' : 'none'; if (txt) el.textContent = txt;
+}
+function miraDoArrasto(dx, dy) {
+  const c = yawDaCamera(), f = { x: Math.sin(c), z: Math.cos(c) }, d = { x: -Math.cos(c), z: Math.sin(c) };
+  const wx = f.x * -dy + d.x * dx, wz = f.z * -dy + d.z * dx;
+  return { yaw: Math.atan2(wx, wz), forca: THREE.MathUtils.clamp((Math.hypot(dx, dy) - RAIO_CANCELA) / 130, 0, 1) };
+}
+function iniciarMiraG(ev, bt) {
+  ev.preventDefault(); ev.stopPropagation();
+  if (!podeGranada()) return;
+  if (armasProibidas()) { aviso('🚫 Armas não são permitidas aqui.'); return; }
+  try { bt.setPointerCapture(ev.pointerId); } catch { /* sem captura */ }
+  miraG = { id: ev.pointerId, x0: ev.clientX, y0: ev.clientY, cancela: true, yaw: jogador.yaw, forca: 0.6, bt };
+  bt.style.background = 'rgba(150,40,30,.92)';
+  dicaMiraG('💣 Arraste para mirar · solte para lançar · volte ao botão para cancelar');
+}
+function moverMiraG(ev) {
+  if (!miraG || ev.pointerId !== miraG.id) return;
+  const dx = ev.clientX - miraG.x0, dy = ev.clientY - miraG.y0;
+  miraG.cancela = Math.hypot(dx, dy) < RAIO_CANCELA;
+  if (!miraG.cancela) { const m = miraDoArrasto(dx, dy); miraG.yaw = m.yaw; miraG.forca = m.forca; if (!jogador.passageiro) jogador.yaw = m.yaw; }
+  dicaMiraG(miraG.cancela ? '✖ Solte aqui para cancelar' : `💣 Força ${Math.round(20 + 80 * miraG.forca)}% · solte para lançar`);
+  mostrarPreviaG(miraG.yaw, miraG.forca, miraG.cancela);
+}
+function soltarMiraG(ev, cancelar = false) {
+  if (!miraG || (ev && ev.pointerId !== miraG.id)) return;
+  const m = miraG; miraG = null; esconderPreviaG(); dicaMiraG(''); m.bt.style.background = 'rgba(40,46,30,.9)';
+  if (cancelar || m.cancela) { aviso('💣 Granada cancelada.', 1.2); return; }
+  lancarGranada({ yaw: m.yaw, forca: m.forca });
+}
+function botaoGranadaMira(bt) {
+  bt.addEventListener('pointerdown', (ev) => iniciarMiraG(ev, bt));
+  bt.addEventListener('pointermove', moverMiraG);
+  bt.addEventListener('pointerup', (ev) => soltarMiraG(ev));
+  bt.addEventListener('pointercancel', (ev) => soltarMiraG(ev, true));
 }

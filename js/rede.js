@@ -148,6 +148,9 @@ function traduzirRpc(m) {
     'sem permissao': 'Você não tem esse poder.',
     'so policiais entram no bope': 'Só policiais em serviço entram no BOPE.',
     'o bope aceita de 3o sargento para cima': 'O BOPE aceita policiais de 3º Sargento para cima.',
+    'precisa de indicacao para o bope': 'Para entrar no BOPE é preciso ser indicado pelo General Supremo ou por um oficial (Polícia, PRF ou Forças Armadas).',
+    'so patente alta indica para o bope': 'Só o General Supremo e oficiais de patente alta indicam para o BOPE.',
+    'nao pode indicar a si mesmo': 'Você não pode se indicar.',
     'so o bope': 'Só o BOPE pega o kit de armas.',
     'aguarde para pegar o kit de novo': 'Você já pegou o kit há pouco. Espere 10 minutos.',
     'armazem vazio ou voce ja esta equipado': 'O armamento está vazio ou você já está equipado.',
@@ -1010,4 +1013,9 @@ export const tatica = {
   registrarSom: (url, texto) => rpc('registrar_som', { p_url: url, p_texto: texto }),
   sonsRecentes: () => rpc('sons_recentes'),
   invisivel: (ligado) => rpc('staff_invisivel', { ligado }),
+  // BOPE (86): indicação, prisão de quem foi abatido
+  indicarBope: (alvo) => rpc('indicar_bope', { p_alvo: alvo }),
+  podeIndicarBope: (id) => rpc('pode_indicar_bope', { p_id: id }),
+  minhaIndicacao: async (id) => { try { return (await sel(sb.from('bope_indicacoes').select('*').eq('alvo', id)))[0] || null; } catch { return null; } },
+  presoPeloBope: (policial) => rpc('preso_pelo_bope', { p_policial: policial || null }),
 };
