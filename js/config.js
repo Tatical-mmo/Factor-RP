@@ -1,6 +1,7 @@
 // Configuração geral do jogo (etapa 1: cidade + personagem)
 
 export const PERSONAGENS = [
+  { id: 'Jovem_Cidade', nome: 'Jovem da Cidade' },   // personagens novos (Meshy): animações do _animacoes.glb
   { id: 'Autumn_Traveler', nome: 'Viajante de Outono' },
   { id: 'Bandaged_Trailblazer', nome: 'Desbravador' },
   { id: 'Bandit_Brave', nome: 'Bandido Valente' },
@@ -34,7 +35,7 @@ export const PERSONAGENS_EVENTO = [
 ];
 
 // grátis ao criar a conta; os outros custam 8.000 na loja de personagens (mesma lista do banco)
-export const PERSONAGENS_GRATIS = ['Autumn_Traveler', 'Bandaged_Trailblazer', 'Curly_Wanderer', 'Desert_Scout_Ava',
+export const PERSONAGENS_GRATIS = ['Jovem_Cidade', 'Autumn_Traveler', 'Bandaged_Trailblazer', 'Curly_Wanderer', 'Desert_Scout_Ava',
   'Mustached_Explorer', 'Patchwork_Scout', 'Urban_Explorer', 'Urban_Wanderer'];
 export const PRECO_PERSONAGEM = 8000, PRECO_NOME = 1000;
 
