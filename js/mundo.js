@@ -650,7 +650,13 @@ function gerarFavelas() {
       const hs = [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, 0]].map(([a, b]) => chaoNatural(x + a * w / 2, z + b * d / 2));
       const lo = Math.min(...hs), hi = Math.max(...hs), andares = 1 + Math.floor(rf() * rf() * 3.6);
       const i = predio(x, z, w, d, andares * 2.9 + (hi - lo) + 0.4, { y: lo - 0.4, cor: CORES_FAVELA[Math.floor(rf() * CORES_FAVELA.length)], loja: false, det: false });
-      Object.assign(edificios[i], { tipo: 'favela', k: 1 + Math.floor(rf() * 4) });
+      // frente virada para a rua mais perto (o modelo 3D olha para +z)
+      let rumo = 0, dm = Infinity;
+      for (const [rx, rz, rw, rd, vert] of ruasMorro) {
+        const dx = Math.max(0, Math.abs(x - rx) - rw / 2), dz = Math.max(0, Math.abs(z - rz) - rd / 2), dd = Math.hypot(dx, dz);
+        if (dd < dm) { dm = dd; rumo = vert ? (rx > x ? Math.PI / 2 : -Math.PI / 2) : (rz > z ? 0 : Math.PI); }
+      }
+      Object.assign(edificios[i], { tipo: 'favela', k: 1 + Math.floor(rf() * 4), rumo, solo: hi - lo + 0.4 });
       if (rf() < 0.45) { edificios[i].det.push(detalhes.length); detalhes.push({ ed: i, dx: (rf() - 0.5) * (w - 1.6), dz: (rf() - 0.5) * (d - 1.6), w: 1.2, h: 1, d: 1.2 }); }   // caixa d'água
     }
     extras.push({ x0: f.x0, x1: f.x1, z0: f.z0, z1: f.z1, cor: '#a88a68' });
@@ -960,6 +966,7 @@ function tipo3d(e) {
   return e.h <= 15 ? 'predio_residencial' : 'predio_escritorio';
 }
 function rumo3d(e) {
+  if (e.rumo !== undefined) return e.rumo;
   const i = Math.round((e.x - quadC(0)) / PASSO), j = Math.round((e.z - quadC(0)) / PASSO), dx = e.x - quadC(i), dz = e.z - quadC(j);
   if (Math.abs(dz) >= Math.abs(dx) - 0.5) return dz >= 0 ? 0 : Math.PI;
   return dx >= 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -990,9 +997,10 @@ export function predios3dPerto(px, pz, dt) {
   const n = {}; for (const t of Object.keys(modelos3d)) n[t] = 0;
   for (const [i, t] of em3d) {
     const e = edificios[i], ang = rumo3d(e), lado = Math.abs(Math.sin(ang)) > 0.5;
-    const h = e.tipo === 'casa' ? e.h + 1.5 : e.h;
+    const meio = e.solo ? e.solo * 0.5 : 0;   // favela no barranco: o modelo começa no meio da encosta (não estica tanto)
+    const h = e.tipo === 'casa' ? e.h + 1.5 : e.h - meio;
     _q.setFromAxisAngle(_v.set(0, 1, 0), ang);
-    _m.compose(_v.set(e.x, e.y, e.z), _q, _e.set(lado ? e.d : e.w, h, lado ? e.w : e.d));
+    _m.compose(_v.set(e.x, e.y + meio, e.z), _q, _e.set(lado ? e.d : e.w, h, lado ? e.w : e.d));
     modelos3d[t].setMatrixAt(n[t]++, _m);
   }
   for (const [t, im] of Object.entries(modelos3d)) { im.count = n[t]; im.instanceMatrix.needsUpdate = true; }

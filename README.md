@@ -1414,7 +1414,7 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 
 - **Favela do Morro da Serra**: no morro atrás de Vila Serra. Rua principal subindo do centro da cidade, três travessas e becos entre as casas.
 - **Favela do Morro do Porto**: no litoral leste, depois da Base Naval (siga a rua z = 945). Termina num paredão de pedra sobre o mar.
-- As casas já existem e ninguém constrói. Se existirem `assets/modelos/favela_casa1.glb` a `favela_casa4.glb`, as casas perto do jogador usam esses modelos.
+- As casas já existem e ninguém constrói. As casas perto do jogador usam os modelos 3D `assets/modelos/favela_casa1.glb` a `favela_casa4.glb` (texturas reduzidas para 512 px: ~400 KB cada), com a frente virada para a rua mais perto.
 - **Base de clã no alto** de cada morro: laje com mureta, QG, caixa d'água e mastro. São territórios novos (Morro da Serra e Morro do Porto) que os clãs capturam como os outros.
 - **8 lotes de empresa** (4 na rua de baixo de cada favela).
 - **Ônibus**: Linha 9 · Morro da Serra (sai do centro de Vila Serra) e Linha 10 · Morro do Porto (sai do centro de Porto Sul).
