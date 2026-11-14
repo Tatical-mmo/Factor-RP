@@ -1443,7 +1443,7 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 
 ## Versão 14/11 · polícia e armas, patrocinadores, Saveiro com som e equipe invisível (20261114u)
 
-**Rode o SQL `supabase/85_policia_armas_patrocinio.sql`** (depois do 84). Novo botão no menu: **🎯 Tático**.
+**Rode os SQL `supabase/85a_policia_armas.sql`, `85b_barricadas_patrocinio.sql` e `85c_saveiro_equipe.sql`**, nessa ordem (depois do 84). Novo botão no menu: **🎯 Tático**.
 
 - **Armas airsoft**: **espingarda** (7 chumbos espalhados, forte de perto, alcance curto) e **fuzil** (rápido e de longe). Equipe pelo 🎯 Tático ou pela mochila e saque com o botão Arma.
 - **Granadas de airsoft**: botão 💣 na tela (no PC, tecla **H**). Estoura 2,3 s depois e mancha de tinta tudo num raio de 6 m (dano maior no centro). Estragam barricadas e a blindagem do Caveirão.
@@ -1462,3 +1462,4 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Saveiro** (55.000) e **Saveiro com som** (150.000) na concessionária. No som, o dono cola um link https de MP3 e um anúncio: quem está a até 80 m ouve e o anúncio aparece em cima do carro (festas, reuniões, empresas). Aviso de que música proibida dá ban; todo link fica registrado e a equipe vê a lista no Painel (com o botão Banir).
 - **Carros estacionam na ilha inteira** (antes eram puxados de volta para a metrópole).
 - **Equipe invisível**: o administrador e os moderadores com o poder "Modo invisível" ligam no Painel; os jogadores não veem (nem no minimapa), a equipe continua vendo. O modo imortal continua como antes.
+- **Mini rodoviárias das favelas**: as linhas 9 (Morro da Serra) e 10 (Morro do Porto) saem da mini rodoviária de Vila Serra e de Porto Sul (onde para o intermunicipal da Metrópole), dão a volta no morro e voltam para ela, onde ficam paradas até a hora da próxima saída (em loop). Correção: elas não somem mais no ponto final.

@@ -9133,12 +9133,14 @@ const LINHAS = [
     rua: [[162, -260], [162, -216], [108, -216], [108, -108], [-270, -108], [-270, -270], [-324, -270], [-324, 54], [-108, 54], [270, 54], [270, 324], [324, 324], [324, -270], [162, -270], [162, -260]],
     paradas: [ROD, [-297, -270, 'Praça do Território (NO)', 'o'], [-324, -100, 'Zona Oeste', 's'], [-162, 54, 'Território Oeste', 'l'], [297, 324, 'Praça do Território (SE)', 'l'], [324, 0, 'Zona Leste', 'n']] },
   // favelas: circulares que saem do centro de cada cidade vizinha e sobem o morro
-  { id: 9, nome: 'Linha 9 · Morro da Serra', curto: 'Morro da Serra', cor: '#d35400', k: 2, fase: 4, modelos: URB, circular: true,
-    rua: [[27, -999], [27, -1107], [0, -1107], [0, -1260], [90, -1260], [90, -1190], [0, -1190], [0, -1107], [-27, -1107], [-27, -999], [27, -999]],
-    paradas: [[0, -999, 'Vila Serra · Centro'], [0, -1150, 'Morro da Serra · Entrada'], [0, -1230, 'Morro da Serra · Meio'], [45, -1260, 'Morro da Serra · Parte Alta'], [90, -1225, 'Morro da Serra · Travessa']] },
-  { id: 10, nome: 'Linha 10 · Morro do Porto', curto: 'Morro do Porto', cor: '#b03a2e', k: 3, fase: 8, modelos: URB, circular: true,
-    rua: [[27, 999], [27, 945], [1050, 945], [1050, 1045], [960, 1045], [960, 945], [-27, 945], [-27, 999], [27, 999]],
-    paradas: [[0, 999, 'Porto Sul · Centro'], [600, 945, 'Base Naval'], [1050, 975, 'Morro do Porto · Entrada'], [1050, 1020, 'Morro do Porto · Meio'], [1005, 1045, 'Morro do Porto · Parte Alta'], [960, 990, 'Morro do Porto · Baixada']] },
+  // saem da mini rodoviária de cada cidade (onde o intermunicipal da Metrópole para), dão a volta no morro e
+  // esperam no terminal até o horário da próxima saída (terminal: segundos parado lá)
+  { id: 9, nome: 'Linha 9 · Morro da Serra', curto: 'Morro da Serra', cor: '#d35400', k: 2, fase: 4, modelos: URB, circular: true, terminal: 45, mini: 'Vila Serra',
+    rua: [[54, -945], [81, -945], [81, -999], [27, -999], [27, -1107], [0, -1107], [0, -1260], [90, -1260], [90, -1190], [0, -1190], [0, -1107], [-27, -1107], [-27, -945], [54, -945]],
+    paradas: [[54, -945, '🚌 Mini Rodoviária de Vila Serra'], [54, -999, 'Vila Serra · Centro'], [0, -1150, 'Morro da Serra · Entrada'], [0, -1230, 'Morro da Serra · Meio'], [45, -1260, 'Morro da Serra · Parte Alta'], [90, -1225, 'Morro da Serra · Travessa']] },
+  { id: 10, nome: 'Linha 10 · Morro do Porto', curto: 'Morro do Porto', cor: '#b03a2e', k: 3, fase: 8, modelos: URB, circular: true, terminal: 45, mini: 'Porto Sul',
+    rua: [[54, 945], [1050, 945], [1050, 1045], [960, 1045], [960, 945], [-27, 945], [-27, 999], [27, 999], [27, 945], [54, 945]],
+    paradas: [[54, 945, '🚌 Mini Rodoviária de Porto Sul', 'l'], [600, 945, 'Base Naval', 'l'], [1050, 975, 'Morro do Porto · Entrada'], [1050, 1020, 'Morro do Porto · Meio'], [1005, 1045, 'Morro do Porto · Parte Alta'], [960, 990, 'Morro do Porto · Baixada'], [0, 999, 'Porto Sul · Centro']] },
 ];
 const V_ONIBUS = 10, ESPERA_PONTO = 6, FOLGA_FILA = 25;
 // caminho de direção (faixa da direita, curvas arredondadas) de uma linha: da plataforma, pela cidade, de volta à fila e à plataforma
@@ -9211,8 +9213,8 @@ function tabelaLinha(L) {
   let t = 0, sAnt = 0; L.tab = [];
   for (const p of L.pontos) { const chega = t + (p.s - sAnt) / V_ONIBUS + 2; L.tab.push({ chega, sai: chega + ESPERA_PONTO }); t = chega + ESPERA_PONTO; sAnt = p.s; }
   L.R = t + (L.sFila - sAnt) / V_ONIBUS + 2;           // volta inteira até a fila
-  L.H = L.circular ? L.R / L.k : (L.R + FOLGA_FILA) / (L.k - 1);   // intervalo entre saídas (circular: roda sem parar)
-  L.C = L.circular ? L.R : L.k * L.H;                  // ciclo de cada ônibus
+  L.H = L.circular ? (L.R + (L.terminal || 0)) / L.k : (L.R + FOLGA_FILA) / (L.k - 1);   // intervalo entre saídas (circular: roda sem parar; com terminal, espera lá)
+  L.C = L.circular ? L.R + (L.terminal || 0) : L.k * L.H;                  // ciclo de cada ônibus
 }
 for (const L of LINHAS) { montarCaminho(L); montarParadasLinha(L); }
 const LINHA_ID = Object.fromEntries(LINHAS.map((L) => [L.id, L]));
@@ -9238,7 +9240,12 @@ function atrasoSaida(L, m) {
 // estado da saída m da linha no tempo t (null = não está na rua nem na rodoviária por esta saída)
 function estadoSaida(L, m, t) {
   const T = horaSaida(L, m), D = atrasoSaida(L, m);
-  if (L.circular) { if (t < T || t >= T + L.R) return null; const r = sNaRota(L, t - T); return { ...r, rota: true, parado: r.ponto !== undefined }; }
+  if (L.circular) {
+    const W = L.terminal || 0;
+    if (t < T || t >= T + W + L.R) return null;
+    if (t < T + W) return { s: 0, parado: true, terminal: true };   // parado na mini rodoviária até a hora de sair (o da volta anterior chega bem aqui)
+    const r = sNaRota(L, t - T - W); return { ...r, rota: true, parado: r.ponto !== undefined };
+  }
   if (t >= T + L.R || t < T - (L.C - L.R)) return null;
   if (t >= T + D) { const r = sNaRota(L, (t - T - D) * L.R / (L.R - D)); return { ...r, rota: true, parado: r.ponto !== undefined }; }
   const entra = T - L.H + 7 + atrasoSaida(L, m - 1);   // só encosta depois que o da frente saiu (e ganhou distância)
@@ -9418,7 +9425,27 @@ function segurarAte(L, m, t, st, alvo) {
   const e2 = estadoSaida(L, m, t - hi); if (!e2 || !e2.rota) return null;
   st.atraso = hi; return e2;
 }
+let miniRodoFeitas = false;
+function montarMiniRodoviarias() {
+  miniRodoFeitas = true;
+  for (const L of LINHAS) {
+    if (!L.mini) continue;
+    const q = pontoCaminho(L, 0), cx = Math.cos(q.ang), sx = -Math.sin(q.ang);   // lado da calçada (à direita do ônibus)
+    const x = q.x - cx * 6.2, z = q.z - sx * 6.2, y = alturaChao(x, z), g = new THREE.Group();
+    const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, ...o });
+    const bl = (m, w, h, d, px, py, pz) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(px, py, pz); o.castShadow = true; o.receiveShadow = true; g.add(o); return o; };
+    // comprida ao longo da rua (z do grupo = sentido do ônibus); a rua fica do lado +x
+    bl(M('#c9c3b2'), 6, 0.2, 16, 0, 0.1, 0);                                  // piso
+    bl(M(L.cor, { metalness: 0.3 }), 6.4, 0.25, 16.4, 0, 3.6, 0);              // cobertura
+    for (const pz of [-7.6, 0, 7.6]) bl(M('#5a6068', { metalness: 0.5 }), 0.18, 3.5, 0.18, -2.6, 1.85, pz);
+    for (const pz of [-5, 0, 5]) bl(M('#8a5a2a'), 0.6, 0.45, 2.6, -1.8, 0.45, pz);   // bancos
+    bl(M('#2c3440'), 0.15, 1.2, 3.4, -2.8, 2.2, 6);                           // quadro de horários
+    g.position.set(x, y, z); g.rotation.y = q.ang; scene.add(g);
+    const placa = textoSprite(`🚌 Mini Rodoviária de ${L.mini} · ${L.nome}`, { escala: 0.75, fundo: 'rgba(20,24,34,.9)', cor: '#ffd9a0' }); placa.position.set(x, y + 5, z); scene.add(placa);
+  }
+}
 function atualizarOnibus(dt) {
+  if (!miniRodoFeitas && mundo.listaRuas().length) montarMiniRodoviarias();
   montarParadas();
   saidasOcupadas.clear(); for (const r of remotos.values()) if (r.meta?.on) saidasOcupadas.add(String(r.meta.on));
   const t = agoraServidor() / 1000;
@@ -9450,7 +9477,7 @@ function atualizarOnibus(dt) {
         }
       }
       // circulares: as três linhas se encontram na esquina da rodoviária (vindas de lados opostos); entra um por vez
-      if (L.circular) {
+      if (L.circular && !L.terminal) {
         const naJ = (q) => q.s > L.L - 24 || q.s < 16;
         if (naJ(e)) {
           const outro = [...juncaoAntes, ...juncaoAgora].some((k2) => k2 !== chB) && !juncaoAntes.includes(chB);
