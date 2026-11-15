@@ -667,7 +667,9 @@ function colocarLojaExtra(x, z) {
 
 // ================================================================= PERSONAGENS
 const NOMES_LOCOMOCAO = ['idle', 'idle_long', 'walk', 'run', 'carry_walk', 'walk_shoot', 'algemado_andar'];
-const RESERVA_ANIM = { algemado: 'carregar_parado', algemado_andar: 'carry_walk', rendido: 'idle', levantar_maos: 'idle', arremessar: 'punch_right' };
+const RESERVA_ANIM = { algemado: 'carregar_parado', algemado_andar: 'carry_walk', rendido: 'idle', levantar_maos: 'idle', arremessar: 'punch_right',
+  pegar_caixa: 'pegar', soltar_caixa: 'pegar', embalar: 'pegar', pular: 'idle', pular_correndo: 'run', pular_agarrar: 'idle', pular_descer: 'idle', salto: 'run',
+  queda_livre: 'idle', paraquedas: 'idle', salto_militar: 'run', pular_armado: 'run' };
 function prepararClipes(anims) {
   const clipes = {};
   for (const c of anims) clipes[c.name] = c;
@@ -767,11 +769,14 @@ const _maoArma = new THREE.Vector3();
 // Copiar as rotações direto deixava pés e corpo tortos, porque cada esqueleto tem a pose de descanso um pouco diferente.
 // Aqui elas são adaptadas "no mundo": cada osso faz o mesmo movimento que faz no robô, a partir da própria pose de descanso.
 const DO_ROBO = ['punch_combo', 'shoot', 'death', 'pickup', 'hit', 'idle', 'punch_left', 'idle_long', 'punch_right', 'walk_shoot', 'carry_walk'];
-const DA_BASE_PARA_TODOS = ['rendido', 'levantar_maos', 'algemado', 'algemado_andar', 'carregar_parado', 'arremessar'];
-let roboBase = null, baseAnimacoes = null;
-function obterBaseAnimacoes() {
-  if (!baseAnimacoes) baseAnimacoes = carregarGLB('assets/personagens/animacoes_base.glb').then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => null);
-  return baseAnimacoes;
+const DA_BASE_PARA_TODOS = ['rendido', 'levantar_maos', 'algemado', 'algemado_andar', 'carregar_parado', 'arremessar', 'pegar_caixa', 'soltar_caixa', 'embalar',
+  'pular', 'pular_correndo', 'pular_agarrar', 'pular_descer', 'queda_livre', 'paraquedas', 'salto', 'salto_militar', 'pular_armado'];
+let roboBase = null, basesAnimacoes = null;
+// arquivos com as animações (cada um com o esqueleto de onde vieram); o jogo adapta para cada personagem
+const ARQ_ANIMACOES = ['animacoes_base', 'animacoes_caixa', 'animacoes_pulo', 'animacoes_queda'];
+function obterBasesAnimacoes() {
+  if (!basesAnimacoes) basesAnimacoes = Promise.all(ARQ_ANIMACOES.map((a) => carregarGLB(`assets/personagens/${a}.glb`).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => null))).then((l) => l.filter(Boolean));
+  return basesAnimacoes;
 }
 function obterRoboBase() {
   if (!roboBase) roboBase = carregarGLB('assets/robos/Rusty_Scout_Bot.glb').then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => null);
@@ -826,7 +831,7 @@ async function criarAvatar(pasta, id) {
   let gltf;
   // procura em assets/<pasta>/ e, para os personagens de evento, também em personagens/ (onde o robô colocou);
   // se não achar, usa um personagem padrão para o jogo não travar
-  for (const url of [`assets/${pasta}/${id}.glb`, `${pasta}/${id}.glb`, 'assets/personagens/Autumn_Traveler.glb']) {
+  for (const url of [`assets/${pasta}/${id}.glb`, `${pasta}/${id}.glb`, 'assets/personagens/Jovem_Cidade.glb']) {
     try { gltf = await carregarGLB(url); break; } catch (e) { console.warn('modelo não carregou:', url, e); }
   }
   const modelo = SkeletonUtils.clone(gltf.scene);
@@ -834,10 +839,10 @@ async function criarAvatar(pasta, id) {
     let anims = gltf.animations;
     const robo = pasta === 'personagens' ? await obterRoboBase() : null;
     // personagem novo (só esqueleto, do Meshy/Mixamo): as animações vêm do arquivo base; tiro e pegar, do robô
-    const base = pasta === 'personagens' && !gltf.animations.some((a) => a.name === 'idle') ? await obterBaseAnimacoes() : null;
-    if (base) {
+    const bases = pasta === 'personagens' && !gltf.animations.some((a) => a.name === 'idle') ? await obterBasesAnimacoes() : null;
+    if (bases?.length) {
       try {
-        const daBase = base.animations.map((c) => adaptarClipe(c, base.scene, gltf.scene)), tem = new Set(daBase.map((c) => c.name));
+        const daBase = bases.flatMap((b) => b.animations.map((c) => adaptarClipe(c, b.scene, gltf.scene))), tem = new Set(daBase.map((c) => c.name));
         const doRobo = robo ? robo.animations.filter((c) => DO_ROBO.includes(c.name) && !tem.has(c.name)).map((c) => adaptarClipe(c, robo.scene, gltf.scene)) : [];
         anims = [...daBase, ...doRobo];
       } catch (e) { console.warn('não adaptou as animações da base:', id, e); }
@@ -846,11 +851,8 @@ async function criarAvatar(pasta, id) {
         const novos = robo.animations.filter((c) => DO_ROBO.includes(c.name)).map((c) => adaptarClipe(c, robo.scene, gltf.scene));
         anims = [...gltf.animations.filter((a) => !DO_ROBO.includes(a.name)), ...novos];
         // personagens antigos também ganham as animações novas (rendido, algemado, carregar caixa, arremessar)
-        const base2 = await obterBaseAnimacoes();
-        if (base2) {
-          const extras = base2.animations.filter((c) => DA_BASE_PARA_TODOS.includes(c.name)).map((c) => adaptarClipe(c, base2.scene, gltf.scene));
-          anims = [...anims.filter((a) => !DA_BASE_PARA_TODOS.includes(a.name)), ...extras];
-        }
+        const extras = (await obterBasesAnimacoes()).flatMap((b) => b.animations.filter((c) => DA_BASE_PARA_TODOS.includes(c.name)).map((c) => adaptarClipe(c, b.scene, gltf.scene)));
+        anims = [...anims.filter((a) => !DA_BASE_PARA_TODOS.includes(a.name)), ...extras];
       } catch (e) { console.warn('não adaptou as animações:', id, e); }
     }
     if (!gltf.userData.clipes) gltf.userData.clipes = prepararClipes(anims);
@@ -949,6 +951,8 @@ window.addEventListener('keydown', (e) => {
   if (k === 'e') acaoContexto();
   if (k === 'f') { if (jogador.carro?.servico === 'tanque') atirarTanque(); else if (!jogador.carro?.voa) socar(); }
   if (k === 'q') alternarArma();
+  if (k === ' ') pular();
+  if (k === 'r') renderSe();
   if (k === 'z') girarCamera(-1);
   if (k === 'x') girarCamera(1);
   if (k === 'm') abrirJanela('mochila');
@@ -1054,6 +1058,7 @@ function configurarJoystick() {
     b.addEventListener('pointerup', solta); b.addEventListener('pointercancel', solta); b.addEventListener('lostpointercapture', solta);
   }
   toque('btAcao', acaoContexto); toque('btSoco', socar); toque('btArma', alternarArma); toque('btAlgema', acaoAlgema); toque('btCrime', acaoCrime);
+  toque('btPular', pular); toque('btRender', renderSe);
   toque('btTiro', () => atirar(null)); toque('btGiraE', () => girarCamera(-1)); toque('btGiraD', () => girarCamera(1));
 }
 
@@ -1520,7 +1525,7 @@ async function pegarEncomenda(ag) {
   if (ocupado) return; ocupado = true;
   try {
     const e = await rede.encomendas.pegar(ag.id);
-    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 1.5, fade: 0.15 }); jogador.trava = 1.1; jogador.alvo = null;
+    jogador.avatar.tocar('pegar_caixa', { umaVez: true, velocidade: jogador.avatar.clipes.pegar_caixa ? 2.6 : 1.5, fade: 0.15 }); jogador.trava = 1.1; jogador.alvo = null;
     jogador.eventos.push({ t: 0.7, fn: () => carregarEncomenda(e) });
     aviso(`Encomenda para ${NOMES_AGENCIA[e.destino]}: ${e.valor} moedas na entrega. Prazo: 20 min. Pegue o trem!`, 5);
     rastrear({ nome: `Agência ${({ centro: 'da Metrópole', serra: 'de Vila Serra', porto: 'de Porto Sul' })[e.destino]}`, ...AGENCIAS.find((a) => a.id === e.destino) });
@@ -1591,7 +1596,7 @@ async function embalar(bancada) {
   try {
     await rede.economia.iniciarEmbalagem(bancada.produto);
     virarPara(bancada.x, bancada.z); jogador.alvo = null;
-    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 0.6, fade: 0.15 });
+    jogador.avatar.tocar('embalar', jogador.avatar.clipes.embalar ? { velocidade: 1, fade: 0.2 } : { umaVez: true, velocidade: 0.6, fade: 0.15 });
     jogador.trava = 2.8;
     jogador.eventos.push({ t: 2.7, fn: () => {
       jogador.carregando = criarCaixa(bancada.produto);
@@ -1631,7 +1636,7 @@ function pegarOuSoltar(caixa) {
   const av = jogador.avatar; const dur = 1.7 / 1.5;
   jogador.alvo = null;
   if (caixa) jogador.yaw = Math.atan2(caixa.position.x - jogador.pos.x, caixa.position.z - jogador.pos.z);
-  av.tocar('pegar', { umaVez: true, velocidade: 1.5, fade: 0.15 });
+  av.tocar(caixa ? 'pegar_caixa' : 'soltar_caixa', { umaVez: true, velocidade: av.clipes.pegar_caixa ? 2.6 : 1.5, fade: 0.15 });   // abaixa e pega / abaixa e solta
   jogador.trava = dur;
   jogador.eventos.push({ t: dur * 0.6, fn: () => {
     if (caixa) {
@@ -1661,6 +1666,7 @@ function alternarArma() {
   if (!jogador.armado && armasProibidas()) { aviso('🚫 Armas não são permitidas aqui.'); return; }
   if (!jogador.armado && !livre()) return;
   if (jogador.carregando) { aviso('Solte a caixa antes de sacar a arma.'); return; }
+  if (!jogador.armado && (jogador.rendido || performance.now() - (jogador.baixouMaos || -1e9) < 60000)) traiuRendicao();
   jogador.armado = !jogador.armado;
   jogador.arma.visible = jogador.armado;
   $('btTiro').classList.toggle('oculto', !jogador.armado);
@@ -1881,8 +1887,10 @@ function ejetar() {
   semPiloto.push({ c, mesh: c.mesh, yaw: jogador.yaw, alt: c.alt, vel: Math.max(c.vel, 8), vs: Math.min(c.vs || 0, -1), pitch: c.pitch || 0 });
   if (c.ap) c.ap = null; if (c.aula && c.aula === aula) c.aula.comAP = true;
   jogador.carro = null; modoVolante(false); document.body.classList.remove('ejetar');
-  jogador.pos.y = chao + c.alt + 2; jogador.paraquedas = { t: 0 }; jogador.avatar.raiz.visible = true;
-  aviso('🪂 Ejetou! O paraquedas abriu. Use o joystick para guiar a descida.', 3.5);
+  jogador.pos.y = chao + c.alt + 2; jogador.avatar.raiz.visible = true;
+  const livre = c.alt > 45 ? Math.min(4, (c.alt - 30) / 15) : 0;   // de alto: queda livre antes de abrir
+  jogador.paraquedas = { t: 0, livre };
+  aviso(livre ? '🪂 Ejetou! Queda livre… o paraquedas abre em instantes.' : '🪂 Ejetou! O paraquedas abriu. Use o joystick para guiar a descida.', 3.5);
 }
 function atualizarSemPiloto(dt) {
   for (let i = semPiloto.length - 1; i >= 0; i--) {
@@ -1904,13 +1912,13 @@ function paraquedasMesh() {
 }
 function descerParaquedas(dt, dir, forca) {
   const j = jogador, av = j.avatar, pq = j.paraquedas;
-  if (!pq.mesh) { pq.mesh = paraquedasMesh(); av.raiz.add(pq.mesh); }
   pq.t += dt;
-  j.pos.x += dir.x * forca * 3.5 * dt; j.pos.z += dir.z * forca * 3.5 * dt; if (forca > 0.1) j.yaw = Math.atan2(dir.x, dir.z);
-  j.pos.y -= 4 * dt;
-  const chao = alturaChao(j.pos.x, j.pos.z);
-  av.tocar('idle'); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw; av.mixer.update(dt); av.raiz.updateMatrixWorld(true);
-  if (j.pos.y <= chao) { j.pos.y = chao; resolverColisao(j.pos, j.raio); av.raiz.remove(pq.mesh); j.paraquedas = null; aviso('🪂 Pousou com o paraquedas.', 2.5); }
+  const chao = alturaChao(j.pos.x, j.pos.z), emQueda = pq.t < pq.livre && j.pos.y - chao > 30;
+  if (!emQueda && !pq.mesh) { pq.mesh = paraquedasMesh(); av.raiz.add(pq.mesh); if (pq.livre) aviso('🪂 O paraquedas abriu! Use o joystick para guiar a descida.', 3); }
+  j.pos.x += dir.x * forca * (emQueda ? 6 : 3.5) * dt; j.pos.z += dir.z * forca * (emQueda ? 6 : 3.5) * dt; if (forca > 0.1) j.yaw = Math.atan2(dir.x, dir.z);
+  j.pos.y -= (emQueda ? 16 : 4) * dt;
+  av.tocar(emQueda ? 'queda_livre' : 'paraquedas'); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw; av.mixer.update(dt); av.raiz.updateMatrixWorld(true);
+  if (j.pos.y <= chao) { j.pos.y = chao; resolverColisao(j.pos, j.raio); if (pq.mesh) av.raiz.remove(pq.mesh); j.paraquedas = null; aviso('🪂 Pousou com o paraquedas.', 2.5); }
 }
 // explosão: efeito para todos; carro de jogador some por 30 s e volta para o dono; quem estava dentro é jogado para fora
 function explodir(pos, carro = null) {
@@ -2763,7 +2771,7 @@ function atualizarRemotos(dt) {
       continue;
     }
     if (r.carro) { scene.remove(r.carro); r.carro = null; r.carroId = null; raiz.visible = true; tempoCarros = 0; }
-    if (!!a.pq !== !!r.pq) { if (a.pq) { r.pq = paraquedasMesh(); raiz.add(r.pq); } else { raiz.remove(r.pq); r.pq = null; } }   // descendo de paraquedas
+    if ((a.pq === 1) !== !!r.pq) { if (a.pq === 1) { r.pq = paraquedasMesh(); raiz.add(r.pq); } else { raiz.remove(r.pq); r.pq = null; } }   // descendo de paraquedas (2 = queda livre, sem a lona)
     if (!raiz.visible || Math.hypot(a.x - raiz.position.x, a.z - raiz.position.z) > 8) { raiz.position.set(a.x, a.y, a.z); raiz.visible = true; }
     const k = Math.min(1, dt * 10);
     raiz.position.x += (a.x - raiz.position.x) * k; raiz.position.y += (a.y - raiz.position.y) * k; raiz.position.z += (a.z - raiz.position.z) * k;
@@ -2793,7 +2801,7 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), iv: j.carro?.invisivel ? 1 : 0, mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? 1 : 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), iv: j.carro?.invisivel ? 1 : 0, mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? (j.paraquedas.mesh ? 1 : 2) : 0 };
   const u = ultimoEnvio;
   const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs || u.iv !== est.iv || u.mh !== est.mh || u.ap !== est.ap || u.sg !== est.sg;
   if (!mudou && tempoKeepAlive > 0) return;
@@ -2938,9 +2946,11 @@ function extrasDoLote(l, e, v, fabrica, bx, bz) {
   const n = Math.min(2, robosAtivos(e));
   for (let i = 0; i < n; i++) {
     const rota = fabrica ? [[bx + 1.4, bz - 1 + i], [l.portao.x + 2 - i * 3, l.portao.z - 2.2]] : [[l.portao.x - 3 + i * 4, l.portao.z - 2.5], [l.portao.x - 3 + i * 4, l.portao.z - 2.5]];
-    criarAvatar('robos', fabrica ? 'Rusty_Scout_Bot' : 'Rustbolt_Sentinel').then((av) => {
+    const quem = PERSONAGENS[(Math.abs(String(e.id).split('').reduce((h, ch) => h * 31 + ch.charCodeAt(0) | 0, 7)) + i * 7) % PERSONAGENS.length].id;   // funcionário NPC: sempre o mesmo por empresa
+    criarAvatar('personagens', quem).then((av) => {
       if (v.removido) return;
-      av.raiz.position.set(rota[0][0], 0.18, rota[0][1]); av.raiz.scale.setScalar(0.85);
+      av.raiz.position.set(rota[0][0], 0.18, rota[0][1]);
+      { const et = textoSprite('👷 Funcionário', { escala: 0.5, fundo: 'rgba(40,60,90,.92)' }); et.position.y = 2.15; av.raiz.add(et); }
       scene.add(av.raiz);
       av.tocar(fabrica ? 'carry_walk' : 'idle_long');
       robosMundo.push({ av, rota, i: 1, lote: l.id, anda: fabrica });
@@ -3363,7 +3373,7 @@ async function embalarFabrica(b) {
   try {
     const pago = await rede.logistica.embalar(b.empresa);
     virarPara(b.x, b.z); jogador.alvo = null;
-    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 0.6, fade: 0.15 });
+    jogador.avatar.tocar('embalar', jogador.avatar.clipes.embalar ? { velocidade: 1, fade: 0.2 } : { umaVez: true, velocidade: 0.6, fade: 0.15 });
     jogador.trava = 2.8;
     jogador.eventos.push({ t: 2.7, fn: () => aviso(pago > 0 ? `Caixa no estoque! +${pago} moedas` : 'Caixa embalada e guardada no estoque.') });
   } catch (e) { aviso(e.message); }
@@ -3385,7 +3395,7 @@ async function retirarDoDeposito(dep) {
     if (!pd) { aviso('Não há pedido aceito desta fábrica para a sua transportadora.', 3.5); return; }
     const produto = await rede.logistica.retirar(pd.id);
     virarPara(dep.x, dep.z); jogador.alvo = null;
-    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 1.5, fade: 0.15 });
+    jogador.avatar.tocar('pegar_caixa', { umaVez: true, velocidade: jogador.avatar.clipes.pegar_caixa ? 2.6 : 1.5, fade: 0.15 });
     jogador.trava = 1.1;
     jogador.eventos.push({ t: 0.7, fn: () => {
       const cx = criarCaixa(produto); cx.userData.pedido = { id: pd.id, destino: pd.destino };
@@ -3431,7 +3441,7 @@ const SKIN_POLICIA = 'Rustbolt_Sentinel';
 const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfil?.personagem);
 function metaPresenca() {
   const p = jogador.perfil;
-  return { ceu: jogador.noCeu ? 1 : 0, bope: !!p.bope, invis: !!p.invisivel, som: somAtivo ? { url: somAtivo.url, txt: somAtivo.txt } : null, emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
+  return { rd: jogador.rendido ? 1 : 0, ceu: jogador.noCeu ? 1 : 0, bope: !!p.bope, invis: !!p.invisivel, som: somAtivo ? { url: somAtivo.url, txt: somAtivo.txt } : null, emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
     prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
@@ -3873,6 +3883,12 @@ function policiaNPCReage(n, dt) {
   n.hostil -= dt;
   const dx = jogador.pos.x - p.x, dz = jogador.pos.z - p.z, d = Math.hypot(dx, dz);
   if (jogador.morto || d > 90 || n.hostil <= 0) { n.hostil = 0; n.av.tocar('walk', { velocidade: 0.85 }); return false; }
+  if (jogador.rendido) {   // rendido: vai até ele e prende
+    n.av.raiz.rotation.y = suavizarAngulo(n.av.raiz.rotation.y, Math.atan2(dx, dz), dt * 8);
+    if (d > 1.3) { p.x += dx / d * 4.5 * dt; p.z += dz / d * 4.5 * dt; n.av.tocar('run'); }
+    else if (!ocupado) { ocupado = true; n.hostil = 0; rede.recompensas.presoPorRobo().then((min) => { if (min) aviso(`🚓 Rendido e preso pela polícia: ${min} min de pena.`, 4); }).catch((e) => aviso(e.message)).finally(() => { ocupado = false; }); }
+    n.av.mixer.update(dt); return true;
+  }
   n.av.raiz.rotation.y = suavizarAngulo(n.av.raiz.rotation.y, Math.atan2(dx, dz), dt * 8);
   // revida: corre atrás atirando (mais rápido e mais certeiro que antes)
   if (d > 9) { p.x += dx / d * 5 * dt; p.z += dz / d * 5 * dt; n.av.tocar('run', { velocidade: 1.1 }); }
@@ -3883,7 +3899,7 @@ function policiaNPCReage(n, dt) {
     const de = new THREE.Vector3(p.x, p.y + 1.4, p.z), t = Math.max(0.12, d / 30);
     criarBola(de, new THREE.Vector3(dx / t, (jogador.pos.y + 1 - de.y) / t + 4.9 * t, dz / t), n.corTiro || '#ffd23e');
     const acerto = jogador.carro ? 0.55 : d < 12 ? 0.85 : 0.65;
-    setTimeout(() => { if (Math.random() < acerto && !jogador.morto) { jogador.ultimoAgressor = null; danoLocal(14); } }, t * 1000);
+    setTimeout(() => { if (Math.random() < acerto && !jogador.morto) { jogador.ultimoAgressor = null; danoPolicial(14); } }, t * 1000);
   }
   n.av.mixer.update(dt); return true;
 }
@@ -4709,7 +4725,8 @@ function receberDano(d) {
   const r = remotos.get(d.de);
   if (!r?.av || r.av.raiz.position.distanceTo(jogador.pos) > 30) return;     // golpe de longe demais: ignora
   if (!golpePlausivel(d.de)) return;                                           // rápido demais para ser de verdade
-  const v = Math.max(0, Math.min(80, Number(d.v) || 0)) * (1 - bonusTreino('luta'));   // treino de luta: defesa
+  let v = Math.max(0, Math.min(80, Number(d.v) || 0)) * (1 - bonusTreino('luta'));   // treino de luta: defesa
+  if (ehForcaPolicial(r.meta)) { if (jogador.rendido) return; if (performance.now() < (jogador.traiuAte || 0)) v = 999; }   // rendido não apanha da polícia; quem traiu a rendição morre
   jogador.vida -= absorverEscudo(v); jogador.ultimoAgressor = d.de;
   desenharFome();
   if (jogador.vida <= 0) { morrerLocal(); return; }
@@ -4965,7 +4982,7 @@ function atualizarCacada(dt) {
         const de = new THREE.Vector3(o.position.x, o.position.y + 1.4, o.position.z), t = Math.max(0.12, d / 30);
         criarBola(de, new THREE.Vector3(dx / t, (j.pos.y + 1 - de.y) / t + 4.9 * t, dz / t), '#2fbf5a');
         const acerto = j.carro ? 0.6 : d < 12 ? 0.9 : 0.7;
-        setTimeout(() => { if (Math.random() < acerto && !j.morto) { j.ultimoAgressor = null; danoLocal(16); } }, t * 1000);
+        setTimeout(() => { if (Math.random() < acerto && !j.morto) { j.ultimoAgressor = null; danoPolicial(16); } }, t * 1000);
       }
     }
     if (d < 2.2 && !j.carro && !j.passageiro) pegou = true;
@@ -5945,6 +5962,8 @@ function atualizarJogador(dt) {
   }
   const correr = !j.carregando && !j.armado && (teclas.has('shift') || (joy.ativo && forca > 0.92) || (j.alvo && j.pos.distanceTo(j.alvo) > 12));
 
+  if (j.pulo) passoPulo(dt);
+  if (j.rendido && performance.now() - j.rendidoEm > 900) { j.trava = Math.max(j.trava, 0.1); av.tocar('rendido'); }   // rendido: mãos para cima, parado
   if (j.trava > 0) {
     j.trava -= dt;
   } else {
@@ -5956,7 +5975,7 @@ function atualizarJogador(dt) {
       vel *= fatorVelocidade();
       j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 12);
       j.pos.x += dir.x * vel * dt; j.pos.z += dir.z * vel * dt;
-      resolverColisao(j.pos, j.raio);
+      resolverColisao(j.pos, j.raio); j.ultimoMov = performance.now(); j.correndo = correr;
     }
     // animação conforme o estado
     if (j.morto) { /* fica caído */ }
@@ -5973,7 +5992,7 @@ function atualizarJogador(dt) {
       else av.tocar('idle');
     }
   }
-  resolverColisao(j.pos, j.raio);
+  if (!j.pulo) resolverColisao(j.pos, j.raio);   // pulando por cima de um obstáculo: a colisão volta no fim do pulo
   if (j.dentroCasa) limitarInterior(j.pos);
   if (j.pena > 0 && cadeia) {
     if (j.dentroCasa !== 'carceragem') { const c = posCela(); teleportar(c.x, c.z); }
@@ -5985,7 +6004,7 @@ function atualizarJogador(dt) {
     }
   }
   j.pos.y = THREE.MathUtils.lerp(j.pos.y, alturaChao(j.pos.x, j.pos.z), Math.min(1, dt * 12));
-  av.raiz.position.copy(j.pos);
+  av.raiz.position.copy(j.pos); av.raiz.position.y += j.puloY || 0;
   av.raiz.rotation.y = j.yaw;
   av.mixer.update(dt);
   av.raiz.updateMatrixWorld(true);
@@ -8214,7 +8233,7 @@ function montarComprador() {
     const placa = textoSprite('📦 Armazém do Seu Tonho', { escala: 0.7, fundo: 'rgba(90,70,40,.92)' }); placa.position.set(COMPRADOR.x, 7.6, COMPRADOR.z + D / 2 + 0.4); scene.add(placa);
     compradorMontado = { g, porta, aberto: null, placaFechado: null };
     // Seu Tonho: atrás do balcão, de frente para a rua, com nome em cima
-    criarAvatar('personagens', 'Bandit_Brave').then((av) => { const y = alturaChao(COMPRADOR.x, COMPRADOR.z);
+    criarAvatar('personagens', 'Seu_Tonho').then((av) => { const y = alturaChao(COMPRADOR.x, COMPRADOR.z);
       av.raiz.position.set(COMPRADOR.x + 3.2, y, COMPRADOR.z + D / 2 + 0.75); av.raiz.rotation.y = 0; scene.add(av.raiz); av.tocar('idle'); compradorMontado.av = av;
       const nome = textoSprite('Seu Tonho', { escala: 0.45, fundo: 'rgba(40,30,20,.85)' }); nome.position.set(0, 2.25, 0); av.raiz.add(nome);
     }).catch((e) => console.warn('Seu Tonho não carregou', e));
@@ -8910,13 +8929,23 @@ const PECAS_FARDA = {
   bone: { arq: 'farda_bone', copa: 0.69, cx: -0.1, topo: 0.277, folga: 1.08, subir: 0 },
   bombeiro: { arq: 'farda_capacete_bombeiro', copa: 0.7, cx: 0.016, topo: 0.465, folga: 0.88, subir: 0.05 },   // aba larga: menor e mais alto, senão engole a cabeça,
   militar: { arq: 'farda_capacete_militar', copa: 0.78, cx: 0.014, topo: 0.5, folga: 1.12, subir: 0 },
+  // médico: jaleco (comprido, até as coxas) e máscara (no rosto); as medidas saem do próprio arquivo quando ele carrega
+  jaleco: { arq: 'farda_jaleco', auto: 'corpo', alt: 1.75, subir: -0.36 },
+  mascara: { arq: 'farda_mascara', auto: 'cabeca', folga: 0.9, subir: -0.58, frente: 0.22 },
 };
-const CHAPEU_DE = { policia: 'bone', prf: 'bone', bombeiro: 'bombeiro', medico: 'bone', exercito: 'militar', jornalista: 'bone', bope: 'militar' };
+const CHAPEU_DE = { policia: 'bone', prf: 'bone', bombeiro: 'bombeiro', medico: 'mascara', exercito: 'militar', jornalista: 'bone', bope: 'militar' };
 const fardaDe = (m) => { const p = papelDe(m); return p === 'policia' && m?.bope ? 'bope' : p; };   // policial do BOPE veste preto
 const pecasFarda = {}; let pecasPedidas = false;
 function carregarPecasFarda() {
   if (pecasPedidas) return; pecasPedidas = true;
-  for (const [k, d] of Object.entries(PECAS_FARDA)) carregarGLB(`assets/modelos/${d.arq}.glb`).then((g) => { pecasFarda[k] = g.scene; }).catch(() => { /* fica a farda simples */ });
+  for (const [k, d] of Object.entries(PECAS_FARDA)) carregarGLB(`assets/modelos/${d.arq}.glb`).then((g) => {
+    if (d.auto) {   // peça nova: mede o arquivo (frente em +X, como as outras)
+      const b = new THREE.Box3().setFromObject(g.scene), t = new THREE.Vector3(); b.getSize(t);
+      if (d.auto === 'corpo') Object.assign(d, { largura: t.z, prof: t.x, topo: b.max.y });
+      else Object.assign(d, { copa: t.z, cx: (b.min.x + b.max.x) / 2, topo: b.max.y });
+    }
+    pecasFarda[k] = g.scene; versaoFarda++;
+  }).catch(() => { faltaPeca.add(k); versaoFarda++; /* fica a farda simples (ou o colete e o boné, no médico) */ });
 }
 const _rotulos = new Map();
 function rotuloFarda(u) {   // plaquinha com o nome da corporação, no peito e nas costas do colete
@@ -8976,7 +9005,7 @@ function encaixar(peca, osso, med, sx, sy, sz, centro) {
 // colete: larg/alt/fund (multiplicam) e subir/frente (deslocam, em fração da altura do tronco)
 // chapéu: tam (multiplica) e subir/frente (fração da altura da cabeça)
 let ajusteFarda = {}, versaoFarda = 0;
-const AJ_PADRAO = { colete: { larg: 1, alt: 1, fund: 1, subir: 0, frente: 0 }, chapeu: { tam: 1, subir: 0, frente: 0 } };
+const AJ_PADRAO = { colete: { larg: 1, alt: 1, fund: 1, subir: 0, frente: 0, giro: 0 }, chapeu: { tam: 1, subir: 0, frente: 0, giro: 0 } };
 function ajusteDe(papel, peca) { return { ...AJ_PADRAO[peca], ...(ajusteFarda?.[papel]?.[peca] || {}) }; }
 function definirAjusteFarda(novo) {
   const txt = JSON.stringify(novo || {}); if (txt === JSON.stringify(ajusteFarda)) return;
@@ -8984,7 +9013,9 @@ function definirAjusteFarda(novo) {
 }
 function vestir(av, papel) {
   if (!av) return;
-  const glb = !!(papel && pecasFarda.colete && pecasFarda[CHAPEU_DE[papel]]);
+  const corpoNome = PECA_CORPO_DE[papel] && !faltaPeca.has(PECA_CORPO_DE[papel]) ? PECA_CORPO_DE[papel] : 'colete';
+  const chapNome = faltaPeca.has(CHAPEU_DE[papel]) ? 'bone' : CHAPEU_DE[papel];
+  const glb = !!(papel && pecasFarda[corpoNome] && pecasFarda[chapNome]);
   if (av.uniforme?.papel === papel && av.uniforme.glb === glb && av.uniforme.v === versaoFarda) return;
   if (av.uniforme) { av.uniforme.colete.removeFromParent(); av.uniforme.chapeu.removeFromParent(); av.uniforme = null; }
   if (!papel) return;
@@ -8995,7 +9026,7 @@ function vestir(av, papel) {
   let ossos = { base: achados.spine1 || achados.spine || achados.spine2, pescoco: achados.neck, cabeca: achados.head, topo: achados.headtop_end };
   if (!ossos.base || !ossos.pescoco || !ossos.cabeca) ossos = null;   // sem esqueleto conhecido: veste pela altura do corpo
   let colete, chapeu;
-  if (glb) { colete = pecaGlb('colete', u.cor, u); chapeu = pecaGlb(CHAPEU_DE[papel], u.chapeu); }
+  if (glb) { colete = pecaGlb(corpoNome, corpoNome === 'jaleco' ? '#ffffff' : u.cor, corpoNome === 'jaleco' ? null : u); chapeu = pecaGlb(chapNome, chapNome === 'mascara' ? '#ffffff' : u.chapeu); }
   else {   // enquanto os modelos 3D não carregam: colete e boné simples
     colete = new THREE.Mesh(new THREE.CylinderGeometry(1, 0.94, 1, 14, 1, true), new THREE.MeshStandardMaterial({ map: texturaUniforme(u), roughness: 0.8, side: THREE.DoubleSide }));
     chapeu = new THREE.Group();
@@ -9015,19 +9046,21 @@ function vestir(av, papel) {
     const { tronco, cabeca, mt, mc } = av._medidas;
     if (mt && mc) {
       // colete: do pescoço até um pouco acima do quadril; largura e fundura do peito medidas na malha
-      const C = PECAS_FARDA.colete, quadril = achados.hips || av.modelo.getObjectByName('mixamorigHips');
+      const C = PECAS_FARDA[corpoNome], quadril = achados.hips || av.modelo.getObjectByName('mixamorigHips');
       let topo = mt.alturaDe(ossos.pescoco), base = quadril ? mt.alturaDe(quadril) : null;
       if (topo === null || base === null || topo - base < 0.05) { topo = mt.topo; base = mt.baixo; } else base += (topo - base) * 0.12;
       const H = topo - base, ac = ajusteDe(papel, 'colete'), ah = ajusteDe(papel, 'chapeu');
-      encaixar(colete, tronco, mt, mt.largura * 1.35 * ac.larg / C.largura, H * ac.alt, Math.min(mt.prof, mt.largura * 0.85) * 1.5 * ac.fund / C.prof,
-        { f: mt.cf + ac.frente * H, c: (topo + base) / 2 + ac.subir * H });
-      const P = PECAS_FARDA[CHAPEU_DE[papel]], hc = mc.topo - mc.baixo, sc = Math.min(mc.largura, hc * 0.95) * P.folga * 1.1 * ah.tam / P.copa;
-      encaixar(chapeu, cabeca, mc, sc, sc, sc, { f: mc.cf - P.cx * sc + ah.frente * hc, c: mc.topo + hc * (0.03 + P.subir + ah.subir) - P.topo * sc });
+      encaixar(colete, tronco, mt, mt.largura * 1.35 * ac.larg / C.largura, H * ac.alt * (C.alt || 1), Math.min(mt.prof, mt.largura * 0.85) * 1.5 * ac.fund / C.prof,
+        { f: mt.cf + ac.frente * H, c: (topo + base) / 2 + (ac.subir + (C.subir || 0)) * H });
+      const P = PECAS_FARDA[chapNome], hc = mc.topo - mc.baixo, sc = Math.min(mc.largura, hc * 0.95) * P.folga * 1.1 * ah.tam / P.copa;
+      encaixar(chapeu, cabeca, mc, sc, sc, sc, { f: mc.cf - P.cx * sc + (ah.frente + (P.frente || 0)) * hc, c: mc.topo + hc * (0.03 + P.subir + ah.subir) - P.topo * sc });
+      if (colete.children[0]) colete.children[0].rotation.y = -Math.PI / 2 + (ac.giro || 0) * Math.PI / 180;   // ajuste de giro (peça feita virada para outro lado)
+      if (chapeu.children[0]) chapeu.children[0].rotation.y = -Math.PI / 2 + (ah.giro || 0) * Math.PI / 180;
       preso = true;
     }
   }
   if (!preso) scene.add(colete, chapeu);
-  av.uniforme = { papel, colete, chapeu, ossos, glb, preso, peca: CHAPEU_DE[papel], v: versaoFarda };
+  av.uniforme = { papel, colete, chapeu, ossos, glb, preso, peca: chapNome, v: versaoFarda };
 }
 const _cx = new THREE.Vector3(), _cy = new THREE.Vector3(), _cz = new THREE.Vector3(), _cw = new THREE.Vector3();
 const _ua = new THREE.Vector3(), _ub = new THREE.Vector3(), _uc = new THREE.Vector3(), _ud = new THREE.Vector3(), _um = new THREE.Matrix4(), _ux = new THREE.Vector3(), _uq = new THREE.Quaternion();
@@ -10177,7 +10210,7 @@ function montarCentral() {
 const lixReal = (l) => l.gemea || l;
 function esvaziar(l, t) { const r = lixReal(l); r.coletada = t; for (const o of LIXEIRAS) if (o.gemea === r) o.coletada = t; }
 // ---- garis NPC: dois por caminhão, nos estribos de trás; descem na lixeira e levam os sacos
-const ROUPA_GARI = ['Urban_Explorer', 'Patchwork_Scout'];
+const ROUPA_GARI = ['Mecanico', 'Pai_Familia'];
 function garisDe(dono) {
   if (dono.garis.length || dono.criandoGaris) return dono.garis;
   dono.criandoGaris = true;
@@ -11337,8 +11370,8 @@ function acaoAviacao() {
 // ================================================================= editor da farda (admin): ajusta olhando o próprio personagem
 let editorFarda = null;
 const CAMPOS_FARDA = {
-  colete: [['larg', 'Largura', 0.5, 2, 0.02], ['alt', 'Altura', 0.5, 2, 0.02], ['fund', 'Fundura', 0.5, 2.5, 0.02], ['subir', 'Subir / descer', -0.6, 0.6, 0.01], ['frente', 'Frente / trás', -0.6, 0.6, 0.01]],
-  chapeu: [['tam', 'Tamanho', 0.5, 2, 0.02], ['subir', 'Subir / descer', -0.8, 0.8, 0.01], ['frente', 'Frente / trás', -0.8, 0.8, 0.01]],
+  colete: [['larg', 'Largura', 0.5, 2, 0.02], ['alt', 'Altura', 0.5, 2, 0.02], ['fund', 'Fundura', 0.5, 2.5, 0.02], ['subir', 'Subir / descer', -0.6, 0.6, 0.01], ['frente', 'Frente / trás', -0.6, 0.6, 0.01], ['giro', 'Girar (graus)', -180, 180, 5]],
+  chapeu: [['tam', 'Tamanho', 0.5, 2, 0.02], ['subir', 'Subir / descer', -0.8, 0.8, 0.01], ['frente', 'Frente / trás', -0.8, 0.8, 0.01], ['giro', 'Girar (graus)', -180, 180, 5]],
 };
 function abrirEditorFarda() {
   if (!souEquipe() || jogador.perfil?.cargo !== 'admin') { aviso('Só o administrador ajusta a farda.'); return; }
@@ -11357,7 +11390,7 @@ function abrirEditorFarda() {
     el.innerHTML = `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b style="flex:1">👔 Ajuste da farda</b>
         <button data-a="girar">↻ Girar</button><button data-a="fechar">✕</button></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${Object.keys(UNIFORMES).map((k) => `<button data-p="${k}" style="${k === papel ? 'background:#f2a33a;color:#111' : ''}">${NOME_FARDA[k]}</button>`).join('')}</div>
-      <div style="display:flex;gap:6px;margin-bottom:6px">${[['colete', '🦺 Colete'], ['chapeu', '⛑️ Capacete / boné']].map(([k, t]) => `<button data-q="${k}" style="flex:1;${k === peca ? 'background:#f2a33a;color:#111' : ''}">${t}</button>`).join('')}</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">${[['colete', '🦺 Colete / jaleco'], ['chapeu', '⛑️ Capacete / boné / máscara']].map(([k, t]) => `<button data-q="${k}" style="flex:1;${k === peca ? 'background:#f2a33a;color:#111' : ''}">${t}</button>`).join('')}</div>
       ${CAMPOS_FARDA[peca].map(([k, n, mi, ma, st]) => `<label style="display:flex;align-items:center;gap:8px;margin:4px 0"><span style="width:110px">${n}</span>
         <input type="range" data-c="${k}" min="${mi}" max="${ma}" step="${st}" value="${aj[k]}" style="flex:1"><b data-v="${k}" style="width:46px;text-align:right">${(+aj[k]).toFixed(2)}</b></label>`).join('')}
       <div style="display:flex;gap:6px;margin-top:8px"><button data-a="zerar" style="flex:1">↺ Padrão desta peça</button><button data-a="salvar" style="flex:1;background:#2f8f4e;color:#fff">💾 Salvar para todos</button></div>
@@ -12609,7 +12642,7 @@ function testeDefesa(base, tipo) {
   teste = { B, tipo, t: 0, log: [], fim: false, vida: 100, tiros: 0, aaT: 0, aaTiros: 0, aaDisp: 0, rajada: 0, avisou: false, mirou: false };
   if (tipo === 'pe') {
     teste.pos = new THREE.Vector3(g.x + fx * 60, 0, g.z + fz * 60); teste.alvo = new THREE.Vector3(g.x - fx * 30, 0, g.z - fz * 30);
-    criarAvatar('personagens', 'Bandit_Brave').then((av) => {
+    criarAvatar('personagens', 'Seu_Tonho').then((av) => {
       if (!teste) return; teste.av = av; av.raiz.position.copy(teste.pos); scene.add(av.raiz); av.tocar('walk', { velocidade: 1.8 });
       const et = textoSprite('INVASOR (teste)', { escala: 0.5, fundo: 'rgba(170,30,30,.95)' }); et.position.y = 2.3; av.raiz.add(et);
     }).catch(() => { teste.log.push('não carregou o invasor'); });
@@ -13216,7 +13249,7 @@ function atualizarTatica(dt) {
   try { tiqueTatica(dt); } catch (e) { if (!atualizarTatica.erro) { atualizarTatica.erro = true; console.warn('tático:', e); } }   // nunca trava o jogo
 }
 function tiqueTatica(dt) {
-  atualizarGranadas(dt); atualizarSons2(dt); atualizarBope(dt); atualizar87(dt);
+  atualizarGranadas(dt); atualizarSons2(dt); atualizarBope(dt); atualizar87(dt); atualizarRendicao(dt);
   if ((tBarricadas -= dt) <= 0) { tBarricadas = 12; rede.tatica.barricadas().then(sincronizarBarricadas).catch(() => {}); }
   if ((atualizarTatica.t = (atualizarTatica.t || 0) - dt) <= 0) { atualizarTatica.t = 0.3; painelRapido(); }
   // blindagem do Caveirão na tela
@@ -13529,13 +13562,13 @@ function alvoBope(op) {
   if (j.dentroCasa) return { x: op.ultFora.x, z: op.ultFora.z, y: alturaChao(op.ultFora.x, op.ultFora.z), modo: 'casa' };
   return { x: j.pos.x, z: j.pos.z, y: j.pos.y, modo: j.morto ? 'corpo' : 'vivo' };
 }
-function danoBope(v) { jogador.danoBopeT = performance.now(); danoLocal(v); }
+function danoBope(v) { jogador.danoBopeT = performance.now(); danoPolicial(v); }
 function atirarBot(b, T, cor, letal) {
   const p = b.av.raiz.position, de = new THREE.Vector3(p.x, p.y + 1.4, p.z), dx = T.x - p.x, dz = T.z - p.z, d = Math.hypot(dx, dz), t = Math.max(0.12, d / 32);
   criarBola(de, new THREE.Vector3(dx / t, (T.y + 1 - de.y) / t + 4.9 * t, dz / t), cor);
   b.op.disparos.push([b.i, r2t(T.x), r2t(T.y + 1), r2t(T.z), letal ? 1 : 0]);
   const j = jogador;
-  if (letal) { const acerto = j.carro ? 0.5 : d < 12 ? 0.8 : 0.6; setTimeout(() => { if (Math.random() < acerto && !j.morto) danoBope(20); }, t * 1000); }
+  if (letal) { const acerto = j.carro ? 0.5 : d < 12 ? 0.8 : 0.6; setTimeout(() => { if (Math.random() < acerto && !j.morto) danoBope(performance.now() < (j.traiuAte || 0) ? 999 : 20); }, t * 1000); }
   else setTimeout(() => { if (Math.random() < 0.7 && !j.morto) { danoBope(3); tremor = Math.max(tremor, 0.18); } }, t * 1000);
 }
 function andarBot(b, gx, gz, vel, dt, olhar) {
@@ -13576,6 +13609,7 @@ function passoBot(b, dt) {
   else { b.fecha = Math.max(0.9, (b.fecha ?? 12) - dt * 1.7); r = b.fecha; a = base + lado * Math.PI * 0.72; vel += 0.6; }
   andarBot(b, T.x + Math.sin(a) * r, T.z + Math.cos(a) * r, vel, dt, dT < 35 ? T : null);
   b.tiro -= dt;
+  if (jogador.rendido) b.tiro = Math.max(b.tiro, 0.5);   // rendido: ninguém atira; os do cerco vêm prender
   if (b.papel === 'distrair' && dT < 28 && b.tiro <= 0) { b.tiro = 0.45 + Math.random() * 0.2; atirarBot(b, T, '#f4f4f4', false); }
   if (b.papel === 'abater' && dT < 32 && b.tiro <= 0) { b.tiro = 0.9 + Math.random() * 0.3; atirarBot(b, T, '#c0392b', true); }
   if (b.papel === 'cercar' && dT < 1.4 && !j.carro && !j.passageiro && !j.morto && !op.prendendo) {
@@ -13992,3 +14026,125 @@ function atualizar87(dt) {
     const f = restaCeu(); dicaCeu(f > 0 ? `☁️ Purgatório · o portão da segunda chance abre em ${mmss(f)}` : '🚪 O portão abriu: vá até ele para voltar à vida');
   }
 }
+
+// ================================================================= 89: pular, render-se e o jaleco do médico
+// ---------------------------------------------------------------- pular (botão 🦘 ou espaço)
+// Sem nada na frente: pulo (parado ou correndo). Obstáculo fino e baixo (carro, barricada, mureta): salta por cima.
+// Mais alto (muro de até ~3 m): agarra, sobe e desce do outro lado. Prédio, parede grossa ou muro muito alto: não dá.
+const ALTURA_MAX_PULO = 3.3;
+const saltoTreinado = () => militar() || (!!corporacao() && (treino.corrida || 0) > 0);   // treino militar: salto aprimorado
+function bloqueado(x, z, soFixos = false) {
+  const p = new THREE.Vector3(x, 0, z);
+  if (soFixos) { colidirLista(colisores, p, 0.3); mundo.colidir(p, 0.3, colidirLista); }
+  else resolverColisao(p, 0.3);
+  return Math.hypot(p.x - x, p.z - z) > 0.02;
+}
+function topoEm(x, z) {   // altura do obstáculo, quando ele sabe a própria altura
+  let topo = null;
+  const ver = (lista) => { for (const c of lista) {
+    if (c.off || c.top == null) continue;
+    const dentro = c.tipo === 'caixa' ? x > c.x0 - 0.35 && x < c.x1 + 0.35 && z > c.z0 - 0.35 && z < c.z1 + 0.35 : Math.hypot(x - c.x, z - c.z) < c.r + 0.35;
+    if (dentro) topo = Math.max(topo ?? -1e9, c.top);
+  } };
+  ver(colisores); mundo.colidir({ x, z }, 0.35, (l) => ver(l));
+  return topo;
+}
+function pular() {
+  const j = jogador;
+  if (!j.avatar || j.morto || j.carro || j.passageiro || j.onibus || j.voo || j.trem || j.pulo || j.trava > 0 || j.algemado || j.rendido || j.paraquedas || j.pena > 0 || j.ferido) return;
+  if (j.carregando) { aviso('Solte a caixa antes de pular.', 2); return; }
+  const dx = Math.sin(j.yaw), dz = Math.cos(j.yaw), x0 = j.pos.x, z0 = j.pos.z, av = j.avatar;
+  const correndo = performance.now() - (j.ultimoMov || 0) < 250;
+  let ini = null, fim = null;
+  for (let d = 0.45; d <= 4.6; d += 0.15) {
+    const b = bloqueado(x0 + dx * d, z0 + dz * d);
+    if (b && ini === null) { if (d > (correndo ? 1.8 : 1.3)) break; ini = d; }
+    else if (!b && ini !== null) { fim = d + 0.3; break; }
+  }
+  let pl;
+  if (ini === null) {   // pulo simples: no lugar, ou para a frente se estava correndo
+    let alcance = 0;
+    if (correndo) for (let d = 0.3; d <= 2.6; d += 0.3) { if (bloqueado(x0 + dx * d, z0 + dz * d)) break; alcance = d; }
+    pl = { dur: correndo ? 0.95 : 1.0, h: correndo ? 0.75 : 0.55, para: { x: x0 + dx * alcance, z: z0 + dz * alcance } };
+    av.tocar(correndo ? 'salto' : 'pular', { umaVez: true, velocidade: correndo ? 3.6 : 2.3, fade: 0.08 });
+  } else {
+    if (fim === null || fim - ini > 2.4) { aviso('🧱 Largo ou alto demais para pular.', 2); return; }
+    let topo = null; for (let d = ini; d < fim; d += 0.2) { const t = topoEm(x0 + dx * d, z0 + dz * d); if (t != null) topo = Math.max(topo ?? -1e9, t); }
+    const alt = topo != null ? topo - alturaChao(x0, z0) : null;
+    if (alt != null && alt > ALTURA_MAX_PULO) { aviso('🧱 Alto demais para pular.', 2); return; }
+    const xm = x0 + dx * (ini + 0.25), zm = z0 + dz * (ini + 0.25);
+    const baixo = (alt != null && alt <= 1.6) || [...barricadasMundo.values()].some((b) => Math.hypot(b.d.x - xm, b.d.z - zm) < 3) || !bloqueado(xm, zm, true);   // carro, barricada ou mureta
+    const para = { x: x0 + dx * fim, z: z0 + dz * fim };
+    if (baixo) {
+      const nome = j.armado ? 'pular_armado' : saltoTreinado() ? 'salto_militar' : 'pular_correndo';
+      pl = { dur: nome === 'salto_militar' ? 0.75 : 0.9, h: Math.max(0.9, (alt || 1) + 0.25), para, meio: true };
+      av.tocar(nome, { umaVez: true, velocidade: nome === 'salto_militar' ? 1.6 : nome === 'pular_armado' ? 0.95 : 1, fade: 0.06 });
+    } else {   // muro: pula, agarra, passa por cima e desce do outro lado
+      if (j.armado) alternarArmaForcado(false);
+      pl = { dur: saltoTreinado() ? 1.9 : 2.5, h: (alt || 2.4) + 0.3, para, meio: true, agarra: true };
+      av.tocar('pular_agarrar', { umaVez: true, velocidade: 1.1, fade: 0.06 });
+    }
+  }
+  j.pulo = { t: 0, de: { x: x0, z: z0 }, ...pl }; j.alvo = null; j.trava = pl.dur;
+  sons.tocar?.('soco', { vol: 0.15 });
+}
+function passoPulo(dt) {
+  const j = jogador, pl = j.pulo; pl.t += dt;
+  const k = Math.min(1, pl.t / pl.dur);
+  if (pl.agarra && !pl.desce && k > 0.5) { pl.desce = true; j.avatar.tocar('pular_descer', { umaVez: true, velocidade: 2.4, fade: 0.08 }); }
+  // por cima do obstáculo: anda mais no meio do pulo; pulo simples: anda junto
+  const m = pl.meio ? THREE.MathUtils.smoothstep(k, pl.agarra ? 0.3 : 0.15, pl.agarra ? 0.7 : 0.85) : k;
+  j.pos.x = pl.de.x + (pl.para.x - pl.de.x) * m; j.pos.z = pl.de.z + (pl.para.z - pl.de.z) * m;
+  j.puloY = Math.sin(Math.PI * Math.min(1, pl.agarra ? k * 1.05 : k)) * pl.h;
+  j.trava = Math.max(j.trava, 0.05);
+  if (k >= 1) { j.pulo = null; j.puloY = 0; j.trava = 0; resolverColisao(j.pos, j.raio); }
+}
+
+// ---------------------------------------------------------------- render-se (botão vermelho em confronto com a polícia)
+// Rendido: a polícia (robôs, BOPE, Exército, PRF e policiais jogadores) não atira, só prende. Quem se rende e saca a arma
+// de novo (ou até 1 min depois de baixar as mãos) vira alvo de força letal por 3 minutos.
+const ehForcaPolicial = (m) => !!(m && (m.policial || m.bope || m.prf || m.profissao === 'exercito'));
+function emConfronto() {
+  const j = jogador;
+  if (!((j.perfil?.crimes || 0) > 0) || j.morto || j.carro || j.passageiro || j.pena > 0 || j.dentroCasa || j.noCeu) return false;
+  if (opBope && opBope.fase !== 'alerta') return true;
+  for (const n of npcs) if (n.policia && !(n.caido > 0) && (n.hostil > 0 || n.perseguindo || n.bope) && n.av?.raiz.position.distanceTo(j.pos) < 60) return true;
+  for (const r of remotos.values()) { const q = posRemoto(r); if (ehForcaPolicial(r.meta) && q && Math.hypot(q.x - j.pos.x, q.z - j.pos.z) < 40) return true; }
+  return false;
+}
+function renderSe() {
+  const j = jogador;
+  if (j.rendido) { j.rendido = false; j.baixouMaos = performance.now(); j.trava = 0; aviso('Você baixou as mãos. Se sacar a arma no próximo minuto, a polícia atira para matar.', 4); conexao?.rastrear(metaPresenca()); return; }
+  if (!emConfronto() || j.pulo || j.ferido) return;
+  if (j.armado) alternarArmaForcado(false);
+  j.rendido = true; j.rendidoEm = performance.now(); j.alvo = null;
+  j.avatar.tocar('levantar_maos', { umaVez: true, velocidade: 1.8, fade: 0.1 }); j.trava = 0.9;
+  aviso('🏳️ Você se rendeu: a polícia não atira, só prende. Se sacar a arma de novo, eles atiram para matar.', 5);
+  conexao?.rastrear(metaPresenca());
+}
+function traiuRendicao() {
+  const j = jogador; j.rendido = false; j.traiuAte = performance.now() + 180000; j.baixouMaos = 0;
+  aviso('☠️ Você sacou a arma depois de se render: a polícia vai atirar para MATAR.', 5);
+  conexao?.rastrear(metaPresenca());
+  for (const n of npcs) if (n.policia && !n.bope && n.av && n.av.raiz.position.distanceTo(j.pos) < 70) n.hostil = Math.max(n.hostil || 0, 90);
+}
+function danoPolicial(v) {   // tiro de policial robô, BOPE ou esquadra
+  const j = jogador;
+  if (j.rendido) return;
+  danoLocal(performance.now() < (j.traiuAte || 0) ? 999 : v);
+}
+let tRender = 0;
+function atualizarRendicao(dt) {
+  const j = jogador; if (!j.perfil) return;
+  if (j.rendido && (j.morto || j.pena > 0 || !((j.perfil.crimes || 0) > 0) || j.carro || j.dentroCasa)) { j.rendido = false; conexao?.rastrear(metaPresenca()); }
+  if ((tRender -= dt) > 0) return; tRender = 0.3;
+  const bt = $('btRender'); if (!bt) return;
+  const mostra = j.rendido || emConfronto();
+  bt.classList.toggle('oculto', !mostra);
+  const txt = j.rendido ? '✋ Baixar as mãos' : '🏳️ Render-se'; if (bt.textContent !== txt) bt.textContent = txt;
+}
+
+// ---------------------------------------------------------------- jaleco e máscara do médico (peças 3D que o admin ajusta)
+// Quando os arquivos farda_jaleco.glb e farda_mascara.glb existirem, o médico veste jaleco e máscara; senão, colete e boné.
+const PECA_CORPO_DE = { medico: 'jaleco' };
+const faltaPeca = new Set();

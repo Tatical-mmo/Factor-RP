@@ -1,24 +1,33 @@
 // Configuração geral do jogo (etapa 1: cidade + personagem)
 
-export const PERSONAGENS = [
-  { id: 'Jovem_Cidade', nome: 'Jovem da Cidade' },   // personagens novos (Meshy): animações do animacoes_base.glb
-  { id: 'Autumn_Traveler', nome: 'Viajante de Outono' },
-  { id: 'Bandaged_Trailblazer', nome: 'Desbravador' },
-  { id: 'Bandit_Brave', nome: 'Bandido Valente' },
-  { id: 'Curly_Wanderer', nome: 'Andarilha Cacheada' },
-  { id: 'Desert_Scout_Ava', nome: 'Ava, a Batedora' },
-  { id: 'Desert_Warden', nome: 'Guardião do Deserto' },
-  { id: 'Dustbound_Scout', nome: 'Batedor da Poeira' },
-  { id: 'Dustveil_Scout', nome: 'Batedora Velada' },
-  { id: 'Friendly_Village_Blacksmith', nome: 'Ferreiro' },
-  { id: 'Grimbeard_the_Ironclad', nome: 'Barba de Ferro' },
-  { id: 'Hooded_Paw_Guardian', nome: 'Guardião Encapuzado' },
-  { id: 'Mustached_Explorer', nome: 'Explorador Bigodudo' },
-  { id: 'Patchwork_Scout', nome: 'Batedor Remendado' },
-  { id: 'Shadow_Scout', nome: 'Batedor das Sombras' },
-  { id: 'The_Frightened_Escapee', nome: 'Fugitivo Assustado' },
-  { id: 'Urban_Explorer', nome: 'Explorador Urbano' },
-  { id: 'Urban_Wanderer', nome: 'Andarilho Urbano' },
+export const PERSONAGENS = [   // personagens do Meshy: as animações vêm dos arquivos animacoes_*.glb
+  { id: 'Jovem_Cidade', nome: 'Jovem da Cidade' },
+  { id: 'Moca_Academia', nome: 'Moça da Academia' },
+  { id: 'Grandalhao', nome: 'Grandalhão' },
+  { id: 'Moca_Trancas', nome: 'Moça das Tranças' },
+  { id: 'Torcedor', nome: 'Torcedor da Seleção' },
+  { id: 'Moradora', nome: 'Moradora da Vila' },
+  { id: 'Pai_Familia', nome: 'Pai de Família' },
+  { id: 'Vovo', nome: 'Vovô do Xadrez' },
+  { id: 'Mecanico', nome: 'Mecânico' },
+  { id: 'Executiva', nome: 'Executiva' },
+  { id: 'Fisiculturista', nome: 'Fisiculturista' },
+  { id: 'Enfermeiro', nome: 'Enfermeiro' },
+  { id: 'Executivo', nome: 'Executivo' },
+  { id: 'Enfermeira', nome: 'Enfermeira' },
+  { id: 'MC_Funk', nome: 'MC do Funk' },
+  { id: 'Seu_Tonho', nome: 'Senhor da Venda' },
+  { id: 'Surfista', nome: 'Surfista' },
+  { id: 'Gaucha', nome: 'Gaúcha' },
+  { id: 'Rapaz_Bairro', nome: 'Rapaz do Bairro' },
+  { id: 'Ruiva', nome: 'Ruiva' },
+  { id: 'Barbudo', nome: 'Barbudo do Sul' },
+  { id: 'Playboy', nome: 'Playboy' },
+  { id: 'Gaucho', nome: 'Gaúcho' },
+  { id: 'Nipo', nome: 'Nipo-brasileiro' },
+  { id: 'Moletom', nome: 'Rapaz do Moletom' },
+  { id: 'Nordestino', nome: 'Nordestino' },
+  { id: 'Dona_Salao', nome: 'Dona do Salão' },
 ];
 
 // personagens de evento: só à venda quando o administrador abre a vitrine (preço e prazo vêm do banco)
@@ -35,8 +44,7 @@ export const PERSONAGENS_EVENTO = [
 ];
 
 // grátis ao criar a conta; os outros custam 8.000 na loja de personagens (mesma lista do banco)
-export const PERSONAGENS_GRATIS = ['Jovem_Cidade', 'Autumn_Traveler', 'Bandaged_Trailblazer', 'Curly_Wanderer', 'Desert_Scout_Ava',
-  'Mustached_Explorer', 'Patchwork_Scout', 'Urban_Explorer', 'Urban_Wanderer'];
+export const PERSONAGENS_GRATIS = ['Jovem_Cidade', 'Moca_Academia', 'Moca_Trancas', 'Torcedor', 'Moradora', 'Pai_Familia', 'Surfista', 'Gaucha', 'Rapaz_Bairro', 'Nipo', 'Moletom', 'Dona_Salao'];
 export const PRECO_PERSONAGEM = 8000, PRECO_NOME = 1000;
 
 // Robôs: só administrador, moderadores e polícia (não aparecem na escolha)
@@ -83,6 +91,8 @@ export const CONTROLES_PC = [
   ['F perto de caminhão', 'atacar a carga'],
   ['F', 'soco'],
   ['Q', 'sacar / guardar arma'],
+  ['Espaço', 'pular (por cima de obstáculos; muro baixo: agarra e passa)'],
+  ['R', 'render-se (em confronto com a polícia)'],
   ['Clique (armado)', 'atirar'],
   ['Z / X', 'girar câmera'],
   ['Roda do mouse', 'zoom'],

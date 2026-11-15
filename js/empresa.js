@@ -96,7 +96,7 @@ async function desenhar(auto = false) {
     const lista = [['resumo', 'Resumo'], ['equipe', 'Funcionários']];
     if (e.fabrica) lista.push(['vendas', 'Vendas'], ['missoes', 'Missões']);
     if (temFrota(e)) lista.push(['pedidos', 'Pedidos'], ['caminhoes', 'Veículos']);
-    lista.push(['robos', 'Robôs e nível']);
+    lista.push(['robos', '👷 Funcionários NPC e nível']);
     if (minhas.length > 1) lista.push(['fundir', 'Fundir']);
     if (!lista.some(([k]) => k === aba)) aba = 'resumo';
     abas.innerHTML = lista.map(([k, t]) => `<button data-aba="${k}" class="${aba === k ? 'sel' : ''}">${t}</button>`).join('');
@@ -255,7 +255,7 @@ async function telaCaminhoes(c, e) {
   const cont = {};
   c.innerHTML = `<p class="dica">Veículos saem do caixa da empresa (você tem ${num(e.caixa)}). Fábricas de veículos de jogadores vendem mais barato; sem estoque nelas, o veículo vem de fora.</p>
     <div class="lista">${Object.entries(VEICULOS).map(([t, v]) => `<div class="linha item"><span class="nm"><b>${v.icone} ${v.nome}</b>
-      <small>${v.texto} · leva ${capDe(t)} caixas (${v.cap} + ${v.robo} por robô, máx. ${v.max})${e.nivel < v.nivel ? ` · a partir do nível ${v.nivel}` : ''}</small>
+      <small>${v.texto} · leva ${capDe(t)} caixas (${v.cap} + ${v.robo} por funcionário NPC, máx. ${v.max})${e.nivel < v.nivel ? ` · a partir do nível ${v.nivel}` : ''}</small>
       <small data-preco="${t}">${num(v.sistema)}</small></span>
       <span class="bts"><button data-comprar="${t}" ${e.nivel < v.nivel ? 'disabled' : ''}>Comprar</button></span></div>`).join('')}</div>
     <div class="sub">Frota (${meus.length}/${lim(e, 'caminhoes')})</div>
@@ -277,22 +277,22 @@ const cachePreco = new Map();
 function telaRobos(c, e) {
   const alugadosAtivos = e.aluguel_ate && Date.parse(e.aluguel_ate) > Date.now() ? e.robos_alugados : 0;
   const custo = lim(e, 'evoluir');
-  const funcao = [e.fabrica ? 'Na fábrica, cada robô embala <b>1 caixa a cada 90 s</b> sozinho (acumula até 4 h fora do jogo).' : '',
-    e.produto === 'robo' ? 'Na fábrica de robôs, cada robô monta <b>1 robô a cada 20 min</b>, vendido a empresas e clãs por 8.000 (o dinheiro entra no caixa).' : '',
-    VEICULOS[e.produto] ? `Na fábrica de ${({ van: 'vans', caminhao: 'caminhões', helicoptero: 'helicópteros' })[e.produto]}, cada robô monta <b>1 a cada ${({ van: 25, caminhao: 40, helicoptero: 120 })[e.produto]} min</b>, vendido a outras empresas por ${num(VEICULOS[e.produto].fabrica)} (o dinheiro entra no caixa).` : '',
-    temFrota(e) ? 'Na transportadora, cada robô carregador põe <b>+5 caixas</b> em cada caminhão (máximo 60).' : ''].filter(Boolean).join(' ');
+  const funcao = [e.fabrica ? 'Na fábrica, cada funcionário NPC embala <b>1 caixa a cada 90 s</b> sozinho (acumula até 4 h fora do jogo).' : '',
+    e.produto === 'robo' ? 'Na fábrica de robôs, cada funcionário NPC monta <b>1 robô a cada 20 min</b>, vendido a empresas e clãs por 8.000 (o dinheiro entra no caixa).' : '',
+    VEICULOS[e.produto] ? `Na fábrica de ${({ van: 'vans', caminhao: 'caminhões', helicoptero: 'helicópteros' })[e.produto]}, cada funcionário NPC monta <b>1 a cada ${({ van: 25, caminhao: 40, helicoptero: 120 })[e.produto]} min</b>, vendido a outras empresas por ${num(VEICULOS[e.produto].fabrica)} (o dinheiro entra no caixa).` : '',
+    temFrota(e) ? 'Na transportadora, cada funcionário NPC carregador põe <b>+5 caixas</b> em cada caminhão (máximo 60).' : ''].filter(Boolean).join(' ');
   const prox = e.nivel + 1, precisaItem = prox % 5 === 0;
   const velocidade = 100 + (e.nivel - 1) * 15;
-  c.innerHTML = `<div class="cartoes"><div><small>Nível</small><b>${nivelTexto(e.nivel)}</b></div><div><small>Robôs ativos</small><b>${ativos(e)}/${lim(e, 'robos')}</b></div>
-      <div><small>Funcionários</small><b>até ${lim(e, 'funcionarios')}</b></div><div><small>Veículos</small><b>${temFrota(e) ? 'até ' + lim(e, 'caminhoes') : '—'}</b></div></div>
+  c.innerHTML = `<div class="cartoes"><div><small>Nível</small><b>${nivelTexto(e.nivel)}</b></div><div><small>Funcionários NPC</small><b>${ativos(e)}/${lim(e, 'robos')}</b></div>
+      <div><small>Funcionários jogadores</small><b>até ${lim(e, 'funcionarios')}</b></div><div><small>Veículos</small><b>${temFrota(e) ? 'até ' + lim(e, 'caminhoes') : '—'}</b></div></div>
     <p class="dica">${funcao}</p>
-    <div class="sub">Robôs</div>
+    <div class="sub">👷 Funcionários NPC</div>
     <p class="dica">Próprios: <b>${e.robos}</b> · alugados: <b>${alugadosAtivos}</b>${alugadosAtivos ? ` (até ${new Date(e.aluguel_ate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})` : ''}</p>
-    <p class="dica" id="rPreco">Consultando o preço do robô…</p>
-    <div class="botoes"><button id="rComprar">Comprar robô</button><button id="rAlugar">Alugar por 24 h (1.200)</button></div>
+    <p class="dica" id="rPreco">Consultando o preço do funcionário NPC…</p>
+    <div class="botoes"><button id="rComprar">Contratar funcionário NPC</button><button id="rAlugar">Temporário por 24 h (1.200)</button></div>
     ${e.fabrica ? `<p class="dica">Linha de produção a <b>${velocidade}%</b> da velocidade (sobe 15% por nível).</p>` : ''}
     <div class="sub">Evoluir a empresa</div>
-    ${custo ? `<p class="dica">Nível ${prox}: até ${LIMITES.robos[e.nivel]} robôs, ${LIMITES.funcionarios[e.nivel]} funcionários e ${!e.transporte ? Math.ceil(LIMITES.caminhoes[e.nivel] / 2) : LIMITES.caminhoes[e.nivel]} caminhões${!e.transporte && prox === 3 ? ' (a fábrica passa a poder ter caminhões)' : ''}${FASES[prox] ? `. Visual novo: ${FASES[prox]}` : ''}.</p>
+    ${custo ? `<p class="dica">Nível ${prox}: até ${LIMITES.robos[e.nivel]} funcionários NPC, ${LIMITES.funcionarios[e.nivel]} funcionários jogadores e ${!e.transporte ? Math.ceil(LIMITES.caminhoes[e.nivel] / 2) : LIMITES.caminhoes[e.nivel]} caminhões${!e.transporte && prox === 3 ? ' (a fábrica passa a poder ter caminhões)' : ''}${FASES[prox] ? `. Visual novo: ${FASES[prox]}` : ''}.</p>
       ${precisaItem ? '<p class="aviso-item">🔓 Precisa de 1 <b>Desbloqueio Corporativo</b> na sua mochila (vende na loja por 50.000).</p>' : ''}
       <div class="botoes"><button id="rEvoluir">Evoluir para o nível ${prox} por ${num(custo)}</button></div>` : '<p class="dica">Nível máximo. Abra filiais pelas placas "Lote à venda".</p>'}
     ${e.nivel >= 10 ? `<p class="dica">Filiais: ${ctx.lotesDe(e.id).length}/${unidadesMax(e.nivel)} lotes. Para abrir uma, vá até uma placa "Lote à venda".</p>` : ''}
@@ -302,11 +302,11 @@ function telaRobos(c, e) {
   const precoGuardado = cachePreco.get(e.id);
   (precoGuardado && precoGuardado.t > Date.now() - 30000 ? Promise.resolve(precoGuardado.p) : rede.precoRobo(e.id).then((p) => { cachePreco.set(e.id, { p, t: Date.now() }); return p; })).then((p) => {
     const el = $('rPreco'); if (!el) return;
-    el.innerHTML = p <= 8000 ? 'Robô de uma <b>fábrica de robôs</b> da cidade: <b>8.000</b>.' : 'Nenhuma fábrica de robôs tem estoque: o robô vem de fora por <b>12.000</b>.';
-    const b = $('rComprar'); if (b) b.textContent = `Comprar robô (${num(p)})`;
+    el.innerHTML = p <= 8000 ? 'Contratação por uma <b>fábrica de robôs</b> da cidade (agência): <b>8.000</b>.' : 'Nenhuma fábrica de robôs da cidade tem vaga: o funcionário NPC vem de fora por <b>12.000</b>.';
+    const b = $('rComprar'); if (b) b.textContent = `Contratar funcionário NPC (${num(p)})`;
   }).catch(() => {});
-  $('rComprar').onclick = () => executar(() => rede.logistica.comprarRobo(e.id), 'Robô comprado! Ele já está trabalhando.');
-  $('rAlugar').onclick = () => executar(() => rede.logistica.alugarRobo(e.id), 'Robô alugado por 24 horas.');
+  $('rComprar').onclick = () => executar(() => rede.logistica.comprarRobo(e.id), '👷 Funcionário NPC contratado! Ele já está trabalhando.');
+  $('rAlugar').onclick = () => executar(() => rede.logistica.alugarRobo(e.id), '👷 Funcionário NPC temporário por 24 horas.');
   const ev = $('rEvoluir'); if (ev) ev.onclick = () => executar(() => rede.logistica.evoluir(e.id), (n) => `Empresa evoluiu para o nível ${n}!`);
 }
 
