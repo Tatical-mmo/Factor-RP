@@ -14074,7 +14074,9 @@ function pular() {
     let alcance = 0;
     if (correndo) for (let d = 0.3; d <= 2.6; d += 0.3) { if (bloqueado(x0 + dx * d, z0 + dz * d)) break; alcance = d; }
     pl = { dur: correndo ? 0.95 : 1.0, h: correndo ? 0.75 : 0.55, para: { x: x0 + dx * alcance, z: z0 + dz * alcance } };
-    av.tocar(correndo ? 'salto' : 'pular', { umaVez: true, velocidade: correndo ? 3.6 : 2.3, fade: 0.08 });
+    // armado: o mesmo pulo segurando a arma (o de passar por cima), no tempo do pulo
+    if (j.armado) av.tocar('pular_armado', { umaVez: true, velocidade: 0.8 / pl.dur, fade: 0.06 });
+    else av.tocar(correndo ? 'salto' : 'pular', { umaVez: true, velocidade: correndo ? 3.6 : 2.3, fade: 0.08 });
   } else {
     if (fim === null || fim - ini > 2.4) { aviso('🧱 Largo ou alto demais para pular.', 2); return; }
     let topo = null; for (let d = ini; d < fim; d += 0.2) { const t = topoEm(x0 + dx * d, z0 + dz * d); if (t != null) topo = Math.max(topo ?? -1e9, t); }
@@ -14086,7 +14088,7 @@ function pular() {
     if (baixo) {
       const nome = j.armado ? 'pular_armado' : saltoTreinado() ? 'salto_militar' : 'pular_correndo';
       pl = { dur: nome === 'salto_militar' ? 0.75 : 0.9, h: Math.max(0.9, (alt || 1) + 0.25), para, meio: true };
-      av.tocar(nome, { umaVez: true, velocidade: nome === 'salto_militar' ? 1.6 : nome === 'pular_armado' ? 0.95 : 1, fade: 0.06 });
+      av.tocar(nome, { umaVez: true, velocidade: nome === 'salto_militar' ? 1.6 : nome === 'pular_armado' ? 0.8 / 0.9 : 1, fade: 0.06 });
     } else {   // muro: pula, agarra, passa por cima e desce do outro lado
       if (j.armado) alternarArmaForcado(false);
       pl = { dur: saltoTreinado() ? 1.9 : 2.5, h: (alt || 2.4) + 0.3, para, meio: true, agarra: true };

@@ -468,11 +468,11 @@ export const RODAS = {
   onibus_busscar: { estilo: 'pesado', eixos: [[-2.27, 0.5], [3.16, 0.5]], cy: 0.51, xo: 1.2, xi: 0.84 },
   onibus_articulado: { estilo: 'pesado', eixos: [[-5.25, 0.52], [-3.9, 0.52], [1.8, 0.52], [6.6, 0.52]], cy: 0.53, xo: 1.23, xi: 0.84 },
   // ônibus novos (medidos já girados e no tamanho do jogo)
-  onibus_amarelo: { estilo: 'pesado', eixos: [[-1.7, 0.52], [3.25, 0.52]], cy: 0.52, xo: 1.28, xi: 0.86 },
-  onibus_branco: { estilo: 'pesado', eixos: [[-2.0, 0.52], [3.3, 0.52]], cy: 0.52, xo: 1.28, xi: 0.86 },
-  onibus_laranja: { estilo: 'pesado', eixos: [[-2.35, 0.52], [3.35, 0.52]], cy: 0.52, xo: 1.2, xi: 0.8 },
-  onibus_brasilsul: { estilo: 'pesado', eixos: [[-3.9, 0.52], [-2.65, 0.52], [4.5, 0.52]], cy: 0.52, xo: 1.28, xi: 0.86 },
-  onibus_viacao: { estilo: 'pesado', eixos: [[-4.0, 0.52], [-2.5, 0.52], [4.7, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88 },
+  onibus_amarelo: { estilo: 'pesado', eixos: [[-1.7, 0.52], [3.25, 0.52]], cy: 0.52, xo: 1.28, xi: 0.86, corte: [1.22, 0.45, 0.25] },
+  onibus_branco: { estilo: 'pesado', eixos: [[-2.0, 0.52], [3.3, 0.52]], cy: 0.52, xo: 1.28, xi: 0.86, corte: [1.22, 0.45, 0.25] },
+  onibus_laranja: { estilo: 'pesado', eixos: [[-2.35, 0.52], [3.35, 0.52]], cy: 0.52, xo: 1.2, xi: 0.8, corte: [1.22, 0.45, 0.25] },
+  onibus_brasilsul: { estilo: 'pesado', eixos: [[-3.9, 0.52], [-2.65, 0.52], [4.5, 0.52]], cy: 0.52, xo: 1.28, xi: 0.86, corte: [1.22, 0.45, 0.25] },
+  onibus_viacao: { estilo: 'pesado', eixos: [[-4.0, 0.52], [-2.5, 0.52], [4.7, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
 };
 const LARG_RODA = { classico: 0.32, carro: 0.30, esporte: 0.32, suv: 0.36, pesado: 0.30, militar: 0.38 };
 const comRodas = new Set();
@@ -503,7 +503,9 @@ let matChassi = null;
 function montarRodas(g, nome) {
   const R = RODAS[nome], base = R && ctx?.modelo?.('roda_' + R.estilo); if (!base) return;
   const { eixos, cy, xo, xi } = R, W = LARG_RODA[R.estilo], zf = Math.max(...eixos.map((e) => e[0]));
-  removerTriangulos(g, (x, y, z) => { const sx = Math.abs(x); if (sx < xi - 0.03 || sx > xo + 0.06) return false; for (const [ez, r] of eixos) if (Math.hypot(y - cy, z - ez) < r * 1.04) return true; return false; }, 'semRodas');
+  // corte: [raio (x o da roda), quanto entra para dentro (rodado duplo), quanto sai para fora]
+  const [kr, dxi, dxo] = R.corte || [1.04, 0.03, 0.06];
+  removerTriangulos(g, (x, y, z) => { const sx = Math.abs(x); if (sx < xi - dxi || sx > xo + dxo) return false; for (const [ez, r] of eixos) if (Math.hypot(y - cy, z - ez) < r * kr) return true; return false; }, 'semRodas');
   const b = new THREE.Box3().setFromObject(g);
   const grupo = new THREE.Group(); grupo.name = 'rodas'; g.add(grupo);
   matChassi ||= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0.1, side: THREE.DoubleSide });

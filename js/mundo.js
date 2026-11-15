@@ -112,7 +112,20 @@ export function altura(x, z) {
   if (blocosMetro.has(i + ',' + j) && Math.abs(x - quadC(i)) < QB / 2 && Math.abs(z - quadC(j)) < QB / 2) return 0.18;
   if (z < -1150) return morro(x, z);
   if (x > 900 && x < 1100 && z > 948 && z < 1112) return morroPorto(x, z);
-  return null;
+  return alturaNaCalcada(x, z);
+}
+// calçadas fora do centro (cidades vizinhas, bairros novos, quartel): o chão sobe junto com a calçada desenhada
+// (antes só o centro sabia a altura e o personagem afundava 18 cm nelas)
+let gradeCalc = null, nCalc = -1;
+function alturaNaCalcada(x, z) {
+  if (nCalc !== calcadas.length) {
+    nCalc = calcadas.length; gradeCalc = new Map();
+    calcadas.forEach(([cx, cz, w, d], k) => { for (const c of chaves(cx - w / 2, cz - d / 2, cx + w / 2, cz + d / 2)) { if (!gradeCalc.has(c)) gradeCalc.set(c, []); gradeCalc.get(c).push(k); } });
+  }
+  const l = gradeCalc.get(Math.floor(x / CEL) + ',' + Math.floor(z / CEL)); if (!l) return null;
+  let h = null;
+  for (const k of l) { const [cx, cz, w, d, y] = calcadas[k]; if (Math.abs(x - cx) <= w / 2 && Math.abs(z - cz) <= d / 2) h = Math.max(h ?? 0, y); }
+  return h;
 }
 // mantém o jogador nas áreas andáveis (a ferrovia só se cruza de trem)
 // partes do porto por onde se anda no mar: píer, rampa de embarque e convés do navio
