@@ -923,13 +923,45 @@ function aparece(o) {
   let x = o; for (let k = 0; x && k < 40; k++) { if (!x.visible) return false; if (x === scene) return true; x = x.parent; }
   return false;   // tirado da cena, mas ainda guardado em alguma lista: não pode virar parede invisível
 }
+// Veículos sólidos: cada um vira uma caixa do tamanho da lataria, virada para onde ele aponta (antes era um círculo de
+// 1,4 m no meio: dava para entrar pela frente/traseira do carro e pelas pontas do ônibus)
+const caixasVeic = new WeakMap(), _cvInv = new THREE.Matrix4(), _cvM = new THREE.Matrix4(), _cvB = new THREE.Box3();
+function caixaDoVeiculo(m) {
+  let b = caixasVeic.get(m); if (b) return b;
+  m.updateMatrixWorld(true); _cvInv.copy(m.matrixWorld).invert();
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  m.traverse((o) => {
+    if (!o.isMesh || !o.geometry || o.isSprite || o.material?.transparent || o.name === 'longe' || o.parent?.name === 'longe') return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    _cvB.copy(o.geometry.boundingBox).applyMatrix4(_cvM.multiplyMatrices(_cvInv, o.matrixWorld));
+    if (!Number.isFinite(_cvB.min.x)) return;
+    x0 = Math.min(x0, _cvB.min.x); x1 = Math.max(x1, _cvB.max.x); z0 = Math.min(z0, _cvB.min.z); z1 = Math.max(z1, _cvB.max.z);
+  });
+  const k = m.scale?.x || 1;
+  if (!Number.isFinite(x0)) { x0 = -0.9; x1 = 0.9; z0 = -2; z1 = 2; }
+  b = { x0: Math.max(-1.6, x0 * k), x1: Math.min(1.6, x1 * k), z0: Math.max(-9.5, z0 * k), z1: Math.min(9.5, z1 * k) };
+  caixasVeic.set(m, b); return b;
+}
+function empurrarDeVeiculo(p, raio, m, x = m.position.x, z = m.position.z, ang = m.rotation.y) {
+  const b = caixaDoVeiculo(m), s = Math.sin(ang), c = Math.cos(ang), dx = p.x - x, dz = p.z - z;
+  const lx = dx * c - dz * s, lz = dx * s + dz * c;   // lado (x do veículo) e frente (z do veículo)
+  if (lx < b.x0 - raio || lx > b.x1 + raio || lz < b.z0 - raio || lz > b.z1 + raio) return;
+  const pe = lx - (b.x0 - raio), pd = (b.x1 + raio) - lx, pt = lz - (b.z0 - raio), pf = (b.z1 + raio) - lz, mn = Math.min(pe, pd, pt, pf);
+  let nx = lx, nz = lz;
+  if (mn === pe) nx = b.x0 - raio; else if (mn === pd) nx = b.x1 + raio; else if (mn === pt) nz = b.z0 - raio; else nz = b.z1 + raio;
+  p.x = x + nx * c + nz * s; p.z = z - nx * s + nz * c;
+}
+const noChao = (m) => m.position.y <= alturaChao(m.position.x, m.position.z) + 2;
 function colidirCarros(p, raio) {
-  for (const v of carrosMundo.values()) {
-    const m = v.mesh; if (jogador.carro?.mesh === m || v.chamada || !aparece(m)) continue;
-    const q = m.position; if (q.y > alturaChao(q.x, q.z) + 2) continue;
-    const dx = p.x - q.x, dz = p.z - q.z, r = raio + 1.4, d2 = dx * dx + dz * dz;
-    if (d2 < r * r && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = q.x + dx / d * r; p.z = q.z + dz / d * r; }
-  }
+  const meu = jogador.carro?.mesh;
+  for (const v of carrosMundo.values()) { const m = v.mesh; if (m === meu || v.chamada || !aparece(m) || !noChao(m)) continue; empurrarDeVeiculo(p, raio, m); }
+  for (const l of largadosRua.values()) if (l.mesh && l.mesh !== meu && aparece(l.mesh)) empurrarDeVeiculo(p, raio, l.mesh);
+  for (const q of seqOnibus.values()) if (q.mesh && q.mesh !== meu && aparece(q.mesh)) empurrarDeVeiculo(p, raio, q.mesh);
+  for (const v of viaturas) if (v.obj !== meu && aparece(v.obj)) empurrarDeVeiculo(p, raio, v.obj);
+  for (const v of vansNpc) if (v.obj !== meu && aparece(v.obj)) empurrarDeVeiculo(p, raio, v.obj);
+  for (const v of rondasBombeiros) if (v.obj !== meu && aparece(v.obj)) empurrarDeVeiculo(p, raio, v.obj);
+  for (const o of servicos.veiculosNpc()) if (o !== meu && aparece(o)) empurrarDeVeiculo(p, raio, o);
+  for (const r of remotos.values()) if (r.carro && r.carro !== meu && aparece(r.carro) && noChao(r.carro)) empurrarDeVeiculo(p, raio, r.carro);
 }
 function resolverMoveis(p, raio) {
   // caminhão em movimento
@@ -940,8 +972,7 @@ function resolverMoveis(p, raio) {
   for (const c of caminhoes.values()) {
     // só veículo que está aparecendo no mapa e no chão (os escondidos ficavam parados no centro, em x 0 z 0, como um bloqueio invisível)
     if (jogador.carro?.mesh === c.obj || !aparece(c.obj) || c.obj.position.y > alturaChao(c.obj.position.x, c.obj.position.z) + 2) continue;
-    const q = c.obj.position, dx = p.x - q.x, dz = p.z - q.z, rr = raio + 2.2, d2 = dx * dx + dz * dz;
-    if (d2 < rr * rr && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = q.x + dx / d * rr; p.z = q.z + dz / d * rr; }
+    empurrarDeVeiculo(p, raio, c.obj);
   }
   for (const r of remotos.values()) {
     if (!aparece(r.av?.raiz)) continue;
@@ -1422,6 +1453,7 @@ function sairCarro() {
   jogador.carro = null; modoVolante(false);
   c.mesh.position.copy(jogador.pos); c.mesh.rotation.y = jogador.yaw;
   const v = carrosMundo.get(c.id); if (v) { v.d = { ...v.d, x: jogador.pos.x, z: jogador.pos.z, ang: jogador.yaw }; }
+  if (v?.d.ladrao && v.d.ladrao === jogador.perfil?.id) ultimoLargado = { ref: 'car:' + c.id, ate: agoraServidor() + 90000 };   // carro arrombado: dá para pôr fogo
   rede.carros.estacionar(c.id, jogador.pos.x, jogador.pos.z, jogador.yaw).catch(() => {});
   // desce pela porta esquerda
   const lx = Math.cos(jogador.yaw) * 1.8, lz = -Math.sin(jogador.yaw) * 1.8;
@@ -8035,7 +8067,7 @@ function contextoRacoes() {
 }
 function acaoCrime() { const c = contextoCrime(); if (c) c[2](); }
 function veiculoParaIncendiar() {
-  if (!jogador.cla || !ultimoLargado || agoraServidor() > ultimoLargado.ate || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.morto) return null;
+  if ((!jogador.cla && jogador.perfil?.cargo !== 'admin') || !ultimoLargado || agoraServidor() > ultimoLargado.ate || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.morto) return null;
   if (jogador.perfil?.policial || jogador.perfil?.prf || veiculoEmChamas(ultimoLargado.ref)) return null;
   const v = veiculoPorRef(ultimoLargado.ref); if (!v || v.l?.queima > 0) return null;
   return pertoDoVeiculo(v.mesh, v.x, v.z, 3.5) ? { ...v, ref: ultimoLargado.ref } : null;
@@ -9849,11 +9881,8 @@ function colidirOnibus(p, raio) {
   for (const b of onibusNpc) {
     if (!b.ativo || !b.mesh.visible) continue;
     if (jogador.onibus && b.L === jogador.onibus.L && b.m === jogador.onibus.m) continue;
-    const fx = Math.sin(b.ang), fz = Math.cos(b.ang);
-    for (const o of [-3.6, 0, 3.6]) {
-      const cx = b.x + fx * o, cz = b.z + fz * o, dx = p.x - cx, dz = p.z - cz, r = raio + 1.5, d2 = dx * dx + dz * dz;
-      if (d2 < r * r && d2 > 1e-8) { const d = Math.sqrt(d2); p.x = cx + dx / d * r; p.z = cz + dz / d * r; }
-    }
+    if (b.mesh === jogador.carro?.mesh) continue;
+    empurrarDeVeiculo(p, raio, b.mesh, b.x, b.z, b.ang);   // a lataria inteira (12 a 14 m), não só três círculos
   }
 }
 // ---- passageiro: embarca num ônibus parado (ponto ou plataforma) e desce no ponto que quiser
@@ -14180,6 +14209,7 @@ function atualizar87(dt) {
 // Sem nada na frente: pulo (parado ou correndo). Obstáculo fino e baixo (carro, barricada, mureta): salta por cima.
 // Mais alto (muro de até ~3 m): agarra, sobe e desce do outro lado. Prédio, parede grossa ou muro muito alto: não dá.
 const ALTURA_MAX_PULO = 3.3;
+const SOBE_ANIM = { pular_correndo: 0.32, salto_militar: 0.28, pular_armado: 0.28, pular_agarrar: 0.4 };   // quanto cada animação de pulo já sobe o quadril
 const saltoTreinado = () => militar() || (!!corporacao() && (treino.corrida || 0) > 0);   // treino militar: salto aprimorado
 function bloqueado(x, z, soFixos = false) {
   const p = new THREE.Vector3(x, 0, z);
@@ -14197,6 +14227,30 @@ function topoEm(x, z) {   // altura do obstáculo, quando ele sabe a própria al
   ver(colisores); mundo.colidir({ x, z }, 0.35, (l) => ver(l));
   return topo;
 }
+// altura (acima do chão) do veículo que está neste ponto, ou null: carros dos jogadores, ônibus, caminhões, viaturas,
+// vans e os largados na rua
+function alturaVeiculoEm(x, z) {
+  const lista = [];
+  for (const v of carrosMundo.values()) lista.push(v.mesh);
+  for (const b of onibusNpc) if (b.ativo) lista.push(b.mesh);
+  for (const l of largadosRua.values()) lista.push(l.mesh);
+  for (const s2 of seqOnibus.values()) lista.push(s2.mesh);
+  for (const c of caminhoes.values()) lista.push(c.obj);
+  for (const v of viaturas) lista.push(v.obj);
+  for (const v of vansNpc) lista.push(v.obj);
+  for (const o of servicos.veiculosNpc()) lista.push(o);
+  for (const r of remotos.values()) if (r.carro) lista.push(r.carro);
+  let h = null; const caixa = new THREE.Box3();
+  for (const m of lista) {
+    if (!m || !m.visible || !m.parent || Math.hypot(m.position.x - x, m.position.z - z) > 9) continue;
+    const r = m.rotation.y, fx = Math.sin(r), fz = Math.cos(r), dx = x - m.position.x, dz = z - m.position.z;
+    const e = civico.eixosDe(m), meio = Math.max(2.2, Math.max(Math.abs(e.zf), Math.abs(e.zr)) + 1.6);
+    const ao = dx * fx + dz * fz, la = dx * fz - dz * fx;
+    if (Math.abs(ao) > meio + 0.3 || Math.abs(la) > 1.6) continue;
+    caixa.setFromObject(m); h = Math.max(h ?? 0, caixa.max.y - alturaChao(x, z));
+  }
+  return h;
+}
 function pular() {
   const j = jogador;
   if (!j.avatar || j.morto || j.carro || j.passageiro || j.onibus || j.voo || j.trem || j.pulo || j.trava > 0 || j.algemado || j.rendido || j.paraquedas || j.pena > 0 || j.ferido) return;
@@ -14213,25 +14267,30 @@ function pular() {
   if (ini === null) {   // pulo simples: no lugar, ou para a frente se estava correndo
     let alcance = 0;
     if (correndo) for (let d = 0.3; d <= 2.6; d += 0.3) { if (bloqueado(x0 + dx * d, z0 + dz * d)) break; alcance = d; }
-    pl = { dur: correndo ? 0.95 : 1.0, h: correndo ? 0.75 : 0.55, para: { x: x0 + dx * alcance, z: z0 + dz * alcance } };
+    pl = { dur: correndo ? 0.95 : 1.0, h: correndo ? 0.42 : 0.3, para: { x: x0 + dx * alcance, z: z0 + dz * alcance } };   // a animação já sobe o quadril (0,2-0,4 m)
     // armado: o mesmo pulo segurando a arma (o de passar por cima), no tempo do pulo
     if (j.armado) av.tocar('pular_armado', { umaVez: true, velocidade: 0.8 / pl.dur, fade: 0.06 });
     else av.tocar(correndo ? 'salto' : 'pular', { umaVez: true, velocidade: correndo ? 3.6 : 2.3, fade: 0.08 });
   } else {
     if (fim === null || fim - ini > 2.4) { aviso('🧱 Largo ou alto demais para pular.', 2); return; }
     let topo = null; for (let d = ini; d < fim; d += 0.2) { const t = topoEm(x0 + dx * d, z0 + dz * d); if (t != null) topo = Math.max(topo ?? -1e9, t); }
-    const alt = topo != null ? topo - alturaChao(x0, z0) : null;
-    if (alt != null && alt > ALTURA_MAX_PULO) { aviso('🧱 Alto demais para pular.', 2); return; }
     const xm = x0 + dx * (ini + 0.25), zm = z0 + dz * (ini + 0.25);
-    const baixo = (alt != null && alt <= 1.6) || [...barricadasMundo.values()].some((b) => Math.hypot(b.d.x - xm, b.d.z - zm) < 3) || !bloqueado(xm, zm, true);   // carro, barricada ou mureta
+    // veículo na frente (carro, ônibus, caminhão): a altura vem do próprio modelo. Antes um ônibus de 3 m era tratado como
+    // "baixo" e o personagem atravessava a lataria num salto de 1 m.
+    const hv = topo == null ? alturaVeiculoEm(x0 + dx * (ini + fim) / 2, z0 + dz * (ini + fim) / 2) : null;
+    const alt = topo != null ? topo - alturaChao(x0, z0) : hv;
+    if (alt != null && alt > ALTURA_MAX_PULO) { aviso('🧱 Alto demais para pular.', 2); return; }
+    const baixo = (alt != null ? alt <= 1.6 : false) || (alt == null && ([...barricadasMundo.values()].some((b) => Math.hypot(b.d.x - xm, b.d.z - zm) < 3) || !bloqueado(xm, zm, true)));   // mureta, carro baixo ou barricada
     const para = { x: x0 + dx * fim, z: z0 + dz * fim };
     if (baixo) {
       const nome = j.armado ? 'pular_armado' : saltoTreinado() ? 'salto_militar' : 'pular_correndo';
-      pl = { dur: nome === 'salto_militar' ? 0.75 : 0.9, h: Math.max(0.9, (alt || 1) + 0.25), para, meio: true };
+      // altura do corpo = obstáculo + folga - o quanto a própria animação já levanta o quadril (antes somava as duas e o
+      // personagem voava quase 2 m por cima de uma mureta). Sem altura conhecida (carro, barricada): ~1 m.
+      pl = { dur: nome === 'salto_militar' ? 0.75 : 0.9, h: Math.max(0.25, (alt ?? 0.95) + 0.12 - (SOBE_ANIM[nome] || 0.3)), para, meio: true };
       av.tocar(nome, { umaVez: true, velocidade: nome === 'salto_militar' ? 1.6 : nome === 'pular_armado' ? 0.8 / 0.9 : 1, fade: 0.06 });
     } else {   // muro: pula, agarra, passa por cima e desce do outro lado
       if (j.armado) alternarArmaForcado(false);
-      pl = { dur: saltoTreinado() ? 1.9 : 2.5, h: (alt || 2.4) + 0.3, para, meio: true, agarra: true };
+      pl = { dur: saltoTreinado() ? 1.9 : 2.5, h: Math.max(1, (alt || 2.4) - 0.15), para, meio: true, agarra: true };
       av.tocar('pular_agarrar', { umaVez: true, velocidade: 1.1, fade: 0.06 });
     }
   }
