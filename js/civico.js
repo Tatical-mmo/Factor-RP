@@ -467,6 +467,12 @@ export const RODAS = {
   onibus_apache: { estilo: 'pesado', eixos: [[-2.13, 0.56], [3.37, 0.56]], cy: 0.57, xo: 1.22, xi: 0.84 },
   onibus_busscar: { estilo: 'pesado', eixos: [[-2.27, 0.5], [3.16, 0.5]], cy: 0.51, xo: 1.2, xi: 0.84 },
   onibus_articulado: { estilo: 'pesado', eixos: [[-5.25, 0.52], [-3.9, 0.52], [1.8, 0.52], [6.6, 0.52]], cy: 0.53, xo: 1.23, xi: 0.84 },
+  // ônibus novos (medidos já girados e no tamanho do jogo)
+  onibus_amarelo: { estilo: 'pesado', eixos: [[-1.7, 0.52], [3.25, 0.52]], cy: 0.52, xo: 1.28, xi: 0.86 },
+  onibus_branco: { estilo: 'pesado', eixos: [[-2.0, 0.52], [3.3, 0.52]], cy: 0.52, xo: 1.28, xi: 0.86 },
+  onibus_laranja: { estilo: 'pesado', eixos: [[-2.35, 0.52], [3.35, 0.52]], cy: 0.52, xo: 1.2, xi: 0.8 },
+  onibus_brasilsul: { estilo: 'pesado', eixos: [[-3.9, 0.52], [-2.65, 0.52], [4.5, 0.52]], cy: 0.52, xo: 1.28, xi: 0.86 },
+  onibus_viacao: { estilo: 'pesado', eixos: [[-4.0, 0.52], [-2.5, 0.52], [4.7, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88 },
 };
 const LARG_RODA = { classico: 0.32, carro: 0.30, esporte: 0.32, suv: 0.36, pesado: 0.30, militar: 0.38 };
 const comRodas = new Set();
@@ -636,7 +642,9 @@ function veiculoGLBNovo(modelo, cor) {
   c.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (tinta) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor || '#ffffff'), tinta); } } });
   const h = (b.max.y - b.min.y) * s;
   if (modelo === 'caveirao' || modelo.startsWith('viatura')) sirene(g, [h + 0.05, modelo === 'caveirao' ? 0.6 : -0.2]);
-  g.userData.eixos = { zf: L * 0.31, zr: -L * 0.31 }; g.userData.modelo = modelo;
+  g.userData.modelo = modelo;
+  if (RODAS[modelo]) { g.userData.glb = modelo; try { montarRodas(g, modelo); } catch (e) { console.warn('rodas:', modelo, e); } }   // ônibus novos: rodas que giram e viram
+  else g.userData.eixos = { zf: L * 0.31, zr: -L * 0.31 };
   return g;
 }
 // placa de texto pintada (letreiro na lataria)

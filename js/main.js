@@ -5059,6 +5059,7 @@ async function criarPoliciaNPC() {
 }
 // percurso fechado (volta da quadra) e ponto nele pelo relógio do servidor: todos veem o robô no mesmo lugar
 // arredonda as esquinas de um caminho fechado (curva de até r metros), para ninguém virar "no canto"
+const R_DIREITA = 4.2;   // raio que deixa o veículo longe da quina da calçada (faixa a 2,4 m do meio-fio)
 function arredondarLaco(pts, rmax = 8) {
   const n = pts.length; if (n < 3) return pts;
   const r = [];
@@ -5068,7 +5069,9 @@ function arredondarLaco(pts, rmax = 8) {
     if (l1 < 0.01 || l2 < 0.01) { r.push(p); continue; }
     const d1 = [(p[0] - a[0]) / l1, (p[1] - a[1]) / l1], d2 = [(b[0] - p[0]) / l2, (b[1] - p[1]) / l2];
     if (Math.abs(d1[0] * d2[1] - d1[1] * d2[0]) < 0.05 && d1[0] * d2[0] + d1[1] * d2[1] > 0) { r.push(p); continue; }
-    const rr = Math.min(rmax, l1 * 0.45, l2 * 0.45), q0 = [p[0] - d1[0] * rr, p[1] - d1[1] * rr], q2 = [p[0] + d2[0] * rr, p[1] + d2[1] * rr];
+    // curva à direita (para o lado da calçada): fechada e rente à faixa, como motorista de ônibus; à esquerda, aberta
+    const dirt = d1[0] * d2[1] - d1[1] * d2[0] > 0;
+    const rr = Math.min(dirt ? R_DIREITA : rmax, l1 * 0.45, l2 * 0.45), q0 = [p[0] - d1[0] * rr, p[1] - d1[1] * rr], q2 = [p[0] + d2[0] * rr, p[1] + d2[1] * rr];
     for (let k = 0; k <= 6; k++) { const t = k / 6, u = 1 - t; r.push([u * u * q0[0] + 2 * u * t * p[0] + t * t * q2[0], u * u * q0[1] + 2 * u * t * p[1] + t * t * q2[1]]); }
   }
   return r;
@@ -9280,7 +9283,7 @@ function montarCaminho(L) {
     const a = bruto[i - 1], p = bruto[i], b = bruto[i + 1], d1 = dir(a, p), d2 = dir(p, b);
     const l1 = Math.hypot(p[0] - a[0], p[1] - a[1]), l2 = Math.hypot(b[0] - p[0], b[1] - p[1]);
     if (Math.abs(d1[0] * d2[1] - d1[1] * d2[0]) < 0.05 && d1[0] * d2[0] + d1[1] * d2[1] > 0) { pts.push(p); continue; }
-    const r = Math.min(9, l1 * 0.45, l2 * 0.45), q0 = [p[0] - d1[0] * r, p[1] - d1[1] * r], q2 = [p[0] + d2[0] * r, p[1] + d2[1] * r];
+    const r = Math.min(d1[0] * d2[1] - d1[1] * d2[0] > 0 ? R_DIREITA : 9, l1 * 0.45, l2 * 0.45), q0 = [p[0] - d1[0] * r, p[1] - d1[1] * r], q2 = [p[0] + d2[0] * r, p[1] + d2[1] * r];
     for (let k = 0; k <= 6; k++) { const t = k / 6, u = 1 - t; pts.push([u * u * q0[0] + 2 * u * t * p[0] + t * t * q2[0], u * u * q0[1] + 2 * u * t * p[1] + t * t * q2[1]]); }
   }
   pts.push(bruto[bruto.length - 1]);
