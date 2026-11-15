@@ -672,7 +672,7 @@ function colocarLojaExtra(x, z) {
 const NOMES_LOCOMOCAO = ['idle', 'idle_long', 'walk', 'run', 'carry_walk', 'walk_shoot', 'algemado_andar'];
 const RESERVA_ANIM = { algemado: 'carregar_parado', algemado_andar: 'carry_walk', rendido: 'idle', levantar_maos: 'idle', arremessar: 'punch_right',
   pegar_caixa: 'pegar', soltar_caixa: 'pegar', embalar: 'pegar', pular: 'idle', pular_correndo: 'run', pular_agarrar: 'idle', pular_descer: 'idle', salto: 'run',
-  queda_livre: 'idle', paraquedas: 'idle', salto_militar: 'run', pular_armado: 'run' };
+  queda_livre: 'idle', paraquedas: 'idle', salto_militar: 'run', pular_armado: 'run', arrombar: 'pegar', incendiar: 'pegar' };
 function prepararClipes(anims) {
   const clipes = {};
   for (const c of anims) clipes[c.name] = c;
@@ -775,10 +775,10 @@ const _maoArma = new THREE.Vector3();
 // Aqui elas são adaptadas "no mundo": cada osso faz o mesmo movimento que faz no robô, a partir da própria pose de descanso.
 const DO_ROBO = ['punch_combo', 'shoot', 'death', 'pickup', 'hit', 'idle', 'punch_left', 'idle_long', 'punch_right', 'walk_shoot', 'carry_walk'];
 const DA_BASE_PARA_TODOS = ['rendido', 'levantar_maos', 'algemado', 'algemado_andar', 'carregar_parado', 'arremessar', 'pegar_caixa', 'soltar_caixa', 'embalar',
-  'pular', 'pular_correndo', 'pular_agarrar', 'pular_descer', 'queda_livre', 'paraquedas', 'salto', 'salto_militar', 'pular_armado'];
+  'pular', 'pular_correndo', 'pular_agarrar', 'pular_descer', 'queda_livre', 'paraquedas', 'salto', 'salto_militar', 'pular_armado', 'arrombar', 'incendiar'];
 let roboBase = null, basesAnimacoes = null;
 // arquivos com as animações (cada um com o esqueleto de onde vieram); o jogo adapta para cada personagem
-const ARQ_ANIMACOES = ['animacoes_base', 'animacoes_caixa', 'animacoes_pulo', 'animacoes_queda'];
+const ARQ_ANIMACOES = ['animacoes_base', 'animacoes_caixa', 'animacoes_pulo', 'animacoes_queda', 'animacoes_crime'];
 function obterBasesAnimacoes() {
   if (!basesAnimacoes) basesAnimacoes = Promise.all(ARQ_ANIMACOES.map((a) => carregarGLB(`assets/personagens/${a}.glb`).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => null))).then((l) => l.filter(Boolean));
   return basesAnimacoes;
@@ -4600,7 +4600,7 @@ async function arrombarCarro(v) {
   if (ocupado) return; ocupado = true;
   try {
     virarPara(v.mesh.position.x, v.mesh.position.z);
-    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 0.7, fade: 0.1 }); jogador.trava = 2.5;
+    jogador.avatar.tocar('arrombar', { umaVez: true, velocidade: 2.97 / 2.5, fade: 0.1 }); jogador.trava = 2.5;   // cotovelada no vidro
     aviso('Arrombando o carro…', 2.5);
     await new Promise((r) => setTimeout(r, 2500));
     await rede.carros.roubar(v.d.id);
@@ -7875,7 +7875,7 @@ async function roubarCarroRua(k) {
   roubandoRua = true;
   const px = l ? l.x : c.x, pz = l ? l.z : c.z, rot = l ? l.r : c.rot;
   virarPara(px, pz); jogador.alvo = null;
-  jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 0.7, fade: 0.1 }); jogador.trava = 2.5;
+  jogador.avatar.tocar('arrombar', { umaVez: true, velocidade: 2.97 / 2.5, fade: 0.1 }); jogador.trava = 2.5;
   aviso('Arrombando o carro…', 2.5);
   await new Promise((r) => setTimeout(r, 2500));
   try {
@@ -8093,7 +8093,7 @@ function pertoDoVeiculo(mesh, x, z, raio) {
 async function incendiarVeiculo(v) {
   if (incendiando) return; incendiando = true;
   const modelo = v.mesh.userData.modelo || (v.l?.d?.tipo), porte = /onibus|caminhao|bombeiros/.test(modelo || '') || v.ref.startsWith('cam:') && v.l?.d?.tipo !== 'van' ? 2 : 1;
-  virarPara(v.x, v.z); jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 0.9, fade: 0.1 }); jogador.trava = 1.2;
+  virarPara(v.x, v.z); jogador.avatar.tocar('incendiar', { umaVez: true, velocidade: 2.97 / 2.6, fade: 0.1 }); jogador.trava = 2.6;   // joga o combustível e o fogo
   try {
     await rede.incendiarVeiculo(v.ref, v.x, v.z, civico.CARROS[modelo]?.nome || NOME_VEICULO[modelo] || 'Veículo', porte);
     ultimoLargado = null; servicos.recarregarFogo();
