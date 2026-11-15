@@ -163,13 +163,11 @@ export const CARROS = {
   van: { nome: 'Van', preco: 0, vel: 11 },
   caminhao_escola: { nome: 'Caminhão da autoescola', preco: 0, vel: 9 },
   caminhao_lixo: { nome: 'Caminhão de lixo', preco: 0, vel: 9 },
-  onibus_urbano: { nome: 'Ônibus urbano', preco: 0, vel: 12 },
-  onibus_executivo: { nome: 'Ônibus executivo', preco: 0, vel: 12 },
-  onibus_executivo2: { nome: 'Ônibus executivo', preco: 0, vel: 12 },
-  onibus_dois_andares: { nome: 'Ônibus de dois andares', preco: 0, vel: 12 },
-  onibus_apache: { nome: 'Ônibus urbano (Apache)', preco: 0, vel: 12 },
-  onibus_busscar: { nome: 'Ônibus urbano (Busscar)', preco: 0, vel: 12 },
-  onibus_articulado: { nome: 'Ônibus articulado', preco: 0, vel: 11 },
+  onibus_amarelo: { nome: 'Ônibus urbano (amarelo)', preco: 0, vel: 12 },
+  onibus_branco: { nome: 'Ônibus urbano (branco)', preco: 0, vel: 12 },
+  onibus_laranja: { nome: 'Ônibus urbano (laranja)', preco: 0, vel: 12 },
+  onibus_brasilsul: { nome: 'Ônibus de viagem dois andares', preco: 0, vel: 13 },
+  onibus_viacao: { nome: 'Ônibus de viagem executivo', preco: 0, vel: 13 },
   aviao_pequeno: { nome: 'Avião pequeno', preco: 0, vel: 40, voa: true },
   aviao_medio: { nome: 'Avião médio', preco: 0, vel: 52, voa: true },
   aviao_grande: { nome: 'Avião grande', preco: 0, vel: 64, voa: true },
@@ -177,7 +175,8 @@ export const CARROS = {
 // arrancada: segundos para chegar perto da velocidade máxima. Os leves arrancam rápido; ônibus e caminhões, devagar.
 const ARRANCADA = { esportivo: 3, classico: 3, popular: 5, viatura: 5, ambulancia: 5.5, presidencial: 5.5, suv: 6.5, militar: 6.5, van: 6.5,
   caminhao: 11, caminhao_escola: 11, caminhao_lixo: 11, bombeiros: 11, exercito_caminhao: 11, tanque: 12,
-  onibus: 12, onibus_urbano: 12, onibus_apache: 12, onibus_busscar: 12, onibus_executivo: 14, onibus_executivo2: 15, onibus_dois_andares: 15, onibus_articulado: 16 };
+  onibus: 12, onibus_urbano: 12, onibus_apache: 12, onibus_busscar: 12, onibus_executivo: 14, onibus_executivo2: 15, onibus_dois_andares: 15, onibus_articulado: 16,
+  onibus_amarelo: 12, onibus_branco: 12, onibus_laranja: 12, onibus_brasilsul: 15, onibus_viacao: 14 };
 // aceleração (m/s²) na velocidade v: forte no começo e mais fraca perto do máximo, como um motor de verdade
 export function aceleracao(modelo, v, max) {
   const T = ARRANCADA[modelo] ?? 6, a0 = 1.21 * max / T, x = Math.min(1, Math.max(0, v / max));
@@ -624,10 +623,13 @@ function modeloCarroBase(modelo, cor) {
 }
 
 // modelos 3D gerados (vêm com a frente em +x e tamanho 1): gira para +z, põe as rodas no chão e ajusta o comprimento
-const GLB_NOVOS = { caveirao: 6, viatura_civil: 4.6, viatura_prf: 4.7, saveiro: 4.4, saveiro_som: 4.4 };
+const GLB_NOVOS = { caveirao: 6, viatura_civil: 4.6, viatura_prf: 4.7, saveiro: 4.4, saveiro_som: 4.4,
+  // ônibus novos (Meshy): os da cidade (circulares) e os de viagem; vêm com a frente em -x
+  onibus_amarelo: 12.5, onibus_branco: 12, onibus_laranja: 12, onibus_brasilsul: 14, onibus_viacao: 14 };
+const FRENTE_MENOS_X = new Set(['onibus_amarelo', 'onibus_branco', 'onibus_laranja', 'onibus_brasilsul', 'onibus_viacao']);
 function veiculoGLBNovo(modelo, cor) {
   const L = GLB_NOVOS[modelo], g = new THREE.Group(), piv = new THREE.Group(), c = ctx.modelo(modelo).clone(true);
-  c.rotation.y = -Math.PI / 2; piv.add(c); piv.updateMatrixWorld(true);
+  c.rotation.y = FRENTE_MENOS_X.has(modelo) ? Math.PI / 2 : -Math.PI / 2; piv.add(c); piv.updateMatrixWorld(true);
   const b = new THREE.Box3().setFromObject(piv), s = L / Math.max(0.01, b.max.z - b.min.z);
   c.position.set(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2); piv.scale.setScalar(s); g.add(piv);
   const tinta = modelo === 'saveiro' ? 0.45 : modelo === 'saveiro_som' ? 0.3 : 0;

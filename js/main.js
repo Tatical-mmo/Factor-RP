@@ -7065,13 +7065,10 @@ function npcAlgemado(n, dt) {
 
 // ---------------------------------------------------------------- janela de escolha simples (contrabandista)
 // créditos dos modelos 3D com licença CC-BY 4.0 (a licença pede o nome do autor e o link da obra)
-const CREDITOS = [
-  ['Caio Apache Vip IV', 'lael.eugenio', 'https://sketchfab.com/3d-models/caio-apache-vip-iv-9d368d4f432b40a18f8882563043ee04'],
-  ['Busscar Ecoss MB OF-1721 - FULL', 'QCY', 'https://sketchfab.com/3d-models/busscar-ecoss-mb-of-1721-full-db6df9e45e17418c9f191f81af27bbcf'],
-];
+const CREDITOS = [];   // (os ônibus do Sketchfab saíram do jogo)
 function creditos() {
-  escolher('📜 Créditos', 'Modelos 3D usados no jogo sob a licença Creative Commons CC-BY 4.0 (creativecommons.org/licenses/by/4.0). Os modelos foram reduzidos e adaptados para o jogo (tamanho, rodas e cabine). Toque para abrir a página original.',
-    CREDITOS.map(([obra, autor, url]) => ({ rotulo: `🚌 "${obra}" · por ${autor} (Sketchfab)`, fn: () => window.open(url, '_blank', 'noopener') })));
+  escolher('📜 Créditos', '<b>Ônibus</b>: modelos 3D gerados por inteligência artificial (Meshy), inspirados nas carrocerias e chassis dos fabricantes brasileiros de ônibus, como <b>Marcopolo</b>, <b>Caio Induscar</b>, <b>Busscar</b>, <b>Comil</b> e <b>Mascarello</b>, e nos chassis <b>Mercedes-Benz</b>, <b>Volvo</b> e <b>Scania</b>. Pinturas, nomes de viações e marcas que aparecem nos ônibus pertencem aos seus donos; o jogo não tem ligação com essas empresas.<br><br><b>Personagens, máscaras e veículos novos</b>: gerados com Meshy e Tripo.',
+    [{ rotulo: 'Ok', fn: () => {} }, ...CREDITOS.map(([obra, autor, url]) => ({ rotulo: `🚌 "${obra}" · por ${autor} (Sketchfab)`, fn: () => window.open(url, '_blank', 'noopener') }))]);
 }
 function escolher(titulo, texto, opcoes) {
   let el = $('escolhaJanela');
@@ -9221,10 +9218,10 @@ const RODO = { x: 135, z: -243, x0: 113, x1: 157, z0: -265, z1: -221, baia: -230
 // cinco plataformas na Rodoviária (oeste → leste). As linhas "circulares" não param na plataforma: passam na calçada
 // do lado leste da rodoviária (ponto Rodoviária) e rodam sem parar o dia todo.
 const PLAT = [117.5, 126.1, 134.7, 143.3, 151.9];
-const URB = ['onibus_urbano', 'onibus_apache', 'onibus_busscar', 'onibus_apache'], EXEC = ['onibus_executivo2', 'onibus_dois_andares'];   // os de viagem vão para as cidades vizinhas
+const URB = ['onibus_amarelo', 'onibus_branco', 'onibus_laranja'], EXEC = ['onibus_brasilsul', 'onibus_viacao'];   // os de viagem vão para as cidades vizinhas
 const ROD = [162, -238, 'Rodoviária', 's'];   // ponto das circulares, na calçada leste da rodoviária
 const LINHAS = [
-  { id: 1, nome: 'Linha 1 · Circular', curto: 'Circular', cor: '#1f6fd1', faixa: PLAT[0], k: 3, fase: 0, modelos: ['onibus_articulado', 'onibus_apache', 'onibus_busscar'],
+  { id: 1, nome: 'Linha 1 · Circular', curto: 'Circular', cor: '#1f6fd1', faixa: PLAT[0], k: 3, fase: 0, modelos: URB,
     rua: [[PLAT[0], -216], [108, -216], [108, -54], [-108, -54], [-108, 54], [108, 54], [108, -270], [PLAT[0], -270]],
     paradas: [[108, -150, 'Concessionária', 's'], [-27, -54, null], [-108, -27, null], [27, 54, null], [108, -110, 'Banco', 'n']] },
   { id: 7, nome: 'Linha 7 · Vila Serra', curto: 'Vila Serra', cor: '#6d4c9f', faixa: PLAT[1], k: 4, fase: 3, modelos: EXEC, inter: true,
@@ -9233,10 +9230,10 @@ const LINHAS = [
   { id: 8, nome: 'Linha 8 · Porto Sul', curto: 'Porto Sul', cor: '#1a8fb0', faixa: PLAT[2], k: 4, fase: 10, modelos: EXEC, inter: true,
     rua: [[PLAT[2], -216], [216, -216], [216, 945], [-81, 945], [-81, 999], [81, 999], [81, 945], [216, 945], [216, -270], [PLAT[2], -270]],
     paradas: [[216, 300, 'Av. Leste', 's'], [216, 600, 'Rodovia Sul', 's'], [70, 945, '🚌 Rodoviária de Porto Sul', 'o'], [0, 999, 'Porto Sul · Centro', 'l'], [216, 560, 'Rodovia Sul', 'n'], [216, 250, 'Av. Leste', 'n']] },
-  { id: 3, nome: 'Linha 3 · Leste', curto: 'Leste', cor: '#2e9e57', faixa: PLAT[3], k: 3, fase: 14, modelos: ['onibus_urbano', 'onibus_articulado', 'onibus_busscar'],
+  { id: 3, nome: 'Linha 3 · Leste', curto: 'Leste', cor: '#2e9e57', faixa: PLAT[3], k: 3, fase: 14, modelos: URB,
     rua: [[PLAT[3], -216], [270, -216], [270, 162], [108, 162], [108, -270], [PLAT[3], -270]],
     paradas: [[270, -90, 'Zona Leste'], [190, 162, 'Cemitério'], [108, 27, null], [108, -180, 'Banco']] },
-  { id: 2, nome: 'Linha 2 · Aeroporto', curto: 'Aeroporto', cor: '#e8891c', faixa: PLAT[4], k: 3, fase: 7, modelos: ['onibus_executivo'],
+  { id: 2, nome: 'Linha 2 · Aeroporto', curto: 'Aeroporto', cor: '#e8891c', faixa: PLAT[4], k: 3, fase: 7, modelos: ['onibus_viacao'],
     rua: [[PLAT[4], -216], [162, -216], [162, -668], [400, -668], [400, -688], [162, -688], [162, -270], [PLAT[4], -270]],
     paradas: [[162, -470, 'Av. do Aeroporto', 'n'], [270, -688, '✈️ Aeroporto · Terminal'], [162, -420, 'Av. do Aeroporto', 's']] },
   // circulares (sem plataforma): começam e terminam na calçada leste da rodoviária
@@ -9376,7 +9373,7 @@ const estadoBus = new Map(), pontosOcupados = [], pontosAntes = [], juncaoAntes 
 let paradasMontadas = false, minhaVolta = null, placasRodo = [];
 // modelo do ônibus de cada saída: as linhas alternam entre os modelos (o mesmo ônibus físico mantém o modelo)
 // comprimento de cada ônibus (o articulado tem 18,6 m): a fila e a espera nos pontos usam o tamanho de verdade
-const COMP_ONIBUS = (mod) => (mod === 'onibus_articulado' ? 18.6 : mod === 'onibus_executivo2' || mod === 'onibus_dois_andares' ? 14 : 12);
+const COMP_ONIBUS = (mod) => (mod === 'onibus_articulado' ? 18.6 : /^onibus_(executivo2|dois_andares|brasilsul|viacao)$/.test(mod) ? 14 : mod === 'onibus_amarelo' ? 12.5 : 12);
 const passoFila = (L) => (L.passoFila ??= Math.max(...L.modelos.map(COMP_ONIBUS)) + 2);
 function modeloSaida(L, m) { const lista = L.modelos.filter((x) => x === 'onibus' || modelos[x]); return lista.length ? lista[(((m % L.k) + L.k) % L.k) % lista.length] : 'onibus'; }
 function corpoOnibus(cor, modelo = 'onibus') { return civico.modeloCarro(modelo, cor); }
