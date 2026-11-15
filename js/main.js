@@ -2654,7 +2654,7 @@ async function iniciarJogo(perfil) {
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
   civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n], addPiso: mundo.addPiso });
-  civico.montarPrefeitura(); civico.montarConcessionaria();
+  civico.montarPrefeitura(); montarBasePrf(); civico.montarConcessionaria();
   { // degraus da entrada da prefeitura: o personagem sobe neles em vez de afundar
     const P = civico.PREFEITURA;
     mundo.addPiso({ x0: P.x - 15, x1: P.x + 15, z0: P.z + 11.4, z1: P.z + 13.7, h: 0.48 });
@@ -5031,6 +5031,33 @@ async function socorrerFerido(alvo) {
     aviso(`✚ Você socorreu ${alvo.r.meta.nome}: +${v} moedas`, 4);
   } catch (e) { aviso(e.message); }
   finally { ocupado = false; }
+}
+
+// ---------------------------------------------------------------- base da PRF (modelo 3D): na saída norte para a rodovia
+// Quarteirão (-135, -405), virado para a rua da rodovia (oeste). Medidas tiradas do modelo (local, frente +z): prédio
+// x -16..5 / z -14..-4,6, marquise da entrada em x -7..-2, garagem x 5..15 e pátio na frente com as viaturas.
+function montarBasePrf() {
+  const glb = modelos.predio_prf; if (!glb) return;
+  const T = { x: -135, z: -405, ang: -Math.PI / 2 }, cs = Math.cos(T.ang), sn = Math.sin(T.ang);
+  mundo.liberarQuadra(T.x, T.z);
+  const mundoDe = (lx, lz) => ({ x: T.x + lx * cs + lz * sn, z: T.z - lx * sn + lz * cs });
+  const caixa = (lx0, lz0, lx1, lz1) => { const a = mundoDe(lx0, lz0), b = mundoDe(lx1, lz1); colisores.push({ tipo: 'caixa', x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z) }); };
+  const g = new THREE.Group(); g.position.set(T.x, 0.18, T.z); g.rotation.y = T.ang;
+  const giro = new THREE.Group(); giro.add(glb.clone(true)); giro.rotation.y = -Math.PI / 2;   // o modelo veio com a frente para +x
+  const m = new THREE.Group(); m.add(giro); m.updateMatrixWorld(true);
+  const bb = new THREE.Box3().setFromObject(m), tam = bb.getSize(new THREE.Vector3()), k = Math.min(34 / (tam.x || 1), 30 / (tam.z || 1));
+  m.scale.setScalar(k); m.position.set(-(bb.min.x + bb.max.x) / 2 * k, -bb.min.y * k, -2 - (bb.min.z + bb.max.z) / 2 * k);
+  m.traverse((q) => { if (q.isMesh) { q.castShadow = true; q.receiveShadow = true; } }); g.add(m); scene.add(g);
+  caixa(-16.2, -14.4, 5, -4.6); caixa(5, -14.4, 15.4, -4.2);   // prédio e garagem
+  // viaturas da PRF estacionadas no pátio, de frente para a saída
+  for (const lx of [7.2, 10.2, 13.2]) {
+    const v = civico.modeloCarro('viatura_prf', '#ffffff'); if (!v) continue;
+    const p = mundoDe(lx, 1.5); v.position.set(p.x, 0.18, p.z); v.rotation.y = T.ang; scene.add(v);
+    caixa(lx - 1.1, -0.9, lx + 1.1, 3.9);
+  }
+  const porta = mundoDe(-4.5, -3); civico.PREFEITURA.prf.x = porta.x; civico.PREFEITURA.prf.z = porta.z;   // o balcão da PRF agora é a porta da base
+  const pl = textoSprite('🚔 PRF · Polícia Rodoviária Federal', { escala: 0.9, fundo: 'rgba(31,63,122,.95)' }); const pp = mundoDe(-5, -4); pl.position.set(pp.x, tam.y * k + 2.2, pp.z); scene.add(pl);
+  const pe = textoSprite('PRF · posto e computador', { escala: 0.5, fundo: '#1f3f7a' }); pe.position.set(porta.x, 3.4, porta.z); scene.add(pe);
 }
 
 // ---------------------------------------------------------------- obras públicas da prefeitura

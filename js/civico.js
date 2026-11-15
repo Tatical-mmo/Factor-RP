@@ -223,7 +223,7 @@ export function montarPrefeitura() {
     ctx.addPiso?.({ x0: X - 5.4, x1: X + 5.4, z0: Z + 5.4, z1: Z + 8.8, h: Y + 2.0, rampa: { eixo: 'z', de: Z + 8.8, ate: Z + 5.4, h0: Y, h1: Y + 2.0 } });
     PREFEITURA.porta.z = Z + 3;                                    // a porta fica no pórtico, lá em cima
     PREFEITURA.porta.x = X;
-    ctx.balcao(PREFEITURA.prf.x, PREFEITURA.prf.z, '#1f3f7a', 'PRF · Polícia Eleitoral', 'Entre em serviço e investigue');
+    if (!ctx.modelo?.('predio_prf')) ctx.balcao(PREFEITURA.prf.x, PREFEITURA.prf.z, '#1f3f7a', 'PRF · Polícia Eleitoral', 'Entre em serviço e investigue');   // com a base 3D, a PRF sai da calçada
     ctx.balcao(PREFEITURA.jornal.x, PREFEITURA.jornal.z, '#6b5326', 'Jornal da Cidade', 'Vire jornalista e faça reportagens');
     return;
   }
@@ -249,7 +249,7 @@ export function montarPrefeitura() {
   ctx.janelas.push(vidro);
   const t1 = ctx.textoSprite('PREFEITURA', { escala: 1.4, fundo: 'rgba(30,50,80,.92)', cor: '#ffe7a8' }); t1.position.set(PREFEITURA.x, 17, PREFEITURA.z + 6); ctx.scene.add(t1);
   ctx.colisores.push({ tipo: 'caixa', x0: PREFEITURA.x - 17, x1: PREFEITURA.x + 17, z0: PREFEITURA.z - 15, z1: PREFEITURA.z + 11 });
-  ctx.balcao(PREFEITURA.prf.x, PREFEITURA.prf.z, '#1f3f7a', 'PRF · Polícia Eleitoral', 'Entre em serviço e investigue');
+  if (!ctx.modelo?.('predio_prf')) ctx.balcao(PREFEITURA.prf.x, PREFEITURA.prf.z, '#1f3f7a', 'PRF · Polícia Eleitoral', 'Entre em serviço e investigue');   // com a base 3D, a PRF sai da calçada
   ctx.balcao(PREFEITURA.jornal.x, PREFEITURA.jornal.z, '#6b5326', 'Jornal da Cidade', 'Vire jornalista e faça reportagens');
 }
 
