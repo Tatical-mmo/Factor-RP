@@ -1437,22 +1437,33 @@ function dirigir(dt) {
   {
     // carro de verdade (modelo de bicicleta): o volante gira aos poucos e volta ao centro sozinho; a curva depende da
     // distância entre os eixos e da velocidade (rápido, o volante "pesa" e a curva fica mais aberta). Sem curva seca.
-    c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * (volante ? 2.6 : 4.5));
-    const tc = tipoCabine(), eixo = tc === 'onibus' ? 6.2 : tc === 'caminhao' ? 4.8 : 2.7, vAbs = Math.abs(c.vel);
-    // ângulo máximo das rodas (devagar dá para manobrar fechado) e limite de aderência: quanto mais rápido, mais aberta a curva
-    // (aceleração lateral máxima ~0,45 g no carro, ~0,3 g em caminhão/ônibus); o tanque gira sobre as esteiras.
-    const tanque = c.modelo === 'tanque', maxEsterco = tc === 'carro' ? 0.6 : 0.65;
+    c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * (volante ? 3.4 : 4.5));
+    // distância entre eixos do próprio modelo (com dois eixos atrás, o efetivo fica mais para trás: vira mais aberto)
+    const tc = tipoCabine(), ex = c.mesh ? civico.eixosDe(c.mesh) : null, vAbs = Math.abs(c.vel);
+    const eixo = ex && ex.zf - ex.zr > 1.5 ? ex.zf - ex.zr : tc === 'onibus' ? 6.2 : tc === 'caminhao' ? 4.8 : 2.7;
+    // ângulo máximo das rodas (devagar dá para manobrar fechado: ônibus e caminhão viram até ~48°, como os de verdade)
+    // e limite de aderência: quanto mais rápido, mais aberta a curva (~0,45 g no carro, ~0,3 g em caminhão/ônibus);
+    // o tanque gira sobre as esteiras.
+    const tanque = c.modelo === 'tanque', maxEsterco = tc === 'carro' ? 0.68 : 0.84;
+    c.eixoTras = tanque || !ex ? 0 : ex.zr;   // o veículo gira em volta do eixo de trás (a frente é que vira)
     const aLat = tanque ? 99 : tc === 'carro' ? (c.modelo === 'esportivo' || c.modelo === 'classico' ? 5.5 : 4.5) : 3;
     let curva = Math.tan(c.volante * maxEsterco) / eixo;
     const curvaMax = aLat / Math.max(1, vAbs * vAbs);
     curva = THREE.MathUtils.clamp(curva, -curvaMax, curvaMax);
     const giro = tanque ? c.volante * 0.9 * Math.min(1, vAbs / 2 + 0.4) : vAbs * curva;
+    c.yawAntes = jogador.yaw;
     jogador.yaw -= giro * dt * Math.sign(c.vel || 1);
   }
   if (c.servico) civico.atualizarSirenes(performance.now() / 1000, c.mesh);
   if (!c.assentado) { resolverColisao(jogador.pos, c.raio || 1.3); c.assentado = true; }
   const antes = { x: jogador.pos.x, z: jogador.pos.z };
-  jogador.pos.x += Math.sin(jogador.yaw) * c.vel * dt; jogador.pos.z += Math.cos(jogador.yaw) * c.vel * dt;
+  {
+    // bicicleta de verdade: o eixo de trás anda reto na direção que estava e a frente (que vira) puxa; o centro do
+    // veículo é posto de volta a partir do eixo de trás. Assim a frente abre na curva e a traseira é arrastada.
+    const zr = c.eixoTras || 0, y0 = c.yawAntes ?? jogador.yaw;
+    const rx = jogador.pos.x + Math.sin(y0) * zr + Math.sin(y0) * c.vel * dt, rz = jogador.pos.z + Math.cos(y0) * zr + Math.cos(y0) * c.vel * dt;
+    jogador.pos.x = rx - Math.sin(jogador.yaw) * zr; jogador.pos.z = rz - Math.cos(jogador.yaw) * zr;
+  }
   if (!c.voa) { colidirVeiculo(c, dt); resolverColisao(jogador.pos, c.raio || 1.3); }
   const andou = Math.hypot(jogador.pos.x - antes.x, jogador.pos.z - antes.z), esperado = Math.abs(c.vel) * dt;
   if (esperado > 0.01 && andou < esperado * 0.6) {          // bateu
@@ -5059,8 +5070,30 @@ async function criarPoliciaNPC() {
 }
 // percurso fechado (volta da quadra) e ponto nele pelo relógio do servidor: todos veem o robô no mesmo lugar
 // arredonda as esquinas de um caminho fechado (curva de até r metros), para ninguém virar "no canto"
-const R_DIREITA = 4.2;   // raio que deixa o veículo longe da quina da calçada (faixa a 2,4 m do meio-fio)
-function arredondarLaco(pts, rmax = 8) {
+// Motorista profissional: com a traseira arrastando (fecha para dentro na curva), quem é comprido abre a curva à
+// direita: vai um pouco para o meio da rua antes da esquina, entra no cruzamento e só então vira, fechado; assim as
+// rodas de trás passam longe da quina da calçada. Quanto maior a distância entre eixos (wb), mais abre.
+// (medido numa simulação do arrasto: carro, ônibus urbano, caminhão e ônibus de viagem passam sem subir)
+const R_DIREITA = 3;
+function abrirCurvas(pts, wb, fechado) {
+  if (!wb) return pts;
+  const n = pts.length, r = [];
+  for (let i = 0; i < n; i++) {
+    const p = pts[i];
+    if (!fechado && (i === 0 || i === n - 1)) { r.push(p); continue; }
+    const a = pts[(i + n - 1) % n], b = pts[(i + 1) % n];
+    const l1 = Math.hypot(p[0] - a[0], p[1] - a[1]), l2 = Math.hypot(b[0] - p[0], b[1] - p[1]);
+    if (l1 < 0.01 || l2 < 0.01) { r.push(p); continue; }
+    const d1 = [(p[0] - a[0]) / l1, (p[1] - a[1]) / l1], d2 = [(b[0] - p[0]) / l2, (b[1] - p[1]) / l2];
+    const cr = d1[0] * d2[1] - d1[1] * d2[0];
+    if (cr < 0.7) { r.push(p); continue; }   // só a curva à direita (a da calçada) de uns 90°
+    const A = Math.min(6 + 1.5 * wb, l1 * 0.4, l2 * 0.4), k = Math.min(0.55 * wb, A * 0.5);
+    r.push([p[0] - d1[0] * A, p[1] - d1[1] * A], [p[0] + (d1[0] - d2[0]) * k, p[1] + (d1[1] - d2[1]) * k], [p[0] + d2[0] * A, p[1] + d2[1] * A]);
+  }
+  return r;
+}
+function arredondarLaco(pts, rmax = 8, wb = 0) {
+  pts = abrirCurvas(pts, wb, true);
   const n = pts.length; if (n < 3) return pts;
   const r = [];
   for (let i = 0; i < n; i++) {
@@ -5070,14 +5103,14 @@ function arredondarLaco(pts, rmax = 8) {
     const d1 = [(p[0] - a[0]) / l1, (p[1] - a[1]) / l1], d2 = [(b[0] - p[0]) / l2, (b[1] - p[1]) / l2];
     if (Math.abs(d1[0] * d2[1] - d1[1] * d2[0]) < 0.05 && d1[0] * d2[0] + d1[1] * d2[1] > 0) { r.push(p); continue; }
     // curva à direita (para o lado da calçada): fechada e rente à faixa, como motorista de ônibus; à esquerda, aberta
-    const dirt = d1[0] * d2[1] - d1[1] * d2[0] > 0;
+    const dirt = wb && d1[0] * d2[1] - d1[1] * d2[0] > 0.7;
     const rr = Math.min(dirt ? R_DIREITA : rmax, l1 * 0.45, l2 * 0.45), q0 = [p[0] - d1[0] * rr, p[1] - d1[1] * rr], q2 = [p[0] + d2[0] * rr, p[1] + d2[1] * rr];
     for (let k = 0; k <= 6; k++) { const t = k / 6, u = 1 - t; r.push([u * u * q0[0] + 2 * u * t * p[0] + t * t * q2[0], u * u * q0[1] + 2 * u * t * p[1] + t * t * q2[1]]); }
   }
   return r;
 }
-function laco(pts, curva = false) {
-  if (curva) pts = arredondarLaco(pts);
+function laco(pts, curva = false, wb = 0) {
+  if (curva) pts = arredondarLaco(pts, 8, wb);
   let total = 0; const seg = [];
   for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length], d = Math.hypot(b[0] - a[0], b[1] - a[1]); seg.push([a, b, d]); total += d; }
   return { seg, total };
@@ -5147,7 +5180,7 @@ function criarViaturas() {
     const cantos = [[ruaC(a), ruaC(b)], [ruaC(c), ruaC(b)], [ruaC(c), ruaC(d)], [ruaC(a), ruaC(d)]];
     const pts = cantos.map(([x, z], i) => { const nx = cantos[(i + 1) % 4][0] - x, nz = cantos[(i + 1) % 4][1] - z, l = Math.hypot(nx, nz); return [x - nz / l * faixa, z + nx / l * faixa]; });
     const obj = civico.modeloCarro('viatura', '#ffffff'); scene.add(obj);
-    viaturas.push({ id: 13 + k, obj, laco: laco(pts, true), vel: 7, fase: k * 120, perseguindo: false });
+    viaturas.push({ id: 13 + k, obj, laco: laco(pts, true, civico.entreEixos('viatura')), vel: 7, fase: k * 120, perseguindo: false });
   });
 }
 // caminhões dos bombeiros fazendo ronda pela cidade (o mais perto de um incêndio vai atender)
@@ -5158,7 +5191,7 @@ function criarRondasBombeiros() {
     const cantos = [[ruaC(a), ruaC(b)], [ruaC(c), ruaC(b)], [ruaC(c), ruaC(d)], [ruaC(a), ruaC(d)]];
     const pts = cantos.map(([x, z], i) => { const nx = cantos[(i + 1) % 4][0] - x, nz = cantos[(i + 1) % 4][1] - z, l = Math.hypot(nx, nz); return [x - nz / l * faixa, z + nx / l * faixa]; });
     const obj = civico.modeloCarro('bombeiros', '#ffffff'); scene.add(obj);
-    rondasBombeiros.push({ obj, laco: laco(pts, true), vel: 6.5, fase: k * 170 + 40, st: { atraso: 0 } });
+    rondasBombeiros.push({ obj, laco: laco(pts, true, civico.entreEixos('bombeiros')), vel: 6.5, fase: k * 170 + 40, st: { atraso: 0 } });
   });
 }
 // vans de entrega NPC rodando pela cidade (dá para sequestrar)
@@ -5170,7 +5203,7 @@ function criarVansNpc() {
     if (k % 2) cantos.reverse();
     const pts = cantos.map(([x, z], i) => { const nx = cantos[(i + 1) % 4][0] - x, nz = cantos[(i + 1) % 4][1] - z, l = Math.hypot(nx, nz); return [x - nz / l * faixa, z + nx / l * faixa]; });
     const obj = civico.modeloCarro('van', ['#f2f2ee', '#d8d8d2', '#c9302c', '#2d5fa8'][k]); scene.add(obj);
-    vansNpc.push({ id: k, obj, laco: laco(pts, true), vel: 7.5, fase: k * 97 + 23, st: { atraso: 0 } });
+    vansNpc.push({ id: k, obj, laco: laco(pts, true, civico.entreEixos('van')), vel: 7.5, fase: k * 97 + 23, st: { atraso: 0 } });
   });
 }
 function atualizarVansNpc(dt) {
@@ -9276,14 +9309,16 @@ function montarCaminho(L) {
     }
     const d = di || dout, n = [-d[1], d[0]]; return [p[0] + n[0] * lado, p[1] + n[1] * lado];
   });
-  const bruto = L.circular ? ruaPts : [...(L.ini || [[f, RODO.baia], [f, RODO.saidaZ]]), ...ruaPts, ...(L.fimPts || [[f, RODO.entrada], [f, RODO.fila], [f, RODO.baia]])];
+  // a linha abre as curvas à direita pelo maior ônibus dela (ver abrirCurvas)
+  const wb = L.wb ?? (L.modelos ? Math.max(...L.modelos.map((m) => civico.entreEixos(m))) : 0);
+  const bruto = abrirCurvas(L.circular ? ruaPts : [...(L.ini || [[f, RODO.baia], [f, RODO.saidaZ]]), ...ruaPts, ...(L.fimPts || [[f, RODO.entrada], [f, RODO.fila], [f, RODO.baia]])], wb, false);
   // arredonda as esquinas (curva de até 7 m)
   const pts = [bruto[0]];
   for (let i = 1; i < bruto.length - 1; i++) {
     const a = bruto[i - 1], p = bruto[i], b = bruto[i + 1], d1 = dir(a, p), d2 = dir(p, b);
     const l1 = Math.hypot(p[0] - a[0], p[1] - a[1]), l2 = Math.hypot(b[0] - p[0], b[1] - p[1]);
     if (Math.abs(d1[0] * d2[1] - d1[1] * d2[0]) < 0.05 && d1[0] * d2[0] + d1[1] * d2[1] > 0) { pts.push(p); continue; }
-    const r = Math.min(d1[0] * d2[1] - d1[1] * d2[0] > 0 ? R_DIREITA : 9, l1 * 0.45, l2 * 0.45), q0 = [p[0] - d1[0] * r, p[1] - d1[1] * r], q2 = [p[0] + d2[0] * r, p[1] + d2[1] * r];
+    const r = Math.min(wb && d1[0] * d2[1] - d1[1] * d2[0] > 0.7 ? R_DIREITA : 9, l1 * 0.45, l2 * 0.45), q0 = [p[0] - d1[0] * r, p[1] - d1[1] * r], q2 = [p[0] + d2[0] * r, p[1] + d2[1] * r];
     for (let k = 0; k <= 6; k++) { const t = k / 6, u = 1 - t; pts.push([u * u * q0[0] + 2 * u * t * p[0] + t * t * q2[0], u * u * q0[1] + 2 * u * t * p[1] + t * t * q2[1]]); }
   }
   pts.push(bruto[bruto.length - 1]);
@@ -10155,7 +10190,7 @@ const CHEIA_EM = 240;   // segundos para encher de novo
 const lixeiraCheia = (l, t) => t - l.coletada > CHEIA_EM;
 const PARADA_LIXO = 8;   // segundos parado em cada lixeira (os garis descem, recolhem e sobem)
 SETORES.forEach((S, k) => {
-  S.cam = { faixa: 351, ini: [[351, -86], [351, -64]], fimPts: [[351, -100], [351, -86]], rua: S.rua }; montarCaminho(S.cam);
+  S.cam = { faixa: 351, ini: [[351, -86], [351, -64]], fimPts: [[351, -100], [351, -86]], rua: S.rua, wb: 5.8 }; montarCaminho(S.cam);
   const n = Math.max(8, Math.min(14, Math.round(S.cam.L / 85))), ini = 45, fim = S.cam.L - 45; S.lix = [];
   for (let i = 0; i < n; i++) {
     const s = ini + (fim - ini) * i / (n - 1), q = pontoCaminho(S.cam, s), rx = -Math.cos(q.ang), rz = Math.sin(q.ang);

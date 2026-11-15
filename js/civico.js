@@ -520,6 +520,13 @@ function montarRodas(g, nome) {
 // gira as rodas pelo quanto cada veículo andou (serve para o seu, os NPCs e os outros jogadores) e vira as da frente
 // distância do centro do modelo até o eixo da frente (zf) e até o de trás (zr); com dois eixos juntos, o meio deles.
 // No articulado conta só a parte da frente (a de trás é um reboque, dobrada à parte).
+// distância entre o eixo que vira e o eixo de trás (efetivo) de um modelo, sem precisar do objeto
+export function entreEixos(modelo) {
+  const R = RODAS[GLB_CARRO[modelo]] || RODAS[modelo]; if (!R || R.eixos.length < 2) return 2.7;
+  const zs = R.eixos.map((a) => a[0]), meio = (Math.max(...zs) + Math.min(...zs)) / 2, media = (l) => l.reduce((a, b) => a + b, 0) / l.length;
+  const f = zs.filter((z) => z >= meio), t = zs.filter((z) => z < meio);
+  return media(f) - (media(t) - (t.length > 1 ? 0.35 * (Math.max(...t) - Math.min(...t)) : 0));
+}
 export function eixosDe(o) {
   if (o.userData.eixos) return o.userData.eixos;
   let glb = null; o.traverse((k) => { glb ||= k.userData?.glb; });
@@ -528,7 +535,8 @@ export function eixosDe(o) {
     const tras = o.getObjectByName('traseira'), zs = R.eixos.map((a) => a[0]).filter((z) => !tras || z > tras.position.z);
     const hi = Math.max(...zs), lo = Math.min(...zs), meio = (hi + lo) / 2, media = (l) => l.reduce((a, b) => a + b, 0) / l.length;
     const f = zs.filter((z) => z >= meio), t = zs.filter((z) => z < meio);
-    if (f.length && t.length) e = { zf: media(f), zr: media(t) };
+    // dois eixos atrás: os pneus arrastam de lado e resistem à curva, como se o eixo ficasse mais para trás do meio deles
+    if (f.length && t.length) e = { zf: media(f), zr: media(t) - (t.length > 1 ? 0.35 * (Math.max(...t) - Math.min(...t)) : 0) };
   }
   const k = o.scale.z || 1; e = { zf: e.zf * k, zr: e.zr * k };
   o.userData.eixos = e; return e;
@@ -550,7 +558,9 @@ export function atualizarRodas(dt, cam) {
     const dyaw = Math.atan2(Math.sin(ry - u.ultY), Math.cos(ry - u.ultY)); u.ultY = ry;
     if (d > 120 || Math.hypot(dx, dz) > 6) continue;
     const anda = dx * Math.sin(ry) + dz * Math.cos(ry);
-    const alvo = Math.abs(anda) > 0.004 ? THREE.MathUtils.clamp(Math.atan(dyaw * 2.6 / anda), -0.55, 0.55) : (u.esterco || 0);
+    // ângulo das rodas da frente pela geometria (bicicleta): giro = andou × tan(ângulo) / entre-eixos
+    const ex = eixosDe(m), wb = Math.max(1.5, ex.zf - ex.zr);
+    const alvo = Math.abs(anda) > 0.004 ? THREE.MathUtils.clamp(Math.atan(dyaw * wb / anda), -0.84, 0.84) : (u.esterco || 0);
     u.esterco = (u.esterco || 0) + (alvo - (u.esterco || 0)) * Math.min(1, dt * 8);
     for (const piv of gr.children) { if (piv.name === 'chassi') continue; const rd = piv.children[0]; if (rd) rd.rotation.x += anda / (rd.userData.raio || 0.4); if (piv.userData.dianteira) piv.rotation.y = u.esterco; }
   }
