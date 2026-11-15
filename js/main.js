@@ -695,7 +695,7 @@ function colocarLojaExtra(x, z) {
 const NOMES_LOCOMOCAO = ['idle', 'idle_long', 'walk', 'run', 'carry_walk', 'walk_shoot', 'algemado_andar'];
 const RESERVA_ANIM = { algemado: 'carregar_parado', algemado_andar: 'carry_walk', rendido: 'idle', levantar_maos: 'idle', arremessar: 'punch_right',
   pegar_caixa: 'pegar', soltar_caixa: 'pegar', embalar: 'pegar', pular: 'idle', pular_correndo: 'run', pular_agarrar: 'idle', pular_descer: 'idle', salto: 'run',
-  queda_livre: 'idle', paraquedas: 'idle', salto_militar: 'run', pular_armado: 'run', arrombar: 'pegar', incendiar: 'pegar', arrombar_vidro: 'arrombar', incendiar_molotov: 'incendiar' };
+  pular_movendo: 'salto', queda_livre: 'idle', paraquedas: 'idle', salto_militar: 'run', pular_armado: 'run', arrombar: 'pegar', incendiar: 'pegar', arrombar_vidro: 'arrombar', incendiar_molotov: 'incendiar' };
 function prepararClipes(anims) {
   const clipes = {};
   for (const c of anims) clipes[c.name] = c;
@@ -798,10 +798,10 @@ const _maoArma = new THREE.Vector3();
 // Aqui elas são adaptadas "no mundo": cada osso faz o mesmo movimento que faz no robô, a partir da própria pose de descanso.
 const DO_ROBO = ['punch_combo', 'shoot', 'death', 'pickup', 'hit', 'idle', 'punch_left', 'idle_long', 'punch_right', 'walk_shoot', 'carry_walk'];
 const DA_BASE_PARA_TODOS = ['rendido', 'levantar_maos', 'algemado', 'algemado_andar', 'carregar_parado', 'arremessar', 'pegar_caixa', 'soltar_caixa', 'embalar',
-  'pular', 'pular_correndo', 'pular_agarrar', 'pular_descer', 'queda_livre', 'paraquedas', 'salto', 'salto_militar', 'pular_armado', 'arrombar', 'incendiar', 'arrombar_vidro', 'incendiar_molotov'];
+  'pular', 'pular_correndo', 'pular_movendo', 'pular_agarrar', 'pular_descer', 'queda_livre', 'paraquedas', 'salto', 'salto_militar', 'pular_armado', 'arrombar', 'incendiar', 'arrombar_vidro', 'incendiar_molotov'];
 let roboBase = null, basesAnimacoes = null;
 // arquivos com as animações (cada um com o esqueleto de onde vieram); o jogo adapta para cada personagem
-const ARQ_ANIMACOES = ['animacoes_base', 'animacoes_caixa', 'animacoes_pulo', 'animacoes_queda', 'animacoes_crime'];
+const ARQ_ANIMACOES = ['animacoes_base', 'animacoes_caixa', 'animacoes_pulo', 'animacoes_pulo2', 'animacoes_queda', 'animacoes_crime'];
 function obterBasesAnimacoes() {
   if (!basesAnimacoes) basesAnimacoes = Promise.all(ARQ_ANIMACOES.map((a) => carregarGLB(`assets/personagens/${a}.glb`).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => null))).then((l) => l.filter(Boolean));
   return basesAnimacoes;
@@ -14683,7 +14683,7 @@ function atualizar87(dt) {
 // Sem nada na frente: pulo (parado ou correndo). Obstáculo fino e baixo (carro, barricada, mureta): salta por cima.
 // Mais alto (muro de até ~3 m): agarra, sobe e desce do outro lado. Prédio, parede grossa ou muro muito alto: não dá.
 const ALTURA_MAX_PULO = 3.3;
-const SOBE_ANIM = { pular_correndo: 0.32, salto_militar: 0.28, pular_armado: 0.28, pular_agarrar: 0.4 };   // quanto cada animação de pulo já sobe o quadril
+const SOBE_ANIM = { pular_movendo: 0.32, pular_correndo: 0.32, salto_militar: 0.28, pular_armado: 0.28, pular_agarrar: 0.4 };   // quanto cada animação de pulo já sobe o quadril
 const saltoTreinado = () => militar() || (!!corporacao() && (treino.corrida || 0) > 0);   // treino militar: salto aprimorado
 function bloqueado(x, z, soFixos = false) {
   const p = new THREE.Vector3(x, 0, z);
@@ -14741,9 +14741,11 @@ function pular() {
   if (ini === null) {   // pulo simples: no lugar, ou para a frente se estava correndo
     let alcance = 0;
     if (correndo) for (let d = 0.3; d <= 2.6; d += 0.3) { if (bloqueado(x0 + dx * d, z0 + dz * d)) break; alcance = d; }
-    pl = { dur: correndo ? 0.95 : 1.0, h: correndo ? 0.42 : 0.3, para: { x: x0 + dx * alcance, z: z0 + dz * alcance } };   // a animação já sobe o quadril (0,2-0,4 m)
+    const novo = correndo && !j.armado && !!av.clipes?.pular_movendo;   // pulo em movimento novo (passada no ar, já sobe o quadril ~0,3 m)
+    pl = { dur: correndo ? 0.9 : 1.0, h: novo ? 0.16 : correndo ? 0.42 : 0.3, para: { x: x0 + dx * alcance, z: z0 + dz * alcance } };   // a animação já sobe o quadril (0,2-0,4 m)
     // armado: o mesmo pulo segurando a arma (o de passar por cima), no tempo do pulo
     if (j.armado) av.tocar('pular_armado', { umaVez: true, velocidade: 0.8 / pl.dur, fade: 0.06 });
+    else if (novo) av.tocar('pular_movendo', { umaVez: true, velocidade: 0.87 / pl.dur, fade: 0.06 });
     else av.tocar(correndo ? 'salto' : 'pular', { umaVez: true, velocidade: correndo ? 3.6 : 2.3, fade: 0.08 });
   } else {
     if (fim === null || fim - ini > 2.4) { aviso('🧱 Largo ou alto demais para pular.', 2); return; }

@@ -204,6 +204,17 @@ const SEM_TINTA = new Set(['onibus_executivo2', 'onibus_dois_andares', 'aviao_pe
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
 export function montarPrefeitura() {
   const g = new THREE.Group(); g.position.set(PREFEITURA.x, 0.18, PREFEITURA.z);
+  const glb = ctx.modelo?.('predio_prefeitura');
+  if (glb) {   // modelo 3D (Meshy) quando existe: ocupa o mesmo lugar do prédio feito por código, frente para a rua (+z)
+    const m = glb.clone(true), bb = new THREE.Box3().setFromObject(m), tam = bb.getSize(new THREE.Vector3()), k = Math.min(34 / (tam.x || 1), 26 / (tam.z || 1));
+    m.scale.setScalar(k); m.position.set(-(bb.min.x + bb.max.x) / 2 * k, -bb.min.y * k, -2 - (bb.min.z + bb.max.z) / 2 * k);
+    m.traverse((q) => { if (q.isMesh) { q.castShadow = true; q.receiveShadow = true; } }); g.add(m); ctx.scene.add(g);
+    const t0 = ctx.textoSprite('PREFEITURA', { escala: 1.4, fundo: 'rgba(30,50,80,.92)', cor: '#ffe7a8' }); t0.position.set(PREFEITURA.x, tam.y * k + 3, PREFEITURA.z + 6); ctx.scene.add(t0);
+    ctx.colisores.push({ tipo: 'caixa', x0: PREFEITURA.x - 17, x1: PREFEITURA.x + 17, z0: PREFEITURA.z - 15, z1: PREFEITURA.z + 11 });
+    ctx.balcao(PREFEITURA.prf.x, PREFEITURA.prf.z, '#1f3f7a', 'PRF · Polícia Eleitoral', 'Entre em serviço e investigue');
+    ctx.balcao(PREFEITURA.jornal.x, PREFEITURA.jornal.z, '#6b5326', 'Jornal da Cidade', 'Vire jornalista e faça reportagens');
+    return;
+  }
   const branco = mat('#f1ece0', { roughness: 0.5 }), creme = mat('#e3d6b8'), cupula = mat('#b9c7cf', { metalness: 0.4, roughness: 0.35 });
   const vidro = mat('#2b3d4f', { roughness: 0.1, metalness: 0.5, emissive: '#ffcf7a', emissiveIntensity: 0 });
   bloco(g, creme, 34, 11, 22, 0, 5.5, -4);
