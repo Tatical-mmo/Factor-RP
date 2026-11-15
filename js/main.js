@@ -671,6 +671,11 @@ const RESERVA_ANIM = { algemado: 'carregar_parado', algemado_andar: 'carry_walk'
 function prepararClipes(anims) {
   const clipes = {};
   for (const c of anims) clipes[c.name] = c;
+  // nomes do Meshy/Mixamo, se a base não carregar: o personagem nunca fica parado de braços abertos
+  for (const [de, para] of [['Running', 'run'], ['Walking', 'walk'], ['Long_Breathe_and_Look_Around', 'idle'], ['Dead', 'death'], ['Hit_Reaction_1', 'hit'], ['Right_Jab_from_Guard', 'punch_right']]) {
+    if (clipes[de] && !clipes[para]) clipes[para] = clipes[de].clone(), clipes[para].name = para;
+  }
+  if (!clipes.idle && clipes.walk) { clipes.idle = THREE.AnimationUtils.subclip(clipes.walk, 'idle', 0, 1, 30); }
   // anima no lugar (o deslocamento é feito pelo código)
   for (const n of NOMES_LOCOMOCAO) {
     const c = clipes[n]; if (!c) continue;
@@ -765,7 +770,7 @@ const DO_ROBO = ['punch_combo', 'shoot', 'death', 'pickup', 'hit', 'idle', 'punc
 const DA_BASE_PARA_TODOS = ['rendido', 'levantar_maos', 'algemado', 'algemado_andar', 'carregar_parado', 'arremessar'];
 let roboBase = null, baseAnimacoes = null;
 function obterBaseAnimacoes() {
-  if (!baseAnimacoes) baseAnimacoes = carregarGLB('assets/personagens/_animacoes.glb').then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => null);
+  if (!baseAnimacoes) baseAnimacoes = carregarGLB('assets/personagens/animacoes_base.glb').then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => null);
   return baseAnimacoes;
 }
 function obterRoboBase() {

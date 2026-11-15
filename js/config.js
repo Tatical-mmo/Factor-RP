@@ -1,7 +1,7 @@
 // Configuração geral do jogo (etapa 1: cidade + personagem)
 
 export const PERSONAGENS = [
-  { id: 'Jovem_Cidade', nome: 'Jovem da Cidade' },   // personagens novos (Meshy): animações do _animacoes.glb
+  { id: 'Jovem_Cidade', nome: 'Jovem da Cidade' },   // personagens novos (Meshy): animações do animacoes_base.glb
   { id: 'Autumn_Traveler', nome: 'Viajante de Outono' },
   { id: 'Bandaged_Trailblazer', nome: 'Desbravador' },
   { id: 'Bandit_Brave', nome: 'Bandido Valente' },
