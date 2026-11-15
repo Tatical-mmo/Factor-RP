@@ -47,9 +47,14 @@ function pode(poder) {
   return p.cargo === 'admin' || (p.cargo === 'moderador' && p.poderes?.[poder] === true);
 }
 function msg(t, ok = true) { const m = $('painelMsg'); m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'erro'); clearTimeout(msg.t); msg.t = setTimeout(() => { m.textContent = ''; }, 4000); }
+// depois de uma ação o painel é redesenhado: guarda a rolagem e volta para o mesmo lugar (antes voltava ao topo
+// ou "corria" e o próximo toque caía em outro botão, por exemplo em outra skin)
+function rolagens() { const l = []; for (let el = $('painelConteudo'); el; el = el.parentElement) if (el.scrollHeight > el.clientHeight + 2) l.push([el, el.scrollTop]); return l; }
+function voltarRolagem(l) { const por = () => { for (const [el, t] of l) el.scrollTop = t; }; por(); requestAnimationFrame(por); setTimeout(por, 120); setTimeout(por, 450); setTimeout(por, 1000); }
 async function executar(fn, sucesso) {
-  try { await fn(); msg(sucesso); if (selecionado) await abrirJogador(selecionado); else desenhar(); }
-  catch (e) { msg(e.message, false); }
+  const rol = rolagens();
+  try { await fn(); msg(sucesso); if (selecionado) await abrirJogador(selecionado); else desenhar(); voltarRolagem(rol); }
+  catch (e) { msg(e.message, false); voltarRolagem(rol); }
 }
 
 function desenhar() {

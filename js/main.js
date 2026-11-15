@@ -14252,7 +14252,7 @@ const faltaPeca = new Set();
 // O jogador compra na loja e usa pela mochila. Cada máscara é ajustada pelo admin no editor da farda (tamanho, altura, frente, giro).
 let mascaraPrevia = null;   // editor da farda: mostra a máscara escolhida no meu personagem
 const glbMascaras = new Map();
-const PADRAO_MASCARA = { cabeca: { subir: 0.06, frente: 0.04, tam: 1.32 }, rosto: { subir: -0.02, frente: 0.16, tam: 0.95 }, boca: { subir: -0.22, frente: 0.14, tam: 1 } };
+const PADRAO_MASCARA = { cabeca: { subir: 0, frente: 0.02, tam: 1.05 }, rosto: { subir: -0.02, frente: 0.16, tam: 0.95 }, boca: { subir: -0.22, frente: 0.14, tam: 1 } };
 function pecaMascara(id) {
   if (!glbMascaras.has(id)) glbMascaras.set(id, carregarGLB(`assets/modelos/${id}.glb`).then((g) => {
     const b = new THREE.Box3().setFromObject(g.scene), t = new THREE.Vector3(), c = new THREE.Vector3(); b.getSize(t); b.getCenter(c);
@@ -14260,6 +14260,41 @@ function pecaMascara(id) {
     return { cena: g.scene, larg: Math.max(t.z, 0.01) };
   }).catch(() => null));
   return glbMascaras.get(id);
+}
+// Medida da cabeça para a máscara IGUAL em todos os personagens: cabelo, tranças, coque, chapéu e óculos
+// bagunçavam a medida (a máscara ia para trás do cabelo ou ficava enorme). Agora: altura e tamanho fixos a partir do
+// pescoço (todos têm o mesmo tamanho de corpo) e a frente pela ponta do nariz (só a faixa do meio do rosto, do
+// queixo ao nariz, onde não tem cabelo nem aba de chapéu). Medido na pose de descanso, no espaço do osso da cabeça.
+const ROSTO = { centro: 0.13, alt: 0.25, larg: 0.17, atrasDoNariz: 0.10 };   // em metros, a partir do pescoço
+function medirRosto(modelo, cabeca, pescoco) {
+  if (!cabeca || !pescoco) return null;
+  let sk = null, malhas = [];
+  modelo.traverse((m) => { if (m.isSkinnedMesh && m.skeleton.bones.includes(cabeca)) { malhas.push(m); sk ||= m.skeleton; } });
+  if (!sk) return null;
+  const ic = sk.bones.indexOf(cabeca), ip = sk.bones.indexOf(pescoco); if (ip < 0) return null;
+  const pesc = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().copy(sk.boneInverses[ip]).invert());   // pescoço no modelo (descanso)
+  const quer = new Set(); sk.bones.forEach((b, i) => { if (b === cabeca || descendeDe(b, cabeca)) quer.add(i); });
+  const v = new THREE.Vector3(), zs = [];
+  for (const m of malhas) {
+    const g = m.geometry, P = g.attributes.position, SI = g.attributes.skinIndex, SW = g.attributes.skinWeight; if (!P || !SI || !SW) continue;
+    for (let k = 0; k < P.count; k++) {
+      let w = 0; for (let c = 0; c < 4; c++) if (quer.has(SI.getComponent(k, c))) w += SW.getComponent(k, c);
+      if (w < 0.4) continue;
+      v.fromBufferAttribute(P, k).applyMatrix4(m.bindMatrix);
+      const dy = v.y - pesc.y; if (dy < 0.05 || dy > 0.16 || Math.abs(v.x - pesc.x) > 0.03) continue;
+      zs.push(v.z);
+    }
+  }
+  if (zs.length < 8) return null;
+  zs.sort((a, b) => a - b); const nariz = zs[Math.floor(zs.length * 0.95)];
+  const bi = sk.boneInverses[ic], R = new THREE.Matrix3().setFromMatrix4(bi);
+  const cima = new THREE.Vector3(0, 1, 0).applyMatrix3(R).normalize();
+  const frente = new THREE.Vector3(0, 0, 1).applyMatrix3(R); frente.addScaledVector(cima, -frente.dot(cima)).normalize();
+  const lado = new THREE.Vector3().crossVectors(cima, frente).normalize();
+  const c = new THREE.Vector3(pesc.x, pesc.y + ROSTO.centro, nariz - ROSTO.atrasDoNariz).applyMatrix4(bi);   // centro da cabeça no osso
+  const k = new THREE.Vector3(0, 1, 0).applyMatrix3(R).length() || 1;   // metros do modelo -> unidades do osso (o esqueleto pode ter escala)
+  const cc = c.dot(cima);
+  return { cima, frente, lado, largura: ROSTO.larg * k, prof: ROSTO.larg * 1.25 * k, baixo: cc - ROSTO.alt * k / 2, topo: cc + ROSTO.alt * k / 2, cl: c.dot(lado), cf: c.dot(frente) };
 }
 function vestirMascara(av, id) {
   if (!av) return;
@@ -14275,7 +14310,7 @@ function vestirMascara(av, id) {
     let cabeca = null, pescoco = null;
     av.modelo.traverse((x) => { if (!x.isBone) return; const n = (x.name || '').toLowerCase().replace(/[^a-z0-9_]/g, ''); if (!cabeca && /head$/.test(n)) cabeca = x; if (!pescoco && /neck$/.test(n)) pescoco = x; });
     if (!cabeca) { av.mascara = null; return; }
-    if (!av._medMascara) av._medMascara = medirParte(av.modelo, cabeca, (b) => descendeDe(b, cabeca) || b === pescoco);
+    if (!av._medMascara) av._medMascara = medirRosto(av.modelo, cabeca, pescoco) || medirParte(av.modelo, cabeca, (b) => descendeDe(b, cabeca) || b === pescoco);
     const mc = av._medMascara; if (!mc) { av.mascara = null; return; }
     const tipo = MASCARAS.find((m) => m.id === id).tipo, pd = PADRAO_MASCARA[tipo], aj = ajusteDe('mk:' + id, 'chapeu');
     const hc = mc.topo - mc.baixo, sc = Math.min(mc.largura, hc * 0.95) * 1.15 * pd.tam * aj.tam / p.larg;
