@@ -829,6 +829,20 @@ function adaptarClipe(clip, cenaR, cenaN) {
   }
   return new THREE.AnimationClip(clip.name, clip.duration, tracks);
 }
+// Todos os personagens do mesmo tamanho: o Meshy entrega todos com 1,70 m contando cabelo e chapéu, então quem tem
+// cabelo alto ou boné fica com o corpo menor (pescoço de 1,29 a 1,41 m). Escala cada um para o pescoço ficar a
+// 1,40 m: corpo, cabeça e ombros ficam iguais e colete/máscara/capacete encaixam do mesmo jeito em todos.
+const ALTURA_PESCOCO = 1.40;
+function padronizarTamanho(modelo, gltf) {
+  if (gltf.userData.escalaPadrao === undefined) {
+    let pescoco = null; gltf.scene.updateMatrixWorld(true);
+    gltf.scene.traverse((o) => { if (!pescoco && o.isBone && /neck$/.test((o.name || '').toLowerCase().replace(/[^a-z0-9_]/g, ''))) pescoco = o; });
+    const y = pescoco ? new THREE.Vector3().setFromMatrixPosition(pescoco.matrixWorld).y : 0;
+    const k = y > 0.5 ? ALTURA_PESCOCO / y : 1;
+    gltf.userData.escalaPadrao = k > 0.85 && k < 1.25 ? k : 1;
+  }
+  if (gltf.userData.escalaPadrao !== 1) modelo.scale.multiplyScalar(gltf.userData.escalaPadrao);
+}
 async function criarAvatar(pasta, id) {
   let gltf;
   // procura em assets/<pasta>/ e, para os personagens de evento, também em personagens/ (onde o robô colocou);
@@ -837,6 +851,7 @@ async function criarAvatar(pasta, id) {
     try { gltf = await carregarGLB(url); break; } catch (e) { console.warn('modelo não carregou:', url, e); }
   }
   const modelo = SkeletonUtils.clone(gltf.scene);
+  if (pasta === 'personagens') padronizarTamanho(modelo, gltf);
   if (!gltf.userData.clipes) {
     let anims = gltf.animations;
     const robo = pasta === 'personagens' ? await obterRoboBase() : null;
@@ -11425,20 +11440,30 @@ function abrirEditorFarda() {
   }
   const el = document.createElement('div'); el.id = 'editorFarda';
   el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(20,24,30,.9);color:#eee;padding:10px 12px 14px;font:14px system-ui;max-height:48vh;overflow:auto;border-top:2px solid #f2a33a;touch-action:pan-y';
-  let papel = jogador.farda || 'policia', peca = 'colete';
+  let papel = jogador.farda || 'policia', peca = 'colete', aba = 'farda';
+  // abas separadas: na de máscaras o personagem fica SEM farda (colete e capacete não atrapalham a ver o rosto)
+  const irAba = (nova) => {
+    aba = nova;
+    if (aba === 'mascara') { if (!papel.startsWith('mk:')) papel = 'mk:' + (MASCARAS[0]?.id || ''); peca = 'chapeu'; mascaraPrevia = papel.slice(3); definirFarda(null, true); }
+    else { if (papel.startsWith('mk:')) papel = antes || 'policia'; peca = 'colete'; mascaraPrevia = null; definirFarda(papel, true); }
+    desenhar();
+  };
   const desenhar = () => {
     const aj = { ...AJ_PADRAO[peca], ...(rascunho[papel]?.[peca] || {}) };
-    el.innerHTML = `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b style="flex:1">👔 Ajuste da farda</b>
+    const sel = (on) => (on ? 'background:#f2a33a;color:#111' : '');
+    el.innerHTML = `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b style="flex:1">${aba === 'farda' ? '👔 Ajuste da farda' : '😷 Ajuste das máscaras'}</b>
         <button data-a="girar">↻ Girar</button><button data-a="fechar">✕</button></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${Object.keys(UNIFORMES).map((k) => `<button data-p="${k}" style="${k === papel ? 'background:#f2a33a;color:#111' : ''}">${NOME_FARDA[k]}</button>`).join('')}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><b style="width:100%;font-size:12px;opacity:.8">😷 Máscaras (ajuste de cada uma)</b>${MASCARAS.map((m) => `<button data-mk="${m.id}" style="${papel === 'mk:' + m.id ? 'background:#f2a33a;color:#111' : ''}">${m.nome}</button>`).join('')}</div>
-      <div style="display:flex;gap:6px;margin-bottom:6px">${[['colete', '🦺 Colete / jaleco'], ['chapeu', '⛑️ Capacete / boné / máscara']].map(([k, t]) => `<button data-q="${k}" style="flex:1;${k === peca ? 'background:#f2a33a;color:#111' : ''}">${t}</button>`).join('')}</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px"><button data-aba="farda" style="flex:1;${sel(aba === 'farda')}">👔 Fardas</button><button data-aba="mascara" style="flex:1;${sel(aba === 'mascara')}">😷 Máscaras (sem farda)</button></div>
+      ${aba === 'farda' ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${Object.keys(UNIFORMES).map((k) => `<button data-p="${k}" style="${sel(k === papel)}">${NOME_FARDA[k]}</button>`).join('')}</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">${[['colete', '🦺 Colete / jaleco'], ['chapeu', '⛑️ Capacete / boné']].map(([k, t]) => `<button data-q="${k}" style="flex:1;${sel(k === peca)}">${t}</button>`).join('')}</div>`
+      : `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${MASCARAS.map((m) => `<button data-mk="${m.id}" style="${sel(papel === 'mk:' + m.id)}">${m.nome}</button>`).join('')}</div>`}
       ${CAMPOS_FARDA[peca].map(([k, n, mi, ma, st]) => `<label style="display:flex;align-items:center;gap:8px;margin:4px 0"><span style="width:110px">${n}</span>
         <input type="range" data-c="${k}" min="${mi}" max="${ma}" step="${st}" value="${aj[k]}" style="flex:1"><b data-v="${k}" style="width:46px;text-align:right">${(+aj[k]).toFixed(2)}</b></label>`).join('')}
       <div style="display:flex;gap:6px;margin-top:8px"><button data-a="zerar" style="flex:1">↺ Padrão desta peça</button><button data-a="salvar" style="flex:1;background:#2f8f4e;color:#fff">💾 Salvar para todos</button></div>
-      <small style="opacity:.75">Mexa e veja no seu personagem. Cada corporação e cada peça têm o seu ajuste. Só muda para todos depois de salvar.</small>`;
+      <small style="opacity:.75">${aba === 'farda' ? 'Mexa e veja no seu personagem. Cada corporação e cada peça têm o seu ajuste.' : 'Seu personagem fica sem farda para ver o rosto. Cada máscara tem o seu ajuste (vale para todos os personagens, que agora têm o mesmo tamanho).'} Só muda para todos depois de salvar.</small>`;
+    el.querySelectorAll('[data-aba]').forEach((b) => { b.onclick = () => irAba(b.dataset.aba); });
     el.querySelectorAll('[data-p]').forEach((b) => { b.onclick = () => { papel = b.dataset.p; mascaraPrevia = null; definirFarda(papel, true); desenhar(); }; });
-    el.querySelectorAll('[data-mk]').forEach((b) => { b.onclick = () => { papel = 'mk:' + b.dataset.mk; peca = 'chapeu'; mascaraPrevia = b.dataset.mk; desenhar(); }; });
+    el.querySelectorAll('[data-mk]').forEach((b) => { b.onclick = () => { papel = 'mk:' + b.dataset.mk; peca = 'chapeu'; mascaraPrevia = b.dataset.mk; definirFarda(null, true); desenhar(); }; });
     el.querySelectorAll('[data-q]').forEach((b) => { b.onclick = () => { peca = b.dataset.q; desenhar(); }; });
     el.querySelectorAll('[data-c]').forEach((r) => {
       r.oninput = () => {
