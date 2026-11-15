@@ -238,10 +238,30 @@ async function abaCidade() {
     <div class="botoes"><label style="flex:1">Compra <input id="cFavP" type="number" inputmode="numeric" min="1000" value="${cf.favela_preco ?? 60000}" style="width:100%"></label>
       <label style="flex:1">Aluguel <input id="cFavA" type="number" inputmode="numeric" min="50" value="${cf.favela_aluguel ?? 200}" style="width:100%"></label></div>
     <div class="botoes"><button id="cFavSalvar">Salvar preços das favelas</button></div>
+    <div class="sub">💊 Hospital e 🏛️ prefeitura</div>
+    <p class="dica">Comissão que o médico ganha por medicação gratuita dada no hospital, e o orçamento público que cai no cofre da prefeitura a cada mandato (na posse do prefeito).</p>
+    <div class="botoes"><label style="flex:1">Comissão por medicação <input id="cCom" type="number" inputmode="numeric" min="0" value="${cf.comissao_remedio ?? 150}" style="width:100%"></label>
+      <label style="flex:1">Orçamento por mandato <input id="cOrc" type="number" inputmode="numeric" min="0" step="10000" value="${cf.orcamento_mandato ?? 500000}" style="width:100%"></label></div>
+    <div class="botoes"><button id="cHospSalvar">Salvar comissão e orçamento</button></div>
+    <div class="sub">🏗️ Obras públicas</div>
+    <p class="dica">Patrimônio da prefeitura só o administrador desfaz. Demolir apaga o prédio e o programa.</p>
+    <div class="lista" id="cObras"><span class="vazio">Carregando…</span></div>
     <div class="sub">👔 Farda</div>
     <p class="dica">Ajuste o tamanho e a posição do colete e do capacete/boné de cada corporação, uma por uma, vendo no seu personagem. Ao salvar, vale para todos.</p>
     <div class="botoes"><button id="cFarda">👔 Ajustar a farda</button></div>`;
   $('cFarda').onclick = () => { fechar(); ctx.ajustarFarda?.(); };
+  $('cHospSalvar').onclick = async () => {
+    try { await rede.hospital.comissao(Number($('cCom').value)); await rede.hospital.orcamento(Number($('cOrc').value)); msg('Comissão e orçamento salvos.'); }
+    catch (e) { msg(/admin_comissao|admin_orcamento|schema cache|does not exist/i.test(e.message || '') ? 'Rode os SQL 93a, 93b e 93c no SQL Editor do Supabase.' : e.message, false); }
+  };
+  const NOMES_OBRA = { cras: '🤝 CRAS', varredores: '🧹 Gabinete dos Varredores', camara: '🏛️ Câmara dos Vereadores' };
+  const listarObras = async () => {
+    const el = $('cObras'); if (!el) return;
+    let ob = []; try { ob = await rede.obras.lista(); } catch { el.innerHTML = '<span class="vazio">Rode o 93c_obras_publicas.sql.</span>'; return; }
+    el.innerHTML = ob.length ? ob.map((o) => `<div class="linha item"><span class="nm"><b>${NOMES_OBRA[o.tipo] || o.tipo}</b><small>terreno ${o.terreno} · ${o.status} · ${o.publica ? 'patrimônio da prefeitura' : 'particular do prefeito'}</small></span><span class="bts"><button data-demolir="${o.id}">Demolir</button></span></div>`).join('') : '<span class="vazio">Nenhuma obra.</span>';
+    el.querySelectorAll('[data-demolir]').forEach((b) => { b.onclick = async () => { try { await rede.obras.demolir(Number(b.dataset.demolir)); msg('Obra demolida.'); ctx.obrasMudaram?.(); listarObras(); } catch (e) { msg(e.message, false); } }; });
+  };
+  listarObras();
   $('cFavSalvar').onclick = async () => {
     try { await rede.configJogo.salvarFavela(Number($('cFavP').value), Number($('cFavA').value)); ctx.configMudou?.(); msg('Preços das favelas salvos.'); }
     catch (e) { msg(/admin_favela|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 83_casas_favela.sql no SQL Editor do Supabase.' : e.message, false); }

@@ -100,19 +100,43 @@ export function colidir(p, raio, resolverLista) {
     resolverLista(novos, p, raio);
   }
 }
-export function altura(x, z) {
+export function altura(x, z) { return alturaBase(x, z, true); }
+// rua = false: o chão sem os 10 cm do asfalto das ruas dos morros (é sobre ele que o asfalto é desenhado)
+function alturaBase(x, z, rua) {
   for (let k = pisos.length - 1; k >= 0; k--) {
     const p = pisos[k];
     if (x < p.x0 || x > p.x1 || z < p.z0 || z > p.z1) continue;
     if (!p.rampa) return p.h;
     const r = p.rampa, v = r.eixo === 'z' ? z : x;
-    return THREE.MathUtils.lerp(r.h0, r.h1, THREE.MathUtils.clamp((v - r.de) / (r.ate - r.de), 0, 1));
+    return THREE.MathUtils.lerp(r.h0, r.h1, THREE.MathUtils.clamp((v - r.de) / (r.ate - r.de), 0, 1)) + (rua && naRuaMorro(x, z) ? 0.1 : 0);   // a rampa é coberta pelo asfalto
   }
   const i = Math.round((x - quadC(0)) / PASSO), j = Math.round((z - quadC(0)) / PASSO);
   if (blocosMetro.has(i + ',' + j) && Math.abs(x - quadC(i)) < QB / 2 && Math.abs(z - quadC(j)) < QB / 2) return 0.18;
-  if (z < -1150) return morro(x, z);
-  if (x > 900 && x < 1100 && z > 948 && z < 1112) return morroPorto(x, z);
-  return alturaNaCalcada(x, z);
+  if (z < -1150 || (x > 900 && x < 1100 && z > 948 && z < 1112)) return chaoDoMorro(x, z, rua);
+  const hc = alturaNaCalcada(x, z);
+  return rua && naRuaMorro(x, z) ? (hc ?? 0) + 0.1 : hc;   // ruas que levam às favelas (fora do relevo)
+}
+// chão dos morros igual ao que aparece na tela: o asfalto das ruas fica 10 cm acima do terreno e o gramado é uma malha
+// de triângulos (10 m na Serra, 2,5 m no Porto) que corta as curvas do relevo; antes o pé afundava no meio dos triângulos
+function chaoDoMorro(x, z, rua) {
+  const serra = z < -1150, nat = serra ? morro(x, z) : morroPorto(x, z);
+  if (!rua) return nat;
+  if (naRuaMorro(x, z)) return nat + 0.1;
+  return (serra ? naMalha(morro, 0, -1340, 900, 380, 90, 38, x, z) : naMalha(morroPorto, 1000, 1030, 200, 164, 80, 66, x, z)) ?? nat;
+}
+function naRuaMorro(x, z) {
+  if (!((z < -1090 && z > -1400 && x > -175 && x < 175) || (z > 930 && z < 1112 && x > 80 && x < 1100))) return false;
+  for (const [rx, rz, w, d, , desenhar] of ruasMorro) if (desenhar && Math.abs(x - rx) <= w / 2 && Math.abs(z - rz) <= d / 2) return true;
+  return false;
+}
+function naMalha(fn, cx, cz, W, D, nx, nz, x, z) {   // altura no triângulo da PlaneGeometry (diagonal igual à do three.js)
+  const sx = W / nx, sz = D / nz, x0 = cx - W / 2, z0 = cz - D / 2;
+  const fi = (x - x0) / sx, fj = (z - z0) / sz;
+  if (fi < 0 || fj < 0 || fi >= nx || fj >= nz) return null;
+  const i = Math.floor(fi), j = Math.floor(fj), u = fi - i, v = fj - j;
+  const xa = x0 + i * sx, za = z0 + j * sz, h = (a, b) => fn(xa + a * sx, za + b * sz) + 0.05;
+  if (u + v <= 1) { const ha = h(0, 0); return ha + u * (h(1, 0) - ha) + v * (h(0, 1) - ha); }
+  const hc = h(1, 1); return hc + (1 - u) * (h(0, 1) - hc) + (1 - v) * (h(1, 0) - hc);
 }
 // calçadas fora do centro (cidades vizinhas, bairros novos, quartel): o chão sobe junto com a calçada desenhada
 // (antes só o centro sabia a altura e o personagem afundava 18 cm nelas)
@@ -729,7 +753,7 @@ function montarFavelasMalhas() {
     if (!desenhar) continue;
     const nx = Math.max(1, Math.round(w / (vert ? 5 : 2.5))), nz = Math.max(1, Math.round(d / (vert ? 2.5 : 5)));
     const g = new THREE.PlaneGeometry(w, d, nx, nz).rotateX(-Math.PI / 2), q = g.attributes.position;
-    for (let k = 0; k < q.count; k++) { const vx = q.getX(k) + x, vz = q.getZ(k) + z; q.setY(k, (altura(vx, vz) ?? 0) + 0.1); }
+    for (let k = 0; k < q.count; k++) { const vx = q.getX(k) + x, vz = q.getZ(k) + z; q.setY(k, (alturaBase(vx, vz, false) ?? 0) + 0.1); }
     g.computeVertexNormals();
     const m = new THREE.Mesh(g, MAT.asfalto); m.position.set(x, 0, z); m.receiveShadow = true; ctx.scene.add(m);
   }
@@ -947,12 +971,35 @@ function montarChaos() {
   }
 }
 
+// ---------------------------------------------------------------- terreno de obra pública: tira os prédios do quarteirão
+// (depois de gerar o mapa, sem mexer no sorteio: o resto da cidade fica igual). A calçada continua.
+const quadrasLivres = new Set();
+export function liberarQuadra(cx, cz) {
+  const k = cx + ',' + cz; if (quadrasLivres.has(k) || !malhaPredios) return; quadrasLivres.add(k);
+  const x0 = cx - QB / 2, x1 = cx + QB / 2, z0 = cz - QB / 2, z1 = cz + QB / 2;
+  const dentro = (x, z) => x > x0 && x < x1 && z > z0 && z < z1;
+  edificios.forEach((e, i) => {
+    if (!dentro(e.x, e.z) || e.removido) return;
+    e.removido = true; e.h = 0.001; em3d.delete(i); cortados.delete(i);
+    malhaPredios.setMatrixAt(i, _m.makeScale(0, 0, 0));
+    if (idxTelha.has(i)) malhaTelhas.setMatrixAt(idxTelha.get(i), _m.makeScale(0, 0, 0));
+    for (const d of e.det) malhaDet.setMatrixAt(d, _m.makeScale(0, 0, 0));
+    e.det = [];
+  });
+  for (const l of grade.values()) for (const c of l) {
+    if (c.tipo === 'caixa' && c.x0 >= x0 - 0.01 && c.x1 <= x1 + 0.01 && c.z0 >= z0 - 0.01 && c.z1 <= z1 + 0.01) Object.assign(c, { x0: 1e7, x1: 1e7, z0: 1e7, z1: 1e7 });
+  }
+  malhaPredios.instanceMatrix.needsUpdate = true; malhaTelhas.instanceMatrix.needsUpdate = true; malhaDet.instanceMatrix.needsUpdate = true;
+  refazer3d = true;
+}
+
 // ---------------------------------------------------------------- prédios que tapam o jogador ficam cortados
 const cortados = new Set();
 const _ray = new THREE.Ray(), _box = new THREE.Box3();
 let tempoOclusao = 0;
 function definirCorte(i, cortar) {
   const e = edificios[i];
+  if (e.removido) return;
   if (cortar && em3d.has(i)) { em3d.delete(i); refazer3d = true; }
   malhaPredios.setMatrixAt(i, matrizPredio(e, cortar ? Math.min(e.h, 2.2) : e.h));
   if (idxTelha.has(i)) malhaTelhas.setMatrixAt(idxTelha.get(i), matrizTelha(e, !cortar));
@@ -1012,6 +1059,7 @@ export function ativarPredios3d(mapa) {   // mapa: nome -> cena do GLB
 }
 // que modelo usar e para onde o prédio olha (a rua mais perto do lote)
 function tipo3d(e) {
+  if (e.removido) return null;
   if (e.y === 0) return null;                                        // horizonte: longe demais, fica caixa
   if (e.tipo === 'favela') return `favela_casa${e.k || 1}`;          // só troca se o GLB existir
   if (e.tipo === 'casa') return e.h > 4 ? 'predio_sobrado' : (Math.round(e.x * 7 + e.z * 3) % 2 ? 'predio_casa1' : 'predio_casa2');

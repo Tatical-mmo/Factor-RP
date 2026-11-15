@@ -1178,6 +1178,9 @@ function acaoContexto() {
   if (pertoContratante()) { abrirMissoes(); return; }
   if (jogador.perfil.prf) { const alvo = eleitoralProximo(2.4); if (alvo) { prenderEleitoral(alvo); return; } }
   if (jogador.perfil.profissao === 'medico') { const fer = feridoProximo(2.8); if (fer) { socorrerFerido(fer); return; } }
+  if (pertoPrateleira()) { pegarRemediosAlmox(); return; }
+  if (obraNaFrente()) { abrirPrefeitura('obras'); return; }
+  if (podeMedicar()) { const pac = pacienteProximo(2.2); if (pac) { medicarPaciente(pac); return; } }
   const fogo = servicos.fogoProximo(9);
   if (fogo && !jogador.carregando) {
     if (fogo.tipo === 'veiculo' && jogador.perfil.profissao !== 'bombeiro' && !servicos.fogoNoComeco(fogo)) { aviso('🔥 O fogo já cresceu: só os bombeiros conseguem apagar.', 3); return; }
@@ -2616,7 +2619,7 @@ async function iniciarJogo(perfil) {
     Promise.all(nomes.map((n) => Promise.resolve(carregarGLB(`assets/modelos/${n}.glb`)).then((g) => [n, g?.scene]).catch(() => [n, null]))).then((l) => { const m = Object.fromEntries(l.filter(([, c]) => c)); if (Object.keys(m).length) mundo.ativarPredios3d(m); }); }
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
-  civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n] });
+  civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n], addPiso: mundo.addPiso });
   civico.montarPrefeitura(); civico.montarConcessionaria();
   { // degraus da entrada da prefeitura: o personagem sobe neles em vez de afundar
     const P = civico.PREFEITURA;
@@ -2706,7 +2709,7 @@ async function iniciarJogo(perfil) {
     clas: () => [...clasCache.values()], territorios: () => [...territorios.values()].map((v) => v.d),
     minhasEmpresas: () => [...empresas.values()].filter((e) => e.dono === jogador.perfil.id),
     meusCarros: () => [...carrosMundo.values()].map((v) => v.d).filter((d) => d.dono === jogador.perfil.id),
-    veiculos: meusVeiculos, acaoVeiculo, amigosMudaram: () => carregarAmigos(), jornalMudou: () => { tempoJornal = 0.3; tempoTelao = 0; },
+    veiculos: meusVeiculos, acaoVeiculo, obrasMudaram: () => { tObras = 0; }, amigosMudaram: () => carregarAmigos(), jornalMudou: () => { tempoJornal = 0.3; tempoTelao = 0; },
     irRedacao: () => entrarRedacao(), tirarFoto: () => tirarFotoRua(), convidarEstudio: () => convidarEstudio(),
     online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta?.nome || '?' })), bloqueado: (id) => bloqueados.has(id),
     bloqueiosMudaram: () => carregarBloqueios(), sairDaConta: async () => { await rede.sair(); location.reload(); },
@@ -2768,7 +2771,7 @@ async function iniciarJogo(perfil) {
     online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta.nome })),
     averiguar: (id, nome) => iniciarAveriguar(id, nome),
     resetFeito: () => { conexao?.enviar('reset', { de: jogador.perfil.id }); setTimeout(() => location.reload(), 2500); },
-    configMudou: () => { tempoConfig = 0; },
+    configMudou: () => { tempoConfig = 0; }, obrasMudaram: () => { tObras = 0; },
     posicaoDe: (id) => { const r = remotos.get(id); return r?.av?.raiz.visible ? r.av.raiz.position : (r?.alvo || null); },
     minhaPosicao: () => jogador.pos,
     teleportar,
@@ -4995,6 +4998,206 @@ async function socorrerFerido(alvo) {
   finally { ocupado = false; }
 }
 
+// ---------------------------------------------------------------- obras públicas da prefeitura
+// 3 terrenos perto da prefeitura. Em obra: tapume, estrutura subindo, betoneira e pedreiros NPC (só de dia).
+// Pronta: o prédio do programa. Descontinuado: placa "Programa descontinuado" na frente.
+const TERRENOS_OBRA = { 1: { x: -189, z: -135, ang: Math.PI / 2 }, 2: { x: -135, z: -189, ang: 0 }, 3: { x: -81, z: -189, ang: 0 } };
+const NOME_OBRA = { cras: '🤝 CRAS', varredores: '🧹 Gabinete dos Varredores', camara: '🏛️ Câmara dos Vereadores' };
+const obrasVis = new Map();   // terreno -> { chave, g, cols, pedreiros, frente }
+const varredores = [];
+let tObras = 0, obrasLista = [], tProcObras = 20;
+function ehDia() { return noiteAtual < 0.45; }
+function atualizarObras(dt) {
+  if ((tObras -= dt) <= 0) {
+    tObras = 45;
+    rede.obras.lista().then((l) => { obrasLista = l || []; sincronizarObras(); }).catch(() => {});
+  }
+  if ((tProcObras -= dt) <= 0) { tProcObras = 75; rede.obras.processar().catch(() => {}); }
+  const dia = ehDia();
+  for (const v of obrasVis.values()) for (const p of v.pedreiros) p.raiz.visible = dia;
+  atualizarVarredores(dt, dia);
+}
+function sincronizarObras() {
+  const ciclo = Math.floor(agoraServidor() / 1000 / 1920);
+  for (const [t, v] of obrasVis) {
+    const o = obrasLista.find((q) => q.terreno === t);
+    const chave = o && `${o.id}:${o.status}:${o.status === 'construindo' ? Math.min(3, Math.floor((ciclo - o.inicio_ciclo) / Math.max(1, o.pronta_ciclo - o.inicio_ciclo) * 4)) : ''}`;
+    if (!o || chave !== v.chave) { removerObraVis(v); obrasVis.delete(t); }
+  }
+  for (const o of obrasLista) if (!obrasVis.has(o.terreno) && TERRENOS_OBRA[o.terreno]) obrasVis.set(o.terreno, montarObraVis(o, ciclo));
+  const temVarredores = obrasLista.some((o) => o.tipo === 'varredores' && o.status === 'ativa');
+  if (temVarredores && !varredores.length) criarVarredores();
+  if (!temVarredores && varredores.length) { for (const v of varredores) scene.remove(v.av.raiz); varredores.length = 0; }
+}
+function removerObraVis(v) {
+  scene.remove(v.g); for (const s2 of v.sprites) scene.remove(s2);
+  for (const p of v.pedreiros) scene.remove(p.raiz);
+  for (const c of v.cols) { const k = colisores.indexOf(c); if (k >= 0) colisores.splice(k, 1); }
+}
+function montarObraVis(o, ciclo) {
+  const T = TERRENOS_OBRA[o.terreno];
+  mundo.liberarQuadra(T.x, T.z);
+  const g = new THREE.Group(); g.position.set(T.x, 0.18, T.z); g.rotation.y = T.ang;
+  const M = (c, x = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.7, ...x });
+  const bl = (m, w, h, d, px, py, pz) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(px, py, pz); b.castShadow = true; b.receiveShadow = true; g.add(b); return b; };
+  const v = { chave: '', g, cols: [], pedreiros: [], sprites: [], frente: null };
+  const cs = Math.cos(T.ang), sn = Math.sin(T.ang);
+  const mundoDe = (lx, lz) => ({ x: T.x + lx * cs + lz * sn, z: T.z - lx * sn + lz * cs });   // local -> mundo (rotação em y)
+  const caixaCol = (lx0, lz0, lx1, lz1) => { const a = mundoDe(lx0, lz0), b = mundoDe(lx1, lz1); const c = { tipo: 'caixa', x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z) }; colisores.push(c); v.cols.push(c); };
+  const placa = (txt, fundo, ly, lz = 17) => { const p = mundoDe(0, lz); const sp = textoSprite(txt, { escala: 0.8, fundo }); sp.position.set(p.x, ly, p.z); scene.add(sp); v.sprites.push(sp); };
+  v.frente = mundoDe(0, 18.5);
+  if (o.status === 'construindo') {
+    const fase = Math.min(3, Math.floor((ciclo - o.inicio_ciclo) / Math.max(1, o.pronta_ciclo - o.inicio_ciclo) * 4));
+    v.chave = `${o.id}:${o.status}:${fase}`;
+    const terra = M('#8a6a4a', { roughness: 1 }), tap = M('#2f6fd1'), conc = M('#a9a59c'), ferro = M('#6b4a2e', { metalness: 0.4 });
+    bl(terra, 36, 0.06, 36, 0, 0.03, 0);
+    // tapume com portão na frente (+z local)
+    bl(tap, 36, 2.2, 0.15, 0, 1.1, -18); bl(tap, 0.15, 2.2, 36, -18, 1.1, 0); bl(tap, 0.15, 2.2, 36, 18, 1.1, 0);
+    bl(tap, 14, 2.2, 0.15, -11, 1.1, 18); bl(tap, 14, 2.2, 0.15, 11, 1.1, 18);
+    caixaCol(-18, -18.2, 18, -17.8); caixaCol(-18.2, -18, -17.8, 18); caixaCol(17.8, -18, 18.2, 18); caixaCol(-18, 17.8, -4, 18.2); caixaCol(4, 17.8, 18, 18.2);
+    // estrutura: laje, pilares e andares conforme o andamento
+    bl(conc, 24, 0.4, 16, 0, 0.2, -4);
+    const andares = fase + 1;
+    for (let a = 0; a < andares; a++) {
+      for (const px of [-11, -5.5, 0, 5.5, 11]) for (const pz of [-11.5, -4, 3.5]) bl(conc, 0.5, 3.2, 0.5, px, 0.4 + a * 3.4 + 1.6, pz);
+      if (a < andares - 1 || fase === 3) bl(conc, 24, 0.25, 16, 0, 0.4 + (a + 1) * 3.4 - 0.1, -4);
+    }
+    for (let k = 0; k < 6; k++) bl(ferro, 0.06, 2, 0.06, -11 + k * 4.4, 0.4 + andares * 3.4 + 1, -11.5);   // ferragem esperando
+    caixaCol(-12, -12, 12, 4);
+    // grua, betoneira, tijolos e areia
+    bl(M('#e8b923', { metalness: 0.3 }), 0.8, 22, 0.8, 14, 11, -14);
+    bl(M('#e8b923', { metalness: 0.3 }), 18, 0.6, 0.6, 9, 22, -14);
+    bl(M('#555'), 2, 1.2, 1.2, 1, 21.4, -14);
+    const bet = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 1.4, 12).rotateZ(1.1), M('#d84a2a')); bet.position.set(-14, 1.3, 10); bet.castShadow = true; g.add(bet);
+    for (let k = 0; k < 3; k++) bl(M('#b5532c'), 1.6, 0.9, 1.2, 12 - k * 2, 0.45, 12);
+    const areia = new THREE.Mesh(new THREE.ConeGeometry(2.2, 1.6, 12), M('#d9c08a', { roughness: 1 })); areia.position.set(-12, 0.8, 0); g.add(areia);
+    caixaCol(-15, 9, -13, 11); caixaCol(13.6, -14.4, 14.4, -13.6);
+    scene.add(g);
+    placa(`🏗️ OBRA DA PREFEITURA · ${NOME_OBRA[o.tipo] || o.tipo}`, 'rgba(190,120,20,.95)', 4.2);
+    placa(`pronta em ${Math.max(0, o.pronta_ciclo - ciclo)} ciclo(s) · ${o.publica ? 'dinheiro público' : 'dinheiro do prefeito'}`, 'rgba(20,24,34,.9)', 3.3);
+    // pedreiros NPC (somem à noite)
+    const vagas = [[-6, 6, 'arrombar'], [4, 7, 'pegar'], [-9, -13, 'arrombar'], [8, 10, 'carry_walk']];
+    vagas.forEach(([lx, lz, anim], k) => {
+      const quem = PERSONAGENS[(o.id * 7 + k * 5) % PERSONAGENS.length].id;
+      criarAvatar('personagens', quem).then((av) => {
+        if (!obrasVis.has(o.terreno) || obrasVis.get(o.terreno) !== v) return;
+        const p = mundoDe(lx, lz); av.raiz.position.set(p.x, 0.18, p.z); av.raiz.rotation.y = T.ang + (k % 2 ? Math.PI : 0);
+        const et = textoSprite('👷 Pedreiro', { escala: 0.45, fundo: 'rgba(190,120,20,.95)' }); et.position.y = 2.15; av.raiz.add(et);
+        const capacete = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), M('#f2c230')); capacete.position.y = 1.78; av.raiz.add(capacete);
+        av.raiz.visible = ehDia(); scene.add(av.raiz); av.tocar(anim, { velocidade: anim === 'arrombar' ? 1.1 : 0.9 });
+        v.pedreiros.push(av); avataresObra.add(av);
+      }).catch(() => {});
+    });
+    return v;
+  }
+  v.chave = `${o.id}:${o.status}:`;
+  const parede = { cras: '#efe9dc', varredores: '#e9e4d6', camara: '#f1ede4' }[o.tipo] || '#ddd', faixa = { cras: '#2f9e5b', varredores: '#e07a1f', camara: '#8a6b2a' }[o.tipo] || '#555';
+  if (o.tipo === 'camara') {
+    bl(M('#cfc8b8'), 30, 0.6, 22, 0, 0.3, -3);
+    bl(M(parede), 28, 9, 18, 0, 5.1, -4);
+    for (let k = 0; k < 6; k++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 8, 14), M('#f7f4ee')); c.position.set(-10 + k * 4, 4.6, 6.2); c.castShadow = true; g.add(c); }
+    bl(M('#e6dfcf'), 24, 1.2, 3, 0, 9.2, 6.2);
+    { const tri = new THREE.Shape([new THREE.Vector2(-12.5, 0), new THREE.Vector2(12.5, 0), new THREE.Vector2(0, 3.2)]);   // frontão triangular
+      const fr = new THREE.Mesh(new THREE.ExtrudeGeometry(tri, { depth: 2.6, bevelEnabled: false }), M('#e6dfcf')); fr.position.set(0, 9.8, 4.9); fr.castShadow = true; g.add(fr); }
+    const cup = new THREE.Mesh(new THREE.SphereGeometry(4, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), M('#5f7f8f', { metalness: 0.4 })); cup.position.set(0, 9.6, -4); g.add(cup);
+    for (let k = 0; k < 3; k++) bl(M('#d8d1c1'), 14 - k * 0.01, 0.3, 1.2, 0, 0.75 + k * 0.3, 9.5 - k * 0.9);
+    caixaCol(-14, -13, 14, 5); placa('🏛️ CÂMARA DOS VEREADORES', 'rgba(110,80,30,.95)', 15.5, 7);
+  } else {
+    const alto = o.tipo === 'cras' ? 7 : 4.2, larg = o.tipo === 'cras' ? 24 : 16;
+    bl(M(parede), larg, alto, 14, 0, alto / 2, -4);
+    bl(M(faixa), larg + 0.2, 0.7, 14.2, 0, alto - 0.35, -4);
+    for (let a = 0; a < (o.tipo === 'cras' ? 2 : 1); a++) for (let k = 0; k < 4; k++) bl(M('#2a4a66', { roughness: 0.15, metalness: 0.4 }), 2.2, 1.6, 0.1, -larg / 2 + 3 + k * (larg - 6) / 3, 1.8 + a * 3.2, 3.06);
+    bl(M('#3a2e24'), 2.2, 2.6, 0.12, 0, 1.3, 3.08);
+    bl(M(faixa), 6, 0.25, 2.4, 0, 2.9, 4.2);
+    caixaCol(-larg / 2, -11, larg / 2, 3);
+    if (o.tipo === 'varredores') {   // garagem com carrinhos de lixo
+      bl(M('#b7b0a0'), 9, 3.4, 8, 14, 1.7, -4); caixaCol(9.5, -8, 18.5, 0);
+      for (let k = 0; k < 3; k++) bl(M('#e07a1f'), 0.9, 1.1, 1.3, 11 + k * 1.4, 0.55, 2);
+    }
+    placa(o.tipo === 'cras' ? '🤝 CRAS · Assistência Social' : '🧹 Gabinete dos Varredores · Limpa Rua', o.tipo === 'cras' ? 'rgba(30,110,60,.95)' : 'rgba(190,100,20,.95)', alto + 1.8, 4);
+  }
+  if (o.status === 'descontinuada') {   // placa na frente do prédio
+    for (const sx of [-1.4, 1.4]) bl(M('#555b63', { metalness: 0.4 }), 0.12, 2.4, 0.12, sx, 1.2, 13);
+    bl(M('#b3261e'), 3.6, 1.4, 0.1, 0, 2.6, 13);
+    placa('🚫 Programa descontinuado', 'rgba(170,30,25,.95)', 4.1, 13);
+  }
+  scene.add(g);
+  return v;
+}
+const avataresObra = new Set();
+// varredores NPC da empresa contratada: varrem as calçadas do centro (só de dia)
+function criarVarredores() {
+  const trechos = [[-50, -60, 50, -60], [-60, 40, -60, -40], [60, -40, 60, 40], [-40, 60, 40, 60]];
+  trechos.forEach(([x0, z0, x1, z1], k) => {
+    criarAvatar('personagens', PERSONAGENS[(k * 3 + 1) % PERSONAGENS.length].id).then((av) => {
+      const et = textoSprite('🧹 Varredor', { escala: 0.45, fundo: 'rgba(224,122,31,.95)' }); et.position.y = 2.15; av.raiz.add(et);
+      const vassoura = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.4, 6), new THREE.MeshStandardMaterial({ color: '#8a6a3a' })); vassoura.position.set(0.3, 0.7, 0.35); vassoura.rotation.x = 0.6; av.raiz.add(vassoura);
+      scene.add(av.raiz); av.tocar('walk', { velocidade: 0.55 });
+      varredores.push({ av, a: [x0, z0], b: [x1, z1], t: Math.random(), ida: true });
+    }).catch(() => {});
+  });
+}
+function atualizarVarredores(dt, dia) {
+  for (const v of varredores) {
+    v.av.raiz.visible = dia; if (!dia) continue;
+    const L = Math.hypot(v.b[0] - v.a[0], v.b[1] - v.a[1]) || 1;
+    v.t += (v.ida ? 1 : -1) * dt * 0.75 / L; if (v.t >= 1 || v.t <= 0) { v.ida = !v.ida; v.t = Math.min(1, Math.max(0, v.t)); }
+    const x = v.a[0] + (v.b[0] - v.a[0]) * v.t, z = v.a[1] + (v.b[1] - v.a[1]) * v.t;
+    v.av.raiz.position.set(x, alturaChao(x, z), z); v.av.raiz.rotation.y = Math.atan2((v.b[0] - v.a[0]) * (v.ida ? 1 : -1), (v.b[1] - v.a[1]) * (v.ida ? 1 : -1));
+    v.av.mixer.update(dt);
+  }
+  for (const av of avataresObra) { if (!av.raiz.parent) { avataresObra.delete(av); continue; } if (av.raiz.visible) av.mixer.update(dt); }
+}
+function obraNaFrente() { for (const v of obrasVis.values()) if (v.frente && Math.hypot(jogador.pos.x - v.frente.x, jogador.pos.z - v.frente.z) < 3.2) return v; return null; }
+
+// ---------------------------------------------------------------- hospital: almoxarifado e medicação gratuita
+function noHospital() { return Math.abs(jogador.pos.x - civico.HOSPITAL.x) <= 45 && Math.abs(jogador.pos.z - civico.HOSPITAL.z) <= 45; }
+function funcionarioHospital() { return jogador.perfil?.profissao === 'medico' || jogador.perfil?.cargo === 'admin'; }
+function pertoPrateleira() { const pr = civico.ALMOX.prateleira; return jogador.perfil?.profissao === 'medico' && civico.dentroDoAlmox(jogador.pos.x, jogador.pos.z) && Math.hypot(jogador.pos.x - pr.x, jogador.pos.z - pr.z) < 2.2; }
+function podeMedicar() { return jogador.perfil?.profissao === 'medico' && (jogador.patenteNivel || 1) >= 2 && noHospital(); }
+function pacienteProximo(raio) {
+  let melhor = null, dm = raio;
+  for (const [id, r] of remotos) {
+    if (!r.av?.raiz.visible || r.meta.ferido || r.meta.ceu || r.meta.morto) continue;
+    const d = r.av.raiz.position.distanceTo(jogador.pos);
+    if (d < dm) { dm = d; melhor = { id, r }; }
+  }
+  return melhor;
+}
+let avisouAlmox = 0;
+function vigiarAlmoxarifado() {   // quem não é funcionário é posto para fora
+  if (jogador.carro || funcionarioHospital() || !civico.dentroDoAlmox(jogador.pos.x, jogador.pos.z)) return;
+  const pt = civico.ALMOX.porta; jogador.pos.set(pt.x, alturaChao(pt.x, pt.z), pt.z - 0.6); jogador.alvo = null;
+  if (performance.now() - avisouAlmox > 3000) { avisouAlmox = performance.now(); aviso('🔒 Área restrita: só funcionários do hospital em serviço.', 3); }
+}
+async function pegarRemediosAlmox() {
+  if (ocupado) return; ocupado = true;
+  try {
+    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 1.5, fade: 0.1 }); jogador.trava = 1.0;
+    const n = await rede.hospital.pegar(jogador.pos.x, jogador.pos.z);
+    jogador.perfil.remedios_hosp = n;
+    aviso(`💊 Você pegou remédios do almoxarifado: ${n} na maleta. Medique os pacientes dentro do hospital.`, 4);
+  } catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
+}
+async function medicarPaciente(alvo) {
+  if (ocupado) return; ocupado = true;
+  try {
+    if (!(jogador.perfil.remedios_hosp > 0)) throw new Error('Sua maleta está vazia: pegue remédios no almoxarifado (anexo leste do hospital).');
+    virarPara(alvo.r.av.raiz.position.x, alvo.r.av.raiz.position.z);
+    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 1.5, fade: 0.1 }); jogador.trava = 1.0;
+    const r = await rede.hospital.medicar(alvo.id, jogador.pos.x, jogador.pos.z);
+    jogador.perfil.remedios_hosp = r.restam;
+    aviso(`💊 Você medicou ${r.nome}: +${r.comissao} de comissão · ${r.restam} remédios na maleta${r.restam ? '' : ' (pegue mais no almoxarifado)'}.`, 4);
+  } catch (e) { aviso(e.message); }
+  finally { ocupado = false; }
+}
+function medicado(medico) {
+  if (jogador.morto) return;
+  jogador.vida = Math.min(100, jogador.vida + 50); desenharFome();
+  aviso(`💊 ${medico || 'Um médico'} te medicou de graça: +50 de vida.`, 4);
+}
+
 async function usarRemedio() {
   if (jogador.vida >= 100) { aviso('Sua vida já está cheia.'); return false; }
   await rede.combate.usarRemedio();
@@ -5995,6 +6198,7 @@ function aoComando(c) {
   if (c.tipo === 'teleporte' && c.dados) { teleportar(Number(c.dados.x), Number(c.dados.z)); aviso('Você foi teleportado pela equipe.'); }
   if (c.tipo === 'aviso' && c.dados?.texto) { aviso(c.dados.texto, 5); atualizarJanelaEmpresa(); }
   if (c.tipo === 'socorro') socorrido(c.dados?.medico);
+  if (c.tipo === 'medicado') medicado(c.dados?.medico);
   if (c.tipo === 'reviver') { if (jogador.noCeu) voltarDoCeu('⚡ O General Supremo te reviveu.'); else if (jogador.morto) { levantar(100); aviso('⚡ O General Supremo te reviveu.', 4); } }
   if (c.tipo === 'ceu_oferta') ofertaCeu(c.dados?.nome);
   if (c.tipo === 'bloqueio_carro') {   // o dono bloqueou o carro que eu roubei
@@ -6591,6 +6795,9 @@ function contexto() {
   if (jogador.perfil?.policial && procuradoProximo(2.4)) return ['algemar e prender o procurado', 'Prender'];
   if (jogador.perfil?.prf && eleitoralProximo(2.4)) return ['prender por crime eleitoral (PRF)', 'Prender'];
   if (jogador.perfil?.profissao === 'medico' && feridoProximo(2.8)) return ['socorrer o ferido (+250)', 'Socorrer'];
+  if (obraNaFrente()) return ['obras públicas: programas, CRAS e Câmara', 'Prefeitura'];
+  if (pertoPrateleira()) return [`pegar remédios do almoxarifado (${jogador.perfil.remedios_hosp || 0}/20 na maleta)`, 'Pegar'];
+  if (podeMedicar() && pacienteProximo(2.2)) return [`medicar de graça (+comissão) · ${jogador.perfil.remedios_hosp || 0} na maleta`, 'Medicar'];
   if (servicos.estaApagando()) return ['jogando água no fogo (toque para parar)', 'Parar'];
   { const f = servicos.fogoProximo(9);
     if (f && !jogador.carregando) {
@@ -6736,7 +6943,7 @@ function quadroJogo() {
   atualizarSoldados(dt);
   atualizarCacada(dt);
   tempoArma -= dt; if (tempoArma <= 0) { tempoArma = 0.5; conferirArma(); }
-  atualizarExplosoes(dt); atualizarOndas(dt); atualizarSemPiloto(dt); atualizarContagemMorte();
+  atualizarObras(dt); vigiarAlmoxarifado();   atualizarExplosoes(dt); atualizarOndas(dt); atualizarSemPiloto(dt); atualizarContagemMorte();
   atualizarMira();
   civico.atualizarQuartel(jogador.pos);
   atualizarArea51(dt); atualizarBases(dt); atualizarQuartelExtras(dt); atualizarBaseAerea(dt); atualizarMisseis(dt); avisarAlistamentos(dt); atualizarMarinha(dt);
@@ -7971,6 +8178,15 @@ function veiculoPorRef(ref) {
   if (t === 'seq') { const s = seqOnibus.get(+k); return s?.mesh ? { mesh: s.mesh, x: s.mesh.position.x, z: s.mesh.position.z, l: s } : null; }
   return null;
 }
+// crimes de clã: membro de clã (ou o admin, para testar). Sem clã, o botão aparece mas explica a regra.
+let ignorarCla = false;
+function crimeDeCla() { return ignorarCla || !!jogador.cla || jogador.perfil?.cargo === 'admin'; }
+function sequestroSemCla() {
+  if (crimeDeCla() || !jogador.armado) return null;
+  ignorarCla = true;
+  try { return jujubaParaSequestrar() || onibusParaSequestrar() || vanNpcParaSequestrar() || veiculoEmpresaParaSequestrar(); }
+  finally { ignorarCla = false; }
+}
 // botão extra dos crimes de clã (ao lado do botão de ação, que continua com Entrar/Arrombar/Dirigir)
 function contextoCrime() {
   if (jogador.carregando) return null;
@@ -7981,10 +8197,11 @@ function contextoCrime() {
   const pn = pedestreParaAssaltar(); if (pn) return ['assaltar o pedestre (crime)', '💰 Assaltar', () => assaltarPedestre(pn)];
   const vn = vanNpcParaSequestrar(); if (vn) return ['sequestrar a van (crime de clã)', '🔫 Sequestrar', () => sequestrarVanNpc(vn)];
   const ve = veiculoEmpresaParaSequestrar(); if (ve) return [`sequestrar ${ve.d.tipo === 'van' ? 'a van' : 'o caminhão'} (crime de clã)`, '🔫 Sequestrar', () => sequestrarVeiculoEmpresa(ve)];
+  if (sequestroSemCla()) return ['sequestrar veículo: só membros de clã', '🔫 Sequestrar', () => aviso('🔫 Só membros de clã podem sequestrar veículos. Entre em um clã (menu ☰ → Clã).', 3.5)];
   return null;
 }
 function vanNpcParaSequestrar() {
-  if (!jogador.cla || !jogador.armado || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.onibus || jogador.morto || sequestrando) return null;
+  if (!crimeDeCla() || !jogador.armado || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.onibus || jogador.morto || sequestrando) return null;
   if (jogador.perfil?.policial || jogador.perfil?.prf) return null;
   for (const v of vansNpc) {
     if (v.roubada || !v.obj.visible) continue;
@@ -8064,7 +8281,7 @@ async function assaltarPedestre(n) {
 }
 // caminhão ou van de empresa fazendo entrega, com você na frente apontando a arma
 function veiculoEmpresaParaSequestrar() {
-  if (!jogador.cla || !jogador.armado || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.onibus || jogador.morto || sequestrando || taxi) return null;
+  if (!crimeDeCla() || !jogador.armado || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.onibus || jogador.morto || sequestrando || taxi) return null;
   if (jogador.perfil?.policial || jogador.perfil?.prf) return null;
   for (const c of caminhoes.values()) {
     if (!c.obj?.visible || c.d.status !== 'em_rota' || c.d.roubado || c.d.tipo === 'helicoptero') continue;
@@ -8344,7 +8561,7 @@ function atualizarJujubas(dt) {
   montarComprador();
 }
 function jujubaParaSequestrar() {
-  if (!jogador.cla || !jogador.armado || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.onibus || jogador.morto || sequestrando) return null;
+  if (!crimeDeCla() || !jogador.armado || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.onibus || jogador.morto || sequestrando) return null;
   if (jogador.perfil?.policial || jogador.perfil?.prf || militar()) return null;
   for (const v of viagensJuj.values()) {
     if (v.d.status !== 'em_rota' || !v.mesh?.visible) continue;
@@ -8575,7 +8792,7 @@ const fugitivos = [];                 // NPCs correndo para longe do veículo
 let sequestrando = false, tempoSeqServ = 0, tempoSeqPos = 0;
 const chaveSaida = (linha, saida) => `${linha}.${saida}`;
 function onibusParaSequestrar() {
-  if (!jogador.cla || !jogador.armado || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.onibus || jogador.morto || sequestrando) return null;
+  if (!crimeDeCla() || !jogador.armado || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.onibus || jogador.morto || sequestrando) return null;
   if (jogador.perfil?.policial || jogador.perfil?.prf) return null;
   for (const b of onibusNpc) {
     if (!b.ativo || !b.mesh.visible || b.e?.fila) continue;
@@ -9676,6 +9893,7 @@ function montarRodoviaria() {
   const ilhas = [[114.5, 3], [121.8, 3.4], [130.4, 3.4], [139, 3.4], [147.6, 3.4], [155.3, 3.4]];
   for (const [x, w] of ilhas) {
     caixa(x, y + 0.13, R.z, w, 0.26, R.z1 - R.z0 - 6, ilha, false);
+    { const meia = (R.z1 - R.z0 - 6) / 2; mundo.addPiso({ x0: x - w / 2, x1: x + w / 2, z0: R.z - meia, z1: R.z + meia, h: y + 0.26 }); }   // em cima da ilha (antes o pé afundava 26 cm)
     if (x === 155.3) continue;
     if (glbEm('rodo_cidade', x, y + 0.26, R.z - 2, 32, 4.4, w + 1.2, Math.PI / 2)) continue;   // cobertura 3D (abrigo com bancos)
     caixa(x, y + 4.1, R.z - 2, w + 1.4, 0.25, 32, cobertura);
@@ -9769,6 +9987,8 @@ function montarMiniRodoviarias() {
     for (const pz of [-5, 0, 5]) bl(M('#8a5a2a'), 0.6, 0.45, 2.6, -1.8, 0.45, pz);   // bancos
     bl(M('#2c3440'), 0.15, 1.2, 3.4, -2.8, 2.2, 6);                           // quadro de horários
     g.position.set(x, y, z); g.rotation.y = q.ang; scene.add(g);
+    { const c = Math.abs(Math.cos(q.ang)), sn = Math.abs(Math.sin(q.ang)), hx = 3 * c + 8 * sn, hz = 3 * sn + 8 * c;   // o piso de 20 cm é chão (antes o pé afundava nele)
+      mundo.addPiso({ x0: x - hx, x1: x + hx, z0: z - hz, z1: z + hz, h: y + 0.2 }); }
     const placa = textoSprite(`🚌 Mini Rodoviária de ${L.mini} · ${L.nome}`, { escala: 0.75, fundo: 'rgba(20,24,34,.9)', cor: '#ffd9a0' }); placa.position.set(x, y + 5, z); scene.add(placa);
   }
 }

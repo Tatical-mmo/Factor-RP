@@ -40,11 +40,12 @@ async function desenhar() {
       return;
     }
     $('governoTitulo').textContent = 'Prefeitura';
-    abas.innerHTML = [['prefeito', 'Prefeito'], ['eleicao', 'Eleição'], ['outdoors', 'Outdoors'], ['prf', 'PRF']]
+    abas.innerHTML = [['prefeito', 'Prefeito'], ['obras', 'Obras'], ['eleicao', 'Eleição'], ['outdoors', 'Outdoors'], ['prf', 'PRF']]
       .map(([k, t]) => `<button data-aba="${k}" class="${aba === k ? 'sel' : ''}">${t}</button>`).join('');
     abas.querySelectorAll('button').forEach((b) => { b.onclick = () => { aba = b.dataset.aba; desenhar(); }; });
     const pf = await rede.prefeitura.estado();
     if (aba === 'prefeito') telaPrefeito(c, pf);
+    else if (aba === 'obras') await telaObras(c, pf);
     else if (aba === 'eleicao') await telaEleicao(c, pf);
     else if (aba === 'outdoors') await telaOutdoors(c);
     else await telaPrf(c, pf);
@@ -56,6 +57,51 @@ function tempoMandato(pf) {
   const ciclo = Math.floor(ctx.agora() / 1000 / CICLO), fim = (pf.mandato + 1) * 20;
   const min = Math.max(0, Math.round((fim * CICLO - ctx.agora() / 1000) / 60));
   return { ciclos: Math.max(0, fim - ciclo), min, campanha: ciclo % 20 >= 16 };
+}
+
+const ADIC = [['policia', '🚓 Polícia'], ['bope', '💀 BOPE'], ['prf', '🛡️ PRF'], ['bombeiro', '🚒 Bombeiros'], ['medico', '✚ Hospital']];
+const OBRA = {
+  cras: { nome: '🤝 CRAS', custo: 80000, ciclos: 4, txt: 'Cadastro de jogadores; a cada ciclo até 20 cadastrados sorteados recebem uma doação do cofre.' },
+  varredores: { nome: '🧹 Gabinete dos Varredores', custo: 60000, ciclos: 4, txt: 'Paga 3.000 por ciclo a uma empresa de varredores NPC que limpam as ruas.' },
+  camara: { nome: '🏛️ Câmara dos Vereadores', custo: 150000, ciclos: 6, txt: '10 vagas de vereador (candidatura e votação), salário pago pelo cofre, mandato de 40 ciclos.' },
+};
+const TERRENOS = { 1: 'Terreno oeste da prefeitura', 2: 'Terreno norte da prefeitura', 3: 'Terreno nordeste da prefeitura' };
+
+async function telaObras(c, pf) {
+  const eu = ctx.perfil(), souPrefeito = pf.prefeito === eu.id, ciclo = Math.floor(ctx.agora() / 1000 / CICLO);
+  const [obras, cam] = await Promise.all([rede.obras.lista().catch(() => null), rede.obras.camara().catch(() => null)]);
+  if (!obras) { c.innerHTML = '<p class="dica">As obras públicas ainda não foram instaladas (93c_obras_publicas.sql).</p>'; return; }
+  const camara = obras.find((o) => o.tipo === 'camara' && o.status === 'ativa');
+  const vereadores = camara && cam && cam.legislatura ? await rede.obras.vereadores(cam.legislatura).catch(() => []) : [];
+  const estado = (o) => o.status === 'construindo' ? `🏗️ em obra · pronta em ${Math.max(0, o.pronta_ciclo - ciclo)} ciclo(s) (pedreiros só de dia)` : o.status === 'ativa' ? '✅ funcionando' : '🚫 programa descontinuado';
+  const livres = [1, 2, 3].filter((t) => !obras.some((o) => o.terreno === t)), faltam = Object.keys(OBRA).filter((k) => !obras.some((o) => o.tipo === k));
+  c.innerHTML = `<p class="dica">Obra paga pelo cofre é <b>patrimônio da prefeitura</b> (só o administrador desfaz). Paga com o dinheiro do prefeito, é patrimônio dele. O próximo prefeito pode descontinuar os programas.</p>
+    <div class="lista">${obras.length ? obras.map((o) => `<div class="linha item"><span class="nm"><b>${OBRA[o.tipo]?.nome || o.tipo}</b><small>${TERRENOS[o.terreno]} · ${estado(o)} · ${o.publica ? 'patrimônio da prefeitura' : 'particular do prefeito'}</small></span>
+      <span class="bts">${o.tipo === 'cras' && o.status === 'ativa' ? '<button data-cras="1">Cadastrar-me</button>' : ''}
+      ${souPrefeito && o.status === 'ativa' && (o.mandato < pf.mandato || !o.publica) ? `<button class="perigo" data-desc="${o.id}">Descontinuar</button>` : ''}
+      ${souPrefeito && o.status === 'descontinuada' ? `<button data-ret="${o.id}">Retomar</button>` : ''}</span></div>`).join('') : '<span class="vazio">Nenhuma obra pública ainda.</span>'}</div>
+    ${camara && cam ? `<div class="sub">🏛️ Câmara · ${cam.fase === 'candidatura' ? 'candidaturas abertas' : cam.fase === 'votacao' ? 'votação aberta' : cam.fase === 'mandato' ? `legislatura ${cam.legislatura} (até ${Math.max(0, cam.fase_ate - ciclo)} ciclos)` : 'aguardando'}</div>
+      <div class="lista">${vereadores.length ? vereadores.map((v) => `<div class="linha item"><span class="ic">${v.eleito ? '🎗️' : '🗳'}</span><span class="nm"><b>${esc(v.perfil?.nome)}</b><small>${v.votos} voto(s)${v.eleito ? ' · vereador' : ''}</small></span>
+        <span class="bts">${cam.fase === 'votacao' ? `<button data-vver="${v.jogador}">Votar</button>` : ''}</span></div>`).join('') : '<span class="vazio">Nenhum candidato.</span>'}</div>
+      ${cam.fase === 'candidatura' ? '<div class="botoes"><button id="oCandVer">Candidatar-me a vereador</button></div>' : ''}
+      <p class="dica">Candidatura dura 1 ciclo e a votação 1 ciclo; os 10 mais votados assumem por 40 ciclos com salário de ${num(pf.salario_vereador ?? 1500)} por ciclo.</p>` : ''}
+    ${souPrefeito ? `<div class="sub">Construir</div>
+      ${livres.length && faltam.length ? `${faltam.map((k) => `<p class="dica"><b>${OBRA[k].nome}</b> · ${num(OBRA[k].custo)} · ${OBRA[k].ciclos} ciclos de obra. ${OBRA[k].txt}</p>`).join('')}
+      <div class="form linha-form"><select id="oTipo">${faltam.map((k) => `<option value="${k}">${OBRA[k].nome}</option>`).join('')}</select>
+        <select id="oTer">${livres.map((t) => `<option value="${t}">${TERRENOS[t]}</option>`).join('')}</select>
+        <select id="oPag"><option value="0">Pagar com o cofre</option><option value="1">Pagar com o meu dinheiro</option></select><button id="oConstruir">Construir</button></div>` : '<p class="dica">Sem terreno livre ou todas as obras já existem.</p>'}
+      <div class="sub">Valores dos programas</div>
+      <div class="botoes"><label style="flex:1">CRAS por pessoa <input id="oCras" type="number" min="100" max="3000" value="${pf.valor_cras ?? 500}" inputmode="numeric" style="width:100%"></label>
+        <label style="flex:1">Vereador por ciclo <input id="oVer" type="number" min="0" max="10000" value="${pf.salario_vereador ?? 1500}" inputmode="numeric" style="width:100%"></label></div>
+      <div class="botoes"><button id="oValores">Salvar valores</button></div>` : ''}`;
+  const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
+  c.querySelectorAll('[data-cras]').forEach((b) => { b.onclick = () => executar(() => rede.obras.crasCadastrar(), (n) => `Cadastrado no CRAS (${n} cadastrados). A cada ciclo até 20 são sorteados.`); });
+  c.querySelectorAll('[data-desc]').forEach((b) => { b.onclick = () => confirmar(b, () => executar(() => rede.prefeitura.programa(Number(b.dataset.desc), false), 'Programa descontinuado.').then(() => ctx.obrasMudaram?.())); });
+  c.querySelectorAll('[data-ret]').forEach((b) => { b.onclick = () => executar(() => rede.prefeitura.programa(Number(b.dataset.ret), true), 'Programa retomado.').then(() => ctx.obrasMudaram?.()); });
+  c.querySelectorAll('[data-vver]').forEach((b) => { b.onclick = () => executar(() => rede.obras.votar(b.dataset.vver), 'Voto registrado!'); });
+  on('oCandVer', () => executar(() => rede.obras.candidatar(), 'Candidatura a vereador registrada!'));
+  on('oConstruir', () => { const b = $('oConstruir'); confirmar(b, () => executar(() => rede.prefeitura.construir($('oTipo').value, Number($('oTer').value), $('oPag').value === '1'), (r) => `Obra iniciada: ${r.nome} (${r.ciclos} ciclos).`).then(() => ctx.obrasMudaram?.())); });
+  on('oValores', () => executar(() => rede.prefeitura.valoresProgramas(Math.floor(Number($('oCras').value)), Math.floor(Number($('oVer').value))), 'Valores salvos.'));
 }
 
 function telaPrefeito(c, pf) {
@@ -71,6 +117,12 @@ function telaPrefeito(c, pf) {
       <div class="sub">Seguranças (podem algemar)</div>
       <p class="dica">Até 2 jogadores de confiança. Eles usam algemas como a polícia. Deixe o nome vazio para tirar.</p>
       ${[1, 2].map((k) => `<div class="botoes"><input id="gSeg${k}" placeholder="Nome do jogador" value="${esc(pf['seg' + k]?.nome || '')}"><button data-seg="${k}">Salvar ${k}º segurança</button></div>`).join('')}
+      <div class="sub">💰 Adicional de salário (pago pelo cofre)</div>
+      <p class="dica">O orçamento público (depositado no cofre na posse) paga um adicional sobre o salário de cada minuto em serviço. Sem dinheiro no cofre, o adicional para.</p>
+      ${ADIC.map(([k, n]) => `<div class="botoes"><span style="flex:1">${n}</span><input data-adic="${k}" type="number" min="0" max="100" step="5" value="${Number(pf.adicional?.[k]) || 0}" inputmode="numeric" style="width:70px"><b>%</b><button data-adicok="${k}">Salvar</button></div>`).join('')}
+      <div class="sub">🎁 Doar verba a um jogador</div>
+      <p class="aviso-item">Doar para quem não é de clã é legal. Para <b>membro de clã</b> ou para <b>você mesmo</b> é crime: fica em sigilo no computador da PRF e, se provado, você é cassado, preso e a PRF apreende o dinheiro.</p>
+      <div class="form linha-form"><input id="gDoarNome" placeholder="Nome do jogador"><input id="gDoarV" type="number" min="1" placeholder="Valor do cofre" inputmode="numeric"><button id="gDoarOk">Doar do cofre</button></div>
       <div class="sub">Obras e eventos (gastos legais do cofre)</div>
       <p class="dica">Tudo o que você faz fica no computador da PRF. Transferências do cofre aparecem com o destino em sigilo bancário.</p>
       <div class="form linha-form"><select id="gGastoTipo"><option value="obra">🏗️ Obra pública</option><option value="evento">🎉 Evento na praça</option><option value="bonus">🎖️ Bônus aos servidores em serviço</option></select>
@@ -87,6 +139,8 @@ function telaPrefeito(c, pf) {
   on('gGastoOk', () => { const tipo = $('gGastoTipo').value, v = Math.floor(Number($('gGasto').value)); if (v > 0) confirmar($('gGastoOk'), () => executar(() => rede.prefeitura.gasto(tipo, v), (r) => (tipo === 'bonus' ? `Bônus pago: ${num(r)} para cada servidor em serviço.` : `Pago do cofre: ${num(v)}.`))); });
   on('gVerbaOk', () => { const b = $('gVerbaOk'); confirmar(b, () => executar(() => rede.prefeitura.verba(Number($('gCla').value), Math.floor(Number($('gVerba').value))), 'Verba repassada... discretamente.')); });
   on('gTerrOk', () => { const b = $('gTerrOk'); confirmar(b, () => executar(() => rede.prefeitura.territorio($('gTerr').value, Number($('gCla').value)), 'Território entregue ao clã.')); });
+  c.querySelectorAll('[data-adicok]').forEach((b) => { b.onclick = () => { const k = b.dataset.adicok, v = Math.floor(Number(c.querySelector(`[data-adic="${k}"]`).value)); executar(() => rede.prefeitura.adicional(k, v), `Adicional salvo: ${v}%.`); }; });
+  on('gDoarOk', () => { const b = $('gDoarOk'), nome = $('gDoarNome').value.trim(), v = Math.floor(Number($('gDoarV').value)); if (nome && v > 0) confirmar(b, () => executar(() => rede.prefeitura.doar(nome, v), (r) => `Doados ${num(r.valor)} para ${r.nome}.`)); });
   on('gRenuncia', () => { const b = $('gRenuncia'); confirmar(b, () => executar(() => rede.prefeitura.renunciar(), 'Você renunciou. A prefeitura está vaga.')); });
 }
 
@@ -133,7 +187,7 @@ async function telaOutdoors(c) {
 
 async function telaPrf(c, pf) {
   const eu = ctx.perfil();
-  const topo = `<p class="dica">A <b>PRF</b> é a polícia eleitoral: não obedece ao prefeito e paga <b>120 a cada 3 min</b> de serviço. No <b>🖥️ computador da PRF</b> aparecem todos os gastos do prefeito. As transferências do cofre ficam em <b>sigilo bancário</b>: peça a quebra do sigilo (a Justiça leva 3 min e você precisa continuar em serviço; 1 pedido a cada 10 min). Se o dinheiro foi para um clã, o prefeito é cassado e vira procurado (+3.000).</p>
+  const topo = `<p class="dica">A <b>PRF</b> é a polícia eleitoral: não obedece ao prefeito e paga <b>120 a cada 3 min</b> de serviço. No <b>🖥️ computador da PRF</b> aparecem todos os gastos do prefeito. As transferências do cofre ficam em <b>sigilo bancário</b>: peça a quebra do sigilo (a Justiça leva 3 min e você precisa continuar em serviço; 1 pedido a cada 10 min). Se o dinheiro foi para um clã, um membro de clã ou o próprio prefeito, ele é cassado e vira procurado (+3.000). Na prisão, a PRF <b>apreende o dinheiro desviado</b> e divide igualmente entre os agentes em serviço.</p>
     <p class="dica">Quem tem crimes, é de clã, é policial ou é o prefeito não entra.</p>
     <div class="botoes">${eu.prf ? '<button id="pSair" class="perigo">Sair de serviço</button>' : '<button id="pEntrar">Entrar em serviço na PRF</button>'}</div>`;
   let comp = '';
@@ -457,7 +511,7 @@ async function telaHospital(c) {
     <p class="dica">Recupere toda a vida na hora por <b>150</b> (o valor vai para o cofre da prefeitura). Quem morre sem socorro acorda aqui e paga até 100 de conta.</p>
     <div class="botoes"><button id="hTratar">Tratar (150)</button></div>
     <div class="sub">Plantão médico</div>
-    ${telaProfissao(c, 'medico', 'Médico', 'Médicos em serviço veem os feridos (✚ FERIDO) pela cidade. Chegue perto em até 20 s e toque em <b>Socorrer</b>: a pessoa levanta ali mesmo e você ganha <b>250</b>. Procurados não podem trabalhar no serviço público.')}`;
+    ${telaProfissao(c, 'medico', 'Médico', 'Médicos em serviço veem os feridos (✚ FERIDO) pela cidade. Chegue perto em até 20 s e toque em <b>Socorrer</b>: a pessoa levanta ali mesmo e você ganha <b>250</b>. Do nível <b>Enfermeiro</b> em diante, pegue até 20 remédios no <b>almoxarifado</b> (anexo leste do hospital, só funcionários) e <b>medique de graça</b> quem vier ao hospital (+50 de vida): você ganha comissão por medicação. Na loja o remédio custa 3.000. Procurados não podem trabalhar no serviço público.')}`;
   $('hTratar').onclick = () => (ctx.vida?.() >= 100 ? msg('Sua vida já está cheia.', false) : executar(async () => { const v = await rede.saude.tratar(); ctx.curar?.(); return v; }, 'Vida cheia!'));
   ligarProfissao('medico');
 }
@@ -494,7 +548,8 @@ async function telaTaxi(c) {
 
 async function telaJornal(c) {
   const eu = ctx.perfil(), redator = eu.profissao === 'jornalista' || eu.cargo === 'admin';
-  const [lista, materias, carreira] = await Promise.all([rede.jornal.ultimas().catch(() => []), (redator ? rede.jornal.redacao() : rede.jornal.materias()).catch(() => []), cartaoCarreira('jornalista')]);
+  const [lista, materias, carreira, pauta] = await Promise.all([rede.jornal.ultimas().catch(() => []), (redator ? rede.jornal.redacao() : rede.jornal.materias()).catch(() => []), cartaoCarreira('jornalista'),
+    redator ? rede.jornal.pauta().catch(() => []) : Promise.resolve([])]);
   const quando = (t) => { const m = Math.round((Date.now() - Date.parse(t)) / 60000); return m < 0 ? `agendada para ${new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : m < 1 ? 'agora' : m < 60 ? `há ${m} min` : m < 1440 ? `há ${Math.floor(m / 60)} h` : `há ${Math.floor(m / 1440)} d`; };
   const local = (t) => { const d = new Date(t); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
   c.innerHTML = `${redator ? `<div class="sub">✍️ Redação</div>
@@ -503,6 +558,10 @@ async function telaJornal(c) {
       <input id="mtImagem" placeholder="Link de uma imagem (https://…, opcional)"><label class="dica">Publicar em: <input id="mtQuando" type="datetime-local"></label>
       <div class="botoes"><button id="mtSalvar">📰 Publicar</button><button id="mtLimpar">Limpar</button></div><input id="mtId" type="hidden"></div>` : ''}
     <div class="botoes"><button id="mtRedacao">🏢 Ir à redação (escritório e estúdio de fotos)</button>${redator ? '<button id="mtFoto">📷 Tirar foto agora</button><button id="mtConvidar">📨 Convidar para o estúdio</button>' : ''}</div>
+    ${redator ? `<div class="sub">🏛️ Pauta: dinheiro público</div>
+      <p class="dica">Tudo o que a prefeitura faz com o cofre chega aqui. Transferências sigilosas só mostram o destino depois que a PRF quebra o sigilo. Você decide se vira manchete: <b>Reportar</b> vale 200 (uma reportagem por lançamento).</p>
+      <div class="lista">${pauta.length ? pauta.map((g) => `<div class="linha item"><span class="ic">${g.sigiloso ? (g.destino ? '🔓' : '🔒') : '🧾'}</span><span class="nm"><b>${esc(g.descricao)}${g.valor ? ` · ${num(g.valor)}` : ''}</b><small>${quando(g.criado)} · ${esc(g.quem || 'prefeitura')} · ${g.sigiloso ? (g.destino ? `destino: ${esc(g.destino)}` : 'destino em sigilo bancário') : (g.destino ? esc(g.destino) : 'público')}</small></span>
+        <span class="bts">${g.reportado ? '<small>✔ já noticiado</small>' : `<button data-pauta="${g.id}">Reportar</button>`}</span></div>`).join('') : '<span class="vazio">Nada novo da prefeitura.</span>'}</div>` : ''}
     <div class="sub">📰 Matérias</div>
     <div class="lista" id="mtLista">${materias.length ? materias.map((m) => `<div class="materia">${cartao(m)}<small style="opacity:.6">${quando(m.publicar_em)}${m.editada_em ? ` · editada por ${esc(m.editor_nome || '')}` : ''}</small>
       ${redator ? `<div class="botoes"><button data-editar="${m.id}">Editar texto</button><button class="perigo" data-apagar="${m.id}">Apagar</button></div>` : ''}</div>`).join('') : '<span class="vazio">Nenhuma matéria ainda.</span>'}</div>
@@ -515,6 +574,11 @@ async function telaJornal(c) {
   if ($('mtFoto')) $('mtFoto').onclick = () => { fechar(); ctx.tirarFoto(); };
   if ($('mtConvidar')) $('mtConvidar').onclick = () => { fechar(); ctx.convidarEstudio(); };
   if (!redator) return;
+  c.querySelectorAll('[data-pauta]').forEach((b) => { b.onclick = () => {
+    const g = pauta.find((x) => String(x.id) === b.dataset.pauta); if (!g) return;
+    const titulo = `🏛️ Prefeitura: ${g.descricao}${g.valor ? ` (${num(g.valor)})` : ''}${g.destino ? ` → ${g.destino}` : ''}`.slice(0, 120);
+    executar(() => rede.jornal.publicar('prefeitura', String(g.id), titulo, null, null), (v) => `Manchete publicada! +${v}`);
+  }; });
   const pegar = (id) => materias.find((m) => String(m.id) === String(id));
   c.querySelectorAll('[data-editar]').forEach((b) => { b.onclick = () => { const m = pegar(b.dataset.editar); $('mtId').value = m.id; $('mtTitulo').value = m.titulo; $('mtTexto').value = m.texto || ''; $('mtImagem').value = m.imagem || ''; $('mtQuando').value = local(m.publicar_em); $('mtSalvar').textContent = '💾 Salvar edição'; $('mtTitulo').scrollIntoView({ block: 'center' }); }; });
   c.querySelectorAll('[data-apagar]').forEach((b) => { b.onclick = () => confirmar(b, () => executar(() => rede.jornal.apagar(Number(b.dataset.apagar)), 'Matéria apagada.')); });

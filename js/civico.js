@@ -8,6 +8,8 @@ let ctx = null;
 export const PREFEITURA = { x: -135, z: -135, porta: { x: -135, z: -120.5 }, prf: { x: -146, z: -115 }, jornal: { x: -124, z: -115 } };
 export const CONCESSIONARIA = { x: 135, z: -135, balcao: { x: 135, z: -127.5 } };
 export const BANCO = { x: 81, z: -135, balcao: { x: 75, z: -124 }, empregos: { x: 88, z: -124 } };
+// almoxarifado: anexo do hospital (lado leste), só funcionários entram; a prateleira fica no fundo
+export const ALMOX = { x0: -119.4, x1: -114.4, z0: 135, z1: 144, porta: { x: -116.9, z: 133.6 }, prateleira: { x: -116.9, z: 142.4 } };
 export const HOSPITAL = { x: -135, z: 135, balcao: { x: -131, z: 125 }, saida: { x: -139, z: 124 }, vaga: { x: -145, z: 126, ang: -Math.PI / 2 }, veiculo: null };
 export const CEMITERIO = { x: 135, z: 135 };
 // Quartel do Exército (Porto Sul). Os veículos ficam expostos na garagem aberta e no heliponto; são ilimitados:
@@ -233,6 +235,7 @@ export function montarConcessionaria() {
   const g = new THREE.Group(); g.position.set(CONCESSIONARIA.x, 0.18, CONCESSIONARIA.z);
   const vidro = new THREE.MeshStandardMaterial({ color: '#9fc0d8', roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.3, depthWrite: false });
   bloco(g, mat('#d9dde2'), 28, 0.15, 18, 0, 0.08, -5);
+  ctx.addPiso?.({ x0: CONCESSIONARIA.x - 14, x1: CONCESSIONARIA.x + 14, z0: CONCESSIONARIA.z - 14, z1: CONCESSIONARIA.z + 4, h: 0.335 });   // piso da loja
   bloco(g, mat('#2b2f36'), 28.4, 0.6, 18.4, 0, 6.3, -5);
   bloco(g, mat('#c0392b'), 28.5, 1.1, 0.3, 0, 5.6, 4.2);
   for (const [w, d, x, z] of [[28, 0.1, 0, 4], [0.1, 18, -14, -5], [0.1, 18, 14, -5]]) bloco(g, vidro, w, 5.6, d, x, 2.9, z);
@@ -293,7 +296,38 @@ export function montarHospital() {
   const t = ctx.textoSprite('✚ HOSPITAL', { escala: 1.3, fundo: 'rgba(200,30,30,.92)' }); t.position.set(HOSPITAL.x, 21, HOSPITAL.z - 2); ctx.scene.add(t);
   ctx.colisores.push({ tipo: 'caixa', x0: HOSPITAL.x - 15, x1: HOSPITAL.x + 15, z0: HOSPITAL.z - 3.2, z1: HOSPITAL.z + 13 });
   ctx.balcao(HOSPITAL.balcao.x, HOSPITAL.balcao.z, '#d62828', 'Hospital', 'Tratamento e plantão médico');
+  montarAlmoxarifado();
 }
+function montarAlmoxarifado() {
+  const A = ALMOX, g = new THREE.Group(); g.position.set(0, 0.18, 0);
+  const parede = mat('#e8ecee', { roughness: 0.6 }), faixa = mat('#3a87c8'), piso = mat('#b9c2c8', { roughness: 0.8 });
+  const cx = (A.x0 + A.x1) / 2, cz = (A.z0 + A.z1) / 2, L = A.x1 - A.x0, P = A.z1 - A.z0, H = 3.4, e = 0.22, porta = 1.9;
+  bloco(g, piso, L, 0.06, P, cx, 0.03, cz);
+  bloco(g, parede, L, H, e, cx, H / 2, A.z1 - e / 2);                       // fundo
+  bloco(g, parede, e, H, P, A.x0 + e / 2, H / 2, cz);                       // lados
+  bloco(g, parede, e, H, P, A.x1 - e / 2, H / 2, cz);
+  const lado = (L - porta) / 2;                                              // frente com a porta no meio
+  bloco(g, parede, lado, H, e, A.x0 + lado / 2, H / 2, A.z0 + e / 2);
+  bloco(g, parede, lado, H, e, A.x1 - lado / 2, H / 2, A.z0 + e / 2);
+  bloco(g, parede, porta, H - 2.4, e, cx, 2.4 + (H - 2.4) / 2, A.z0 + e / 2);
+  bloco(g, faixa, L + 0.2, 0.3, P + 0.2, cx, H + 0.15, cz);                  // laje com faixa azul
+  bloco(g, mat('#d62828', { emissive: '#d62828', emissiveIntensity: 0.5 }), 1.6, 0.5, 0.06, cx, 2.85, A.z0 - 0.04);
+  // prateleiras com caixas de remédio
+  const metal = mat('#8d969e', { metalness: 0.6, roughness: 0.4 }), cores = ['#ffffff', '#f2c230', '#5fb3e8', '#e25555'];
+  for (let k = 0; k < 4; k++) bloco(g, metal, L - 1, 0.06, 0.6, cx, 0.4 + k * 0.55, A.z1 - 0.6);
+  for (const sx of [A.x0 + 0.55, A.x1 - 0.55]) bloco(g, metal, 0.06, 2.1, 0.6, sx, 1.05, A.z1 - 0.6);
+  for (let k = 0; k < 4; k++) for (let i = 0; i < 7; i++) bloco(g, mat(cores[(i + k) % 4]), 0.36, 0.3, 0.4, A.x0 + 0.95 + i * 0.52, 0.58 + k * 0.55, A.z1 - 0.6);
+  bloco(g, mat('#7a5a3a'), 0.8, 0.9, 1.6, A.x0 + 0.65, 0.45, A.z0 + 3.2);   // bancada lateral
+  ctx.scene.add(g);
+  const t = ctx.textoSprite('🔒 ALMOXARIFADO · só funcionários', { escala: 0.6, fundo: 'rgba(200,30,30,.92)' }); t.position.set(cx, H + 1.1, A.z0); ctx.scene.add(t);
+  const lad = (L - porta) / 2;
+  ctx.colisores.push({ tipo: 'caixa', x0: A.x0, x1: A.x1, z0: A.z1 - e - 1, z1: A.z1 });                 // fundo + prateleira
+  ctx.colisores.push({ tipo: 'caixa', x0: A.x0, x1: A.x0 + e, z0: A.z0, z1: A.z1 });
+  ctx.colisores.push({ tipo: 'caixa', x0: A.x1 - e, x1: A.x1, z0: A.z0, z1: A.z1 });
+  ctx.colisores.push({ tipo: 'caixa', x0: A.x0, x1: A.x0 + lad, z0: A.z0, z1: A.z0 + e });
+  ctx.colisores.push({ tipo: 'caixa', x0: A.x1 - lad, x1: A.x1, z0: A.z0, z1: A.z0 + e });
+}
+export function dentroDoAlmox(x, z) { return x > ALMOX.x0 + 0.2 && x < ALMOX.x1 - 0.2 && z > ALMOX.z0 + 0.25 && z < ALMOX.z1; }
 
 // quartel dos bombeiros: tijolo vermelho, três portões, torre de treino e caminhão (frente para -Z)
 export function montarBombeiros() {
