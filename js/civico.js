@@ -206,11 +206,23 @@ export function montarPrefeitura() {
   const g = new THREE.Group(); g.position.set(PREFEITURA.x, 0.18, PREFEITURA.z);
   const glb = ctx.modelo?.('predio_prefeitura');
   if (glb) {   // modelo 3D (Meshy) quando existe: ocupa o mesmo lugar do prédio feito por código, frente para a rua (+z)
-    const m = glb.clone(true), bb = new THREE.Box3().setFromObject(m), tam = bb.getSize(new THREE.Vector3()), k = Math.min(34 / (tam.x || 1), 26 / (tam.z || 1));
+    const giro = new THREE.Group(); giro.add(glb.clone(true)); giro.rotation.y = -Math.PI / 2;   // o modelo do Meshy veio com a frente para +x
+    const m = new THREE.Group(); m.add(giro); m.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(m), tam = bb.getSize(new THREE.Vector3()), k = Math.min(34 / (tam.x || 1), 26 / (tam.z || 1));
     m.scale.setScalar(k); m.position.set(-(bb.min.x + bb.max.x) / 2 * k, -bb.min.y * k, -2 - (bb.min.z + bb.max.z) / 2 * k);
     m.traverse((q) => { if (q.isMesh) { q.castShadow = true; q.receiveShadow = true; } }); g.add(m); ctx.scene.add(g);
     const t0 = ctx.textoSprite('PREFEITURA', { escala: 1.4, fundo: 'rgba(30,50,80,.92)', cor: '#ffe7a8' }); t0.position.set(PREFEITURA.x, tam.y * k + 3, PREFEITURA.z + 6); ctx.scene.add(t0);
-    ctx.colisores.push({ tipo: 'caixa', x0: PREFEITURA.x - 17, x1: PREFEITURA.x + 17, z0: PREFEITURA.z - 15, z1: PREFEITURA.z + 11 });
+    // medidas tiradas do modelo (local, frente +z): corpo até z 0,5; pórtico com piso a 2 m (x ±6,7, z 0,5..5,6) e
+    // escadaria (x ±5,4, z 5,6..8,8) descendo até a calçada. Pórtico e escada são chão de verdade: o pé não afunda.
+    const X = PREFEITURA.x, Z = PREFEITURA.z, Y = 0.18, caixa = (x0, z0, x1, z1) => ctx.colisores.push({ tipo: 'caixa', x0: X + x0, x1: X + x1, z0: Z + z0, z1: Z + z1 });
+    caixa(-17, -12.8, 17, 0.5);                                   // prédio
+    caixa(-7.3, 0.5, -6.7, 8.8); caixa(6.7, 0.5, 7.3, 8.8);        // muretas do pórtico e da escada
+    caixa(-6.7, 5.6, -5.4, 8.8); caixa(5.4, 5.6, 6.7, 8.8);        // guarda-corpo da escada
+    for (const [cx, cz] of [[-6, 1], [6, 1], [-6, 3], [6, 3]]) ctx.colisores.push({ tipo: 'circ', x: X + cx, z: Z + cz, r: 0.45 });
+    ctx.addPiso?.({ x0: X - 6.7, x1: X + 6.7, z0: Z + 0.5, z1: Z + 5.4, h: Y + 2.0 });
+    ctx.addPiso?.({ x0: X - 5.4, x1: X + 5.4, z0: Z + 5.4, z1: Z + 8.8, h: Y + 2.0, rampa: { eixo: 'z', de: Z + 8.8, ate: Z + 5.4, h0: Y, h1: Y + 2.0 } });
+    PREFEITURA.porta.z = Z + 3;                                    // a porta fica no pórtico, lá em cima
+    PREFEITURA.porta.x = X;
     ctx.balcao(PREFEITURA.prf.x, PREFEITURA.prf.z, '#1f3f7a', 'PRF · Polícia Eleitoral', 'Entre em serviço e investigue');
     ctx.balcao(PREFEITURA.jornal.x, PREFEITURA.jornal.z, '#6b5326', 'Jornal da Cidade', 'Vire jornalista e faça reportagens');
     return;

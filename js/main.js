@@ -5145,13 +5145,31 @@ function montarObraVis(o, ciclo) {
   const glb = modelos['obra_' + o.tipo];
   const PE = { cras: [24, 14, 9], camara: [30, 22, 15], varredores: [26, 14, 5] }[o.tipo] || [20, 14, 6];
   if (glb) {   // modelo 3D (Meshy) quando existe: ocupa o lote do prédio, frente para a rua
-    const m = glb.clone(true), bb = new THREE.Box3().setFromObject(m), tam = bb.getSize(new THREE.Vector3());
+    const giro = new THREE.Group(); giro.add(glb.clone(true)); giro.rotation.y = -Math.PI / 2;   // os modelos do Meshy vieram com a frente para +x
+    const m = new THREE.Group(); m.add(giro); m.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(m), tam = bb.getSize(new THREE.Vector3());
     const k = Math.min(PE[0] / (tam.x || 1), PE[1] / (tam.z || 1));
     m.scale.setScalar(k); m.position.set(-(bb.min.x + bb.max.x) / 2 * k, -bb.min.y * k, -4 - (bb.min.z + bb.max.z) / 2 * k);
     m.traverse((q) => { if (q.isMesh) { q.castShadow = true; q.receiveShadow = true; } }); g.add(m);
-    caixaCol(-PE[0] / 2, -4 - PE[1] / 2, PE[0] / 2, -4 + PE[1] / 2);
+    if (o.tipo === 'camara') {
+      // Câmara 3D: pódio de 2 m com escadaria na frente (x -5..5, z 6,4 → 1). A escada e o patamar são chão de verdade
+      // (medidos no modelo); o resto do prédio é sólido. Antes o pé afundava nos degraus.
+      caixaCol(-PE[0] / 2, -4 - PE[1] / 2, PE[0] / 2, 0.4);
+      caixaCol(-5.6, 0.4, -5, 6.4); caixaCol(5, 0.4, 5.6, 6.4);   // laterais da escada
+      const piso = (lx0, lz0, lx1, lz1, h, rampa) => {
+        const a0 = mundoDe(lx0, lz0), a1 = mundoDe(lx1, lz1), eixoX = Math.abs(sn) > 0.5;
+        const pz = { x0: Math.min(a0.x, a1.x), x1: Math.max(a0.x, a1.x), z0: Math.min(a0.z, a1.z), z1: Math.max(a0.z, a1.z), h: 0.18 + h };
+        if (rampa) pz.rampa = { eixo: eixoX ? 'x' : 'z', de: eixoX ? a0.x : a0.z, ate: eixoX ? a1.x : a1.z, h0: 0.18, h1: 0.18 + h };
+        mundo.addPiso(pz); v.pisos.push(pz);
+      };
+      piso(-5, 6.6, 5, 1.0, 2.25, true);    // degraus: da calçada até o patamar
+      piso(-5, 1.0, 5, 0.4, 2.25, false);   // patamar na porta
+      v.porta = mundoDe(0, 1.4);
+    } else {
+      caixaCol(-PE[0] / 2, -4 - PE[1] / 2, PE[0] / 2, -4 + PE[1] / 2);
+      v.porta = mundoDe(0, -4 + PE[1] / 2 + 1.4);
+    }
     placa(NOME_OBRA[o.tipo], 'rgba(20,24,34,.9)', tam.y * k + 2, -4 + PE[1] / 2);
-    v.porta = mundoDe(0, -4 + PE[1] / 2 + 1.4);
   } else if (o.tipo === 'cras') {
     // CRAS: prédio público de dois andares, branco com faixas verde e amarela, térreo de vidro, marquise e rampa
     const branco = M('#f4f1ea'), verde = M('#1f8a4c'), amarelo = M('#f2c230'), vidro = M('#2c4f66', { roughness: 0.08, metalness: 0.5 }), alu = M('#c9ced3', { metalness: 0.6, roughness: 0.35 });
