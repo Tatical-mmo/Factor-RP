@@ -2066,7 +2066,45 @@ function somExplosao(x, y, z, k, d) {
   if (d < perto + 15) sons.tocar(nome, { vol, dist: d, raio: perto + 15, velocidade: k < 0.75 ? 1.15 : grande ? 0.95 : 1 });
   if (d > perto * 0.6 && d < alcance) sons.tocar('explosao_longe', { vol: grande ? 0.9 : 0.65, dist: d - perto * 0.6, raio: alcance - perto * 0.6 });
 }
-function efeitoExplosao(x, y, z, k = 1, tinta = true) {
+// ---- onda de choque das explosões grandes: anel de ar comprimido correndo pelo chão, cúpula clara que estoura e anel
+// de poeira mais lento. Quando a frente da onda passa por você: a tela treme e, a pé, você é empurrado e cambaleia.
+// O míssil de cruzeiro da Marinha é a maior (~2 quarteirões); avião, helicóptero e bomba fazem ondas menores.
+const ondas = [], geoAnel = new THREE.RingGeometry(0.9, 1, 72), geoAnelPo = new THREE.RingGeometry(0.55, 1, 48), geoDomo = new THREE.SphereGeometry(1, 32, 14, 0, Math.PI * 2, 0, Math.PI / 2);
+function ondaDeChoque(x, y, z, R, vel, forca = 1) {
+  const chao = Math.max(y - 2, alturaChao(x, z)) + 0.2;
+  const mat = (cor, op, soma) => new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide, blending: soma ? THREE.AdditiveBlending : THREE.NormalBlending, toneMapped: false });
+  const anel = new THREE.Mesh(geoAnel, mat('#fff1d0', 0.85, true)), po = new THREE.Mesh(geoAnelPo, mat('#8c7b66', 0.55, false)), domo = new THREE.Mesh(geoDomo, mat('#ffffff', 0.32, true));
+  for (const m of [anel, po]) { m.rotation.x = -Math.PI / 2; m.position.set(x, chao, z); m.scale.setScalar(0.5); m.renderOrder = 5; scene.add(m); }
+  domo.position.set(x, chao - 0.2, z); domo.scale.setScalar(0.5); scene.add(domo);
+  ondas.push({ anel, po, domo, x, z, R, vel, forca, t: 0, atingiu: Math.hypot(jogador.pos.x - x, jogador.pos.z - z) > R });
+}
+function atualizarOndas(dt) {
+  for (let i = ondas.length - 1; i >= 0; i--) {
+    const o = ondas[i]; o.t += dt;
+    const r = o.vel * o.t, u = Math.min(1, r / o.R);
+    o.anel.scale.setScalar(Math.max(0.5, r)); o.anel.material.opacity = 0.85 * (1 - u) * (1 - u);
+    const rp = r * 0.55; o.po.scale.setScalar(Math.max(0.5, rp)); o.po.material.opacity = 0.55 * Math.max(0, 1 - rp / (o.R * 0.6));
+    const rd = Math.min(r * 0.7, o.R * 0.4); o.domo.scale.set(rd, rd * 0.75, rd); o.domo.material.opacity = 0.32 * Math.max(0, 1 - o.t / (o.R * 0.5 / o.vel + 0.25));
+    if (!o.atingiu) {
+      const dx = jogador.pos.x - o.x, dz = jogador.pos.z - o.z, d = Math.hypot(dx, dz);
+      if (r >= d) {
+        o.atingiu = true; const f = Math.max(0, 1 - d / o.R) * o.forca;
+        tremor = Math.max(tremor, 0.35 + 1.3 * f);
+        if (!jogador.carro && !jogador.dentroCasa && !jogador.morto && f > 0.12 && d > 0.5) {
+          o.empurra = { vx: dx / d * 10 * Math.min(1.2, f), vz: dz / d * 10 * Math.min(1.2, f), t: 0.35 };
+          if (jogador.trava <= 0.2) { jogador.avatar?.tocar('hit', { umaVez: true, velocidade: 1.2, fade: 0.06 }); jogador.trava = 0.6; }
+          if (f > 0.5) aviso('💨 A onda de choque te jogou longe!', 1.6);
+        }
+      }
+    }
+    if (o.empurra && o.empurra.t > 0) {   // empurrão: desliza para longe da explosão, freando
+      const e = o.empurra, q = e.t / 0.35; e.t -= dt;
+      jogador.pos.x += e.vx * q * dt; jogador.pos.z += e.vz * q * dt; resolverColisao(jogador.pos, jogador.raio);
+    }
+    if (r >= o.R * 1.05 && rp >= o.R * 0.6 && !(o.empurra?.t > 0)) { for (const m of [o.anel, o.po, o.domo]) { scene.remove(m); m.material.dispose(); } ondas.splice(i, 1); }
+  }
+}
+function efeitoExplosao(x, y, z, k = 1, tinta = true, semOnda = false) {
   const fogo = new THREE.Mesh(geoExplosao, new THREE.MeshBasicMaterial({ color: '#ffb23a', transparent: true, opacity: 0.95, toneMapped: false }));
   const fumaca = new THREE.Mesh(geoExplosao, new THREE.MeshStandardMaterial({ color: '#3b3b3b', transparent: true, opacity: 0.6, roughness: 1, depthWrite: false }));
   const tt = tinta ? new THREE.Mesh(geoExplosao, new THREE.MeshStandardMaterial({ color: '#1f9e46', transparent: true, opacity: 0.9, roughness: 0.6 })) : null;
@@ -2075,6 +2113,7 @@ function efeitoExplosao(x, y, z, k = 1, tinta = true) {
   if (tt) manchar(new THREE.Vector3(x, alturaChao(x, z) + 0.02, z), new THREE.Vector3(0, 1, 0), '#1f9e46');
   const d = Math.hypot(x - jogador.pos.x, z - jogador.pos.z);
   somExplosao(x, y, z, k, d);
+  if (k >= 1.4 && !semOnda && y - alturaChao(x, z) < 25) ondaDeChoque(x, y, z, 14 * k, 55, 0.5 + 0.2 * k);   // avião, helicóptero, bomba
   tremor = Math.max(tremor, d < 30 * k ? 0.35 * Math.min(2.5, k) : 0);
 }
 function atualizarExplosoes(dt) {
@@ -6697,7 +6736,7 @@ function quadroJogo() {
   atualizarSoldados(dt);
   atualizarCacada(dt);
   tempoArma -= dt; if (tempoArma <= 0) { tempoArma = 0.5; conferirArma(); }
-  atualizarExplosoes(dt); atualizarSemPiloto(dt); atualizarContagemMorte();
+  atualizarExplosoes(dt); atualizarOndas(dt); atualizarSemPiloto(dt); atualizarContagemMorte();
   atualizarMira();
   civico.atualizarQuartel(jogador.pos);
   atualizarArea51(dt); atualizarBases(dt); atualizarQuartelExtras(dt); atualizarBaseAerea(dt); atualizarMisseis(dt); avisarAlistamentos(dt); atualizarMarinha(dt);
@@ -12779,7 +12818,8 @@ function atualizarCruzeiros(dt) {
     if (dj < 160 && resta !== c.avisado) { c.avisado = resta; aviso(`🚨 MÍSSIL DE CRUZEIRO A CAMINHO DESTA ÁREA! Fuja: ${resta} s`, 1.2); if (resta % 3 === 0) sons.radio?.(); }
     if (k >= 1) {
       scene.remove(c.mesh); cruzeiros.splice(i, 1);
-      for (let n = 0; n < 6; n++) efeitoExplosao(c.x + (Math.random() - 0.5) * 16, alvo.y + Math.random() * 4, c.z + (Math.random() - 0.5) * 16, 2.2, false);
+      for (let n = 0; n < 6; n++) efeitoExplosao(c.x + (Math.random() - 0.5) * 16, alvo.y + Math.random() * 4, c.z + (Math.random() - 0.5) * 16, 2.2, false, true);
+      ondaDeChoque(c.x, alvo.y, c.z, 110, 120, 1.6);   // a maior do jogo: ~2 quarteirões
       if (!jogador.dentroCasa && !jogador.morto) {
         const carro = jogador.carro;
         if (dj < 25) { if (carro && !carro.explodiu) acidenteVeiculo(carro, '💥 Atingido por um míssil de cruzeiro!'); jogador.ultimoAgressor = null; danoLocal(999); }
