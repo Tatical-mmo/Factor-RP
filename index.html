@@ -37,7 +37,18 @@
   .btn { font-size:16px; font-weight:700; padding:12px 20px; border-radius:10px; border:0; background:var(--destaque); color:#20160a; cursor:pointer; }
   .btn:disabled { opacity:.45; cursor:default; }
   #login { position:fixed; inset:0; z-index:22; display:flex; align-items:center; justify-content:center; padding:16px;
-    background: radial-gradient(1200px 600px at 50% -10%, #3a4560 0%, var(--bg) 60%); }
+    background: linear-gradient(180deg, rgba(10,14,22,0) 0%, rgba(10,14,22,.3) 50%, rgba(10,14,22,.85) 100%), url(assets/telas/login.webp) center/cover, var(--bg); }
+  #login .cartao { background:rgba(14,18,28,.72); border:1px solid rgba(255,255,255,.08); border-radius:18px; padding:18px 16px 14px; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); box-shadow:0 12px 40px rgba(0,0,0,.45); }
+  .logoJogo { display:block; width:min(340px, 82vw); height:auto; margin:-70px auto 2px; filter:drop-shadow(0 6px 10px rgba(0,0,0,.55)); }
+  #escolha .logoJogo { margin:0 auto 4px; width:min(300px, 70vw); }
+  /* carregamento: cenas do jogo passando (aproxima devagar e troca a cada 5 s) */
+  #carregando .cena { position:absolute; inset:0; background-size:cover; background-position:center; opacity:0; transform:scale(1.04); transition:opacity 1.2s ease; }
+  #carregando .cena.on { opacity:1; animation:zoomCena 7s linear forwards; }
+  @keyframes zoomCena { from { transform:scale(1.04) translateX(0); } to { transform:scale(1.16) translateX(-2%); } }
+  #carregando .veu { position:absolute; inset:0; background:linear-gradient(180deg, rgba(10,14,22,.35) 0%, rgba(10,14,22,0) 35%, rgba(10,14,22,.15) 60%, rgba(10,14,22,.9) 100%); }
+  #carregando .frente { position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; gap:12px; margin-top:auto; padding:0 16px calc(34px + env(safe-area-inset-bottom)); width:100%; box-sizing:border-box; }
+  #carregando .topoLogo { position:absolute; z-index:1; top:calc(18px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%); width:min(300px, 66vw); filter:drop-shadow(0 6px 10px rgba(0,0,0,.6)); }
+  #carregando .legenda { font-weight:800; font-size:15px; letter-spacing:.3px; text-shadow:0 2px 6px rgba(0,0,0,.9); }
   #login .cartao { width:min(380px, 100%); display:flex; flex-direction:column; gap:12px; }
   #login h1 { margin:0; font-size: clamp(34px, 9vw, 48px); text-align:center; letter-spacing:1px; }
   #login h1 span, #escolha h1 span { color:var(--destaque); }
@@ -57,7 +68,7 @@
   #erroNome { width:100%; text-align:center; color:#ff8a7a; font-size:13px; min-height:16px; margin:-4px 0 0; }
 
   /* Carregando */
-  #carregando { position:fixed; inset:0; z-index:30; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:var(--bg); }
+  #carregando { position:fixed; inset:0; z-index:30; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:var(--bg); overflow:hidden; }
   #carregando .barra { width:min(320px, 70vw); height:10px; border-radius:6px; background:#2b3242; overflow:hidden; }
   #carregando .barra i { display:block; height:100%; width:0; background:var(--destaque); transition:width .15s; }
   #carregando small { color:var(--suave); }
@@ -257,8 +268,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fator RP">
-<link rel="apple-touch-icon" href="assets/icones/apple-touch-icon.png">
-<link rel="icon" type="image/png" href="assets/icones/icone-192.png">
+<link rel="apple-touch-icon" href="assets/icones/apple-touch-icon.png?v=2">
+<link rel="icon" type="image/png" href="assets/icones/icone-192.png?v=2">
 <script>
 // se algo quebrar ao abrir, mostra o erro na tela (assim dá para mandar um print e saber o que foi)
 (function () {
@@ -311,7 +322,7 @@
 
 <section id="login">
   <div class="cartao">
-    <h1>FATOR <span>RP</span></h1>
+    <img class="logoJogo" src="assets/telas/logo.webp" alt="Fator RP">
     <p class="sub">Entre na sua conta ou crie uma nova.</p>
     <input id="email" type="email" placeholder="E-mail" autocomplete="email">
     <input id="senha" type="password" placeholder="Senha (mínimo 6 caracteres)" autocomplete="current-password">
@@ -332,7 +343,7 @@
 </section>
 
 <section id="escolha" class="oculto">
-  <h1>FATOR <span>RP</span></h1>
+  <img class="logoJogo" src="assets/telas/logo.webp" alt="Fator RP">
   <p class="sub">Escolha seu personagem e o nome que a cidade vai conhecer. O nome não pode ser repetido.</p>
   <div class="grade" id="grade"></div>
 </section>
@@ -343,10 +354,32 @@
 </div>
 
 <div id="carregando" class="oculto">
-  <div>Carregando a cidade…</div>
-  <div class="barra"><i id="progresso"></i></div>
-  <small id="progressoTxt">0%</small>
+  <div class="cena" style="background-image:url(assets/telas/c1.webp)" data-txt="🚌 Ônibus saindo da Rodoviária"></div>
+  <div class="cena" style="background-image:url(assets/telas/c2.webp)" data-txt="🚦 Trânsito no centro da Metrópole"></div>
+  <div class="cena" style="background-image:url(assets/telas/login.webp)" data-txt="🏘️ Morro do Porto"></div>
+  <div class="cena" style="background-image:url(assets/telas/c3.webp)" data-txt="✈️ Aeroporto da Metrópole"></div>
+  <div class="cena" style="background-image:url(assets/telas/c4.webp)" data-txt="🌆 Fim de tarde na Rodoviária"></div>
+  <div class="cena" style="background-image:url(assets/telas/c6.webp)" data-txt="🚢 O cargueiro em Porto Sul"></div>
+  <div class="cena" style="background-image:url(assets/telas/c5.webp)" data-txt="🌃 A cidade à noite"></div>
+  <div class="veu"></div>
+  <img class="topoLogo" src="assets/telas/logo.webp" alt="Fator RP">
+  <div class="frente">
+    <div class="legenda" id="legendaCena"></div>
+    <div>Carregando a cidade…</div>
+    <div class="barra"><i id="progresso"></i></div>
+    <small id="progressoTxt">0%</small>
+  </div>
 </div>
+<script>
+// cenas do jogo no carregamento: troca a cada 5 s enquanto a tela estiver aberta (começa numa cena sorteada)
+(() => {
+  const tela = document.getElementById('carregando'), cenas = [...tela.querySelectorAll('.cena')], leg = document.getElementById('legendaCena');
+  let i = Math.floor(Math.random() * cenas.length);
+  const mostrar = () => { cenas.forEach((c, k) => c.classList.toggle('on', k === i)); leg.textContent = cenas[i].dataset.txt; };
+  mostrar();
+  setInterval(() => { if (tela.classList.contains('oculto')) return; i = (i + 1) % cenas.length; mostrar(); }, 5000);
+})();
+</script>
 
 <div id="hud" class="oculto">
   <div id="info" class="painel"></div>
@@ -464,7 +497,7 @@
 </div>
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 14/11 · sem primeira pessoa (15l)</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 14/11 · cara nova (15m)</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {
