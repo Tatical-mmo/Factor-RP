@@ -156,3 +156,17 @@ export const DESTINOS = {
 };
 export const CAPACIDADE_CAMINHAO = 20;
 export const PRECO_CAMINHAO = 15000;
+
+// máscaras (acessório na cabeça): compradas na loja, usadas pela mochila; o admin ajusta cada uma no editor da farda
+export const MASCARAS = [
+  { id: 'mascara_camisa_cinza', nome: 'Camisa enrolada (cinza)', tipo: 'cabeca' },
+  { id: 'mascara_camisa_vermelha', nome: 'Camisa enrolada (vermelha)', tipo: 'cabeca' },
+  { id: 'mascara_bandana', nome: 'Bandana', tipo: 'boca' },
+  { id: 'mascara_balaclava', nome: 'Balaclava preta', tipo: 'cabeca' },
+  { id: 'mascara_lenco', nome: 'Lenço do deserto', tipo: 'cabeca' },
+  { id: 'mascara_estrela', nome: 'Máscara da estrela', tipo: 'rosto' },
+  { id: 'mascara_caveira', nome: 'Máscara da caveira', tipo: 'rosto' },
+  { id: 'mascara_camuflada', nome: 'Máscara camuflada', tipo: 'rosto' },
+  { id: 'mascara_onca', nome: 'Máscara de onça', tipo: 'rosto' },
+  { id: 'mascara_coroa', nome: 'Máscara da coroa (dourada)', tipo: 'rosto' },
+];

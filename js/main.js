@@ -6,8 +6,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { FERRO_VELHOS, FABRICAS, PRODUTOS, FOME_POR_SEGUNDO, LOTES_VENDA, DESTINOS } from './config.js';
 import { iniciarCla, atualizarCla } from './cla.js';
 import { iniciarEmpresa, abrirCompra, abrirMissoes, atualizar as atualizarJanelaEmpresa } from './empresa.js';
-import { iniciarLoja, abrir as abrirJanela, recarregarInventario, qtdItem } from './loja.js';
-import { PERSONAGENS, PERSONAGENS_GRATIS, ROBOS, MODELOS, CIDADE, RUAS_HORIZONTAIS, RUAS_VERTICAIS, QUARTEIROES_ESPECIAIS, VELOCIDADE, CONTROLES_PC } from './config.js';
+import { iniciarLoja, abrir as abrirJanela, recarregarInventario, qtdItem, inventarioCarregado } from './loja.js';
+import { MASCARAS, PERSONAGENS, PERSONAGENS_GRATIS, ROBOS, MODELOS, CIDADE, RUAS_HORIZONTAIS, RUAS_VERTICAIS, QUARTEIROES_ESPECIAIS, VELOCIDADE, CONTROLES_PC } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const TOQUE = window.matchMedia('(pointer: coarse)').matches;
@@ -2515,7 +2515,7 @@ async function iniciarJogo(perfil) {
   criarNPCs(id);
   conectarMultiplayer(perfil);
   rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando, inventario: recarregarInventario });
-  iniciarLoja({ equiparArma: (item) => equiparArma(item), colocarBarricada: () => colocarBarricadaAqui(), usarJujuba: () => usarJujuba(), perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, curar: usarRemedio, vida: () => jogador.vida,
+  iniciarLoja({ usarMascara: (item) => usarMascara(item), mascaraAtual: () => jogador.mascara, equiparArma: (item) => equiparArma(item), colocarBarricada: () => colocarBarricadaAqui(), usarJujuba: () => usarJujuba(), perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, curar: usarRemedio, vida: () => jogador.vida,
     casaId: () => (typeof jogador.dentroCasa === 'number' ? jogador.dentroCasa : null),
     meuTerreno: () => { const d = casasMundo.get(portaAberta)?.d; return d?.tipo === 'terreno' && d.dono === jogador.perfil.id ? d : null; },
     portaAtual: () => { const d = casasMundo.get(portaAberta)?.d; return moraEm(d) ? d : null; },
@@ -3441,7 +3441,7 @@ const SKIN_POLICIA = 'Rustbolt_Sentinel';
 const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfil?.personagem);
 function metaPresenca() {
   const p = jogador.perfil;
-  return { rd: jogador.rendido ? 1 : 0, ceu: jogador.noCeu ? 1 : 0, bope: !!p.bope, invis: !!p.invisivel, som: somAtivo ? { url: somAtivo.url, txt: somAtivo.txt } : null, emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
+  return { mk: jogador.mascara || 0, rd: jogador.rendido ? 1 : 0, ceu: jogador.noCeu ? 1 : 0, bope: !!p.bope, invis: !!p.invisivel, som: somAtivo ? { url: somAtivo.url, txt: somAtivo.txt } : null, emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
     prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
@@ -9166,8 +9166,12 @@ function vestiario(trabalho) {
 }
 function atualizarUniformes() {
   seguirExpediente();
-  if (jogador.avatar) { vestir(jogador.avatar, jogador.carro || jogador.passageiro ? null : jogador.farda || null); posicionarUniforme(jogador.avatar); }
-  for (const r of remotos.values()) { if (!r.av) continue; vestir(r.av, r.meta && 'farda' in r.meta ? r.meta.farda : fardaDe(r.meta)); posicionarUniforme(r.av); }
+  if (jogador.avatar) { vestir(jogador.avatar, jogador.carro || jogador.passageiro ? null : jogador.farda || null); posicionarUniforme(jogador.avatar); vestirMascara(jogador.avatar, mascaraPrevia ?? jogador.mascara); }
+  for (const r of remotos.values()) {
+    if (!r.av) continue; vestir(r.av, r.meta && 'farda' in r.meta ? r.meta.farda : fardaDe(r.meta)); posicionarUniforme(r.av);
+    vestirMascara(r.av, r.meta?.mk || null);
+    if (r.av.mascara?.obj) r.av.mascara.obj.visible = r.av.raiz.position.distanceTo(jogador.pos) < 45;   // longe: some (a máscara tem muitos detalhes)
+  }
 }
 // nome com o símbolo do clã (escudo na cor do clã com as iniciais)
 function corDoClaNome(nome) { for (const c of clasCache.values()) if (c.nome === nome) return c.cor || '#c43b3b'; return '#c43b3b'; }
@@ -11390,12 +11394,14 @@ function abrirEditorFarda() {
     el.innerHTML = `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b style="flex:1">👔 Ajuste da farda</b>
         <button data-a="girar">↻ Girar</button><button data-a="fechar">✕</button></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${Object.keys(UNIFORMES).map((k) => `<button data-p="${k}" style="${k === papel ? 'background:#f2a33a;color:#111' : ''}">${NOME_FARDA[k]}</button>`).join('')}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><b style="width:100%;font-size:12px;opacity:.8">😷 Máscaras (ajuste de cada uma)</b>${MASCARAS.map((m) => `<button data-mk="${m.id}" style="${papel === 'mk:' + m.id ? 'background:#f2a33a;color:#111' : ''}">${m.nome}</button>`).join('')}</div>
       <div style="display:flex;gap:6px;margin-bottom:6px">${[['colete', '🦺 Colete / jaleco'], ['chapeu', '⛑️ Capacete / boné / máscara']].map(([k, t]) => `<button data-q="${k}" style="flex:1;${k === peca ? 'background:#f2a33a;color:#111' : ''}">${t}</button>`).join('')}</div>
       ${CAMPOS_FARDA[peca].map(([k, n, mi, ma, st]) => `<label style="display:flex;align-items:center;gap:8px;margin:4px 0"><span style="width:110px">${n}</span>
         <input type="range" data-c="${k}" min="${mi}" max="${ma}" step="${st}" value="${aj[k]}" style="flex:1"><b data-v="${k}" style="width:46px;text-align:right">${(+aj[k]).toFixed(2)}</b></label>`).join('')}
       <div style="display:flex;gap:6px;margin-top:8px"><button data-a="zerar" style="flex:1">↺ Padrão desta peça</button><button data-a="salvar" style="flex:1;background:#2f8f4e;color:#fff">💾 Salvar para todos</button></div>
       <small style="opacity:.75">Mexa e veja no seu personagem. Cada corporação e cada peça têm o seu ajuste. Só muda para todos depois de salvar.</small>`;
-    el.querySelectorAll('[data-p]').forEach((b) => { b.onclick = () => { papel = b.dataset.p; definirFarda(papel, true); desenhar(); }; });
+    el.querySelectorAll('[data-p]').forEach((b) => { b.onclick = () => { papel = b.dataset.p; mascaraPrevia = null; definirFarda(papel, true); desenhar(); }; });
+    el.querySelectorAll('[data-mk]').forEach((b) => { b.onclick = () => { papel = 'mk:' + b.dataset.mk; peca = 'chapeu'; mascaraPrevia = b.dataset.mk; desenhar(); }; });
     el.querySelectorAll('[data-q]').forEach((b) => { b.onclick = () => { peca = b.dataset.q; desenhar(); }; });
     el.querySelectorAll('[data-c]').forEach((r) => {
       r.oninput = () => {
@@ -11416,7 +11422,7 @@ function abrirEditorFarda() {
           b.disabled = false; return;
         }
         if (a === 'fechar') {
-          el.remove(); editorFarda = null; definirFarda(antes, true);
+          el.remove(); editorFarda = null; mascaraPrevia = null; definirFarda(antes, true);
           rede.configJogo.ler().then((c) => { if (c) definirAjusteFarda(c.farda); }).catch(() => {});   // volta ao que está salvo
         }
       };
@@ -13249,7 +13255,7 @@ function atualizarTatica(dt) {
   try { tiqueTatica(dt); } catch (e) { if (!atualizarTatica.erro) { atualizarTatica.erro = true; console.warn('tático:', e); } }   // nunca trava o jogo
 }
 function tiqueTatica(dt) {
-  atualizarGranadas(dt); atualizarSons2(dt); atualizarBope(dt); atualizar87(dt); atualizarRendicao(dt);
+  atualizarGranadas(dt); atualizarSons2(dt); atualizarBope(dt); atualizar87(dt); atualizarRendicao(dt); conferirMascara(dt);
   if ((tBarricadas -= dt) <= 0) { tBarricadas = 12; rede.tatica.barricadas().then(sincronizarBarricadas).catch(() => {}); }
   if ((atualizarTatica.t = (atualizarTatica.t || 0) - dt) <= 0) { atualizarTatica.t = 0.3; painelRapido(); }
   // blindagem do Caveirão na tela
@@ -14148,3 +14154,53 @@ function atualizarRendicao(dt) {
 // Quando os arquivos farda_jaleco.glb e farda_mascara.glb existirem, o médico veste jaleco e máscara; senão, colete e boné.
 const PECA_CORPO_DE = { medico: 'jaleco' };
 const faltaPeca = new Set();
+
+// ---------------------------------------------------------------- máscaras (acessório na cabeça, visto por todos)
+// O jogador compra na loja e usa pela mochila. Cada máscara é ajustada pelo admin no editor da farda (tamanho, altura, frente, giro).
+let mascaraPrevia = null;   // editor da farda: mostra a máscara escolhida no meu personagem
+const glbMascaras = new Map();
+const PADRAO_MASCARA = { cabeca: { subir: 0, frente: 0.02, tam: 1.05 }, rosto: { subir: -0.02, frente: 0.16, tam: 0.95 }, boca: { subir: -0.22, frente: 0.14, tam: 1 } };
+function pecaMascara(id) {
+  if (!glbMascaras.has(id)) glbMascaras.set(id, carregarGLB(`assets/modelos/${id}.glb`).then((g) => {
+    const b = new THREE.Box3().setFromObject(g.scene), t = new THREE.Vector3(), c = new THREE.Vector3(); b.getSize(t); b.getCenter(c);
+    g.scene.position.sub(c);   // centro no meio da peça
+    return { cena: g.scene, larg: Math.max(t.z, 0.01) };
+  }).catch(() => null));
+  return glbMascaras.get(id);
+}
+function vestirMascara(av, id) {
+  if (!av) return;
+  const M = av.mascara;
+  if (M && M.id === id && M.v === versaoFarda) return;
+  if (M?.carregando === id) return;
+  if (M?.obj) M.obj.removeFromParent();
+  av.mascara = null;
+  if (!id || !MASCARAS.some((m) => m.id === id)) return;
+  av.mascara = { id, carregando: id };
+  pecaMascara(id).then((p) => {
+    if (!p || av.mascara?.carregando !== id) return;
+    let cabeca = null, pescoco = null;
+    av.modelo.traverse((x) => { if (!x.isBone) return; const n = (x.name || '').toLowerCase().replace(/[^a-z0-9_]/g, ''); if (!cabeca && /head$/.test(n)) cabeca = x; if (!pescoco && /neck$/.test(n)) pescoco = x; });
+    if (!cabeca) { av.mascara = null; return; }
+    if (!av._medMascara) av._medMascara = medirParte(av.modelo, cabeca, (b) => descendeDe(b, cabeca) || b === pescoco);
+    const mc = av._medMascara; if (!mc) { av.mascara = null; return; }
+    const tipo = MASCARAS.find((m) => m.id === id).tipo, pd = PADRAO_MASCARA[tipo], aj = ajusteDe('mk:' + id, 'chapeu');
+    const hc = mc.topo - mc.baixo, sc = Math.min(mc.largura, hc * 0.95) * 1.15 * pd.tam * aj.tam / p.larg;
+    const obj = new THREE.Group(), g = p.cena.clone(true); g.rotation.y = -Math.PI / 2 + (aj.giro || 0) * Math.PI / 180; obj.add(g);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+    encaixar(obj, cabeca, mc, sc, sc, sc, { f: mc.cf + (pd.frente + aj.frente) * hc, c: (mc.topo + mc.baixo) / 2 + (pd.subir + aj.subir) * hc });
+    av.mascara = { id, obj, v: versaoFarda };
+  }).catch((e) => { console.warn('máscara não vestiu:', id, e); av.mascara = null; });
+}
+function usarMascara(item) {
+  if (jogador.mascara === item) { jogador.mascara = null; aviso('😷 Você tirou a máscara.', 2); }
+  else { if (qtdItem(item) < 1) { aviso('Você não tem essa máscara.'); return; } jogador.mascara = item; aviso(`😷 ${MASCARAS.find((m) => m.id === item)?.nome || 'Máscara'} no rosto.`, 2); }
+  try { localStorage.setItem('fatorMascara', jogador.mascara || ''); } catch { /* sem armazenamento */ }
+  conexao?.rastrear(metaPresenca());
+}
+{ try { jogador.mascara = localStorage.getItem('fatorMascara') || null; } catch { jogador.mascara = null; } }
+let tConfMascara = 0;
+function conferirMascara(dt) {   // vendeu ou perdeu a máscara: tira
+  if ((tConfMascara -= dt) > 0) return; tConfMascara = 5;
+  if (jogador.mascara && inventarioCarregado() && qtdItem(jogador.mascara) < 1) { jogador.mascara = null; try { localStorage.setItem('fatorMascara', ''); } catch { /* */ } conexao?.rastrear(metaPresenca()); }
+}
