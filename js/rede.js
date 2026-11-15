@@ -156,6 +156,9 @@ function traduzirRpc(m) {
     'esse paciente acabou de ser medicado': 'Esse paciente acabou de ser medicado: espere 1 minuto.',
     'adicional de 0 a 100 por cento': 'O adicional vai de 0 a 100%.',
     'esse terreno ja tem obra': 'Esse terreno já tem obra.',
+    'valor de 1 a 10.000.000 por jogador': 'O valor vai de 1 a 10.000.000 por jogador.',
+    'escolha quem recebe': 'Escolha quem recebe.',
+    'nenhum jogador para receber': 'Nenhum jogador para receber (ninguém online ou nomes não encontrados).',
     'essa obra nao esta em construcao': 'Essa obra não está em construção.',
     'a camara nao esta funcionando': 'A Câmara não está funcionando.',
     'a cidade ja tem essa obra': 'A cidade já tem essa obra.',
@@ -166,6 +169,7 @@ function traduzirRpc(m) {
     'ja esta funcionando': 'O programa já está funcionando.',
     'patrimonio da prefeitura: so o administrador pode desfazer': 'Patrimônio da prefeitura: só o administrador pode desfazer.',
     'o cras nao esta funcionando': 'O CRAS não está funcionando.',
+    'acabaram as vagas do cras': 'Infelizmente acabaram as vagas do CRAS neste mandato.',
     'voce ja esta cadastrado': 'Você já está cadastrado no CRAS.',
     'as candidaturas nao estao abertas': 'As candidaturas para vereador não estão abertas.',
     'precisa estar com a ficha limpa': 'Precisa estar com a ficha limpa.',
@@ -571,6 +575,7 @@ export const clima = {
 };
 
 export const painel = {
+  eventoDoacao: (quem, valor, nomes, titulo) => rpc('admin_evento_doacao', { p_quem: quem, p_valor: valor, p_nomes: nomes || null, p_titulo: titulo || null }),
   nomearPrefeito: (id) => rpc('admin_nomear_prefeito', { p_jogador: id }),
   afastarPrefeito: () => rpc('admin_afastar_prefeito'),
   convocarEleicao: (ciclos) => rpc('admin_convocar_eleicao', { p_ciclos: ciclos }),
@@ -630,6 +635,7 @@ export const obras = {
   terminar: (id) => rpc('admin_terminar_obra', { p_obra: id }),
   avancarCamara: () => rpc('admin_avancar_camara'),
   crasCadastrar: () => rpc('cras_cadastrar'),
+  crasEstado: () => rpc('cras_estado'),
   camara: async () => (await sel(sb.from('camara').select('*').eq('id', 1).maybeSingle())),
   vereadores: (leg) => sel(sb.from('vereadores').select('*, perfil:perfis!vereadores_jogador_fkey(nome)').eq('legislatura', leg).order('votos', { ascending: false })),
   candidatar: () => rpc('camara_candidatar'),

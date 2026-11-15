@@ -14,7 +14,7 @@ const PODERES = [
   ['invisivel', 'Modo invisível'],
 ];
 const ACOES = {
-  perdoar: 'perdoou',
+  perdoar: 'perdoou', evento_doacao: 'fez um evento de doação',
   moedas: 'mudou as moedas de', emprego: 'mudou o emprego de', banir: 'baniu', desbanir: 'desbaniu', algemar: 'algemou', soltar_algemas: 'tirou as algemas de',
   prender: 'prendeu', soltar: 'soltou da cadeia', teleporte: 'teleportou', cargo: 'mudou o cargo de',
   prefeito_nomeado: 'nomeou como prefeito', prefeito_afastado: 'afastou o prefeito', eleicao_convocada: 'convocou eleição extraordinária', salario: 'mudou um salário',  presente_personagem: 'deu um personagem para', evento_personagens: 'mexeu na vitrine do evento', patente: 'mudou a patente de', reset_mapa: 'resetou o mapa',
@@ -238,6 +238,12 @@ async function abaCidade() {
     <div class="botoes"><label style="flex:1">Compra <input id="cFavP" type="number" inputmode="numeric" min="1000" value="${cf.favela_preco ?? 60000}" style="width:100%"></label>
       <label style="flex:1">Aluguel <input id="cFavA" type="number" inputmode="numeric" min="50" value="${cf.favela_aluguel ?? 200}" style="width:100%"></label></div>
     <div class="botoes"><button id="cFavSalvar">Salvar preços das favelas</button></div>
+    <div class="sub">🎁 Evento de doação</div>
+    <p class="dica">Dá o mesmo valor para vários jogadores de uma vez. Cada um recebe um aviso com o nome do evento. Fica no registro do painel.</p>
+    <div class="botoes"><select id="cEvQuem" style="flex:1"><option value="online">Todos online agora</option><option value="todos">Todos os jogadores da cidade</option><option value="lista">Uma lista de nomes</option></select></div>
+    <div class="botoes" id="cEvNomesL" style="display:none"><input id="cEvNomes" placeholder="Nomes separados por vírgula" style="flex:1"></div>
+    <div class="botoes"><input id="cEvTit" maxlength="60" placeholder="Nome do evento (ex.: Festa de domingo)" style="flex:1"></div>
+    <div class="botoes"><input id="cEvValor" type="number" inputmode="numeric" min="1" placeholder="Moedas para cada um" style="flex:1"><button id="cEvOk">🎁 Doar</button></div>
     <div class="sub">💊 Hospital e 🏛️ prefeitura</div>
     <p class="dica">Comissão que o médico ganha por medicação gratuita dada no hospital, e o orçamento público que cai no cofre da prefeitura a cada mandato (na posse do prefeito).</p>
     <div class="botoes"><label style="flex:1">Comissão por medicação <input id="cCom" type="number" inputmode="numeric" min="0" value="${cf.comissao_remedio ?? 150}" style="width:100%"></label>
@@ -250,6 +256,17 @@ async function abaCidade() {
     <p class="dica">Ajuste o tamanho e a posição do colete e do capacete/boné de cada corporação, uma por uma, vendo no seu personagem. Ao salvar, vale para todos.</p>
     <div class="botoes"><button id="cFarda">👔 Ajustar a farda</button></div>`;
   $('cFarda').onclick = () => { fechar(); ctx.ajustarFarda?.(); };
+  $('cEvQuem').onchange = () => { $('cEvNomesL').style.display = $('cEvQuem').value === 'lista' ? '' : 'none'; };
+  $('cEvOk').onclick = async () => {
+    const b = $('cEvOk'), quem = $('cEvQuem').value, v = Math.floor(Number($('cEvValor').value));
+    if (!(v > 0)) { msg('Digite quantas moedas cada um recebe.', false); return; }
+    if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Toque de novo para confirmar'; return; }
+    delete b.dataset.conf; b.textContent = '🎁 Doar';
+    try {
+      const r = await rede.painel.eventoDoacao(quem, v, $('cEvNomes').value, $('cEvTit').value.trim());
+      msg(`🎁 ${r.jogadores} jogador(es) receberam ${v.toLocaleString('pt-BR')} (total ${Number(r.total).toLocaleString('pt-BR')}).${r.faltou?.length ? ` Não achei: ${r.faltou.join(', ')}.` : ''}`);
+    } catch (e) { msg(/admin_evento_doacao|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 94_evento_doacao.sql no SQL Editor do Supabase.' : e.message, false); }
+  };
   $('cHospSalvar').onclick = async () => {
     try { await rede.hospital.comissao(Number($('cCom').value)); await rede.hospital.orcamento(Number($('cOrc').value)); msg('Comissão e orçamento salvos.'); }
     catch (e) { msg(/admin_comissao|admin_orcamento|schema cache|does not exist/i.test(e.message || '') ? 'Rode os SQL 93a, 93b e 93c no SQL Editor do Supabase.' : e.message, false); }

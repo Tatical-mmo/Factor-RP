@@ -61,9 +61,9 @@ function tempoMandato(pf) {
 
 const ADIC = [['policia', '🚓 Polícia'], ['bope', '💀 BOPE'], ['prf', '🛡️ PRF'], ['bombeiro', '🚒 Bombeiros'], ['medico', '✚ Hospital']];
 const OBRA = {
-  cras: { nome: '🤝 CRAS', custo: 80000, ciclos: 4, txt: 'Cadastro de jogadores; a cada ciclo até 20 cadastrados sorteados recebem uma doação do cofre.' },
+  cras: { nome: '🤝 CRAS', custo: 80000, ciclos: 4, txt: '20 vagas por mandato: a atendente do CRAS inscreve os jogadores e cada inscrito recebe uma doação do cofre a cada ciclo até o fim do mandato (aí as vagas abrem de novo). Descontinuado, fecha as inscrições.' },
   varredores: { nome: '🧹 Gabinete dos Varredores', custo: 60000, ciclos: 4, txt: 'Paga 3.000 por ciclo a uma empresa de varredores NPC que limpam as ruas.' },
-  camara: { nome: '🏛️ Câmara dos Vereadores', custo: 150000, ciclos: 6, txt: '10 vagas de vereador (candidatura e votação), salário pago pelo cofre, mandato de 40 ciclos.' },
+  camara: { nome: '🏛️ Câmara dos Vereadores', custo: 150000, ciclos: 6, txt: '10 vagas de vereador (candidatura e votação), salário pago pelo cofre, mandato de 40 ciclos. O plenário é só para vereadores, o prefeito e a administração.' },
 };
 const TERRENOS = { 1: 'Terreno oeste da prefeitura', 2: 'Terreno norte da prefeitura', 3: 'Terreno nordeste da prefeitura' };
 
@@ -77,7 +77,7 @@ async function telaObras(c, pf) {
   const livres = [1, 2, 3].filter((t) => !obras.some((o) => o.terreno === t)), faltam = Object.keys(OBRA).filter((k) => !obras.some((o) => o.tipo === k));
   c.innerHTML = `<p class="dica">Obra paga pelo cofre é <b>patrimônio da prefeitura</b> (só o administrador desfaz). Paga com o dinheiro do prefeito, é patrimônio dele. O próximo prefeito pode descontinuar os programas.</p>
     <div class="lista">${obras.length ? obras.map((o) => `<div class="linha item"><span class="nm"><b>${OBRA[o.tipo]?.nome || o.tipo}</b><small>${TERRENOS[o.terreno]} · ${estado(o)} · ${o.publica ? 'patrimônio da prefeitura' : 'particular do prefeito'}</small></span>
-      <span class="bts">${o.tipo === 'cras' && o.status === 'ativa' ? '<button data-cras="1">Cadastrar-me</button>' : ''}
+      <span class="bts">${o.tipo === 'cras' && o.status === 'ativa' ? '<small>inscrição com a atendente, no prédio</small>' : ''}
       ${souPrefeito && o.status === 'ativa' && (o.mandato < pf.mandato || !o.publica) ? `<button class="perigo" data-desc="${o.id}">Descontinuar</button>` : ''}
       ${souPrefeito && o.status === 'descontinuada' ? `<button data-ret="${o.id}">Retomar</button>` : ''}</span></div>`).join('') : '<span class="vazio">Nenhuma obra pública ainda.</span>'}</div>
     ${camara && cam ? `<div class="sub">🏛️ Câmara · ${cam.fase === 'candidatura' ? 'candidaturas abertas' : cam.fase === 'votacao' ? 'votação aberta' : cam.fase === 'mandato' ? `legislatura ${cam.legislatura} (até ${Math.max(0, cam.fase_ate - ciclo)} ciclos)` : 'aguardando'}</div>

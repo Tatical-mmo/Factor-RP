@@ -142,7 +142,19 @@ function telaNovaSenha() {
 }
 rede.aoRecuperarSenha(() => telaNovaSenha());
 if (recuperando) telaNovaSenha();
-rede.sessaoAtual().then((s) => { if (s && !recuperando) aposLogin(s).catch((e) => { mostrar('login'); msgLogin(e.message); }); });
+// ao abrir: se a internet oscilar, tenta de novo (antes um erro na hora de carregar o perfil jogava para a tela de login)
+(async () => {
+  let s = null;
+  for (let k = 0; k < 4 && !s; k++) { try { s = await rede.sessaoAtual(); } catch { /* rede */ } if (!s && k < 3) await new Promise((r) => setTimeout(r, 1200)); }
+  if (!s || recuperando) return;
+  for (let k = 0; ; k++) {
+    try { await aposLogin(s); return; }
+    catch (e) {
+      if (k >= 3) { mostrar('login'); msgLogin(`Não consegui carregar sua conta (${e.message}). Toque em Entrar para tentar de novo.`); return; }
+      msgLogin('Conexão instável, tentando de novo…', true); await new Promise((r) => setTimeout(r, 1500 * (k + 1)));
+    }
+  }
+})();
 
 // ================================================================= MOTOR
 const canvas = $('jogo');
@@ -158,7 +170,7 @@ renderer.toneMappingExposure = 0.95;
 {
   let recarregando = false;
   const recarregarCena = () => { if (recarregando) return; recarregando = true; setTimeout(() => location.reload(), 300); };
-  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); if (document.visibilityState === 'visible') recarregarCena(); }, false);
+  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); if (document.visibilityState === 'visible') { try { localStorage.setItem('fator_perdeu', [localStorage.getItem('fator_perdeu'), Date.now()].filter(Boolean).join(',')); } catch { /* */ } recarregarCena(); } }, false);
   canvas.addEventListener('webglcontextrestored', recarregarCena, false);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
@@ -187,6 +199,17 @@ sol.shadow.normalBias = 0.03;
 scene.add(sol, sol.target);
 scene.fog = new THREE.Fog('#a9c8de', 200, 330);
 visual.iniciar(renderer, scene, sol, TOQUE);
+// a placa de vídeo do celular caiu com o jogo aberto (falta de memória): volta um nível de qualidade
+let baixouQualidade = null;
+try {
+  const marcas = (localStorage.getItem('fator_perdeu') || '').split(',').map(Number).filter((t) => t && Date.now() - t < 600000);
+  localStorage.setItem('fator_perdeu', marcas.join(','));
+  if (marcas.length >= 2) {   // caiu 2 vezes em 10 minutos: aí sim baixa um nível (uma queda só é normal ao trocar de app)
+    localStorage.removeItem('fator_perdeu');
+    const n = visual.nivelAtual(), novo = n === 'alto' ? 'medio' : n === 'medio' ? 'baixo' : null;
+    if (novo) { visual.definirNivel(novo); baixouQualidade = visual.NIVEIS[novo]; }
+  }
+} catch { /* sem armazenamento */ }
 const SOL_DIR = new THREE.Vector3(-0.55, 1, 0.35).normalize();
 
 // ---------------------------------------------------------------- dia e noite (igual para todos, pelo relógio do servidor)
@@ -1180,6 +1203,7 @@ function acaoContexto() {
   if (jogador.perfil.profissao === 'medico') { const fer = feridoProximo(2.8); if (fer) { socorrerFerido(fer); return; } }
   if (pertoPrateleira()) { pegarRemediosAlmox(); return; }
   if (obraNaFrente()) { abrirPrefeitura('obras'); return; }
+  { const po = obraNaPorta(); if (po) { acaoPortaObra(po); return; } }
   if (podeMedicar()) { const pac = pacienteProximo(2.2); if (pac) { medicarPaciente(pac); return; } }
   const fogo = servicos.fogoProximo(9);
   if (fogo && !jogador.carregando) {
@@ -1915,9 +1939,17 @@ function texFumaca() {
   gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.4, 'rgba(255,255,255,.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
   texFum = new THREE.CanvasTexture(cv); return texFum;
 }
+// fumaça e chamas: os sprites são reaproveitados (sem criar e jogar fora material a cada partícula) e há um teto total,
+// para o celular não ficar sem memória de vídeo com vários carros pegando fogo
+const poolParticulas = [], MAX_PARTICULAS = TOQUE ? 110 : 220;
 function soltarParticula(pos, fogo, k) {
+  if (particulasDano.length >= MAX_PARTICULAS) return;
   const cor = fogo ? (Math.random() < 0.5 ? '#ffb21f' : '#ff5a10') : k >= 2 ? '#2b2b2b' : '#a3a3a3';
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texFumaca(), color: cor, transparent: true, opacity: fogo ? 0.95 : 0.55, depthWrite: false, blending: fogo ? THREE.AdditiveBlending : THREE.NormalBlending }));
+  let s = poolParticulas.pop();
+  if (!s) s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texFumaca(), transparent: true, depthWrite: false }));
+  const mt = s.material, bl = fogo ? THREE.AdditiveBlending : THREE.NormalBlending;
+  if (mt.blending !== bl) { mt.blending = bl; mt.needsUpdate = true; }
+  mt.color.set(cor); mt.opacity = fogo ? 0.95 : 0.55;
   s.position.copy(pos); s.position.x += (Math.random() - 0.5) * 0.5; s.position.z += (Math.random() - 0.5) * 0.5;
   s.scale.setScalar(fogo ? 0.8 + Math.random() * 0.7 : 0.6); scene.add(s);
   particulasDano.push({ s, vida: fogo ? 0.5 + Math.random() * 0.3 : 2.2 + Math.random(), t: 0, sobe: fogo ? 2.2 : 1.1 + Math.random() * 0.6, cresce: fogo ? 0.5 : 1.3, op: fogo ? 0.95 : k >= 2 ? 0.75 : 0.55 });
@@ -1927,11 +1959,13 @@ function atualizarDanoVeiculos(dt) {
     const m = c.mesh;
     if (c.explodiu || !m || !m.parent || !m.visible || ((c.dano || 0) < 50 && !c.pegouFogo)) { veicFumando.delete(c); continue; }
     const fogo = c.pegouFogo > 0, k = fogo ? 3 : c.dano >= 80 ? 2 : 1;
+    const longe = Math.hypot(m.position.x - jogador.pos.x, m.position.z - jogador.pos.z) > 110;   // fumaça longe ninguém vê
+    if (!fogo && longe) continue;
     if (!c._alturaV) { const b = new THREE.Box3().setFromObject(m); c._alturaV = Math.min(4, Math.max(1, b.max.y - m.position.y)); }
     const e = civico.eixosDe(m), a = m.rotation.y, fz = e.zf + 0.4, alt = c._alturaV * 0.75;   // motor: na frente
     _pFum.set(m.position.x + Math.sin(a) * fz, m.position.y + alt, m.position.z + Math.cos(a) * fz);
     c._tFum = (c._tFum || 0) - dt;
-    if (c._tFum <= 0) {
+    if (c._tFum <= 0 && !longe) {
       c._tFum = k === 1 ? 0.22 : k === 2 ? 0.09 : 0.06; soltarParticula(_pFum, false, k);
       if (fogo) for (let n = 0; n < 3; n++) {   // chamas espalhadas pela lataria
         const ao = Math.random() * (fz - e.zr + 0.6); _pFog.set(_pFum.x - Math.sin(a) * ao, m.position.y + alt * (0.35 + Math.random() * 0.65), _pFum.z - Math.cos(a) * ao);
@@ -1942,7 +1976,7 @@ function atualizarDanoVeiculos(dt) {
   }
   for (let i = particulasDano.length - 1; i >= 0; i--) {
     const q = particulasDano[i]; q.t += dt; const u = q.t / q.vida;
-    if (u >= 1) { scene.remove(q.s); q.s.material.dispose(); particulasDano.splice(i, 1); continue; }
+    if (u >= 1) { scene.remove(q.s); poolParticulas.push(q.s); particulasDano.splice(i, 1); continue; }
     q.s.position.y += q.sobe * dt; q.s.scale.multiplyScalar(1 + q.cresce * dt); q.s.material.opacity = q.op * (1 - u);
   }
 }
@@ -2671,6 +2705,7 @@ async function iniciarJogo(perfil) {
   $('hud').classList.remove('oculto');
   $('carregando').classList.add('oculto');
   aviso(`Bem-vindo à cidade, ${nome}!`);
+  if (baixouQualidade) setTimeout(() => aviso(`⚠️ O celular ficou sem memória de vídeo duas vezes seguidas e o jogo reiniciou. Baixei a qualidade gráfica para ${baixouQualidade}; dá para voltar em ⚙️.`, 7), 4000);
   criarNPCs(id);
   conectarMultiplayer(perfil);
   rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando, inventario: recarregarInventario });
@@ -5033,6 +5068,7 @@ function removerObraVis(v) {
   scene.remove(v.g); for (const s2 of v.sprites) scene.remove(s2);
   for (const p of v.pedreiros) scene.remove(p.raiz);
   for (const c of v.cols) { const k = colisores.indexOf(c); if (k >= 0) colisores.splice(k, 1); }
+  for (const pz of v.pisos || []) Object.assign(pz, { x0: 1e7, x1: 1e7, z0: 1e7, z1: 1e7 });
 }
 function montarObraVis(o, ciclo) {
   const T = TERRENOS_OBRA[o.terreno];
@@ -5040,7 +5076,7 @@ function montarObraVis(o, ciclo) {
   const g = new THREE.Group(); g.position.set(T.x, 0.18, T.z); g.rotation.y = T.ang;
   const M = (c, x = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.7, ...x });
   const bl = (m, w, h, d, px, py, pz) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(px, py, pz); b.castShadow = true; b.receiveShadow = true; g.add(b); return b; };
-  const v = { chave: '', g, cols: [], pedreiros: [], sprites: [], frente: null };
+  const v = { chave: '', g, cols: [], pedreiros: [], sprites: [], pisos: [], frente: null, porta: null, o };
   const cs = Math.cos(T.ang), sn = Math.sin(T.ang);
   const mundoDe = (lx, lz) => ({ x: T.x + lx * cs + lz * sn, z: T.z - lx * sn + lz * cs });   // local -> mundo (rotação em y)
   const caixaCol = (lx0, lz0, lx1, lz1) => { const a = mundoDe(lx0, lz0), b = mundoDe(lx1, lz1); const c = { tipo: 'caixa', x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z) }; colisores.push(c); v.cols.push(c); };
@@ -5091,30 +5127,101 @@ function montarObraVis(o, ciclo) {
     return v;
   }
   v.chave = `${o.id}:${o.status}:`;
-  const parede = { cras: '#efe9dc', varredores: '#e9e4d6', camara: '#f1ede4' }[o.tipo] || '#ddd', faixa = { cras: '#2f9e5b', varredores: '#e07a1f', camara: '#8a6b2a' }[o.tipo] || '#555';
-  if (o.tipo === 'camara') {
-    bl(M('#cfc8b8'), 30, 0.6, 22, 0, 0.3, -3);
-    bl(M(parede), 28, 9, 18, 0, 5.1, -4);
-    for (let k = 0; k < 6; k++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 8, 14), M('#f7f4ee')); c.position.set(-10 + k * 4, 4.6, 6.2); c.castShadow = true; g.add(c); }
-    bl(M('#e6dfcf'), 24, 1.2, 3, 0, 9.2, 6.2);
-    { const tri = new THREE.Shape([new THREE.Vector2(-12.5, 0), new THREE.Vector2(12.5, 0), new THREE.Vector2(0, 3.2)]);   // frontão triangular
-      const fr = new THREE.Mesh(new THREE.ExtrudeGeometry(tri, { depth: 2.6, bevelEnabled: false }), M('#e6dfcf')); fr.position.set(0, 9.8, 4.9); fr.castShadow = true; g.add(fr); }
-    const cup = new THREE.Mesh(new THREE.SphereGeometry(4, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), M('#5f7f8f', { metalness: 0.4 })); cup.position.set(0, 9.6, -4); g.add(cup);
-    for (let k = 0; k < 3; k++) bl(M('#d8d1c1'), 14 - k * 0.01, 0.3, 1.2, 0, 0.75 + k * 0.3, 9.5 - k * 0.9);
-    caixaCol(-14, -13, 14, 5); placa('🏛️ CÂMARA DOS VEREADORES', 'rgba(110,80,30,.95)', 15.5, 7);
+  // fachada com letreiro (textura de canvas)
+  const letreiro = (titulo, sub, w, h, fundo, cor, px, py, pz) => {
+    const c = document.createElement('canvas'); c.width = 1024; c.height = Math.round(1024 * h / w); const x = c.getContext('2d');
+    x.fillStyle = fundo; x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = cor; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.font = `900 ${Math.round(c.height * (sub ? 0.5 : 0.7))}px system-ui, sans-serif`; x.fillText(titulo, 512, c.height * (sub ? 0.38 : 0.52), 980);
+    if (sub) { x.font = `600 ${Math.round(c.height * 0.2)}px system-ui, sans-serif`; x.fillText(sub, 512, c.height * 0.8, 980); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 })); m.position.set(px, py, pz); g.add(m); return m;
+  };
+  const cil = (r0, r1, h, cor, px, py, pz, seg = 16) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, seg), M(cor)); c.position.set(px, py, pz); c.castShadow = true; c.receiveShadow = true; g.add(c); return c; };
+  const bandeira = (px, pz, cores) => {   // mastro com bandeira (cores genéricas, sem brasão)
+    cil(0.06, 0.08, 9, '#cfd3d6', px, 4.5, pz, 8);
+    cores.forEach((cr, k) => bl(M(cr, { side: THREE.DoubleSide }), 2.2, 0.5, 0.03, px + 1.15, 8.4 - k * 0.5, pz));
+  };
+  const glb = modelos['obra_' + o.tipo];
+  const PE = { cras: [24, 14, 9], camara: [30, 22, 15], varredores: [26, 14, 5] }[o.tipo] || [20, 14, 6];
+  if (glb) {   // modelo 3D (Meshy) quando existe: ocupa o lote do prédio, frente para a rua
+    const m = glb.clone(true), bb = new THREE.Box3().setFromObject(m), tam = bb.getSize(new THREE.Vector3());
+    const k = Math.min(PE[0] / (tam.x || 1), PE[1] / (tam.z || 1));
+    m.scale.setScalar(k); m.position.set(-(bb.min.x + bb.max.x) / 2 * k, -bb.min.y * k, -4 - (bb.min.z + bb.max.z) / 2 * k);
+    m.traverse((q) => { if (q.isMesh) { q.castShadow = true; q.receiveShadow = true; } }); g.add(m);
+    caixaCol(-PE[0] / 2, -4 - PE[1] / 2, PE[0] / 2, -4 + PE[1] / 2);
+    placa(NOME_OBRA[o.tipo], 'rgba(20,24,34,.9)', tam.y * k + 2, -4 + PE[1] / 2);
+    v.porta = mundoDe(0, -4 + PE[1] / 2 + 1.4);
+  } else if (o.tipo === 'cras') {
+    // CRAS: prédio público de dois andares, branco com faixas verde e amarela, térreo de vidro, marquise e rampa
+    const branco = M('#f4f1ea'), verde = M('#1f8a4c'), amarelo = M('#f2c230'), vidro = M('#2c4f66', { roughness: 0.08, metalness: 0.5 }), alu = M('#c9ced3', { metalness: 0.6, roughness: 0.35 });
+    bl(M('#d9d4c9'), 25, 0.35, 15, 0, 0.17, -4);                                    // base
+    bl(branco, 24, 8, 14, 0, 4.35, -4);                                               // corpo
+    bl(verde, 24.2, 0.5, 14.2, 0, 3.6, -4); bl(amarelo, 24.2, 0.22, 14.2, 0, 3.25, -4);   // faixas entre os andares
+    bl(branco, 24.4, 0.7, 14.4, 0, 8.65, -4);                                         // platibanda
+    // térreo envidraçado com caixilhos e porta de vidro
+    bl(vidro, 20, 2.6, 0.08, 0, 1.65, 3.05);
+    for (let k = 0; k <= 8; k++) bl(alu, 0.12, 2.7, 0.14, -10 + k * 2.5, 1.65, 3.1);
+    bl(alu, 20.2, 0.12, 0.16, 0, 2.98, 3.1);
+    bl(M('#173040', { roughness: 0.05, metalness: 0.6 }), 2.4, 2.5, 0.1, 0, 1.6, 3.12);
+    // 1º andar: janelas em fita
+    for (let k = 0; k < 6; k++) { bl(vidro, 2.8, 1.5, 0.08, -8.75 + k * 3.5, 5.6, 3.05); bl(alu, 3, 0.1, 0.2, -8.75 + k * 3.5, 4.8, 3.12); }
+    // marquise sobre a entrada, com pilares
+    bl(M('#e8e4da'), 8, 0.28, 3, 0, 3.0, 4.6); for (const sx of [-3.6, 3.6]) cil(0.12, 0.12, 2.8, '#c9ced3', sx, 1.55, 5.9, 10);
+    letreiro('CRAS', 'Centro de Referência de Assistência Social', 9, 2.1, '#1f8a4c', '#ffffff', 0, 6.3, 3.12);
+    // rampa e degraus de acesso, corrimão
+    bl(M('#cfc9bd'), 6, 0.3, 2, 0, 0.15, 4.2); bl(M('#cfc9bd'), 2.2, 0.18, 4, 5.5, 0.09, 5.2);
+    for (const sx of [4.4, 6.6]) bl(alu, 0.06, 0.9, 4, sx, 0.65, 5.2);
+    // canteiros, banco e mastros
+    for (const sx of [-9, 9]) { bl(M('#8c8577'), 3.2, 0.5, 1.2, sx, 0.25, 5); const arb = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8), M('#4f8a3a')); arb.position.set(sx, 0.9, 5); g.add(arb); }
+    bl(M('#7a5a3a'), 2.4, 0.12, 0.6, -6, 0.5, 6.5);
+    bandeira(-11, 7.5, ['#1f8a4c', '#f2c230', '#1f8a4c']); bandeira(11, 7.5, ['#ffffff', '#2f6fd1', '#ffffff']);
+    for (let k = 0; k < 3; k++) bl(M('#9aa2a8', { metalness: 0.5 }), 1.2, 0.8, 0.9, -7 + k * 3, 9.4, -6);   // ar-condicionado no teto
+    caixaCol(-12, -11, 12, 3.2); caixaCol(-10.6, 4.4, -7.4, 5.6); caixaCol(7.4, 4.4, 10.6, 5.6);
+    placa('🤝 CRAS · Assistência Social', 'rgba(30,110,60,.95)', 11.2, 3);
+    v.porta = mundoDe(0, 4.6);
+  } else if (o.tipo === 'camara') {
+    // Câmara: palácio clássico sobre pódio, escadaria larga, pórtico de 8 colunas, frontão, tambor e cúpula, alas laterais
+    const pedra = M('#ece6d8'), pedra2 = M('#d9d1bf'), cobre = M('#4f7f78', { metalness: 0.35, roughness: 0.45 }), vidro = M('#26404f', { roughness: 0.1, metalness: 0.5 });
+    bl(pedra2, 32, 1.4, 22, 0, 0.7, -4);                                              // pódio
+    for (let k = 0; k < 5; k++) bl(pedra2, 18, 0.28, 0.9, 0, 0.14 + k * 0.28, 9.4 - k * 0.6);   // escadaria
+    bl(pedra, 22, 10, 14, 0, 6.4, -6);                                                // salão principal
+    for (const sx of [-13, 13]) { bl(pedra, 6, 7, 16, sx, 4.9, -5); bl(pedra2, 6.3, 0.5, 16.3, sx, 8.6, -5);   // alas
+      for (let k = 0; k < 3; k++) bl(vidro, 0.08, 2.4, 2, sx + (sx < 0 ? -3.02 : 3.02), 4.6, -10 + k * 4.5); }
+    for (const sx of [-13, 13]) for (let k = 0; k < 2; k++) bl(vidro, 1.4, 2.6, 0.08, sx - 1.5 + k * 3, 4.6, 3.05);
+    // pórtico: 8 colunas com base e capitel
+    for (let k = 0; k < 8; k++) { const px = -8.75 + k * 2.5; cil(0.5, 0.5, 0.3, '#e2dbc9', px, 1.55, 4.6); cil(0.4, 0.46, 7.4, '#f7f3ea', px, 5.4, 4.6, 18); bl(M('#e2dbc9'), 1.1, 0.35, 1.1, px, 9.25, 4.6); }
+    bl(pedra2, 20, 1.1, 3.4, 0, 10, 4.6);                                             // entablamento
+    letreiro('CÂMARA MUNICIPAL', null, 12, 0.8, '#ece6d8', '#6b5326', 0, 10, 6.31);
+    { const tri = new THREE.Shape([new THREE.Vector2(-10.2, 0), new THREE.Vector2(10.2, 0), new THREE.Vector2(0, 2.8)]);
+      const fr = new THREE.Mesh(new THREE.ExtrudeGeometry(tri, { depth: 3.4, bevelEnabled: false }), pedra); fr.position.set(0, 10.55, 2.9); fr.castShadow = true; g.add(fr); }
+    bl(M('#3a2a1c'), 2.6, 4.2, 0.12, 0, 3.5, 1.05);                                    // porta principal
+    for (const sx of [-5, 5]) bl(vidro, 1.6, 3, 0.08, sx, 4.2, 1.05);
+    cil(4.6, 4.8, 3, '#ece6d8', 0, 12.9, -6, 28);                                      // tambor
+    for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; bl(vidro, 0.9, 1.6, 0.08, Math.sin(a) * 4.72, 12.9, -6 + Math.cos(a) * 4.72).rotation.y = a; }
+    const cup = new THREE.Mesh(new THREE.SphereGeometry(4.6, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), cobre); cup.position.set(0, 14.4, -6); cup.castShadow = true; g.add(cup);
+    cil(0.5, 0.7, 1.6, '#ece6d8', 0, 19.6, -6, 12); cil(0.05, 0.05, 1.6, '#c9a227', 0, 21.2, -6, 6);
+    bandeira(-15, 8.8, ['#1f8a4c', '#f2c230', '#1f8a4c']); bandeira(15, 8.8, ['#ffffff', '#2f6fd1', '#ffffff']);
+    for (const sx of [-10, 10]) { cil(0.08, 0.1, 3.6, '#30353b', sx, 3.2, 9, 8); const l = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), M('#fff3c4', { emissive: '#ffe08a', emissiveIntensity: 0.6 })); l.position.set(sx, 5.1, 9); g.add(l); }
+    caixaCol(-16, -15, 16, 6.2);
+    { // escadaria andável: rampa da calçada (z 9,85) até o pódio (z 6,95), virada para onde o prédio olha
+      const a0 = mundoDe(-9, 9.85), a1 = mundoDe(9, 6.95), eixoX = Math.abs(sn) > 0.5;
+      const pz = { x0: Math.min(a0.x, a1.x), x1: Math.max(a0.x, a1.x), z0: Math.min(a0.z, a1.z), z1: Math.max(a0.z, a1.z), h: 1.58,
+        rampa: { eixo: eixoX ? 'x' : 'z', de: eixoX ? a0.x : a0.z, ate: eixoX ? a1.x : a1.z, h0: 0.18, h1: 1.58 } };
+      mundo.addPiso(pz); v.pisos.push(pz); }
+    placa('🏛️ CÂMARA DOS VEREADORES', 'rgba(110,80,30,.95)', 23, 3);
+    v.porta = mundoDe(0, 7.2);
   } else {
-    const alto = o.tipo === 'cras' ? 7 : 4.2, larg = o.tipo === 'cras' ? 24 : 16;
+    const parede = '#e9e4d6', faixa = '#e07a1f', alto = 4.2, larg = 16;
     bl(M(parede), larg, alto, 14, 0, alto / 2, -4);
     bl(M(faixa), larg + 0.2, 0.7, 14.2, 0, alto - 0.35, -4);
-    for (let a = 0; a < (o.tipo === 'cras' ? 2 : 1); a++) for (let k = 0; k < 4; k++) bl(M('#2a4a66', { roughness: 0.15, metalness: 0.4 }), 2.2, 1.6, 0.1, -larg / 2 + 3 + k * (larg - 6) / 3, 1.8 + a * 3.2, 3.06);
+    for (let k = 0; k < 4; k++) bl(M('#2a4a66', { roughness: 0.15, metalness: 0.4 }), 2.2, 1.6, 0.1, -larg / 2 + 3 + k * (larg - 6) / 3, 1.8, 3.06);
     bl(M('#3a2e24'), 2.2, 2.6, 0.12, 0, 1.3, 3.08);
     bl(M(faixa), 6, 0.25, 2.4, 0, 2.9, 4.2);
     caixaCol(-larg / 2, -11, larg / 2, 3);
-    if (o.tipo === 'varredores') {   // garagem com carrinhos de lixo
-      bl(M('#b7b0a0'), 9, 3.4, 8, 14, 1.7, -4); caixaCol(9.5, -8, 18.5, 0);
-      for (let k = 0; k < 3; k++) bl(M('#e07a1f'), 0.9, 1.1, 1.3, 11 + k * 1.4, 0.55, 2);
-    }
-    placa(o.tipo === 'cras' ? '🤝 CRAS · Assistência Social' : '🧹 Gabinete dos Varredores · Limpa Rua', o.tipo === 'cras' ? 'rgba(30,110,60,.95)' : 'rgba(190,100,20,.95)', alto + 1.8, 4);
+    bl(M('#b7b0a0'), 9, 3.4, 8, 14, 1.7, -4); caixaCol(9.5, -8, 18.5, 0);
+    for (let k = 0; k < 3; k++) bl(M('#e07a1f'), 0.9, 1.1, 1.3, 11 + k * 1.4, 0.55, 2);
+    placa('🧹 Gabinete dos Varredores · Limpa Rua', 'rgba(190,100,20,.95)', alto + 1.8, 4);
   }
   if (o.status === 'descontinuada') {   // placa na frente do prédio
     for (const sx of [-1.4, 1.4]) bl(M('#555b63', { metalness: 0.4 }), 0.12, 2.4, 0.12, sx, 1.2, 13);
@@ -5148,7 +5255,80 @@ function atualizarVarredores(dt, dia) {
   }
   for (const av of avataresObra) { if (!av.raiz.parent) { avataresObra.delete(av); continue; } if (av.raiz.visible) av.mixer.update(dt); }
 }
-function obraNaFrente() { for (const v of obrasVis.values()) if (v.frente && Math.hypot(jogador.pos.x - v.frente.x, jogador.pos.z - v.frente.z) < 3.2) return v; return null; }
+function obraNaFrente() { for (const v of obrasVis.values()) if (v.o.status === 'construindo' && v.frente && Math.hypot(jogador.pos.x - v.frente.x, jogador.pos.z - v.frente.z) < 3.2) return v; return null; }
+function obraNaPorta() { for (const v of obrasVis.values()) if (v.o.status !== 'construindo' && v.porta && Math.hypot(jogador.pos.x - v.porta.x, jogador.pos.z - v.porta.z) < 2.8) return v; return null; }
+function contextoPortaObra(v) {
+  if (v.o.tipo === 'cras') return v.o.status === 'ativa' ? ['entrar no CRAS (inscrição com a atendente)', 'Entrar'] : ['CRAS fechado: programa descontinuado', 'Fechado'];
+  if (v.o.tipo === 'camara') return v.o.status === 'ativa' ? ['entrar na Câmara (só vereadores)', 'Entrar'] : ['Câmara fechada: programa descontinuado', 'Fechado'];
+  return ['gabinete dos varredores: programas da prefeitura', 'Prefeitura'];
+}
+async function acaoPortaObra(v) {
+  if (v.o.status !== 'ativa' && v.o.tipo !== 'varredores') { aviso('🚫 Programa descontinuado pela prefeitura: o prédio está fechado.', 3); return; }
+  if (v.o.tipo === 'cras') { const i = salaCras(); entrarSala('cras', { x: v.porta.x, z: v.porta.z }, i.pontos.porta.x - 1, i.pontos.porta.z - 1); aviso('🤝 CRAS: fale com a atendente no balcão para se inscrever.', 3.5); return; }
+  if (v.o.tipo === 'camara') {
+    if (!(await acessoCamara())) { aviso('🔒 Plenário da Câmara: acesso só para os vereadores eleitos, o prefeito e a administração.', 3.5); return; }
+    const i = salaCamara(); entrarSala('camara', { x: v.porta.x, z: v.porta.z }, i.pontos.porta.x - 1, i.pontos.porta.z - 1); aviso('🏛️ Plenário da Câmara dos Vereadores.', 3); return;
+  }
+  abrirPrefeitura('obras');
+}
+async function acessoCamara() {
+  const eu = jogador.perfil; if (!eu) return false;
+  if (eu.cargo === 'admin' || prefeitoAtual === eu.id) return true;
+  try { const cam = await rede.obras.camara(); if (!cam?.legislatura) return false; const vs = await rede.obras.vereadores(cam.legislatura); return vs.some((x) => x.jogador === eu.id && x.eleito); } catch { return false; }
+}
+// interior do CRAS: recepção com a atendente NPC, cadeiras de espera e murais
+function npcSala(i, quem, x, z, rot, rotulo) {
+  criarAvatar('personagens', quem).then((av) => {
+    av.raiz.position.set(i.base.x + x, 0, i.base.z + z); av.raiz.rotation.y = rot;
+    const et = textoSprite(rotulo, { escala: 0.5, fundo: 'rgba(30,110,60,.95)' }); et.position.y = 2.15; av.raiz.add(et);
+    scene.add(av.raiz); av.tocar('idle'); avataresObra.add(av);
+  }).catch(() => {});
+}
+function salaCras() {
+  return montarSala('cras', 3300, 3100, 20, 14, { piso: '#d9d3c6', parede: '#f3efe6', luz: '#fff6e6' }, (i) => {
+    const { caixa, placa } = i;
+    caixa(20, 0.5, 0.32, '#1f8a4c', 0, 3.1, -6.8); caixa(20, 0.2, 0.32, '#f2c230', 0, 2.75, -6.8);
+    caixa(5, 1.1, 1, '#e9e4d8', 0, 0.55, -3.2); caixa(5.2, 0.08, 1.2, '#1f8a4c', 0, 1.14, -3.2);   // balcão
+    caixa(0.5, 0.4, 0.05, '#1b1f27', -1.2, 1.4, -3.4); caixa(0.5, 0.4, 0.05, '#1b1f27', 1.2, 1.4, -3.4);
+    movel(i, 'balcao', 0, -3.2, 5, 1); placa('📝 Inscrição no CRAS', 0, -3.2, 2.9);
+    npcSala(i, 'Enfermeira', 0, -4.6, 0, '🤝 Atendente do CRAS');
+    for (let f = 0; f < 2; f++) for (let k = 0; k < 5; k++) { const x = -4 + k * 2, z = 1.5 + f * 2.2; caixa(0.6, 0.45, 0.6, '#2f6fd1', x, 0.22, z); caixa(0.6, 0.6, 0.08, '#2f6fd1', x, 0.75, z + 0.3); i.obst.push([x - 0.3, x + 0.3, z - 0.3, z + 0.3]); }
+    caixa(3.4, 2, 0.06, '#ffffff', -6.5, 1.8, -6.6); caixa(3.2, 1.8, 0.02, '#cfe8d8', -6.5, 1.8, -6.55); placa('Mural de programas sociais', -6.5, -6.4, 3.1);
+    caixa(3.4, 2, 0.06, '#ffffff', 6.5, 1.8, -6.6); caixa(3.2, 1.8, 0.02, '#fdf0c4', 6.5, 1.8, -6.55); placa('Horário: dia e noite', 6.5, -6.4, 3.1);
+    for (const [x, z] of [[-9, -6], [9, -6], [-9, 5.5]]) { caixa(0.6, 0.6, 0.6, '#8c6a4a', x, 0.3, z); const p2 = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), i.mat('#4f8a3a')); p2.position.set(x, 1.1, z); i.g.add(p2); }
+  });
+}
+async function falarCras() {
+  let e; try { e = await rede.obras.crasEstado(); } catch (x) { aviso(x.message, 3); return; }
+  const fala = (t, ops = [{ rotulo: 'Obrigado!', fn: () => {} }]) => escolher('🤝 Atendente do CRAS', t, ops);
+  if (!e?.existe || e.status !== 'ativa') { fala('Sinto muito, o CRAS está fechado: o programa foi descontinuado pela prefeitura. As inscrições voltam quando ele for reaberto.'); return; }
+  if (e.inscrito) { fala(`Você já está inscrito! Recebe <b>${num(e.valor)}</b> a cada ciclo enquanto durar o mandato do prefeito. Com o mandato novo, as vagas abrem de novo.`); return; }
+  if (e.inscritos >= e.vagas) { fala(`Infelizmente acabaram as vagas deste mandato (${e.vagas} de ${e.vagas}). Quando o próximo prefeito tomar posse, as inscrições abrem de novo.`); return; }
+  fala(`Olá! O CRAS ajuda quem precisa: o inscrito recebe <b>${num(e.valor)}</b> da prefeitura a cada ciclo até o fim do mandato. Ainda temos <b>${e.vagas - e.inscritos}</b> de ${e.vagas} vagas.`, [
+    { rotulo: '📝 Quero me inscrever', fn: () => rede.obras.crasCadastrar().then((n) => aviso(`🤝 Inscrição feita! Você é o ${n}º de ${e.vagas}. A doação cai a cada ciclo.`, 4)).catch((x) => aviso(/acabaram as vagas/i.test(x.message) ? '🤝 Atendente: infelizmente acabaram as vagas deste mandato.' : x.message, 4)) },
+    { rotulo: 'Agora não', fn: () => {} },
+  ]);
+}
+// plenário da Câmara: mesa diretora, tribuna, 10 bancadas e galeria
+function salaCamara() {
+  return montarSala('camara', 3300, 3400, 28, 18, { piso: '#6b4f3a', parede: '#efe6d6', luz: '#fff2dc' }, (i) => {
+    const { caixa, placa } = i;
+    const tapete = new THREE.Mesh(new THREE.PlaneGeometry(14, 10), i.mat('#2f5a3a', 1)); tapete.rotation.x = -Math.PI / 2; tapete.position.set(0, 0.01, -2); i.g.add(tapete);
+    caixa(12, 0.6, 3, '#5a3f28', 0, 0.3, -7); caixa(10, 1, 1, '#7a5636', 0, 1.1, -6.2); movel(i, 'mesa', 0, -6.6, 10, 1.6); placa('Mesa diretora', 0, -6.6, 2.6);
+    for (const sx of [-3, 0, 3]) caixa(0.7, 1.2, 0.7, '#3b2a1c', sx, 1.2, -7.6);
+    caixa(5, 2.6, 0.08, '#1f3f2a', 0, 2.6, -8.8); placa('🏛️ Câmara Municipal', 0, -8.6, 3.4);
+    caixa(1.4, 1.2, 0.9, '#7a5636', 0, 0.6, -3); movel(i, 'tribuna', 0, -3, 1.4, 0.9); placa('Tribuna', 0, -3, 2.1);
+    for (let k = 0; k < 10; k++) {   // bancadas em arco, viradas para a mesa
+      const a = (-0.5 + (k % 5) / 4) * 1.6, r = k < 5 ? 6 : 8.6, x = Math.sin(a) * r, z = -3 + Math.cos(a) * r;
+      const b = caixa(1.6, 0.8, 0.6, '#8a6a4a', x, 0.4, z); b.rotation.y = a; const c = caixa(0.6, 1.1, 0.6, '#2a5a3a', x + Math.sin(a) * 0.7, 0.55, z + Math.cos(a) * 0.7); c.rotation.y = a;
+      i.obst.push([x - 0.8, x + 0.8, z - 0.5, z + 0.5]);
+    }
+    for (let k = 0; k < 2; k++) caixa(20, 0.45, 0.6, '#5a4630', 0, 0.22, 7 + k * 1.1);   // galeria
+    placa('Galeria', 0, 7.5, 1.6);
+    for (const sx of [-12.5, 12.5]) { caixa(0.08, 3, 0.08, '#c9a227', sx, 1.5, -8.4, 0.8); caixa(1, 0.65, 0.02, sx < 0 ? '#1f8a4c' : '#2f6fd1', sx + 0.55, 2.6, -8.4); }
+  });
+}
+
 
 // ---------------------------------------------------------------- hospital: almoxarifado e medicação gratuita
 function noHospital() { return Math.abs(jogador.pos.x - civico.HOSPITAL.x) <= 45 && Math.abs(jogador.pos.z - civico.HOSPITAL.z) <= 45; }
@@ -6795,7 +6975,8 @@ function contexto() {
   if (jogador.perfil?.policial && procuradoProximo(2.4)) return ['algemar e prender o procurado', 'Prender'];
   if (jogador.perfil?.prf && eleitoralProximo(2.4)) return ['prender por crime eleitoral (PRF)', 'Prender'];
   if (jogador.perfil?.profissao === 'medico' && feridoProximo(2.8)) return ['socorrer o ferido (+250)', 'Socorrer'];
-  if (obraNaFrente()) return ['obras públicas: programas, CRAS e Câmara', 'Prefeitura'];
+  if (obraNaFrente()) return ['obra da prefeitura em andamento', 'Obra'];
+  { const po = obraNaPorta(); if (po) return contextoPortaObra(po); }
   if (pertoPrateleira()) return [`pegar remédios do almoxarifado (${jogador.perfil.remedios_hosp || 0}/20 na maleta)`, 'Pegar'];
   if (podeMedicar() && pacienteProximo(2.2)) return [`medicar de graça (+comissão) · ${jogador.perfil.remedios_hosp || 0} na maleta`, 'Medicar'];
   if (servicos.estaApagando()) return ['jogando água no fogo (toque para parar)', 'Parar'];
@@ -7498,6 +7679,29 @@ function escolher(titulo, texto, opcoes) {
 // ================================================================= salas (interiores com funções): QG, redação, prefeitura...
 // Cada sala tem contexto() (o que o botão de ação faz em cada ponto) e acao(). A saída leva de volta para a porta.
 const SALAS = { qg: { contexto: () => contextoQG(), acao: () => acaoQG(), sair: () => aoSairDoQG() } };
+SALAS.cras = {
+  contexto: () => {
+    if (naPorta()) return ['sair do CRAS', 'Sair'];
+    if (pontoInterior('balcao', 2)) return ['falar com a atendente: inscrição no CRAS', 'Falar'];
+    return ['', ''];
+  },
+  acao: () => {
+    if (naPorta()) { sairSala(); return; }
+    if (pontoInterior('balcao', 2)) falarCras();
+  },
+};
+SALAS.camara = {
+  contexto: () => {
+    if (naPorta()) return ['sair do plenário', 'Sair'];
+    if (pontoInterior('tribuna', 1.8)) return ['tribuna: vereadores, votação e programas', 'Tribuna'];
+    if (pontoInterior('mesa', 2.2)) return ['mesa diretora: Câmara e obras da prefeitura', 'Mesa'];
+    return ['', ''];
+  },
+  acao: () => {
+    if (naPorta()) { sairSala(); return; }
+    if (pontoInterior('tribuna', 1.8) || pontoInterior('mesa', 2.2)) abrirPrefeitura('obras');
+  },
+};
 function salaAtual() { return typeof jogador.dentroCasa === 'string' ? SALAS[jogador.dentroCasa.split(':')[0]] || null : null; }
 function entrarSala(chave, saida, x, z) {
   if (jogador.carregando) { scene.remove(jogador.carregando); jogador.carregando = null; }
