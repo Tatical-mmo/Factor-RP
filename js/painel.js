@@ -142,7 +142,7 @@ async function abrirJogador(id) {
       ${j.banido ? '<button id="pDesbanir">Desbanir</button>' : '<input id="pMotivo" placeholder="Motivo"><button id="pBanir" class="perigo">Banir</button>'}</div>`;
   }
   if (eu.cargo === 'admin' && !j.banido) {
-    h += `<div class="sub">Presentear personagem de evento</div><div class="botoes"><select id="pPresSel">${PERSONAGENS_EVENTO.map((x) => `<option value="${x.id}">${esc(x.nome)}</option>`).join('')}</select><button id="pPresente">🎁 Presentear</button></div>`;
+    h += `<div class="sub">Presentear personagem limitado (você não perde o seu)</div><div class="botoes"><select id="pPresSel">${PERSONAGENS_EVENTO.map((x) => `<option value="${x.id}">${esc(x.nome)}</option>`).join('')}</select><button id="pPresente">🎁 Presentear</button></div>`;
     h += `<div class="sub">Prefeitura</div><div class="botoes">${ctx.prefeito?.() === j.id ? '<small>🏛️ É o prefeito atual.</small>' : '<button id="pPrefeito">🏛️ Nomear prefeito</button>'}</div>`;
     if (j.cargo === 'jogador') h += '<div class="sub">💼 Emprego público e patentes</div><div id="pCarreiras" class="dica">Carregando…</div>';
   }
@@ -372,7 +372,7 @@ function abaEu() {
   if (eu.cargo === 'admin') h += '<div class="sub">⚖️ Perdoar crimes</div><div id="pPerdao" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') h += '<div class="sub">Prefeitura</div><div id="pPref" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') {
-    h += `<div class="sub">Evento: personagens especiais</div><p class="dica">Abre a vitrine para os jogadores comprarem. Marque quais (nenhum marcado = todos) e o tempo.</p>
+    h += `<div class="sub">Personagens limitados: vitrine</div><p class="dica">Abre a vitrine para os jogadores comprarem. Marque quais (nenhum marcado = todos) e o tempo.</p>
       <div id="pEvLista" class="poderes">${PERSONAGENS_EVENTO.map((x) => `<label><input type="checkbox" data-ev="${x.id}"> ${esc(x.nome)}</label>`).join('')}</div>
       <div class="botoes"><select id="pEvTempo">${[[30, '30 min'], [60, '1 h'], [180, '3 h'], [720, '12 h'], [1440, '1 dia'], [4320, '3 dias'], [10080, '7 dias']].map(([m, t]) => `<option value="${m}" ${m === 60 ? 'selected' : ''}>${t}</option>`).join('')}</select>
       <button id="pEvAbrir">✨ Abrir vitrine</button><button id="pEvFechar">Fechar vitrine</button></div>`;

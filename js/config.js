@@ -31,16 +31,19 @@ export const PERSONAGENS = [   // personagens do Meshy: as animações vêm dos 
 ];
 
 // personagens de evento: só à venda quando o administrador abre a vitrine (preço e prazo vêm do banco)
-export const PERSONAGENS_EVENTO = [
-  { id: 'Veteran_Gamekeeper', nome: 'Veterano Guarda-Caça' }, { id: 'Molten_Dread_Knight', nome: 'Cavaleiro de Lava' },
-  { id: 'Runebound_Wolfguard', nome: 'Guarda-Lobo Rúnico' }, { id: 'Anubis_Sentinel', nome: 'Sentinela de Anúbis' },
-  { id: 'Armored_Crocodile_Commando', nome: 'Comando Crocodilo' }, { id: 'Bonebound_Reaper', nome: 'Ceifador de Ossos' },
-  { id: 'Grizzled_Vanguard', nome: 'Veterano da Vanguarda' }, { id: 'Ironbraid_Warden', nome: 'Guardiã Trança de Ferro' },
-  { id: 'Raccoon_Ranger', nome: 'Guaxinim Patrulheiro' }, { id: 'Crimson_Samurai', nome: 'Samurai Carmesim' },
-  { id: 'Iron_Vanguard', nome: 'Vanguarda de Ferro' }, { id: 'Ironclad_Sentinel', nome: 'Sentinela Blindada' },
-  { id: 'Azure_Vanguard', nome: 'Vanguarda Celeste' }, { id: 'Inferno_Warden', nome: 'Guardião do Inferno' },
-  { id: 'Rustguard_Automaton', nome: 'Autômato Enferrujado' }, { id: 'Ironhide_Armadillo', nome: 'Tatu Couraçado' },
-  { id: 'Elven_Warden', nome: 'Guardiã Élfica' }, { id: 'Tidebreaker_Sentinel', nome: 'Sentinela Quebra-Mar' },
+export const PERSONAGENS_EVENTO = [   // limitados (Meshy): só o admin dá de presente ou abre a vitrine por um tempo
+  { id: 'Patrocinador', nome: 'Patrocinador' },
+  { id: 'Dona_Empresa', nome: 'Dona da Empresa' },
+  { id: 'Soldado', nome: 'Soldado' },
+  { id: 'Soldada', nome: 'Soldada' },
+  { id: 'Maloqueiro', nome: 'Maloqueiro' },
+  { id: 'Maloqueira', nome: 'Maloqueira' },
+  { id: 'Empresario', nome: 'Empresário' },
+  { id: 'Medica', nome: 'Médica' },
+  { id: 'Medico', nome: 'Médico' },
+  { id: 'Dona_Morro', nome: 'Dona do Morro' },
+  { id: 'Mascarado', nome: 'Mascarado do Morro' },
+  { id: 'Dono_Morro', nome: 'Dono do Morro' },
 ];
 
 // grátis ao criar a conta; os outros custam 8.000 na loja de personagens (mesma lista do banco)

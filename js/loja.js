@@ -229,8 +229,8 @@ async function desenharVisual(c) {
       ${p.personagem === x.id ? '<button class="acao em-uso" disabled>Em uso</button>'
         : tem(x.id) ? `<button class="acao" data-usar="${x.id}">Usar</button>`
         : `<button class="acao" data-comprar-p="${x.id}">🔒 ${PRECO_PERSONAGEM.toLocaleString('pt-BR')}</button>`}</div>`).join('')}</div>
-    <div class="sub">✨ Personagens de evento</div>
-    <p class="dica">${algumAberto ? '<b>Vitrine aberta!</b> Compre antes que feche.' : 'Só ficam à venda quando a administração abre a vitrine do evento. Fique de olho nos avisos.'}</p>
+    <div class="sub">✨ Personagens limitados</div>
+    <p class="dica">${algumAberto ? '<b>Vitrine aberta!</b> Compre antes que feche.' : 'Só ficam à venda quando a administração abre a vitrine por tempo limitado, ou chegam de presente. Fique de olho nos avisos.'}</p>
     <div class="grade pequena">${PERSONAGENS_EVENTO.map((x) => { const e = ev.get(x.id), meu = meus.includes(x.id) || admin;
       return `<div class="carta"><img src="assets/miniaturas/${x.id}.webp" alt="" loading="lazy"><div>${esc(x.nome)}</div>
       ${p.personagem === x.id ? '<button class="acao em-uso" disabled>Em uso</button>'
