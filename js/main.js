@@ -690,6 +690,8 @@ function prepararClipes(anims) {
   }
   const sub = THREE.AnimationUtils.subclip;
   if (clipes.shoot) clipes.mirar = sub(clipes.shoot, 'mirar', 78, 117, 30);
+  // parado com a arma: tronco e braços congelados num quadro do "andar atirando" (mira firme), pernas da animação parada
+  if (clipes.walk_shoot && clipes.idle) clipes.mirar = poseSuperior(clipes.idle, clipes.walk_shoot, clipes.walk_shoot.duration * 0.4, 'mirar');
   // parado segurando: braços e tronco congelados na pose de carregar, pernas da animação parada
   if (clipes.carry_walk && clipes.idle && !clipes.carregar_parado) clipes.carregar_parado = poseSuperior(clipes.idle, clipes.carry_walk, 0.2, 'carregar_parado');
   if (clipes.pickup) clipes.pegar = sub(clipes.pickup, 'pegar', 21, 72, 30);
