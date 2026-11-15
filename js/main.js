@@ -6342,7 +6342,30 @@ function atualizarCamera3D(dt) {
   for (const p of predios) if (p.opac < 0.99) { p.opac = 1; for (const m of p.mats) { m.transparent = false; m.opacity = 1; m.depthWrite = true; } }
   const mira1 = $('mira1p'); if (mira1) mira1.classList.toggle('oculto', modoCam !== 'p1' || !!v);
 }
+// editor da farda/máscaras: câmera de perto, de frente para o personagem, mirando a parte que está sendo ajustada
+// (cabeça para capacete/boné/máscara, tronco para colete/jaleco) e com ela na parte de cima da tela, acima do painel.
+// A câmera fica parada; o botão "Girar" vira o personagem para ver os lados e as costas.
+const camEditor = { yaw: 0, parte: 'tronco' };
+function ossoTronco(av) { if (av.ossoTronco === undefined) { av.ossoTronco = null; av.modelo.traverse((o) => { if (!av.ossoTronco && o.isBone && /spine2$/i.test(o.name)) av.ossoTronco = o; }); if (!av.ossoTronco) av.modelo.traverse((o) => { if (!av.ossoTronco && o.isBone && /spine1?$/i.test(o.name)) av.ossoTronco = o; }); } return av.ossoTronco; }
+const _alvoEd = new THREE.Vector3();
+function cameraDoEditor() {
+  const av = jogador.avatar, osso = camEditor.parte === 'cabeca' ? cabecaDe(av) : ossoTronco(av);
+  if (osso) osso.getWorldPosition(_alvoEd); else _alvoEd.set(jogador.pos.x, jogador.pos.y + (camEditor.parte === 'cabeca' ? 1.6 : 1.2), jogador.pos.z);
+  if (camEditor.parte === 'cabeca') _alvoEd.y += 0.08;   // o osso da cabeça fica na base do crânio
+  const fov = 40, dist = camEditor.parte === 'cabeca' ? 1.55 : 2.5, meia = Math.tan(fov / 2 * Math.PI / 180) * dist;
+  if (camP.fov !== fov) { camP.fov = fov; camP.updateProjectionMatrix(); }
+  if (!camEditor.ativa) document.body.classList.add('editandoFarda');   // some o HUD de cima para ver a peça
+  camEditor.ativa = true; camP.layers.enable(1);
+  const fx = Math.sin(camEditor.yaw), fz = Math.cos(camEditor.yaw);
+  camP.position.set(_alvoEd.x + fx * dist, _alvoEd.y + 0.05, _alvoEd.z + fz * dist);
+  camP.lookAt(_alvoEd.x, _alvoEd.y - meia * 0.5, _alvoEd.z);   // a parte fica a ~1/4 do topo da tela, longe do painel
+  sol.position.copy(_alvoEd).addScaledVector(SOL_DIR, 80); sol.target.position.copy(_alvoEd);
+  if (jogador.etiqueta) jogador.etiqueta.visible = false;
+  camAtiva = camP;
+}
 function atualizarCamera(dt) {
+  if (editorFarda && jogador.avatar) { cameraDoEditor(); return; }
+  if (camEditor.ativa) { camEditor.ativa = false; document.body.classList.remove('editandoFarda'); camP.fov = 68; camP.updateProjectionMatrix(); if (jogador.etiqueta) jogador.etiqueta.visible = true; }
   if (modo3D()) { atualizarCamera3D(dt); return; }
   ladoUnicoP1(null);
   camAtiva = camera;
@@ -11453,6 +11476,7 @@ function abrirEditorFarda() {
     desenhar();
   };
   const desenhar = () => {
+    camEditor.parte = peca === 'colete' ? 'tronco' : 'cabeca';   // a câmera mostra a parte que está sendo ajustada
     const aj = { ...AJ_PADRAO[peca], ...(rascunho[papel]?.[peca] || {}) };
     const sel = (on) => (on ? 'background:#f2a33a;color:#111' : '');
     el.innerHTML = `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b style="flex:1">${aba === 'farda' ? '👔 Ajuste da farda' : '😷 Ajuste das máscaras'}</b>
@@ -11494,6 +11518,7 @@ function abrirEditorFarda() {
       };
     });
   };
+  camEditor.yaw = jogador.yaw;   // câmera de frente para o personagem (fica parada; "Girar" vira o personagem)
   definirFarda(papel, true); desenhar(); document.body.appendChild(el); editorFarda = el;
 }
 // ================================================================= configurações do admin (polícia robô e crimes de NPC)
@@ -14227,7 +14252,7 @@ const faltaPeca = new Set();
 // O jogador compra na loja e usa pela mochila. Cada máscara é ajustada pelo admin no editor da farda (tamanho, altura, frente, giro).
 let mascaraPrevia = null;   // editor da farda: mostra a máscara escolhida no meu personagem
 const glbMascaras = new Map();
-const PADRAO_MASCARA = { cabeca: { subir: 0, frente: 0.02, tam: 1.05 }, rosto: { subir: -0.02, frente: 0.16, tam: 0.95 }, boca: { subir: -0.22, frente: 0.14, tam: 1 } };
+const PADRAO_MASCARA = { cabeca: { subir: 0.06, frente: 0.04, tam: 1.32 }, rosto: { subir: -0.02, frente: 0.16, tam: 0.95 }, boca: { subir: -0.22, frente: 0.14, tam: 1 } };
 function pecaMascara(id) {
   if (!glbMascaras.has(id)) glbMascaras.set(id, carregarGLB(`assets/modelos/${id}.glb`).then((g) => {
     const b = new THREE.Box3().setFromObject(g.scene), t = new THREE.Vector3(), c = new THREE.Vector3(); b.getSize(t); b.getCenter(c);
