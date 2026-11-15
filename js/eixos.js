@@ -24,11 +24,12 @@ export function restaurar() {
 // Cada tipo tem a sua: f = frequência (Hz, mais baixa = mais macia), z = amortecimento (1 = sem balanço),
 // mg/mr = quanto mergulha/tomba por m/s² de aceleração, curso = quanto a mola comprime/estica.
 const MOLAS = {
-  onibus: { f: 1.05, z: 0.42, mg: 0.006, mr: 0.012, curso: 0.16, ang: 0.85 },   // macia e caprichada: balança devagar e assenta
-  caminhao: { f: 1.45, z: 0.38, mg: 0.006, mr: 0.010, curso: 0.13, ang: 1.1 },
-  pesado: { f: 2.3, z: 0.55, mg: 0.003, mr: 0.004, curso: 0.08, ang: 1.6 },     // blindado, tanque, jipe militar
-  carro: { f: 1.75, z: 0.36, mg: 0.008, mr: 0.008, curso: 0.11, ang: 1.25 },
-  esporte: { f: 2.3, z: 0.5, mg: 0.005, mr: 0.004, curso: 0.07, ang: 1.6 },
+  // ônibus: macio, mas contido (mergulha ~1,5° freando, agacha de leve saindo e volta; tomba pouco na curva)
+  onibus: { f: 1.2, z: 0.55, mg: 0.008, mr: 0.004, curso: 0.12, ang: 1.0, maxP: 0.03, maxR: 0.03 },
+  caminhao: { f: 1.45, z: 0.45, mg: 0.006, mr: 0.006, curso: 0.12, ang: 1.1, maxP: 0.035, maxR: 0.04 },
+  pesado: { f: 2.3, z: 0.55, mg: 0.003, mr: 0.003, curso: 0.08, ang: 1.6, maxP: 0.02, maxR: 0.02 },     // blindado, tanque, jipe militar
+  carro: { f: 1.75, z: 0.4, mg: 0.008, mr: 0.006, curso: 0.11, ang: 1.25, maxP: 0.045, maxR: 0.05 },
+  esporte: { f: 2.3, z: 0.5, mg: 0.005, mr: 0.003, curso: 0.07, ang: 1.6, maxP: 0.03, maxR: 0.03 },
 };
 function tipoMola(o) {
   let n = ''; o.traverse((k) => { n ||= k.userData?.glb || ''; }); n = n || o.userData?.modelo || '';
@@ -53,11 +54,16 @@ function amortecer(o, yAlvo, pAlvo, rAlvo) {
   const K = m.k, w = 2 * Math.PI * K.f, kk = w * w, c = 2 * K.z * w;
   // velocidade e aceleração do veículo (suavizadas), para o mergulho, o agachar e o tombar
   const vx = (x - m.x) / dt, vz = (z - m.z) / dt; m.x = x; m.z = z;
-  const sv = Math.min(1, dt / 0.12), ax = (vx - m.vx) / dt, az = (vz - m.vz) / dt;
+  // aceleração = quanto a velocidade (suavizada) mudou neste quadro. Antes era a diferença entre a velocidade crua e a
+  // suavizada dividida pelo quadro: dava ~7x a aceleração real e a traseira ficava arriada o tempo todo andando.
+  const sv = Math.min(1, dt / 0.15), vx0 = m.vx, vz0 = m.vz;
   m.vx += (vx - m.vx) * sv; m.vz += (vz - m.vz) * sv;
-  m.ax += (THREE_clamp(ax, -25, 25) - m.ax) * Math.min(1, dt / 0.18); m.az += (THREE_clamp(az, -25, 25) - m.az) * Math.min(1, dt / 0.18);
+  const ax = THREE_clamp((m.vx - vx0) / dt, -12, 12), az = THREE_clamp((m.vz - vz0) / dt, -12, 12), sa = Math.min(1, dt / 0.25);
+  m.ax += (ax - m.ax) * sa; m.az += (az - m.az) * sa;
   const a = o.rotation.y, fx = Math.sin(a), fz = Math.cos(a);
-  const aLong = m.ax * fx + m.az * fz, aLat = m.ax * fz - m.az * fx;   // frente / lado esquerdo (+x do veículo)
+  let aLong = m.ax * fx + m.az * fz; const aLat = m.ax * fz - m.az * fx;   // frente / lado esquerdo (+x do veículo)
+  // mergulho/agachar só na hora da mudança: acelerando ou freando por muito tempo a carroceria volta ao normal
+  m.aLenta = (m.aLenta || 0) + (aLong - (m.aLenta || 0)) * Math.min(1, dt / 1.1); aLong -= m.aLenta;
   const vh = Math.hypot(m.vx, m.vz);
   // altura: chão subindo de repente lança a carroceria (mais rápido = mais alto)
   const vChao = (yAlvo - m.ya) / dt; m.ya = yAlvo;
@@ -68,7 +74,7 @@ function amortecer(o, yAlvo, pAlvo, rAlvo) {
   if (m.y < yAlvo - K.curso) { m.y = yAlvo - K.curso; if (m.vy < 0) m.vy *= -0.25; }   // fim de curso: bate e volta um pouco
   // ângulos: seguem o chão com a mesma mola (um pouco mais firme) e somam o mergulho/tombo da aceleração
   const wa = w * K.ang, ka = wa * wa, ca = 2 * K.z * wa;
-  const pA = pAlvo - THREE_clamp(aLong * K.mg, -0.06, 0.06), rA = rAlvo + THREE_clamp(aLat * K.mr, -0.07, 0.07);
+  const pA = pAlvo - THREE_clamp(aLong * K.mg, -K.maxP, K.maxP), rA = rAlvo + THREE_clamp(aLat * K.mr, -K.maxR, K.maxR);
   m.vp += (ka * (pA - m.p) - ca * m.vp) * dt; m.p += m.vp * dt;
   m.vr += (ka * (rA - m.r) - ca * m.vr) * dt; m.r += m.vr * dt;
   o.position.y = m.y; o.rotation.x = THREE_clamp(m.p, -0.55, 0.55); o.rotation.z = THREE_clamp(m.r, -0.55, 0.55);

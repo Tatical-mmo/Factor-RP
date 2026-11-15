@@ -7995,7 +7995,15 @@ function veiculoParaIncendiar() {
   if (!jogador.cla || !ultimoLargado || agoraServidor() > ultimoLargado.ate || jogador.carro || jogador.dentroCasa || jogador.passageiro || jogador.morto) return null;
   if (jogador.perfil?.policial || jogador.perfil?.prf || veiculoEmChamas(ultimoLargado.ref)) return null;
   const v = veiculoPorRef(ultimoLargado.ref); if (!v || v.l?.queima > 0) return null;
-  return Math.hypot(v.x - jogador.pos.x, v.z - jogador.pos.z) < 5 ? { ...v, ref: ultimoLargado.ref } : null;
+  return pertoDoVeiculo(v.mesh, v.x, v.z, 3.5) ? { ...v, ref: ultimoLargado.ref } : null;
+}
+// perto do veículo pela lataria e não pelo centro: ônibus e caminhão têm 12-14 m e quem desce na porta do motorista
+// fica a 6-7 m do meio (o botão de incendiar sumia nos ônibus novos, que são mais compridos)
+function pertoDoVeiculo(mesh, x, z, raio) {
+  const r = mesh?.rotation?.y || 0, fx = Math.sin(r), fz = Math.cos(r), dx = jogador.pos.x - x, dz = jogador.pos.z - z;
+  let meio = 2.2; if (mesh) { const e = civico.eixosDe(mesh); meio = Math.max(2.2, Math.max(Math.abs(e.zf), Math.abs(e.zr)) + 1.6); }
+  const ao = THREE.MathUtils.clamp(dx * fx + dz * fz, -meio, meio);
+  return Math.hypot(dx - fx * ao, dz - fz * ao) < raio + 1.3;
 }
 async function incendiarVeiculo(v) {
   if (incendiando) return; incendiando = true;
