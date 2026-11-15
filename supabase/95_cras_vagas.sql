@@ -39,7 +39,7 @@ end $$;
 create or replace function public.cras_fechar() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
-  if new.tipo = 'cras' and new.status = 'descontinuada' and old.status is distinct from 'descontinuada' then delete from cras_cadastros; end if;
+  if new.tipo = 'cras' and new.status = 'descontinuada' and old.status is distinct from 'descontinuada' then delete from cras_cadastros where true; end if;
   return new;
 end $$;
 drop trigger if exists cras_fechar on public.obras;

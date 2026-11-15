@@ -157,7 +157,7 @@ begin
   adm := exists (select 1 from perfis where id = auth.uid() and cargo = 'admin');
   if not adm and (o.publica or o.dono is distinct from auth.uid()) then raise exception 'patrimonio da prefeitura: so o administrador pode desfazer'; end if;
   delete from obras where id = o.id;
-  if o.tipo = 'cras' then delete from cras_cadastros; end if;
+  if o.tipo = 'cras' then delete from cras_cadastros where true; end if;
   if o.tipo = 'camara' then update camara set fase = 'parada', fase_ate = 0 where id = 1; update vereadores set eleito = false where eleito; end if;
 end $$;
 

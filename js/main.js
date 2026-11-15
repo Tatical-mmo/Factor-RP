@@ -5047,7 +5047,15 @@ function montarBasePrf() {
   const m = new THREE.Group(); m.add(giro); m.updateMatrixWorld(true);
   const bb = new THREE.Box3().setFromObject(m), tam = bb.getSize(new THREE.Vector3()), k = Math.min(34 / (tam.x || 1), 30 / (tam.z || 1));
   m.scale.setScalar(k); m.position.set(-(bb.min.x + bb.max.x) / 2 * k, -bb.min.y * k, -2 - (bb.min.z + bb.max.z) / 2 * k);
-  m.traverse((q) => { if (q.isMesh) { q.castShadow = true; q.receiveShadow = true; } }); g.add(m); scene.add(g);
+  g.add(m); scene.add(g); g.updateMatrixWorld(true);
+  // o pátio de concreto do modelo (na frente da garagem) não casa com a calçada: some com dois planos de corte
+  // (some só o que está ao mesmo tempo na frente da garagem, z > -3,8, e do lado dela, x > 0,5; a marquise fica em x < -2)
+  const corte = [new THREE.Plane(new THREE.Vector3(0, 0, -1), -3.8), new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0.5)].map((pl) => pl.applyMatrix4(g.matrixWorld));
+  m.traverse((q) => {
+    if (!q.isMesh) return; q.castShadow = true; q.receiveShadow = true;
+    q.material = [].concat(q.material).map((mt) => { const c = mt.clone(); c.clippingPlanes = corte; c.clipIntersection = true; c.clipShadows = true; return c; });
+    if (q.material.length === 1) q.material = q.material[0];
+  });
   caixa(-16.2, -14.4, 5, -4.6); caixa(5, -14.4, 15.4, -4.2);   // prédio e garagem
   // viaturas da PRF estacionadas no pátio, de frente para a saída
   for (const lx of [7.2, 10.2, 13.2]) {
