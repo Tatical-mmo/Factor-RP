@@ -255,8 +255,11 @@ const alvoCam = new THREE.Vector3();
 const ultimaPosCam = {};
 let modoCam = (() => { try { return localStorage.getItem('fator_cam') || 'iso'; } catch { return 'iso'; } })();
 if (modoCam === 'perto') modoCam = 'atras';
+if (modoCam === 'p1') modoCam = 'livre';   // a primeira pessoa saiu do jogo: quem usava vai para a 3D livre
 // câmeras 3D (☰ › Câmera): "livre" gira em volta do personagem em perspectiva; "p1" é a visão em primeira pessoa
-const camP = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.08, 700);
+// perto = 0,4 m (era 0,08 por causa da primeira pessoa, que saiu): a precisão de profundidade fica 5x melhor e o chão
+// (asfalto, faixas, calçada, grama, que ficam a milímetros um do outro) para de piscar ao longe na câmera 3D
+const camP = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.4, 700);
 scene.add(camP);   // os filhos dela (painel do veículo) aparecem na frente da visão
 let camAtiva = camera;
 const olhar = { yaw: 0, pitch: -0.05, dist: 14, incl: 0.42, veic: 0, arrastou: 0 };
@@ -273,7 +276,7 @@ const rotores = new WeakMap();
 function rotorDe(o) { if (!rotores.has(o)) rotores.set(o, o.getObjectByName('rotor') || null); return rotores.get(o); }
 function trocarCamera() {
   const opc = [['iso', '🗺️ De cima (padrão)', 'Câmera de cima (padrão).'], ['atras', '🎥 De cima, atrás do personagem', 'Câmera de cima que gira e acompanha para onde você anda.'],
-    ['livre', '🌆 3D livre', 'Visão 3D: arraste na tela para girar e inclinar; pinça (ou rodinha) aproxima.'], ['p1', '👁️ Primeira pessoa', 'Primeira pessoa: arraste na tela para olhar; o joystick anda para onde você olha. Armado, o tiro vai na mira do centro.']];
+    ['livre', '🌆 3D livre', 'Visão 3D: arraste na tela para girar e inclinar; pinça (ou rodinha) aproxima.']];   // a primeira pessoa (personagem e veículo) foi retirada
   escolher('🎥 Câmera', 'Escolha como ver o jogo (fica salvo).', opc.map(([m, r, t]) => ({ rotulo: `${m === modoCam ? '✅ ' : ''}${r}`, fn: () => {
     if (modo3D() !== (m === 'livre' || m === 'p1')) olhar.yaw = Math.PI / 4 + anguloCamSuave * Math.PI / 2 + Math.PI;   // começa olhando para o mesmo lado da câmera de cima
     modoCam = m; try { localStorage.setItem('fator_cam', modoCam); } catch { /* sem armazenamento */ }
@@ -843,11 +846,12 @@ function padronizarTamanho(modelo, gltf) {
   }
   if (gltf.userData.escalaPadrao !== 1) modelo.scale.multiplyScalar(gltf.userData.escalaPadrao);
 }
+const VERSAO_GLB_PERS = { Medico: 'mao1' };   // arquivo corrigido: o celular baixa de novo (médico: mão esquerda presa num osso da cabeça)
 async function criarAvatar(pasta, id) {
   let gltf;
   // procura em assets/<pasta>/ e, para os personagens de evento, também em personagens/ (onde o robô colocou);
   // se não achar, usa um personagem padrão para o jogo não travar
-  for (const url of [`assets/${pasta}/${id}.glb`, `${pasta}/${id}.glb`, 'assets/personagens/Jovem_Cidade.glb']) {
+  for (const url of [`assets/${pasta}/${id}.glb${VERSAO_GLB_PERS[id] ? '?v=' + VERSAO_GLB_PERS[id] : ''}`, `${pasta}/${id}.glb`, 'assets/personagens/Jovem_Cidade.glb']) {
     try { gltf = await carregarGLB(url); break; } catch (e) { console.warn('modelo não carregou:', url, e); }
   }
   const modelo = SkeletonUtils.clone(gltf.scene);

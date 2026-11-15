@@ -830,7 +830,7 @@ function montarMalhas() {
   for (const vert of [false, true]) {
     const lista = ruas.filter((r) => r[4] === vert);
     const im = new THREE.InstancedMesh(planoChao, MAT.asfalto, lista.length);
-    lista.forEach(([x, z, w, d], k) => { _m.compose(_v.set(x, vert ? 0.016 : 0.012, z), _q.identity(), _e.set(w, 1, d)); im.setMatrixAt(k, _m); });
+    lista.forEach(([x, z, w, d], k) => { _m.compose(_v.set(x, vert ? 0.022 : 0.012, z), _q.identity(), _e.set(w, 1, d)); im.setMatrixAt(k, _m); });
     im.receiveShadow = true; scene.add(im);
   }
   // árvores
@@ -1160,7 +1160,7 @@ function montarMobiliario() {
   }
   // faixas tracejadas
   const fx = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#ece4c8', roughness: 0.8 }), faixas.length);
-  faixas.forEach(([x, z, vert], k) => { _m.compose(_v.set(x, 0.022, z), _q.identity(), _e.set(vert ? 0.22 : 3, 1, vert ? 3 : 0.22)); fx.setMatrixAt(k, _m); });
+  faixas.forEach(([x, z, vert], k) => { _m.compose(_v.set(x, 0.032, z), _q.identity(), _e.set(vert ? 0.22 : 3, 1, vert ? 3 : 0.22)); fx.setMatrixAt(k, _m); });
   fx.receiveShadow = true; scene.add(fx);
   // postes
   const matPoste = new THREE.MeshStandardMaterial({ color: '#33383f', roughness: 0.5, metalness: 0.5 });
