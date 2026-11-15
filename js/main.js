@@ -2056,6 +2056,16 @@ function receberExplosao(e) {
 }
 const explosoes = [];
 const geoExplosao = new THREE.SphereGeometry(1, 16, 12);
+// Som da explosão: perto (até ~1 quarteirão) o estrondo do tipo certo (veículo, grande = avião/bomba/míssil, na água);
+// mais longe só o estouro abafado de longe, que chega a ~2 quarteirões nas explosões grandes e ~1,5 nas de veículo
+const naAguaSom = (x, z, y) => y < 3 && z > 1116 && !mundo.AREAS_NAVIO.some((r) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) && ![675, 760, 845].some((px) => Math.abs(x - px) < 5 && z < 1170);
+function somExplosao(x, y, z, k, d) {
+  const grande = k >= 1.4, nome = naAguaSom(x, z, y) ? 'explosao_agua' : grande ? 'explosao_grande' : 'explosao_carro';
+  const perto = grande ? 55 : 45, alcance = grande ? 115 : 80;   // quarteirão = 54 m
+  const vol = Math.min(1, (k < 0.75 ? 0.55 : 0.8) + 0.1 * k);
+  if (d < perto + 15) sons.tocar(nome, { vol, dist: d, raio: perto + 15, velocidade: k < 0.75 ? 1.15 : grande ? 0.95 : 1 });
+  if (d > perto * 0.6 && d < alcance) sons.tocar('explosao_longe', { vol: grande ? 0.9 : 0.65, dist: d - perto * 0.6, raio: alcance - perto * 0.6 });
+}
 function efeitoExplosao(x, y, z, k = 1, tinta = true) {
   const fogo = new THREE.Mesh(geoExplosao, new THREE.MeshBasicMaterial({ color: '#ffb23a', transparent: true, opacity: 0.95, toneMapped: false }));
   const fumaca = new THREE.Mesh(geoExplosao, new THREE.MeshStandardMaterial({ color: '#3b3b3b', transparent: true, opacity: 0.6, roughness: 1, depthWrite: false }));
@@ -2064,7 +2074,7 @@ function efeitoExplosao(x, y, z, k = 1, tinta = true) {
   explosoes.push({ fogo, tinta: tt || new THREE.Mesh(), fumaca, t: 0, k });
   if (tt) manchar(new THREE.Vector3(x, alturaChao(x, z) + 0.02, z), new THREE.Vector3(0, 1, 0), '#1f9e46');
   const d = Math.hypot(x - jogador.pos.x, z - jogador.pos.z);
-  sons.tocar('tiro', { vol: Math.min(1, 0.7 + 0.15 * k), dist: d, raio: 120 * Math.max(1, k * 0.7), velocidade: 0.45 / Math.sqrt(k) });
+  somExplosao(x, y, z, k, d);
   tremor = Math.max(tremor, d < 30 * k ? 0.35 * Math.min(2.5, k) : 0);
 }
 function atualizarExplosoes(dt) {
