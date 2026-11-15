@@ -244,7 +244,7 @@ async function abaCidade() {
       <label style="flex:1">Orçamento por mandato <input id="cOrc" type="number" inputmode="numeric" min="0" step="10000" value="${cf.orcamento_mandato ?? 500000}" style="width:100%"></label></div>
     <div class="botoes"><button id="cHospSalvar">Salvar comissão e orçamento</button></div>
     <div class="sub">🏗️ Obras públicas</div>
-    <p class="dica">Patrimônio da prefeitura só o administrador desfaz. Demolir apaga o prédio e o programa.</p>
+    <p class="dica">Patrimônio da prefeitura só o administrador desfaz. Demolir apaga o prédio e o programa. <b>⏩ Terminar agora</b> deixa a obra pronta sem esperar os ciclos; na Câmara, <b>⏩ Avançar fase</b> pula candidatura → votação → mandato.</p>
     <div class="lista" id="cObras"><span class="vazio">Carregando…</span></div>
     <div class="sub">👔 Farda</div>
     <p class="dica">Ajuste o tamanho e a posição do colete e do capacete/boné de cada corporação, uma por uma, vendo no seu personagem. Ao salvar, vale para todos.</p>
@@ -258,7 +258,9 @@ async function abaCidade() {
   const listarObras = async () => {
     const el = $('cObras'); if (!el) return;
     let ob = []; try { ob = await rede.obras.lista(); } catch { el.innerHTML = '<span class="vazio">Rode o 93c_obras_publicas.sql.</span>'; return; }
-    el.innerHTML = ob.length ? ob.map((o) => `<div class="linha item"><span class="nm"><b>${NOMES_OBRA[o.tipo] || o.tipo}</b><small>terreno ${o.terreno} · ${o.status} · ${o.publica ? 'patrimônio da prefeitura' : 'particular do prefeito'}</small></span><span class="bts"><button data-demolir="${o.id}">Demolir</button></span></div>`).join('') : '<span class="vazio">Nenhuma obra.</span>';
+    el.innerHTML = ob.length ? ob.map((o) => `<div class="linha item"><span class="nm"><b>${NOMES_OBRA[o.tipo] || o.tipo}</b><small>terreno ${o.terreno} · ${o.status} · ${o.publica ? 'patrimônio da prefeitura' : 'particular do prefeito'}</small></span><span class="bts">${o.status === 'construindo' ? `<button data-terminar="${o.id}">⏩ Terminar agora</button>` : ''}${o.tipo === 'camara' && o.status === 'ativa' ? '<button data-camara="1">⏩ Avançar fase</button>' : ''}<button data-demolir="${o.id}">Demolir</button></span></div>`).join('') : '<span class="vazio">Nenhuma obra.</span>';
+    el.querySelectorAll('[data-terminar]').forEach((b) => { b.onclick = async () => { try { await rede.obras.terminar(Number(b.dataset.terminar)); msg('Obra pronta! O prédio aparece em instantes.'); ctx.obrasMudaram?.(); listarObras(); } catch (e) { msg(/admin_terminar|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 93e_obras_admin.sql.' : e.message, false); } }; });
+    el.querySelectorAll('[data-camara]').forEach((b) => { b.onclick = async () => { try { const f = await rede.obras.avancarCamara(); msg(`Câmara agora em: ${{ candidatura: 'candidaturas abertas', votacao: 'votação aberta', mandato: 'mandato dos vereadores' }[f] || f}.`); } catch (e) { msg(/admin_avancar|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 93e_obras_admin.sql.' : e.message, false); } }; });
     el.querySelectorAll('[data-demolir]').forEach((b) => { b.onclick = async () => { try { await rede.obras.demolir(Number(b.dataset.demolir)); msg('Obra demolida.'); ctx.obrasMudaram?.(); listarObras(); } catch (e) { msg(e.message, false); } }; });
   };
   listarObras();
