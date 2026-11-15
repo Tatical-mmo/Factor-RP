@@ -1441,7 +1441,7 @@ function sairCarroLocal() {
 // direção arcade: o controle aponta para onde o carro deve ir (como andar a pé)
 function dirigir(dt) {
   const c = jogador.carro, max = c.max || civico.CARROS[c.modelo]?.vel || 15;
-  if (c.dano === undefined) c.dano = danoGuardado(c);
+  if (c.dano === undefined) { c.dano = danoGuardado(c); if (c.dano >= 50) veicFumando.add(c); }
   if (c.voa !== voandoUI) { voandoUI = !!c.voa; document.body.classList.toggle('voando', voandoUI); }
   if (c.jato) { pilotarJato(c, dt); return; }
   if (c.aviao) { pilotarAviao(c, dt); return; }
@@ -1490,8 +1490,9 @@ function dirigir(dt) {
       c.batida = performance.now(); tremor = 0.35; if (c.aula) c.aula.batidas++;
       c.dano = Math.min(100, (c.dano || 0) + Math.min(45, Math.abs(c.vel) * 2.2));   // batida forte estraga mais
       guardarDanoVeiculo(c);
-      if (c.dano >= 100) { acidenteVeiculo(c, '💥 Bateu demais: o veículo explodiu!'); return; }
-      aviso(`💥 Batida! Veículo ${Math.round(100 - c.dano)}%${c.dano >= 70 ? ' (pegando fogo, cuidado!)' : ''}`, 1.6);
+      if (c.dano >= 50) veicFumando.add(c);   // fumaça (e, em 100%, fogo e explosão 5 s depois)
+      if (c.dano >= 100) { if (!c.pegouFogo) { c.pegouFogo = 5; aviso('🔥 O veículo pegou fogo! Saia já: ele explode em 5 s!', 4); } }
+      else aviso(`💥 Batida! Veículo ${Math.round(100 - c.dano)}%${c.dano >= 80 ? ' (soltando fumaça preta: mais uma batida e pega fogo!)' : c.dano >= 50 ? ' (soltando fumaça, cuidado!)' : ''}`, 1.8);
     }
     c.vel *= Math.abs(c.vel) > 6 ? 0.15 : 0.5;
   }
@@ -1855,18 +1856,60 @@ function acidenteVeiculo(c, msg) {
   if (c.voa && !c.caminhao) { quedaAeronave(c, msg); return; }
   const p = c.mesh ? c.mesh.position.clone() : jogador.pos.clone();
   const meu = c.rua === undefined && !c.caminhao && !c.servico && carrosMundo.has(c.id) ? c.id : null;
+  const dentro = jogador.carro === c, pertoDele = Math.hypot(jogador.pos.x - p.x, jogador.pos.z - p.z) < 4.5;   // pegou fogo e explodiu depois que você saiu
   danoVeiculos.delete(meu ?? (c.rua !== undefined ? 'r' + c.rua : c.caminhao ? 'k' + c.caminhao : 's' + c.servico));
   if (meu !== null) {
-    jogador.carro = null; modoVolante(false); jogador.avatar.raiz.visible = true;
+    if (dentro) { jogador.carro = null; modoVolante(false); jogador.avatar.raiz.visible = true; }
     const v = carrosMundo.get(meu); if (v) v.mesh.visible = false;
     rede.carros.acidente(meu).catch(() => {});
-  } else { c.alt = 0; c.pairar = false; c.vel = 0; sairCarro(); if (jogador.carro === c) { jogador.carro = null; modoVolante(false); jogador.avatar.raiz.visible = true; } if (c.mesh && c.rua === undefined) c.mesh.visible = !c.servico; if (c.servico && c.mesh) scene.remove(c.mesh); }
-  jogador.pos.x += 2.2; jogador.pos.y = alturaChao(jogador.pos.x, jogador.pos.z); resolverColisao(jogador.pos, jogador.raio);
+  } else { c.alt = 0; c.pairar = false; c.vel = 0; if (dentro) sairCarro(); if (jogador.carro === c) { jogador.carro = null; modoVolante(false); jogador.avatar.raiz.visible = true; } if (c.mesh && c.rua === undefined) c.mesh.visible = !c.servico; if (c.servico && c.mesh) scene.remove(c.mesh); }
+  if (dentro) { jogador.pos.x += 2.2; jogador.pos.y = alturaChao(jogador.pos.x, jogador.pos.z); resolverColisao(jogador.pos, jogador.raio); }
   const e = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, z: Math.round(p.z * 10) / 10, cv: meu, de: jogador.perfil?.id };
   efeitoExplosao(e.x, e.y, e.z); tremor = 0.8; conexao?.enviar('explosao', e);
   for (const [id, r] of remotos) if (r.av?.raiz.visible && Math.hypot(e.x - r.av.raiz.position.x, e.z - r.av.raiz.position.z) < 4.5) aplicarDanoRemoto(id, 25);
-  jogador.ultimoAgressor = null; danoLocal(40);
+  if (dentro || pertoDele) { jogador.ultimoAgressor = null; danoLocal(40); }
   aviso(msg + (meu !== null ? ' Ele volta para você em 30 s.' : ''), 4.5);
+}
+// ---- veículo batido: com 50% de dano solta fumaça cinza do motor, com 80% fumaça preta grossa; em 100% pega fogo
+// (chamas pela lataria) e explode 5 s depois, dentro ou fora dele (quem estiver perto se machuca)
+const veicFumando = new Set(), particulasDano = [], _pFum = new THREE.Vector3(), _pFog = new THREE.Vector3();
+let texFum = null;
+function texFumaca() {
+  if (texFum) return texFum;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.4, 'rgba(255,255,255,.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  texFum = new THREE.CanvasTexture(cv); return texFum;
+}
+function soltarParticula(pos, fogo, k) {
+  const cor = fogo ? (Math.random() < 0.5 ? '#ffb21f' : '#ff5a10') : k >= 2 ? '#2b2b2b' : '#a3a3a3';
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texFumaca(), color: cor, transparent: true, opacity: fogo ? 0.95 : 0.55, depthWrite: false, blending: fogo ? THREE.AdditiveBlending : THREE.NormalBlending }));
+  s.position.copy(pos); s.position.x += (Math.random() - 0.5) * 0.5; s.position.z += (Math.random() - 0.5) * 0.5;
+  s.scale.setScalar(fogo ? 0.8 + Math.random() * 0.7 : 0.6); scene.add(s);
+  particulasDano.push({ s, vida: fogo ? 0.5 + Math.random() * 0.3 : 2.2 + Math.random(), t: 0, sobe: fogo ? 2.2 : 1.1 + Math.random() * 0.6, cresce: fogo ? 0.5 : 1.3, op: fogo ? 0.95 : k >= 2 ? 0.75 : 0.55 });
+}
+function atualizarDanoVeiculos(dt) {
+  for (const c of veicFumando) {
+    const m = c.mesh;
+    if (c.explodiu || !m || !m.parent || !m.visible || ((c.dano || 0) < 50 && !c.pegouFogo)) { veicFumando.delete(c); continue; }
+    const fogo = c.pegouFogo > 0, k = fogo ? 3 : c.dano >= 80 ? 2 : 1;
+    if (!c._alturaV) { const b = new THREE.Box3().setFromObject(m); c._alturaV = Math.min(4, Math.max(1, b.max.y - m.position.y)); }
+    const e = civico.eixosDe(m), a = m.rotation.y, fz = e.zf + 0.4, alt = c._alturaV * 0.75;   // motor: na frente
+    _pFum.set(m.position.x + Math.sin(a) * fz, m.position.y + alt, m.position.z + Math.cos(a) * fz);
+    c._tFum = (c._tFum || 0) - dt;
+    if (c._tFum <= 0) {
+      c._tFum = k === 1 ? 0.22 : k === 2 ? 0.09 : 0.06; soltarParticula(_pFum, false, k);
+      if (fogo) for (let n = 0; n < 3; n++) {   // chamas espalhadas pela lataria
+        const ao = Math.random() * (fz - e.zr + 0.6); _pFog.set(_pFum.x - Math.sin(a) * ao, m.position.y + alt * (0.35 + Math.random() * 0.65), _pFum.z - Math.cos(a) * ao);
+        soltarParticula(_pFog, true, k);
+      }
+    }
+    if (fogo) { c.pegouFogo -= dt; if (c.pegouFogo <= 0) { c.pegouFogo = 0; veicFumando.delete(c); acidenteVeiculo(c, '💥 O veículo pegou fogo e explodiu!'); } }
+  }
+  for (let i = particulasDano.length - 1; i >= 0; i--) {
+    const q = particulasDano[i]; q.t += dt; const u = q.t / q.vida;
+    if (u >= 1) { scene.remove(q.s); q.s.material.dispose(); particulasDano.splice(i, 1); continue; }
+    q.s.position.y += q.sobe * dt; q.s.scale.multiplyScalar(1 + q.cresce * dt); q.s.material.opacity = q.op * (1 - u);
+  }
 }
 // ---- queda de avião ou helicóptero: explosão do tamanho dele, carcaça queimando e foco de incêndio (os bombeiros apagam).
 // Caiu de baixo (até uns 10 m, ou só tocou errado no chão): sobrevive com -40. De mais alto: morre (com paraquedas, ejete antes).
@@ -6622,7 +6665,7 @@ function quadroJogo() {
   atualizarRemotos(dt); atualizarTatica(dt);
   voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
-  atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
+  atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);

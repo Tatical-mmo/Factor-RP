@@ -264,6 +264,14 @@
   @media (min-width: 900px) { #chatLog { bottom:calc(20px + env(safe-area-inset-bottom)); } }
 </style>
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="preload" as="image" href="assets/telas/logo.webp" fetchpriority="high">
+<link rel="preload" as="image" href="assets/telas/login.webp" fetchpriority="high">
+<link rel="preload" as="image" href="assets/telas/c1.webp" fetchpriority="high">
+<link rel="preload" as="image" href="assets/telas/c2.webp" fetchpriority="high">
+<link rel="preload" as="image" href="assets/telas/c3.webp" fetchpriority="high">
+<link rel="preload" as="image" href="assets/telas/c4.webp" fetchpriority="high">
+<link rel="preload" as="image" href="assets/telas/c5.webp" fetchpriority="high">
+<link rel="preload" as="image" href="assets/telas/c6.webp" fetchpriority="high">
 <meta name="theme-color" content="#141925">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -289,8 +297,8 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261115p",
-  "./js/mundo.js": "./js/mundo.js?v=20261115l",
+  "./js/main.js": "./js/main.js?v=20261115q",
+  "./js/mundo.js": "./js/mundo.js?v=20261115q",
   "./js/ferrovia.js": "./js/ferrovia.js?v=20261114i",
   "./js/cla.js": "./js/cla.js?v=20261114i",
   "./js/config.js": "./js/config.js?v=20261115d",
@@ -373,12 +381,24 @@
 </div>
 <script>
 // cenas do jogo no carregamento: troca a cada 5 s enquanto a tela estiver aberta (começa numa cena sorteada)
+// As fotos são baixadas JÁ no começo (antes dos modelos 3D, que ocupam a internet do celular) e só entram na roda
+// depois de prontas: antes elas só começavam a baixar quando a tela aparecia e algumas ficavam em branco.
 (() => {
   const tela = document.getElementById('carregando'), cenas = [...tela.querySelectorAll('.cena')], leg = document.getElementById('legendaCena');
-  let i = Math.floor(Math.random() * cenas.length);
-  const mostrar = () => { cenas.forEach((c, k) => c.classList.toggle('on', k === i)); leg.textContent = cenas[i].dataset.txt; };
-  mostrar();
-  setInterval(() => { if (tela.classList.contains('oculto')) return; i = (i + 1) % cenas.length; mostrar(); }, 5000);
+  const prontas = new Set();
+  cenas.forEach((c, k) => {
+    const url = (c.style.backgroundImage.match(/url\(["']?([^"')]+)/) || [])[1]; if (!url) return;
+    const im = new Image(); im.decoding = 'async'; im.fetchPriority = 'high';
+    im.onload = () => { (im.decode ? im.decode() : Promise.resolve()).catch(() => {}).then(() => { prontas.add(k); if (atual < 0) proxima(); }); };
+    im.src = url; c.dataset.url = url;
+  });
+  let atual = -1, i = Math.floor(Math.random() * cenas.length);
+  const proxima = () => {
+    if (!prontas.size) return;
+    for (let n = 0; n < cenas.length; n++) { i = (i + 1) % cenas.length; if (prontas.has(i)) break; }
+    atual = i; cenas.forEach((c, k) => c.classList.toggle('on', k === i)); leg.textContent = cenas[i].dataset.txt;
+  };
+  setInterval(() => { if (!tela.classList.contains('oculto')) proxima(); }, 5000);
 })();
 </script>
 
@@ -498,7 +518,7 @@
 </div>
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 14/11 · amortecedor e incendiar (15p)</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 14/11 · fumaça e fogo (15q)</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

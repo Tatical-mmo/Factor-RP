@@ -178,8 +178,9 @@ function ruaHorizonte(x, z) {
   const HL = FIM_HORIZONTE - 3, m = RW / 2 - 0.6;
   if (Math.abs(x) > HL || Math.abs(z) > HL) return false;
   if (Math.abs(z) > BORDA - 3 && Math.abs(x) < CORREDOR) return false;
-  const iX = Math.round((x - ruaC(0)) / PASSO), iZ = Math.round((z - ruaC(0)) / PASSO);
-  return Math.abs(x - ruaC(iX)) < m + 0.01 || Math.abs(z - ruaC(iZ)) < m + 0.01;
+  // antes só a faixa do asfalto era permitida e a calçada/quarteirão em volta "batia" como parede (perto do Aeroporto
+  // e da Área 51); agora anda-se no quarteirão todo e só os prédios (que ganharam colisão) seguram
+  void m; return true;
 }
 
 // ---------------------------------------------------------------- materiais
@@ -555,8 +556,8 @@ function gerarHorizonte() {
     if (i >= MI && i <= MA && j >= MI && j <= MA) continue;
     if (i === 1 || i === 2) continue;                               // corredor da ferrovia
     const x = quadC(i), z = quadC(j);
-    if (rnd() < 0.45) predio(x, z, entre(24, 36), entre(24, 36), Math.round(entre(8, 24)) * 3.5, { y: 0, colide: false });
-    else for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) predio(x + sx * 11, z + sz * 11, entre(14, 18), entre(14, 18), Math.round(entre(5, 17)) * 3.5, { y: 0, colide: false });
+    if (rnd() < 0.45) predio(x, z, entre(24, 36), entre(24, 36), Math.round(entre(8, 24)) * 3.5, { y: 0 });
+    else for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) predio(x + sx * 11, z + sz * 11, entre(14, 18), entre(14, 18), Math.round(entre(5, 17)) * 3.5, { y: 0 });   // com colisão: dá para andar entre eles
   }
 }
 
