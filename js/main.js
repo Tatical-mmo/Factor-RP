@@ -424,6 +424,14 @@ const { quarteiroes: N, quarteirao: QB, rua: RW, calcada: CW } = CIDADE;
 const TOTAL = N * QB + (N + 1) * RW;
 const METADE = TOTAL / 2;
 const ruaC = (i) => -METADE + RW / 2 + i * (QB + RW);
+// está pisando numa faixa de pedestre (as zebras ficam nas 4 bocas de cada cruzamento da cidade, ver "faixas de pedestre")?
+function naFaixaPedestre(x, z) {
+  if (Math.abs(x) > METADE + 4 || Math.abs(z) > METADE + 4) return false;
+  const P = QB + RW, i = Math.round((x - ruaC(0)) / P), j = Math.round((z - ruaC(0)) / P);
+  if (i < 0 || i > N || j < 0 || j > N) return false;
+  const X = ruaC(i), Z = ruaC(j), dx = Math.abs(x - X), dz = Math.abs(z - Z), meio = RW / 2 + 1.7;
+  return (Math.abs(dz - meio) < 1.6 && dx < RW / 2 + 1) || (Math.abs(dx - meio) < 1.6 && dz < RW / 2 + 1);
+}
 const quadC = (i) => -METADE + RW + QB / 2 + i * (QB + RW);
 const BASE_X = METADE + 42;
 const PORTAS_QG = {};   // porta de cada base de clã (leste, oeste)
@@ -1027,17 +1035,17 @@ const caixasVeic = new WeakMap(), _cvInv = new THREE.Matrix4(), _cvM = new THREE
 function caixaDoVeiculo(m) {
   let b = caixasVeic.get(m); if (b) return b;
   m.updateMatrixWorld(true); _cvInv.copy(m.matrixWorld).invert();
-  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, y1 = -Infinity;
   m.traverse((o) => {
     if (!o.isMesh || !o.geometry || o.isSprite || o.material?.transparent || o.name === 'longe' || o.parent?.name === 'longe') return;
     if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
     _cvB.copy(o.geometry.boundingBox).applyMatrix4(_cvM.multiplyMatrices(_cvInv, o.matrixWorld));
     if (!Number.isFinite(_cvB.min.x)) return;
-    x0 = Math.min(x0, _cvB.min.x); x1 = Math.max(x1, _cvB.max.x); z0 = Math.min(z0, _cvB.min.z); z1 = Math.max(z1, _cvB.max.z);
+    x0 = Math.min(x0, _cvB.min.x); x1 = Math.max(x1, _cvB.max.x); z0 = Math.min(z0, _cvB.min.z); z1 = Math.max(z1, _cvB.max.z); y1 = Math.max(y1, _cvB.max.y);
   });
   const k = m.scale?.x || 1;
   if (!Number.isFinite(x0)) { x0 = -0.9; x1 = 0.9; z0 = -2; z1 = 2; }
-  b = { x0: Math.max(-1.6, x0 * k), x1: Math.min(1.6, x1 * k), z0: Math.max(-9.5, z0 * k), z1: Math.min(9.5, z1 * k) };
+  b = { x0: Math.max(-1.6, x0 * k), x1: Math.min(1.6, x1 * k), z0: Math.max(-9.5, z0 * k), z1: Math.min(9.5, z1 * k), y1: Number.isFinite(y1) ? Math.min(5, y1 * k) : 1.6 };
   caixasVeic.set(m, b); return b;
 }
 function empurrarDeVeiculo(p, raio, m, x = m.position.x, z = m.position.z, ang = m.rotation.y) {
@@ -4382,18 +4390,18 @@ function corposNaRua() {
   for (const v of carrosMundo.values()) if (v.mesh.visible) r.push({ o: v.mesh, x: v.mesh.position.x, z: v.mesh.position.z, r: 1.4 });
   for (const [id, x] of remotos) {
     if (x.carro) { pontosDoVeiculo(r, x.carro, x.carro.position.x, x.carro.position.z, x.carro.rotation.y, 1.5); veicJogador.add(x.carro); }
-    else if (x.av?.raiz.visible) r.push({ x: x.av.raiz.position.x, z: x.av.raiz.position.z, r: 0.45, pessoa: id });
+    else if (x.av?.raiz.visible) r.push({ x: x.av.raiz.position.x, z: x.av.raiz.position.z, r: 0.45, pessoa: id, faixa: naFaixaPedestre(x.av.raiz.position.x, x.av.raiz.position.z) });
   }
   for (const o of servicos.veiculosNpc()) r.push({ o, x: o.position.x, z: o.position.z, r: 1.9 });
   if (caminhaoMovel) r.push({ o: caminhaoMovel.obj, x: caminhaoMovel.obj.position.x, z: caminhaoMovel.obj.position.z, r: 2 });
-  for (const n of npcs) r.push({ x: n.av.raiz.position.x, z: n.av.raiz.position.z, r: 0.45, npc: n.policia ? n : null, civilRef: n });
+  for (const n of npcs) r.push({ x: n.av.raiz.position.x, z: n.av.raiz.position.z, r: 0.45, npc: n.policia ? n : null, civilRef: n, faixa: naFaixaPedestre(n.av.raiz.position.x, n.av.raiz.position.z) });
   for (const v of viaturas) r.push({ o: v.obj, x: v.obj.position.x, z: v.obj.position.z, r: 1.8 });
   for (const v of rondasBombeiros) if (v.obj.visible) r.push({ o: v.obj, x: v.obj.position.x, z: v.obj.position.z, r: 1.9 });
   for (const k of obstrucoes) r.push({ o: k.marca, x: k.x, z: k.z, r: k.r });   // veículo em chamas ou carcaça: ninguém passa
   for (const v of vansNpc) if (v.obj.visible && jogador.carro?.vanNpc !== v) r.push({ o: v.obj, x: v.obj.position.x, z: v.obj.position.z, r: 1.7 });
   for (const b of onibusNpc) if (b.vivo) { const fx = Math.sin(b.ang), fz = Math.cos(b.ang), h = (b.comp || 12) / 2 - 2; for (let k = -h; k <= h + 0.01; k += h / Math.ceil(h / 4)) r.push({ o: b.mesh, x: b.x + fx * k, z: b.z + fz * k, r: 1.3 }); }
   for (const S of SETORES) if (S.npc?.visible) r.push({ o: S.npc, x: S.npc.position.x, z: S.npc.position.z, r: 1.6 });
-  if (jogador.avatar && !jogador.carro && !jogador.passageiro && !jogador.onibus && !jogador.voo && !jogador.dentroCasa && !jogador.paraquedas) r.push({ x: jogador.pos.x, z: jogador.pos.z, r: 0.45, eu: true });
+  if (jogador.avatar && !jogador.carro && !jogador.passageiro && !jogador.onibus && !jogador.voo && !jogador.dentroCasa && !jogador.paraquedas) r.push({ x: jogador.pos.x, z: jogador.pos.z, r: 0.45, eu: true, faixa: naFaixaPedestre(jogador.pos.x, jogador.pos.z) });
   if (jogador.carro && !jogador.carro.voa && !jogador.carro.taxi && jogador.carro.mesh) { pontosDoVeiculo(r, jogador.carro.mesh, jogador.pos.x, jogador.pos.z, jogador.carro.mesh.rotation.y, 1.6); veicJogador.add(jogador.carro.mesh); }
   corposCache = r; corposT = performance.now();
   return r;
@@ -4406,12 +4414,19 @@ function frearAtras(st, o, dt, dist = 9, x = o.position.x, z = o.position.z, ang
   // (medido do bico do veículo: um ônibus comprido não para com a frente já dentro do cruzamento)
   const meio = Math.max(0, dist - 7), bx = x + Math.sin(ang) * meio, bz = z + Math.cos(ang) * meio;
   if (!st.sirene && semaforos.sinalAFrente(bx, bz, ang, meio > 0 ? 5 : Math.min(dist, 10))) { if ((st.atraso || 0) < 120) st.atraso = Math.min(120, (st.atraso || 0) + dt); return st.atraso; }
+  // não fecha o cruzamento: logo antes de entrar, só entra se do outro lado cabe o veículo inteiro e ninguém está no meio
+  // dele atravessando (quem já está dentro tem a vez). Espera na faixa de retenção, como no sinal vermelho
+  { const k = !st.sirene && semaforos.cruzamentoAFrente(bx, bz, ang, 3.5);
+    if (k && obstaculoAFrente(x, z, ang, st.ignorar || o, meio + k.dl + k.largura + Math.max(6, dist - 1), o)) {
+      st.bloqCruz = (st.bloqCruz || 0) + dt;
+      if (st.bloqCruz < 25) { if ((st.atraso || 0) < 120) st.atraso = Math.min(120, (st.atraso || 0) + dt); return st.atraso; }
+    } else st.bloqCruz = 0; }
   // longe de quem joga a checagem é mais espaçada (meio segundo), mas continua: ninguém "entra" no outro fora da vista
   const f = foco(), longe = Math.abs(x - f.x) + Math.abs(z - f.z) > 260;
   let bloq;
   if (longe && (st.prox = (st.prox || 0) - dt) > 0) bloq = st.ultimo;
   else { st.prox = 0.5; bloq = st.ultimo = st.fantasma <= 0 && obstaculoAFrente(x, z, ang, st.ignorar || o, dist, o); }
-  if (bloq) { const teto = bloq.fogo ? 1800 : 120; if ((st.atraso || 0) < teto) st.atraso = Math.min(teto, (st.atraso || 0) + dt); if (!bloq.fogo && !veicJogador.has(bloq)) st.bloq = (st.bloq || 0) + dt; if (st.bloq > paciencia) { st.fantasma = 2; st.bloq = 0; } }   // veículo em chamas ou de jogador: espera de verdade, nunca atravessa
+  if (bloq) { const teto = bloq.fogo ? 1800 : 120; if ((st.atraso || 0) < teto) st.atraso = Math.min(teto, (st.atraso || 0) + dt); if (!bloq.fogo && !veicJogador.has(bloq)) st.bloq = (st.bloq || 0) + dt; if (st.bloq > (Math.abs(x - f.x) + Math.abs(z - f.z) < 160 ? 240 : paciencia)) { st.fantasma = 2; st.bloq = 0; } }   // à vista de quem joga, ninguém atravessa ninguém (só destrava um nó de verdade, depois de 4 min)   // veículo em chamas ou de jogador: espera de verdade, nunca atravessa
   else { st.bloq = 0; st.atraso = Math.max(0, (st.atraso || 0) - dt * (longe ? 1 : 0.35)); }
   return st.atraso;
 }
@@ -4422,6 +4437,8 @@ function obstaculoAFrente(x, z, ang, ignorar, dist = 7.5, eu = null) {
   for (const o of corposNaRua()) {
     if (ignorar && (o.o === ignorar || ignorar.has?.(o.o))) continue;
     const dx = o.x - x, dz = o.z - z, f = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx);
+    // faixa de pedestre (Código de Trânsito, art. 70): quem pisa na faixa tem a vez; o veículo para antes, em qualquer faixa da rua
+    if (o.faixa && f > 0.5 && f < dist + 5 && lat < RW / 2 + 1.2) return true;
     if (f > 0.5 && f < dist && lat < 1.5 + o.r) {
       return o.o || true;
     }
@@ -5189,7 +5206,22 @@ function animarAve(g, dt, voando, plana = false) {
   if (u.modelo) { for (const w of u.asas) w.visible = voando; u.corpo3d.rotation.x = voando ? 0.6 : u.corpo.rotation.x * 0.8; u.corpo.rotation.x = 0; }   // o corpo deita para voar; pousado, só ele bica (as pernas ficam firmes)
 }
 // chão de um pássaro: o chão ou o telhado do prédio embaixo
-function chaoAve(x, z) { const t = tetoGeral(x, z); return Math.max(alturaChao(x, z), t ? t.h : -1e9); }
+function chaoAve(x, z) { const t = tetoGeral(x, z), v = veiculoSob(x, z); return Math.max(alturaChao(x, z), t ? t.h : -1e9, v ? v.h : -1e9); }
+// veículos também são sólidos para quem voa: o corvo/pássaro pousa no teto de um caminhão, ônibus ou carro (e vai junto)
+function veiculoSob(x, z) {
+  let m = null, h = -1e9;
+  const visto = new Set();
+  for (const o of corposNaRua()) {
+    const v = o.o; if (!v?.isObject3D || visto.has(v) || o.eu || v === jogador.carro?.mesh) continue;
+    if (Math.abs(o.x - x) > 10 || Math.abs(o.z - z) > 10) continue;
+    visto.add(v);
+    const b = caixaDoVeiculo(v), a = v.rotation.y, sn = Math.sin(a), cs = Math.cos(a), dx = x - v.position.x, dz = z - v.position.z;
+    const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
+    if (lx < b.x0 || lx > b.x1 || lz < b.z0 || lz > b.z1) continue;
+    const t = v.position.y + b.y1; if (t > h) { h = t; m = v; }
+  }
+  return m ? { h, m } : null;
+}
 // TODA construção é sólida para quem voa (pássaro, corvo, helicóptero): além dos prédios da cidade (mundo.tetoEm),
 // os modelos 3D (prefeitura, PRF, delegacia, hospital, CRAS, Câmara, obras, casas, empresas, QG, rodoviária...) são
 // medidos por um raio de cima para baixo. As peças paradas da cena ficam numa grade (refeita a cada 30 s, para pegar
@@ -5371,6 +5403,13 @@ function virarGente(msg) {
 function voarAve(dt, dir, forca) {
   const j = jogador, a = j.ave, av = j.avatar;
   const sobe = aveSobe || teclas.has(' ') || teclas.has('r'), desce = aveDesce || teclas.has('f') || teclas.has('c');
+  // pousado no teto de um veículo: anda e gira junto com ele
+  { const sv = !aveSobe && veiculoSob(j.pos.x, j.pos.z);
+    if (sv && a.y <= sv.h + 0.1) {
+      if (a.sobre === sv.m && a.sobreP) { const dyaw = sv.m.rotation.y - a.sobreA, dx = j.pos.x - a.sobreP.x, dz = j.pos.z - a.sobreP.z, c = Math.cos(dyaw), s = Math.sin(dyaw);
+        j.pos.x = sv.m.position.x + dx * c + dz * s; j.pos.z = sv.m.position.z - dx * s + dz * c; j.yaw += dyaw; a.y = sv.h; }
+      a.sobre = sv.m; a.sobreP = { x: sv.m.position.x, z: sv.m.position.z }; a.sobreA = sv.m.rotation.y;
+    } else a.sobre = null; }
   const chao = chaoAve(j.pos.x, j.pos.z), noAr = a.y > chao + 0.08;
   const vmax = noAr ? (a.tipo === 'corvo' ? 17 : 14) : 2.2;   // pousado: só dá pulinhos
   a.vel += ((forca > 0.05 ? forca * vmax : 0) - a.vel) * Math.min(1, dt * (noAr ? 2.5 : 8));
@@ -13031,7 +13070,20 @@ function atualizarAviacao(dt) {
     else { v[0] = Math.max(v[0], 1 - d / (porte === 'pequeno' ? 70 : 100)); v[1] = Math.max(v[1], 0.35 * (1 - d / 140)); }
   };
   npcAvioes.forEach((n, idx) => {
-    const v = vooNpc(seg, n.tab, n.tab.desloc || 0);
+    let v = vooNpc(seg - (n.espera || 0), n.tab, n.tab.desloc || 0);
+    // no chão, um avião respeita a vez do outro: o internacional espera parado no taxiamento se o regular está logo à
+    // frente (ou cruzando o caminho), e recupera o atraso depois, encurtando a espera na vaga. O regular (que leva
+    // passageiros) segue o horário de todos; o internacional é só paisagem, então o atraso dele pode ser local
+    if (idx > 0) {
+      const r = npcAvioes[0].mesh, frente = v.y < 1 && !v.parado && r && r.visible && r.position.y - alturaChao(r.position.x, r.position.z) < 3;
+      let segura = false;
+      if (frente) {
+        const dx = r.position.x - v.x, dz = r.position.z - v.z, d = Math.hypot(dx, dz), fx = Math.sin(v.ang), fz = Math.cos(v.ang);
+        segura = d < 75 && (dx * fx + dz * fz) / Math.max(d, 1e-3) > 0.2;
+      }
+      if (segura && (n.espera || 0) < 180) { n.espera = (n.espera || 0) + dt; v = vooNpc(seg - n.espera, n.tab, n.tab.desloc || 0); }
+      else if (n.espera > 0 && v.parado) n.espera = Math.max(0, n.espera - dt * 2);   // parado na vaga: encurta a espera e volta ao horário
+    }
     // falas do rádio quando o avião muda de fase (iguais para todos, saem do horário)
     const chave = `${v.id}.${v.seg}`;
     if (n.ult !== chave) {

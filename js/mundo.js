@@ -1101,9 +1101,11 @@ export function predios3dPerto(px, pz, dt) {
   if ((tempo3d -= dt) > 0) return; tempo3d = 0.7;
   const q = ctx.qualidade?.() || 'medio', max = q === 'ultra' || q === 'alto' ? 64 : q === 'medio' ? 16 : 6, raio = q === 'ultra' || q === 'alto' ? 240 : q === 'medio' ? 100 : 65;
   const perto = [];
-  if (max) for (const k of chaves(px - raio, pz - raio, px + raio, pz + raio)) for (const i of gradeEd.get(k) || []) {
+  if (max) for (const k of chaves(px - raio - 20, pz - raio - 20, px + raio + 20, pz + raio + 20)) for (const i of gradeEd.get(k) || []) {
     const e = edificios[i]; if (cortados.has(i)) continue; const t = tipo3d(e); if (!t || !modelos3d[t]) continue;
-    const d = Math.hypot(e.x - px, e.z - pz); if (d < (e.tipo === 'favela' ? Math.min(raio, 45) : raio)) perto.push([d, i, t]);   // casas da favela: só as bem perto (modelo pesado)
+    // folga para quem já está em 3D (fica até ~20 m mais longe): na borda do alcance o prédio não fica trocando de caixa
+    // para 3D e de volta a cada passo (era um dos "pisca-piscas" andando pela cidade)
+    const ja = em3d.has(i) ? 20 : 0, d = Math.hypot(e.x - px, e.z - pz) - ja; if (d < (e.tipo === 'favela' ? Math.min(raio, 45) : raio)) perto.push([d, i, t]);   // casas da favela: só as bem perto (modelo pesado)
   }
   perto.sort((a, b) => a[0] - b[0]);
   const novo = new Map(); const conta = {};

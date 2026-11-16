@@ -77,17 +77,22 @@ export function atualizar(dt, px, pz) {
 
 // quem está em (x, z) indo para ang (frente = sin, cos) precisa parar antes do próximo cruzamento?
 // (vermelho; amarelo só se ainda dá para parar). dist: até onde olha à frente da faixa de retenção
-export function sinalAFrente(x, z, ang, dist = 12) {
-  if (!cruz.length) return false;
+// próximo cruzamento à frente de quem está em (x, z) indo para ang: { c, dl (até a faixa de retenção), vert } ou null
+export function cruzamentoAFrente(x, z, ang, dist = 12) {
+  if (!cruz.length) return null;
   const fx = Math.sin(ang), fz = Math.cos(ang), vert = Math.abs(fz) >= Math.abs(fx);
-  if (Math.max(Math.abs(fx), Math.abs(fz)) < 0.9) return false;   // fazendo curva: segue
+  if (Math.max(Math.abs(fx), Math.abs(fz)) < 0.9) return null;   // fazendo curva
   const sg = Math.sign(vert ? fz : fx), mapa = vert ? colunas : linhas, pos = vert ? x : z;
   let lista = null;
   for (let d = -6; d <= 6 && !lista; d++) lista = mapa.get(Math.round(pos) + d) || null;
-  if (!lista) return false;
+  if (!lista) return null;
   let alvo = null, dl = Infinity;
   for (const c of lista) { const ad = ((vert ? c.z - z : c.x - x) * sg) - (RW / 2 + 1.2); if (ad >= -0.5 && ad < dl) { dl = ad; alvo = c; } }
-  if (!alvo || dl > dist) return false;
-  const f = fase(alvo, vert, relogio());
-  return f === 0 || (f === 1 && dl > 3);
+  if (!alvo || dl > dist) return null;
+  return { c: alvo, dl, vert, largura: RW + 2.4 };
+}
+export function sinalAFrente(x, z, ang, dist = 12) {
+  const k = cruzamentoAFrente(x, z, ang, dist); if (!k) return false;
+  const f = fase(k.c, k.vert, relogio());
+  return f === 0 || (f === 1 && k.dl > 3);
 }

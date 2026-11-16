@@ -7,7 +7,7 @@
 import * as rede from './rede.js';
 
 export const CLASSIFICACAO = { idade: 16, motivos: 'violência, armas e crimes de faz de conta' };
-export const APOIO_URL = 'https://github.com/sponsors/Tatical-mmo';
+export const APOIO_URL = '';   // GitHub Sponsors oculto (cadastro não concluído); para voltar: 'https://github.com/sponsors/Tatical-mmo'
 export const APOIO_PIX = '60ceaecb-7c62-4786-95f0-2d958af022d3';   // chave aleatória (não mostra CPF, e-mail nem telefone)
 
 let ctx = null, dados = { idade: null, protegido: false, tem_pin: false }, carregado = false, carregando = null;
@@ -172,8 +172,8 @@ export function abrirApoio() {
     <div class="sub">Pix (qualquer valor)</div>
     <div class="botoes"><input id="segPix" readonly value="${esc(APOIO_PIX)}" style="flex:1;font-size:12px"><button id="segPixCopiar">📋 Copiar</button></div>
     <p class="dica" style="opacity:.8">Abra o app do seu banco, escolha Pix › Pagar com chave e cole a chave aleatória.</p>
-    <div class="sub">Ou pelo GitHub</div>
-    <div class="botoes"><a href="${esc(APOIO_URL)}" target="_blank" rel="noopener" style="flex:1"><button style="width:100%">💖 Página de apoio no GitHub Sponsors</button></a></div>
+    ${APOIO_URL ? `<div class="sub">Ou pelo GitHub</div>
+    <div class="botoes"><a href="${esc(APOIO_URL)}" target="_blank" rel="noopener" style="flex:1"><button style="width:100%">💖 Página de apoio no GitHub Sponsors</button></a></div>` : ''}
     <p class="dica" style="opacity:.8">O pagamento é feito fora do jogo. Obrigado!</p>`);
   const cp = document.getElementById('segPixCopiar');
   if (cp) cp.onclick = () => {
