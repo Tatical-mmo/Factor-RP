@@ -2148,13 +2148,13 @@ function somExplosao(x, y, z, k, d) {
 // de poeira mais lento. Quando a frente da onda passa por você: a tela treme e, a pé, você é empurrado e cambaleia.
 // O míssil de cruzeiro da Marinha é a maior (~2 quarteirões); avião, helicóptero e bomba fazem ondas menores.
 const ondas = [], geoAnel = new THREE.RingGeometry(0.9, 1, 72), geoAnelPo = new THREE.RingGeometry(0.55, 1, 48), geoDomo = new THREE.SphereGeometry(1, 32, 14, 0, Math.PI * 2, 0, Math.PI / 2);
-function ondaDeChoque(x, y, z, R, vel, forca = 1) {
+function ondaDeChoque(x, y, z, R, vel, forca = 1, arremesso = 0) {
   const chao = Math.max(y - 2, alturaChao(x, z)) + 0.2;
   const mat = (cor, op, soma) => new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide, blending: soma ? THREE.AdditiveBlending : THREE.NormalBlending, toneMapped: false });
   const anel = new THREE.Mesh(geoAnel, mat('#fff1d0', 0.85, true)), po = new THREE.Mesh(geoAnelPo, mat('#8c7b66', 0.55, false)), domo = new THREE.Mesh(geoDomo, mat('#ffffff', 0.32, true));
   for (const m of [anel, po]) { m.rotation.x = -Math.PI / 2; m.position.set(x, chao, z); m.scale.setScalar(0.5); m.renderOrder = 5; scene.add(m); }
   domo.position.set(x, chao - 0.2, z); domo.scale.setScalar(0.5); scene.add(domo);
-  ondas.push({ anel, po, domo, x, z, R, vel, forca, t: 0, atingiu: Math.hypot(jogador.pos.x - x, jogador.pos.z - z) > R, domoOp: R > 200 ? 0.12 : 0.32 });   // a onda gigante: domo bem mais transparente
+  ondas.push({ anel, po, domo, x, z, R, vel, forca, t: 0, atingiu: Math.hypot(jogador.pos.x - x, jogador.pos.z - z) > R, arremesso, domoOp: R > 200 ? 0.12 : 0.32 });   // a onda gigante: domo bem mais transparente
 }
 function atualizarOndas(dt) {
   for (let i = ondas.length - 1; i >= 0; i--) {
@@ -2168,8 +2168,10 @@ function atualizarOndas(dt) {
       if (r >= d) {
         o.atingiu = true; const f = Math.max(0, 1 - d / o.R) * o.forca;
         tremor = Math.max(tremor, 0.35 + 1.3 * f);
-        if (!jogador.carro && !jogador.dentroCasa && !jogador.morto && f > 0.12 && d > 0.5) {
-          o.empurra = { vx: dx / d * 10 * Math.min(1.2, f), vz: dz / d * 10 * Math.min(1.2, f), t: 0.35 };
+        if (o.arremesso && d < o.arremesso && !jogador.carro && !jogador.dentroCasa && !jogador.morto) { const n = Math.max(d, 0.01); arremessar(dx / n, dz / n, 54 * Math.pow(1 - d / o.arremesso, 0.7)); }
+        else if (!jogador.carro && !jogador.dentroCasa && !jogador.morto && f > 0.12 && d > 0.5) {
+          const fe = o.arremesso ? Math.min(0.5, f * 0.5) : Math.min(1.2, f);   // longe da bomba: só arrasta um pouco
+          o.empurra = { vx: dx / d * 10 * fe, vz: dz / d * 10 * fe, t: 0.35 };
           if (jogador.trava <= 0.2) { jogador.avatar?.tocar('hit', { umaVez: true, velocidade: 1.2, fade: 0.06 }); jogador.trava = 0.6; }
           if (f > 0.5) aviso('💨 A onda de choque te jogou longe!', 1.6);
         }
@@ -2185,42 +2187,92 @@ function atualizarOndas(dt) {
 // ---- explosão do míssil de cruzeiro como uma bomba atômica: clarão que ofusca a tela, bola de fogo que sobe, coluna
 // de fumaça e o "chapéu" do cogumelo que cresce e fica no céu; a onda de choque é sentida a ~6 quarteirões (324 m)
 const atomicos = [];
+// nuvem "couve-flor": muitas bolas irregulares (instanciadas) em vez de uma esfera lisa. Fogo (somado, brilha) e fumaça
+// (iluminada, com um brilho laranja por baixo no começo). Cada bola tem o seu lugar no cogumelo e anda com o tempo.
+let geoPuff = null;
+function puffGeo() {
+  if (geoPuff) return geoPuff;
+  const g = new THREE.IcosahedronGeometry(1, 2), p = g.attributes.position, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const k = 1 + 0.18 * Math.sin(v.x * 5.1 + v.y * 3.7) * Math.cos(v.z * 4.3 - v.y * 2.2); p.setXYZ(i, v.x * k, v.y * k, v.z * k); }
+  g.computeVertexNormals(); geoPuff = g; return g;
+}
 function cogumeloAtomico(x, y, z) {
-  const chao = alturaChao(x, z) + 0.2, add = (m) => { scene.add(m); return m; };
-  const basic = (cor, op, soma) => new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: op, depthWrite: false, toneMapped: false, blending: soma ? THREE.AdditiveBlending : THREE.NormalBlending, fog: false });
-  const fumo = (cor, op) => new THREE.MeshStandardMaterial({ color: cor, transparent: true, opacity: op, roughness: 1, depthWrite: false, emissive: '#ff6a1a', emissiveIntensity: 0.6, fog: false });
-  const esf = new THREE.SphereGeometry(1, 28, 18);
-  const clarao = add(new THREE.Mesh(esf, basic('#fffbe8', 1, true))); clarao.position.set(x, chao + 8, z);
-  const bola = add(new THREE.Mesh(esf, basic('#ffb347', 0.95, false))); bola.position.set(x, chao + 10, z);
-  const coluna = add(new THREE.Mesh(new THREE.CylinderGeometry(1, 1.5, 1, 20, 1, true), fumo('#7a5a44', 0.85))); coluna.position.set(x, chao, z);
-  const chapeu = add(new THREE.Mesh(esf, fumo('#8a6a52', 0.9))); chapeu.position.set(x, chao + 30, z);
-  const aro = add(new THREE.Mesh(new THREE.TorusGeometry(1, 0.38, 14, 40), fumo('#6b5040', 0.85))); aro.rotation.x = Math.PI / 2; aro.position.set(x, chao + 26, z);
-  const saia = add(new THREE.Mesh(new THREE.TorusGeometry(1, 0.25, 10, 40), fumo('#9a8a7a', 0.5))); saia.rotation.x = Math.PI / 2; saia.position.set(x, chao + 2, z);   // poeira rolando no chão
-  atomicos.push({ x, z, chao, clarao, bola, coluna, chapeu, aro, saia, t: 0 });
-  // clarão na tela: mais forte quanto mais perto (vê de longe também)
+  const chao = alturaChao(x, z) + 0.2, add = (m) => { m.frustumCulled = false; scene.add(m); return m; };
+  const basic = (cor, op) => new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: op, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending, fog: false });
+  const esf = new THREE.SphereGeometry(1, 28, 18), G = puffGeo();
+  const clarao = add(new THREE.Mesh(esf, basic('#fffbe8', 1)));
+  clarao.position.set(x, chao + 8, z);
+  const anelCond = add(new THREE.Mesh(new THREE.TorusGeometry(1, 0.06, 8, 64), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, fog: false })));   // anel de condensação
+  anelCond.rotation.x = Math.PI / 2;
+  const NF = 46, NS = 150, rnd = (a, b) => a + Math.random() * (b - a);
+  const fogo = add(new THREE.InstancedMesh(G, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending, fog: false }), NF));
+  const fumo = add(new THREE.InstancedMesh(G, new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.92, depthWrite: false, emissive: '#ff5a10', emissiveIntensity: 0.7, fog: false }), NS));
+  const pf = [], ps = [];
+  for (let k = 0; k < NF; k++) { const u = new THREE.Vector3(rnd(-1, 1), rnd(-0.7, 1), rnd(-1, 1)).normalize().multiplyScalar(Math.cbrt(Math.random())); pf.push({ u, r: rnd(0.35, 0.6), f: rnd(0, 6) }); }
+  for (let k = 0; k < NS; k++) {
+    const tipo = k < 70 ? 'chapeu' : k < 100 ? 'coluna' : k < 128 ? 'saia' : 'base';
+    ps.push({ tipo, a: Math.random() * Math.PI * 2, e: Math.random(), h: Math.random(), r: rnd(0.75, 1.25), f: rnd(0, 6) });
+  }
+  // marca queimada no chão
+  const marca = add(new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#120d0a', transparent: true, opacity: 0.75, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 })));
+  marca.position.set(x, chao - 0.12, z); marca.scale.setScalar(0.01);
+  atomicos.push({ x, z, chao, clarao, anelCond, fogo, fumo, pf, ps, marca, t: 0 });
   const d = Math.hypot(jogador.pos.x - x, jogador.pos.z - z);
-  if (d < 900 && !jogador.dentroCasa) {
+  if (d < 900 && !jogador.dentroCasa) {   // clarão na tela: mais forte quanto mais perto (vê de longe também)
     let fl = $('claraoAtomico'); if (!fl) { fl = document.createElement('div'); fl.id = 'claraoAtomico'; fl.style.cssText = 'position:fixed;inset:0;background:#fffdf2;pointer-events:none;z-index:40;opacity:0;transition:opacity 2.6s ease-out'; document.body.appendChild(fl); }
     fl.style.transition = 'none'; fl.style.opacity = String(Math.max(0.25, 1 - d / 900)); void fl.offsetWidth; fl.style.transition = 'opacity 2.6s ease-out'; fl.style.opacity = '0';
   }
-  ondaDeChoque(x, chao, z, 324, 115, 2.2);   // 6 quarteirões
+  ondaDeChoque(x, chao, z, 324, 115, 2.2, 110);   // 6 quarteirões; até 110 m arremessa
   tremor = Math.max(tremor, d < 324 ? 1.6 : 0.4);
 }
+const _mA = new THREE.Matrix4(), _qA = new THREE.Quaternion(), _pA = new THREE.Vector3(), _sA = new THREE.Vector3(), _cA = new THREE.Color(), _eA = new THREE.Euler();
 function atualizarAtomicos(dt) {
   for (let i = atomicos.length - 1; i >= 0; i--) {
-    const a = atomicos[i]; a.t += dt; const t = a.t, S = THREE.MathUtils.smoothstep;
-    const c = S(t, 0, 0.35) * 70; a.clarao.scale.setScalar(Math.max(1, c)); a.clarao.material.opacity = Math.max(0, 1 - t / 1.6);
-    const sobe = S(t, 0.2, 14), hb = 12 + sobe * 95;   // a bola de fogo sobe e esfria (laranja -> vermelho escuro)
-    a.bola.position.y = a.chao + hb; a.bola.scale.setScalar(26 + 10 * S(t, 0, 3));
-    a.bola.material.color.setRGB(1, 0.7 - 0.45 * S(t, 1, 10), 0.28 - 0.25 * S(t, 1, 10)); a.bola.material.opacity = 0.95 * (1 - S(t, 8, 18));
-    a.coluna.scale.set(7 + 5 * S(t, 1, 12), Math.max(1, hb), 7 + 5 * S(t, 1, 12)); a.coluna.position.y = a.chao + hb / 2;
-    const rc = 14 + 44 * S(t, 0.5, 16);   // chapéu do cogumelo
-    a.chapeu.position.y = a.chao + hb + 8; a.chapeu.scale.set(rc, rc * 0.42, rc);
-    a.aro.position.y = a.chao + hb + 2; a.aro.scale.setScalar(rc * 0.95);
-    { const rs = 10 + 150 * S(t, 0, 6); a.saia.scale.set(rs, rs, Math.min(rs, 30) * 0.5); } a.saia.material.opacity = 0.45 * (1 - S(t, 4, 14));   // anel de poeira baixo (não uma parede)
-    const some = 1 - S(t, 30, 55), brasa = 0.6 * (1 - S(t, 4, 20));   // fumaça perde o brilho e some devagar
-    for (const m of [a.coluna, a.chapeu, a.aro]) { m.material.opacity = 0.88 * some; m.material.emissiveIntensity = brasa; }
-    if (t > 56) { for (const m of [a.clarao, a.bola, a.coluna, a.chapeu, a.aro, a.saia]) { scene.remove(m); m.material.dispose(); } atomicos.splice(i, 1); }
+    const a = atomicos[i]; a.t += dt; const t = a.t, S = THREE.MathUtils.smoothstep, X = a.x, Z = a.z, C = a.chao;
+    a.clarao.scale.setScalar(Math.max(1, S(t, 0, 0.35) * 75)); a.clarao.material.opacity = Math.max(0, 1 - t / 1.4);
+    const sobe = S(t, 0.2, 16), hb = 14 + sobe * 105;   // altura do centro da bola de fogo / chapéu
+    const Rf = 18 + 14 * S(t, 0, 2.5);                    // raio da bola de fogo
+    // anel de condensação passando em volta da bola
+    { const u = S(t, 0.4, 3.5); a.anelCond.position.set(X, C + 20 + 40 * u, Z); a.anelCond.scale.setScalar(25 + 120 * u); a.anelCond.material.opacity = 0.55 * Math.sin(Math.PI * Math.min(1, u)); }
+    // fogo: bola fervendo que sobe, de amarelo a laranja e vermelho, e se apaga
+    const quente = 1 - S(t, 1.5, 12), apaga = 1 - S(t, 7, 16);
+    a.fogo.material.opacity = 0.95 * apaga;
+    a.pf.forEach((q, k) => {
+      const ferve = 1 + 0.12 * Math.sin(t * 3 + q.f), rr = Rf * (0.55 + 0.45 * S(t, 0, 1.5));
+      _pA.set(X + q.u.x * rr * ferve, C + hb + q.u.y * rr * 0.8 * ferve, Z + q.u.z * rr * ferve);
+      const sc = Rf * q.r * (0.8 + 0.25 * Math.sin(t * 2.2 + q.f));
+      _qA.setFromEuler(_eA.set(t * 0.3 + q.f, t * 0.2, 0)); _mA.compose(_pA, _qA, _sA.set(sc, sc, sc)); a.fogo.setMatrixAt(k, _mA);
+      _cA.setRGB(1, 0.55 + 0.4 * quente * (1 - q.u.length() * 0.5), 0.15 + 0.5 * quente * quente); a.fogo.setColorAt(k, _cA);
+    });
+    a.fogo.instanceMatrix.needsUpdate = true; if (a.fogo.instanceColor) a.fogo.instanceColor.needsUpdate = true;
+    // fumaça: chapéu (rolando para fora e para baixo), coluna, saia em volta da coluna e poeira na base
+    const rc = 16 + 50 * S(t, 0.5, 18), rcol = 8 + 7 * S(t, 1, 14), rbase = 12 + 140 * S(t, 0, 7);
+    const brasa = 0.42 * (1 - S(t, 1.5, 12)), some = 1 - S(t, 32, 58);
+    a.fumo.material.emissiveIntensity = brasa; a.fumo.material.opacity = 0.93 * some;
+    a.ps.forEach((q, k) => {
+      let px, py, pz, sc, cor;
+      const giro = q.a + t * 0.05;
+      if (q.tipo === 'chapeu') {   // toro achatado: ângulo em volta (a) e posição no tubo (e) girando devagar (fumaça rolando)
+        const tubo = q.e * Math.PI * 2 + t * 0.18, R = rc * 0.62, rt = rc * 0.42;
+        const rr = R + Math.cos(tubo) * rt; px = X + Math.cos(giro) * rr; pz = Z + Math.sin(giro) * rr; py = C + hb + 6 + Math.sin(tubo) * rt * 0.6;
+        sc = rc * 0.36 * q.r; cor = 0.42 + 0.18 * Math.sin(tubo);
+      } else if (q.tipo === 'coluna') {
+        const yy = q.h * hb, rr = rcol * (0.4 + 0.6 * q.e) * (1 - 0.35 * q.h); px = X + Math.cos(giro * 3) * rr; pz = Z + Math.sin(giro * 3) * rr; py = C + yy;
+        sc = rcol * 0.85 * q.r; cor = 0.38 + 0.12 * q.h;
+      } else if (q.tipo === 'saia') {   // a "gola" em volta da coluna, um pouco abaixo do chapéu
+        const rr = rc * 0.42 * (0.7 + 0.3 * q.e); px = X + Math.cos(giro) * rr; pz = Z + Math.sin(giro) * rr; py = C + hb * 0.62 + q.h * 8;
+        sc = rc * 0.2 * q.r; cor = 0.5;
+      } else {   // poeira levantada na base, abrindo em anel
+        const rr = rbase * (0.55 + 0.45 * q.e); px = X + Math.cos(giro) * rr; pz = Z + Math.sin(giro) * rr; py = C + 4 + q.h * 10 * (1 - S(t, 5, 20));
+        sc = (10 + 8 * q.e) * q.r * (1 - 0.5 * S(t, 10, 30)); cor = 0.55;
+      }
+      _pA.set(px, py, pz); _qA.setFromEuler(_eA.set(q.f + t * 0.1, q.f * 2, 0)); _mA.compose(_pA, _qA, _sA.set(sc, sc * 0.85, sc)); a.fumo.setMatrixAt(k, _mA);
+      _cA.setRGB(cor * 0.95, cor * 0.82, cor * 0.7); a.fumo.setColorAt(k, _cA);
+    });
+    a.fumo.instanceMatrix.needsUpdate = true; if (a.fumo.instanceColor) a.fumo.instanceColor.needsUpdate = true;
+    a.marca.scale.setScalar(70 * S(t, 0, 1.5)); a.marca.material.opacity = 0.75 * (1 - S(t, 60, 120));
+    if (t > 120) { for (const m of [a.clarao, a.anelCond, a.fogo, a.fumo, a.marca]) { scene.remove(m); m.material.dispose(); } atomicos.splice(i, 1); }
+    else if (t > 58) { a.fogo.visible = false; a.fumo.visible = false; a.clarao.visible = false; a.anelCond.visible = false; }
   }
 }
 function efeitoExplosao(x, y, z, k = 1, tinta = true, semOnda = false) {
@@ -14096,8 +14148,11 @@ function atualizarCruzeiros(dt) {
       cogumeloAtomico(c.x, alvo.y, c.z);   // clarão, cogumelo e onda de choque de ~6 quarteirões
       if (!jogador.dentroCasa && !jogador.morto && !c.teste) {   // teste do admin: só o efeito
         const carro = jogador.carro;
-        if (dj < 60) { if (carro && !carro.explodiu) acidenteVeiculo(carro, '💥 Atingido por um míssil de cruzeiro!'); jogador.ultimoAgressor = null; danoLocal(999); }
-        else if (dj < 120) { jogador.ultimoAgressor = null; danoLocal(40); aviso('💥 A explosão do míssil feriu você!', 3); }
+        if (carro) { if (dj < 60) { if (!carro.explodiu) acidenteVeiculo(carro, '💥 Atingido por um míssil de cruzeiro!'); jogador.ultimoAgressor = null; danoLocal(999); } else if (dj < 120) { jogador.ultimoAgressor = null; danoLocal(40); } }
+        else if (dj < 120) {   // a pé: o dano vem quando cair do arremesso (ou em 3 s, se nada te arremessou)
+          jogador.danoAoCair = dj < 60 ? 999 : 40;
+          setTimeout(() => { if (!jogador.pulo?.voo) aplicarDanoAoCair(); }, 3000);
+        }
       }
     }
   }
@@ -15659,7 +15714,27 @@ function passoPulo(dt) {
   j.pos.x = pl.de.x + (pl.para.x - pl.de.x) * m; j.pos.z = pl.de.z + (pl.para.z - pl.de.z) * m;
   j.puloY = Math.sin(Math.PI * Math.min(1, pl.agarra ? k * 1.05 : k)) * pl.h;
   j.trava = Math.max(j.trava, 0.05);
-  if (k >= 1) { j.pulo = null; j.puloY = 0; j.trava = 0; resolverColisao(j.pos, j.raio); }
+  if (k >= 1) {
+    j.pulo = null; j.puloY = 0; j.trava = 0; resolverColisao(j.pos, j.raio);
+    if (pl.voo) { j.trava = 0.9; tremor = Math.max(tremor, 0.6); aplicarDanoAoCair(); }   // arremessado pela explosão: cai, demora a levantar
+  }
+}
+// dano da explosão atômica guardado para quando o arremessado cair (ou na hora, se não foi arremessado)
+function aplicarDanoAoCair() {
+  const d = jogador.danoAoCair; if (!d) return; jogador.danoAoCair = 0;
+  jogador.ultimoAgressor = null; danoLocal(d); if (d < 999) aviso('💥 A explosão do míssil feriu você!', 3);
+}
+// a onda de choque joga longe quem está perto: até 1 quarteirão (54 m) no epicentro, menos quanto mais longe; voa num arco
+// e para antes de bater numa parede
+function arremessar(nx, nz, dist) {
+  const j = jogador; if (!j.avatar || j.carro || j.morto) return;
+  let alc = 0; for (let d = 1; d <= dist; d += 1) { if (bloqueado(j.pos.x + nx * d, j.pos.z + nz * d)) break; alc = d; }
+  if (alc < 1) { tremor = Math.max(tremor, 1); aplicarDanoAoCair(); return; }
+  const dur = 0.7 + alc / 26;
+  j.pulo = { t: 0, de: { x: j.pos.x, z: j.pos.z }, para: { x: j.pos.x + nx * alc, z: j.pos.z + nz * alc }, dur, h: Math.max(1.5, alc * 0.22), voo: true };
+  j.yaw = Math.atan2(-nx, -nz); j.alvo = null; j.trava = dur;
+  j.avatar.tocar('hit', { umaVez: true, velocidade: 0.6, fade: 0.06 });
+  aviso(`💥 A onda de choque te arremessou ${Math.round(alc)} m!`, 2.5);
 }
 
 // ---------------------------------------------------------------- render-se (botão vermelho em confronto com a polícia)
