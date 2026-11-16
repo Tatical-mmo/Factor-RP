@@ -541,6 +541,7 @@ export const seguranca = {
   meus: () => rpc('meus_dados_privados'),
   nascimento: (d) => rpc('definir_nascimento', { p_data: d }),
   protegido: (ligar, pin) => rpc('modo_protegido', { p_ligar: !!ligar, p_pin: String(pin || '') }),
+  liberarResponsavel: () => rpc('liberar_protecao_responsavel'),
 };
 export const lixeiros = {
   secreto: (k) => rpc('bueiro_secreto', { p_bueiro: k }),

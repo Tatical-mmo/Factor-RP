@@ -3075,7 +3075,7 @@ async function iniciarJogo(perfil) {
   aviso(`Bem-vindo à cidade, ${nome}!`);
   aplicarPrefs();   // gráfico e câmera que o jogador escolheu (salvos na conta: valem em qualquer aparelho e não somem)
   { const nova = Date.now() - Date.parse(jogador.perfil?.criado_em || 0) < 20 * 60000, pr = jogador.perfil?.prefs || {};
-    setTimeout(() => tutorialPrimeiraVez(nova, !!pr.tutorial, () => salvarPref('tutorial', 1)), 2500); }   // tutorial: uma vez por jogador
+    setTimeout(() => seguranca.pedirIdadeSePreciso().catch(() => {}).then(() => tutorialPrimeiraVez(nova, !!pr.tutorial, () => salvarPref('tutorial', 1))), 2500); }   // tutorial: uma vez por jogador
   if (baixouQualidade) setTimeout(() => aviso(`⚠️ O celular ficou sem memória de vídeo duas vezes seguidas e o jogo reiniciou. Baixei a qualidade gráfica para ${baixouQualidade}; dá para voltar em ⚙️.`, 7), 4000);
   criarNPCs(id);
   conectarMultiplayer(perfil);
