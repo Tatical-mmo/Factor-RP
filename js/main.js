@@ -4866,7 +4866,9 @@ const CEL_SOL = 24;
 function montarSolidos() {
   solidos.grade.clear(); solidos.cache.clear(); solidos.t = performance.now();
   scene.updateMatrixWorld();
-  const pula = (o) => { for (let p = o; p; p = p.parent) { const u = p.userData; if (u && (u.modelo || u.asas || u.corpo3d || u.avatar || u.semSolido)) return true; } return false; };
+  // não é construção: veículos (inclusive o óvni e o feixe dele, que empurravam o óvni para cima), pessoas e pássaros
+  const pula = (o) => { for (let p = o; p; p = p.parent) { const u = p.userData; if (u && (u.modelo || u.asas || u.corpo3d || u.avatar || u.semSolido || u.ovni || u.glb || u.eixos)) return true;
+    if (p.children.some((c) => c.name === 'luzes' || c.name === 'rodas' || c.name === 'rotor' || c.name === 'ovniGiro')) return true; } return false; };
   scene.traverse((o) => {
     if (!o.isMesh || o.isSkinnedMesh || o.isInstancedMesh || o.isSprite || !o.geometry?.attributes?.position) return;
     const m = o.material; if (!m || [].concat(m).some((q) => q.transparent && q.opacity < 0.9)) return;
@@ -13112,10 +13114,11 @@ function montarArea51() {
   const chapa = M('#6f757b', { metalness: 0.5, roughness: 0.6 }), ferro = M('#3b3f44');
   caixa(Hg.x, HH / 2, hz0, Hg.w, HH, 0.5, chapa, true); caixa(Hg.x, HH / 2, hz1, Hg.w, HH, 0.5, chapa, true);
   caixa(hx0, HH / 2, Hg.z, 0.5, HH, Hg.d, chapa, true);
-  caixa(hx1, HH / 2, (hz0 + (Hg.z + 8)) / 2, 0.5, HH, Hg.z + 8 - hz0, chapa, true);       // parede leste com a porta de pessoal
-  caixa(hx1, HH / 2, (hz1 + (Hg.z + 12)) / 2, 0.5, HH, hz1 - (Hg.z + 12), chapa, true);
-  caixa(hx1, (HH + 3) / 2, Hg.z + 10, 0.5, HH - 3, 4, chapa, false);
-  caixa(hx1 + 0.3, 1.5, Hg.z + 10, 0.1, 3, 4, M('#2a2d31'), false, false).visible = false;
+  // parede leste com a porta de pessoal no meio (onde fica a porta blindada do bunker 3D por fora)
+  caixa(hx1, HH / 2, (hz0 + (Hg.z - 2)) / 2, 0.5, HH, Hg.z - 2 - hz0, chapa, true);
+  caixa(hx1, HH / 2, (hz1 + (Hg.z + 2)) / 2, 0.5, HH, hz1 - (Hg.z + 2), chapa, true);
+  caixa(hx1, (HH + 3) / 2, Hg.z, 0.5, HH - 3, 4, chapa, false);
+  caixa(hx1 + 0.3, 1.5, Hg.z, 0.1, 3, 4, M('#2a2d31'), false, false).visible = false;
   for (const zz of [hz0 + 3, hz1 - 3]) caixa(Hg.x, HH + 0.2, zz, Hg.w + 0.6, 0.4, 6.4, ferro);                     // faixas do teto (o meio fica aberto)
   const folhas = [-1, 1].map((sg) => caixa(Hg.x, HH + 0.75, Hg.z + sg * 4.4, Hg.w + 0.4, 0.35, 8.9, chapa, false));   // teto que abre: as duas folhas deslizam para os lados
   for (let x = hx0 + 3; x < hx1; x += 7) caixa(x, HH + 0.1, Hg.z, 0.35, 0.35, Hg.d - 12, ferro, false, false);     // vigas
@@ -13561,8 +13564,12 @@ function predioGLB(nome, x, z, maior, giro = 0, { cortaBase = 0, nucleo = 0.6 } 
   const m = glb.clone(true); m.updateMatrixWorld(true);
   const bb = new THREE.Box3().setFromObject(m);
   if (cortaBase > 0) {
-    const corte = bb.min.y + (bb.max.y - bb.min.y) * cortaBase;
-    civico.removerTriangulos(m, (px, py) => py < corte, 'semBase_' + nome);
+    // tira só a laje em volta: o que fica embaixo do prédio (a planta dele, medida pelo que está bem acima da laje) fica
+    const corte = bb.min.y + (bb.max.y - bb.min.y) * cortaBase, alto = bb.min.y + (bb.max.y - bb.min.y) * (cortaBase + 0.25);
+    const pe = new THREE.Box3(), vv = new THREE.Vector3();
+    m.traverse((o) => { if (!o.isMesh) return; const p = o.geometry.attributes.position; for (let i = 0; i < p.count; i++) { vv.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); if (vv.y > alto) pe.expandByPoint(vv); } });
+    const fx = (pe.max.x - pe.min.x) * 0.03, fz = (pe.max.z - pe.min.z) * 0.03;
+    civico.removerTriangulos(m, (px, py, pz) => py < corte && (px < pe.min.x - fx || px > pe.max.x + fx || pz < pe.min.z - fz || pz > pe.max.z + fz), 'semBase_' + nome);
     const b2 = new THREE.Box3(), v = new THREE.Vector3();   // a caixa de novo, só com o que ficou
     m.traverse((o) => { if (!o.isMesh) return; const p = o.geometry.attributes.position, ix = o.geometry.index; for (let t = 0; t < ix.count; t++) b2.expandByPoint(v.fromBufferAttribute(p, ix.getX(t)).applyMatrix4(o.matrixWorld)); });
     bb.copy(b2);

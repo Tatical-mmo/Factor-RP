@@ -25,14 +25,20 @@ function materiais() {
 // (32% de baixo da altura). Corta uma vez na geometria do modelo (só o óvni usa)
 function semFeixe(c) {
   c.updateMatrixWorld(true); const b = new THREE.Box3().setFromObject(c), corte = b.min.y + (b.max.y - b.min.y) * 0.32;
+  // o emissor verde do meio da barriga (sobra do feixe, "luz grudada"): sai também, e uma tampa escura fecha o buraco
+  const cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2, rc = Math.max(b.max.x - b.min.x, b.max.z - b.min.z) * 0.11, yc = b.min.y + (b.max.y - b.min.y) * 0.42;
   const inv = new THREE.Matrix4().copy(c.matrixWorld).invert(), m = new THREE.Matrix4(), v = new THREE.Vector3();
   c.traverse((o) => {
     if (!o.isMesh || !o.geometry?.index || o.geometry.userData.semFeixe) return;
     const pos = o.geometry.attributes.position, idx = o.geometry.index, fica = []; m.multiplyMatrices(inv, o.matrixWorld);
-    const y = (i) => v.fromBufferAttribute(pos, i).applyMatrix4(m).y;
-    for (let t = 0; t < idx.count; t += 3) { const a = idx.getX(t), bb = idx.getX(t + 1), cc = idx.getX(t + 2); if (!(y(a) < corte && y(bb) < corte && y(cc) < corte)) fica.push(a, bb, cc); }
+    const sai = (i) => { v.fromBufferAttribute(pos, i).applyMatrix4(m); return v.y < corte || (v.y < yc && Math.hypot(v.x - cx, v.z - cz) < rc); };
+    for (let t = 0; t < idx.count; t += 3) { const a = idx.getX(t), bb = idx.getX(t + 1), cc = idx.getX(t + 2); if (!(sai(a) && sai(bb) && sai(cc))) fica.push(a, bb, cc); }
     o.geometry.setIndex(fica); o.geometry.computeBoundingBox(); o.geometry.computeBoundingSphere(); o.geometry.userData.semFeixe = true;
   });
+  if (!c.getObjectByName('tampaBarriga')) {
+    const t = new THREE.Mesh(new THREE.CircleGeometry(rc * 1.08, 24), new THREE.MeshStandardMaterial({ color: '#141518', metalness: 0.7, roughness: 0.45, side: THREE.DoubleSide }));
+    t.name = 'tampaBarriga'; t.rotation.x = Math.PI / 2; t.position.set(cx, yc - (b.max.y - b.min.y) * 0.02, cz); c.add(t);
+  }
   return corte;
 }
 export function criarOvni(glb) {
@@ -57,7 +63,7 @@ export function criarOvni(glb) {
   }
   // anel de luzes coloridas (gira) e luzes de baixo (piscam); o modelo 3D já tem as luzes vermelhas dele
   const giro = new THREE.Group(); giro.name = 'ovniGiro'; giro.position.y = 1.42; g.add(giro);
-  if (g.userData.glb) { const halo = new THREE.Mesh(new THREE.SphereGeometry(8.2, 24, 12), m.halo); halo.position.y = 1.3; halo.scale.y = 0.42; halo.name = 'ovniHalo'; g.add(halo); g.userData.ovni = true; return g; }
+  if (g.userData.glb) { g.userData.ovni = true; return g; }   // sem o halo (ficava como uma luz grudada em volta do casco)
   const bola = new THREE.SphereGeometry(0.26, 10, 8);
   for (let k = 0; k < N_LUZES; k++) { const a = k / N_LUZES * Math.PI * 2, l = new THREE.Mesh(bola, m.anel[k % m.anel.length]); l.position.set(Math.cos(a) * (RAIO + 0.5), 0, Math.sin(a) * (RAIO + 0.5)); giro.add(l); }
   for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2, l = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), m.baixo); l.position.set(Math.cos(a) * 3.6, 0.62, Math.sin(a) * 3.6); g.add(l); }
