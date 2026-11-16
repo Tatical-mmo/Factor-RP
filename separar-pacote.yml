@@ -83,6 +83,7 @@ jobs:
             destino="/tmp/extraido/$(basename "$z" .zip)"
             mkdir -p "$destino"
             if ! unzip -q -o "$z" -d "$destino"; then echo "::warning::$(basename "$z") não é um zip válido, pulei."; continue; fi
+            chmod -R u+rwX,go+rX "$destino"   # arquivos somente-leitura no zip travavam o próximo pacote (cp: Permission denied)
             # se o zip tiver uma 煤nica pasta por cima de tudo, usa o conte煤do dela
             itens=("$destino"/*)
             if [ ${#itens[@]} -eq 1 ] && [ -d "${itens[0]}" ]; then
@@ -91,7 +92,7 @@ jobs:
               origem="$destino"
             fi
             echo "Copiando $(basename "$z") para o reposit贸rio"
-            cp -a "$origem"/. .
+            cp -r --no-preserve=mode "$origem"/. .
           done
 
           git rm -q --cached --ignore-unmatch "${processados[@]}"
