@@ -11591,7 +11591,10 @@ function garisDe(dono) {
   dono.criandoGaris = true;
   ROUPA_GARI.forEach((id, k) => criarAvatar('personagens', id).then((av) => {
     const et = textoSprite('Gari', { escala: 0.45, fundo: 'rgba(232,137,28,.95)' }); et.position.y = 2.1; av.raiz.add(et);
-    av.raiz.visible = false; scene.add(av.raiz); dono.garis[k] = { av, anim: '' };
+    // saco de lixo (sacola_lixo.glb) na mão: aparece só quando ele leva os sacos da lixeira até o caminhão
+    let sacola = null;
+    if (modelos.sacola_lixo) { sacola = new THREE.Group(); const sc = clonar('sacola_lixo'); sc.scale.setScalar(0.55); sc.position.y = 0.25; sacola.add(sc); sacola.position.set(-0.32, 0.55, 0.22); sacola.visible = false; av.raiz.add(sacola); }
+    av.raiz.visible = false; scene.add(av.raiz); dono.garis[k] = { av, anim: '', sacola };
   }).catch(() => {}));
   return dono.garis;
 }
@@ -11600,8 +11603,8 @@ function posicionarGaris(dono, mesh, f, l, visivel, dt) {
   const gs = garisDe(dono), a = mesh.rotation.y, fx = Math.sin(a), fz = Math.cos(a), rx = -Math.cos(a), rz = Math.sin(a);
   gs.forEach((g, k) => {
     if (!g) return; const av = g.av; av.raiz.visible = visivel; if (!visivel) return;
-    const lado = k ? 0.65 : -0.65, est = { x: mesh.position.x - fx * 4.9 + rx * lado, z: mesh.position.z - fz * 4.9 + rz * lado };
-    let p = est, anim = 'idle', y = mesh.position.y + 0.45, rot = a;
+    const lado = k ? 0.75 : -0.75, est = { x: mesh.position.x - fx * 4.75 + rx * lado, z: mesh.position.z - fz * 4.75 + rz * lado };   // estribos de trás do caminhão novo (16r)
+    let p = est, anim = 'idle', y = mesh.position.y + 0.42, rot = a;
     if (f !== null && l) {
       const lx = l.x - rx * 0.9 + fx * (k ? 0.7 : -0.7), lz = l.z - rz * 0.9 + fz * (k ? 0.7 : -0.7);
       const fase = THREE.MathUtils.clamp((f - k * 0.06) / 0.9, 0, 1);
@@ -11611,7 +11614,7 @@ function posicionarGaris(dono, mesh, f, l, visivel, dt) {
       else { p = est; anim = 'idle'; }
     }
     av.raiz.position.set(p.x, y, p.z); av.raiz.rotation.y = rot;
-    if (anim !== g.anim) { g.anim = anim; av.tocar(anim, { velocidade: 1 }); }
+    if (anim !== g.anim) { g.anim = anim; av.tocar(anim, { velocidade: 1 }); if (g.sacola) g.sacola.visible = anim === 'carry_walk'; }
     av.mixer.update(dt);
   });
 }

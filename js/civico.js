@@ -296,9 +296,42 @@ export function montarBanco() {
 
 // hospital: prédio branco, ala alta, cruz vermelha, heliponto no teto e ambulância (frente para -Z)
 // helicóptero de serviço parado numa laje (heliponto): fica no lugar e o modelo do GLB próprio entra quando existir
+// helicópteros do Meshy vêm numa peça só: as pás (acima de y, em volta do eixo) viram um nó "rotor" que gira
+const ROTOR = { helicoptero_resgate: { y: 3.97, x: 0, z: 1.82, r: 8 }, helicoptero_bombeiros: { y: 4.46, x: 0, z: 0.38, r: 8.5 } };
+function separarRotor(base, R) {
+  if (!R || base.getObjectByName('rotor')) return;
+  base.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(base.matrixWorld).invert();
+  const malhas = []; base.traverse((o) => { if (o.isMesh && o.geometry?.index) malhas.push(o); });
+  const rotor = new THREE.Group(); rotor.name = 'rotor'; rotor.position.set(R.x, 0, R.z);
+  const v = new THREE.Vector3(), m = new THREE.Matrix4();
+  for (const o of malhas) {
+    const geo = o.geometry, pos = geo.attributes.position, uv = geo.attributes.uv, nor = geo.attributes.normal, idx = geo.index, fica = [], P = [], U = [], N = [];
+    m.multiplyMatrices(inv, o.matrixWorld); const mn = new THREE.Matrix3().getNormalMatrix(m);
+    const w = (i) => v.fromBufferAttribute(pos, i).applyMatrix4(m);
+    for (let t = 0; t < idx.count; t += 3) {
+      const ids = [idx.getX(t), idx.getX(t + 1), idx.getX(t + 2)];
+      const pa = ids.map((i) => w(i).clone());
+      if (pa.every((q) => q.y > R.y && Math.hypot(q.x - R.x, q.z - R.z) < R.r)) {
+        for (let k = 0; k < 3; k++) {
+          P.push(pa[k].x - R.x, pa[k].y, pa[k].z - R.z);
+          if (uv) U.push(uv.getX(ids[k]), uv.getY(ids[k]));
+          if (nor) { v.fromBufferAttribute(nor, ids[k]).applyMatrix3(mn).normalize(); N.push(v.x, v.y, v.z); }
+        }
+      } else fica.push(...ids);
+    }
+    if (!P.length) continue;
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    if (U.length) g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+    if (N.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); else g.computeVertexNormals();
+    const pas = new THREE.Mesh(g, o.material); pas.castShadow = true; rotor.add(pas);
+    geo.setIndex(fica);
+  }
+  if (rotor.children.length) base.add(rotor);
+}
 function heliDeServico(modelo, vaga, cor) {
-  const proprio = ctx.modelo?.(modelo); if (proprio) { GLB_CARRO[modelo] = modelo; SEM_TINTA.add(modelo); }
+  const proprio = ctx.modelo?.(modelo); if (proprio) { GLB_CARRO[modelo] = modelo; SEM_TINTA.add(modelo); separarRotor(proprio, ROTOR[modelo]); }
   if (!ctx.modelo?.(GLB_CARRO[modelo])) return null;
+  vaga.y += 0.12;   // os esquis em cima da laje (o raio pega a pintura do H)
   const m = modeloCarro(modelo, cor); m.position.set(vaga.x, vaga.y, vaga.z); m.rotation.y = vaga.ang; ctx.scene.add(m);
   return m;
 }
@@ -389,7 +422,27 @@ function montarAlmoxarifado() {
 export function dentroDoAlmox(x, z) { return x > ALMOX.x0 + 0.2 && x < ALMOX.x1 - 0.2 && z > ALMOX.z0 + 0.25 && z < ALMOX.z1; }
 
 // quartel dos bombeiros: tijolo vermelho, três portões, torre de treino e caminhão (frente para -Z)
+// quartel do Meshy (predio_bombeiros.glb): portões para a rua de baixo (-z), heliponto na laje com o helicóptero
+function montarBombeirosGLB(glb) {
+  const X = -81, Z = 139.5, LARG = 36;
+  const g = new THREE.Group(); g.position.set(X, 0.18, Z); g.rotation.y = Math.PI / 2;   // o modelo veio com a frente para +x
+  const m = glb.clone(true); g.add(m); m.updateMatrixWorld(true);
+  const bb = new THREE.Box3().setFromObject(m), tam = bb.getSize(new THREE.Vector3()), k = LARG / Math.max(tam.x, tam.z);
+  m.scale.setScalar(k); m.position.set(-(bb.min.x + bb.max.x) / 2 * k, -bb.min.y * k, -(bb.min.z + bb.max.z) / 2 * k);
+  m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  ctx.scene.add(g); g.updateMatrixWorld(true);
+  const prof = tam.x * k, alto = tam.y * k;   // depois de girar: a largura é o z do modelo e a profundidade o x
+  ctx.colisores.push({ tipo: 'caixa', x0: X - 13.2, x1: X + 15.6, z0: Z - 7.2, z1: Z + 8.4 });   // só o prédio (a base de concreto em volta é chão)
+  const t = ctx.textoSprite('🚒 BOMBEIROS', { escala: 1.2, fundo: 'rgba(170,30,20,.92)' }); t.position.set(X, alto + 3, Z - prof / 2 + 3); ctx.scene.add(t);
+  BOMBEIROS.veiculo = veiculoDeServico('bombeiros', BOMBEIROS.vaga);
+  const hx = X + BOMBEIROS_H.dx, hz = Z + BOMBEIROS_H.dz, hy = lajeEm(g, hx, hz, alto);
+  BOMBEIROS.heliVaga = { x: hx, y: hy, z: hz, ang: Math.PI };
+  BOMBEIROS.heli = heliDeServico('helicoptero_bombeiros', BOMBEIROS.heliVaga, '#d62020');
+  ctx.balcao(BOMBEIROS.balcao.x, BOMBEIROS.balcao.z, '#c81e1e', 'Quartel dos Bombeiros', 'Entre em serviço e apague incêndios');
+}
+const BOMBEIROS_H = { dx: 1.2, dz: -0.6 };   // H do heliponto em relação ao centro do quartel (medido no modelo)
 export function montarBombeiros() {
+  { const glb = ctx.modelo?.('predio_bombeiros'); if (glb) { montarBombeirosGLB(glb); return; } }
   const g = new THREE.Group(); g.position.set(BOMBEIROS.x, 0.18, BOMBEIROS.z); g.rotation.y = Math.PI;
   const tijolo = mat('#9c3b2c', { roughness: 0.85 }), branco = mat('#efe9df'), portao = mat('#c9ced3', { metalness: 0.4 });
   bloco(g, tijolo, 22, 8, 16, -2, 4, -5);
@@ -512,7 +565,7 @@ const PARA_BRISA = {
   onibus_grande: { y: [1.4, 2.8], z: 4.6, hx: 1.31 }, onibus_urbano: { y: [1.12, 3.0], z: 5.1, hx: 1.26 },
   onibus_executivo: { y: [1.3, 3.5], z: 5.1, hx: 1.26 },
   onibus_pequeno: { y: [1.75, 2.75], z: 2.6, hx: 1.16 },
-  caminhao_lixo: { y: [2.2, 3.25], z: 3.6, hx: 1.21 },
+  // caminhao_lixo: modelo novo (16r) ainda sem medida
 };
 let matVidro = null;
 function paraBrisaLimpo(g, glb) {
@@ -547,7 +600,12 @@ function paraBrisaLimpo(g, glb) {
 // vidros do carro inteiros (para-brisa, laterais e traseiro): no modelo eles saíram brancos/cinza manchados; viram
 // vidro escuro. Faixa medida no modelo já no tamanho do jogo (frente +z, chão em 0): y entre a linha da cintura e o
 // teto, e só as faces "em pé" (o teto continua da cor do carro)
-const VIDROS = { viatura_pm: { y: [0.86, 1.3], ny: 0.8, z: [-1.75, 1.45], inclinado: { y: [0.95, 1.28], z: [-0.8, 0.38] } } };   // inclinado: para-brisa e vidro de trás (fora do teto, z entre -0.8 e 0.38)
+const VIDROS = {
+  caminhao_bombeiros: { y: [1.5, 2.32], ny: 0.6, z: [2.9, 4.4] },   // cabine (modelo novo 16r)
+  caminhao_lixo: { y: [1.85, 2.78], ny: 0.6, z: [3.0, 4.4] },
+  helicoptero_resgate: { y: [1.65, 2.75], ny: 0.75, z: [3.9, 6.5], bico: true },   // bico: só o que olha para a frente ou para o lado (o teto da cabine fica)
+  helicoptero_bombeiros: { y: [2.2, 3.3], ny: 0.75, z: [3.6, 6.5], bico: true },
+  viatura_pm: { y: [0.86, 1.3], ny: 0.8, z: [-1.75, 1.45], inclinado: { y: [0.95, 1.28], z: [-0.8, 0.38] } } };   // inclinado: para-brisa e vidro de trás (fora do teto, z entre -0.8 e 0.38)
 function vidrosEscuros(g, R) {
   matVidro ||= new THREE.MeshStandardMaterial({ color: '#17222b', metalness: 0.65, roughness: 0.14 });
   const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), m = new THREE.Matrix4();
@@ -564,7 +622,7 @@ function vidrosEscuros(g, R) {
         n.crossVectors(e1.subVectors(b, a), e2.subVectors(c, a)).normalize();
         const cy = (a.y + b.y + c.y) / 3, cz = (a.z + b.z + c.z) / 3;
         const I = R.inclinado;
-        const ok = (cy > R.y[0] && cy < R.y[1] && Math.abs(n.y) < R.ny && cz > R.z[0] && cz < R.z[1])
+        const ok = (cy > R.y[0] && cy < R.y[1] && Math.abs(n.y) < R.ny && cz > R.z[0] && cz < R.z[1] && (!R.bico || n.z > 0.3 || Math.abs(n.x) > 0.8))
           || (I && n.y >= R.ny && n.y < 0.995 && cy > I.y[0] && cy < I.y[1] && (cz < I.z[0] || cz > I.z[1]) && cz > R.z[0] - 0.2 && cz < R.z[1] + 0.2);
         (ok ? vidro : fica).push(i0, i1, i2);
       }
@@ -590,9 +648,9 @@ export const RODAS = {
   carro_presidencial: { estilo: 'carro', eixos: [[-1.85, 0.44], [2.12, 0.44]], cy: 0.44, xo: 1.23, xi: 0.85 },
   exercito_jipe: { estilo: 'militar', eixos: [[-1.08, 0.46], [1.34, 0.46]], cy: 0.45, xo: 0.97, xi: 0.59 },
   ambulancia: { estilo: 'suv', eixos: [[-1.58, 0.47], [1.78, 0.47]], cy: 0.47, xo: 1.4, xi: 0.94 },
-  caminhao_bombeiros: { estilo: 'pesado', eixos: [[-2.35, 0.6], [2.45, 0.6]], cy: 0.6, xo: 1.76, xi: 1.21 },
+  caminhao_bombeiros: { estilo: 'pesado', eixos: [[-2.4, 0.58], [-1.3, 0.58], [2.45, 0.58]], cy: 0.58, xo: 1.33, xi: 0.86 },   // modelo novo (16r): eixo duplo atrás
   caminhao: { estilo: 'pesado', eixos: [[-2.72, 0.48], [-1.71, 0.48], [3.41, 0.49]], cy: 0.49, xo: 1.18, xi: 0.8 },
-  caminhao_lixo: { estilo: 'pesado', eixos: [[-1.95, 0.55], [2.92, 0.53]], cy: 0.54, xo: 0.96, xi: 0.72 },
+  caminhao_lixo: { estilo: 'pesado', eixos: [[-1.6, 0.56], [-0.4, 0.56], [2.8, 0.56]], cy: 0.56, xo: 1.56, xi: 1.0 },   // modelo novo (16r): eixo duplo atrás
   exercito_caminhao: { estilo: 'militar', eixos: [[-2.15, 0.55], [-1.0, 0.55], [2.45, 0.55]], cy: 0.53, xo: 1.29, xi: 0.95 },
   onibus_grande: { estilo: 'pesado', eixos: [[-2.55, 0.53], [3.3, 0.53]], cy: 0.52, xo: 1.2, xi: 0.85 },
   onibus_urbano: { estilo: 'pesado', eixos: [[-2.7, 0.52], [3.7, 0.52]], cy: 0.53, xo: 1.27, xi: 0.78 },
@@ -742,9 +800,10 @@ function modeloCarroBase(modelo, cor) {
     const g = base.clone(true); g.userData.glb = GLB_CARRO[modelo]; g.userData.modelo = modelo;
     if (modelo === 'militar') removerTriangulos(g, VIDRO_JIPE, 'semVidro');
     if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
-    else if (SEM_TINTA.has(modelo)) { const sr = { ambulancia: [3.4, 0.9], bombeiros: [3.15, 2.5] }[modelo]; if (sr) sirene(g, sr); }
+    else if (SEM_TINTA.has(modelo)) { const sr = { ambulancia: [3.4, 0.9], bombeiros: [2.45, 3.1] }[modelo]; if (sr) sirene(g, sr); }
     else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), modelo.startsWith('onibus') ? 0.38 : modelo === 'caminhao_lixo' ? 0.12 : modelo === 'helicoptero_bombeiros' ? 0.9 : 0.45); } });
     try { paraBrisaLimpo(g, GLB_CARRO[modelo]); } catch (e) { console.warn('para-brisa:', modelo, e); }
+    if (VIDROS[GLB_CARRO[modelo]]) { g.updateMatrixWorld(true); vidrosEscuros(g, VIDROS[GLB_CARRO[modelo]]); }
     try { montarRodas(g, GLB_CARRO[modelo]); } catch (e) { console.warn('rodas:', modelo, e); }   // depois da pintura: as rodas e o chassi têm cor própria
     adicionarLuzes(g, modelo);
     cacheCarro.set(chave, g);

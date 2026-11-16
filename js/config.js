@@ -55,7 +55,7 @@ export const ROBOS = ['Rusty_Scout_Bot', 'Rustbolt_Sentinel'];
 
 export const MODELOS = [
   'caveirao', 'viatura_civil', 'viatura_prf', 'saveiro', 'saveiro_som', 'arma_espingarda', 'arma_fuzil',
-  'caminhao', 'caminhao_danificado', 'ovni', 'caca_leve', 'caca_furtivo', 'asa_furtiva', 'missil', 'porta_avioes', 'destroier', 'missil_cruzeiro', 'viatura', 'viatura_pm', 'predio_hospital', 'helicoptero_resgate', 'helicoptero_bombeiros', 'van_policia', 'caixa', 'arma_paintball', 'algemas',
+  'caminhao', 'caminhao_danificado', 'ovni', 'caca_leve', 'caca_furtivo', 'asa_furtiva', 'missil', 'porta_avioes', 'destroier', 'missil_cruzeiro', 'viatura', 'viatura_pm', 'predio_hospital', 'predio_bombeiros', 'sacola_lixo', 'helicoptero_resgate', 'helicoptero_bombeiros', 'van_policia', 'caixa', 'arma_paintball', 'algemas',
   'bancada', 'base_cla', 'loja', 'delegacia', 'transportadora', 'casa', 'empresa', 'arvore', 'poste',
   'carro_classico', 'roda_classico', 'roda_carro', 'roda_esporte', 'roda_suv', 'roda_pesado', 'roda_militar',
   'van', 'helicoptero', 'carro_popular', 'carro_suv', 'carro_esportivo', 'carro_presidencial', 'robo_motorista', 'ambulancia', 'caminhao_bombeiros',
