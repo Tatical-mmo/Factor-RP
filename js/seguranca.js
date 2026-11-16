@@ -8,6 +8,7 @@ import * as rede from './rede.js';
 
 export const CLASSIFICACAO = { idade: 16, motivos: 'violência, armas e crimes de faz de conta' };
 export const APOIO_URL = 'https://github.com/sponsors/Tatical-mmo';
+export const APOIO_PIX = '60ceaecb-7c62-4786-95f0-2d958af022d3';   // chave aleatória (não mostra CPF, e-mail nem telefone)
 
 let ctx = null, dados = { idade: null, protegido: false }, carregado = false;
 export function iniciar(c) { ctx = c; carregar(); }
@@ -81,7 +82,7 @@ export function abrirProtegido() {
     <div class="botoes"><input id="segPin" type="password" inputmode="numeric" maxlength="8" placeholder="PIN (4 a 8 números)" autocomplete="off" style="flex:1">
     <button id="segPinOk">${on ? '🔓 Desligar' : '🔒 Ligar'}</button></div>
     <p class="dica" id="segMsg"></p>
-    <p class="dica" style="opacity:.8">Esqueceu o PIN? A equipe do jogo pode desligar: peça pelo suporte com o nome do personagem.</p>`);
+    <p class="dica" style="opacity:.8">Esqueceu o PIN? A equipe do jogo pode desligar: escreva para approtaos@gmail.com com o nome do personagem.</p>`);
   const msg = (t, ok = true) => { const m = c.querySelector('#segMsg'); m.textContent = t; m.style.color = ok ? '#7ee08a' : '#ff8a80'; };
   c.querySelector('#segPinOk').onclick = async () => {
     const pin = c.querySelector('#segPin').value.trim();
@@ -121,8 +122,18 @@ export function abrirApoio() {
     melhorias, pode fazer uma <b>doação voluntária</b>.</p>
     <p class="aviso-item">⚠️ É uma <b>doação para a melhoria do jogo</b>: <b>não dá nenhuma recompensa</b> dentro do jogo (nem moedas, nem itens,
     nem vantagens). Doar ou não doar não muda nada na sua conta.</p>
-    <div class="botoes"><a href="${esc(APOIO_URL)}" target="_blank" rel="noopener" style="flex:1"><button style="width:100%">💖 Abrir página de apoio</button></a></div>
-    <p class="dica" style="opacity:.8">O pagamento é feito fora do jogo, na página do GitHub Sponsors. Obrigado!</p>`);
+    <div class="sub">Pix (qualquer valor)</div>
+    <div class="botoes"><input id="segPix" readonly value="${esc(APOIO_PIX)}" style="flex:1;font-size:12px"><button id="segPixCopiar">📋 Copiar</button></div>
+    <p class="dica" style="opacity:.8">Abra o app do seu banco, escolha Pix › Pagar com chave e cole a chave aleatória.</p>
+    <div class="sub">Ou pelo GitHub</div>
+    <div class="botoes"><a href="${esc(APOIO_URL)}" target="_blank" rel="noopener" style="flex:1"><button style="width:100%">💖 Página de apoio no GitHub Sponsors</button></a></div>
+    <p class="dica" style="opacity:.8">O pagamento é feito fora do jogo. Obrigado!</p>`);
+  const cp = document.getElementById('segPixCopiar');
+  if (cp) cp.onclick = () => {
+    const ok = () => ctx?.aviso('📋 Chave Pix copiada. Obrigado pelo apoio!', 3);
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(APOIO_PIX).then(ok, () => { document.getElementById('segPix').select(); ok(); });
+    else { const i = document.getElementById('segPix'); i.select(); try { document.execCommand('copy'); } catch { /* copia manual */ } ok(); }
+  };
 }
 
 // ---------------------------------------------------------------- tocar numa mensagem do chat
