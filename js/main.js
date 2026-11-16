@@ -11010,11 +11010,14 @@ function atualizarNomesCla(dt) {
 // O motorista jogador assume uma saída da tabela (o ônibus do sistema daquela saída some para todos).
 // Qualquer jogador pode embarcar como passageiro (5 moedas) num ônibus parado no ponto ou na plataforma.
 const RODO = { x: 135, z: -243, x0: 113, x1: 157, z0: -265, z1: -221, baia: -230, fila: -243, entrada: -262, saidaZ: -221, guiche: { x: 155.5, z: -239 } };
+// terminal rodoviário (inspirado no Tietê): as plataformas (RODO) + o quarteirão a leste (pátio de espera e saguão).
+// A rua x = 162 entre os dois quarteirões foi fechada (mundo.js) e virou parte do terminal
+const TERMINAL_RODO = { x0: 113, x1: 211, z0: -265, z1: -221, saguao: { x: 186.5, z: -232, w: 49, d: 22 }, quadra: { x: 189, z: -243 } };
 // cinco plataformas na Rodoviária (oeste → leste). As linhas "circulares" não param na plataforma: passam na calçada
 // do lado leste da rodoviária (ponto Rodoviária) e rodam sem parar o dia todo.
 const PLAT = [117.5, 126.1, 134.7, 143.3, 151.9];
 const URB = ['onibus_amarelo', 'onibus_branco', 'onibus_laranja'], EXEC = ['onibus_brasilsul', 'onibus_viacao'];   // os de viagem vão para as cidades vizinhas
-const ROD = [162, -238, 'Rodoviária', 's'];   // ponto das circulares, na calçada leste da rodoviária
+const ROD = [188, -216, 'Rodoviária', 'o'];   // ponto coberto das circulares: calçada da frente do terminal (elas não entram)
 const LINHAS = [
   { id: 1, nome: 'Linha 1 · Circular', curto: 'Circular', cor: '#1f6fd1', faixa: PLAT[0], k: 3, fase: 0, modelos: URB,
     rua: [[PLAT[0], -216], [108, -216], [108, -54], [-108, -54], [-108, 54], [108, 54], [108, -270], [PLAT[0], -270]],
@@ -11029,17 +11032,17 @@ const LINHAS = [
     rua: [[PLAT[3], -216], [270, -216], [270, 162], [108, 162], [108, -270], [PLAT[3], -270]],
     paradas: [[270, -90, 'Zona Leste'], [190, 162, 'Cemitério'], [108, 27, null], [108, -180, 'Banco']] },
   { id: 2, nome: 'Linha 2 · Aeroporto', curto: 'Aeroporto', cor: '#e8891c', faixa: PLAT[4], k: 3, fase: 7, modelos: ['onibus_viacao'],
-    rua: [[PLAT[4], -216], [162, -216], [162, -668], [400, -668], [400, -688], [162, -688], [162, -270], [PLAT[4], -270]],
+    rua: [[PLAT[4], -216], [216, -216], [216, -270], [162, -270], [162, -668], [400, -668], [400, -688], [162, -688], [162, -270], [PLAT[4], -270]],   // sai por baixo e contorna o terminal (a rua do meio agora é do terminal)
     paradas: [[162, -470, 'Av. do Aeroporto', 'n'], [270, -688, '✈️ Aeroporto · Terminal'], [162, -420, 'Av. do Aeroporto', 's']] },
-  // circulares (sem plataforma): começam e terminam na calçada leste da rodoviária
+  // circulares (sem plataforma): começam e terminam no ponto coberto da calçada da frente do terminal (não entram nele)
   { id: 4, nome: 'Linha 4 · Oeste e Serviços', curto: 'Serviços', cor: '#8e44ad', k: 4, fase: 5, modelos: URB, circular: true,
-    rua: [[162, -260], [162, -216], [108, -216], [108, -108], [-270, -108], [-270, 162], [-108, 162], [-108, 108], [108, 108], [108, -270], [162, -270], [162, -260]],
+    rua: [[212, -216], [108, -216], [108, -108], [-270, -108], [-270, 162], [-108, 162], [-108, 108], [108, 108], [108, -270], [216, -270], [216, -216], [212, -216]],
     paradas: [ROD, [-135, -108, 'Prefeitura', 'o'], [-270, -27, 'Autoescola', 's'], [-150, 162, 'Hospital', 'l'], [-81, 108, 'Bombeiros', 'l'], [0, 108, 'Estação Sul', 'l'], [108, -135, 'Banco', 'n']] },
   { id: 5, nome: 'Linha 5 · Estações e Trabalho', curto: 'Estações', cor: '#c0392b', k: 4, fase: 9, modelos: URB, circular: true,
-    rua: [[162, -260], [162, -216], [108, -216], [108, -108], [-108, -108], [-108, 108], [108, 108], [378, 108], [378, -54], [216, -54], [216, -270], [162, -270], [162, -260]],
+    rua: [[212, -216], [108, -216], [108, -108], [-108, -108], [-108, 108], [108, 108], [378, 108], [378, -54], [216, -54], [216, -216], [212, -216]],
     paradas: [ROD, [0, -108, 'Estação Norte', 'o'], [-108, 0, 'Mercado', 's'], [0, 108, 'Estação Sul', 'l'], [300, 108, 'Zona Leste', 'l'], [351, -54, '♻️ Central de Reciclagem', 'o'], [216, -150, 'Zona Nordeste', 'n']] },
   { id: 6, nome: 'Linha 6 · Territórios', curto: 'Territórios', cor: '#16a085', k: 4, fase: 2, modelos: URB, circular: true,
-    rua: [[162, -260], [162, -216], [108, -216], [108, -108], [-270, -108], [-270, -270], [-324, -270], [-324, 54], [-108, 54], [270, 54], [270, 324], [324, 324], [324, -270], [162, -270], [162, -260]],
+    rua: [[212, -216], [108, -216], [108, -108], [-270, -108], [-270, -270], [-324, -270], [-324, 54], [-108, 54], [270, 54], [270, 324], [324, 324], [324, -216], [212, -216]],
     paradas: [ROD, [-297, -270, 'Praça do Território (NO)', 'o'], [-324, -100, 'Zona Oeste', 's'], [-162, 54, 'Território Oeste', 'l'], [297, 324, 'Praça do Território (SE)', 'l'], [324, 0, 'Zona Leste', 'n']] },
   // favelas: circulares que saem do centro de cada cidade vizinha e sobem o morro
   // saem da mini rodoviária de cada cidade (onde o intermunicipal da Metrópole para), dão a volta no morro e
@@ -11172,8 +11175,52 @@ let paradasMontadas = false, minhaVolta = null, placasRodo = [];
 // comprimento de cada ônibus (o articulado tem 18,6 m): a fila e a espera nos pontos usam o tamanho de verdade
 const COMP_ONIBUS = (mod) => (mod === 'onibus_articulado' ? 18.6 : /^onibus_(executivo2|dois_andares|brasilsul|viacao)$/.test(mod) ? 14 : mod === 'onibus_amarelo' ? 12.5 : 12);
 const passoFila = (L) => (L.passoFila ??= Math.max(...L.modelos.map(COMP_ONIBUS)) + 2);
+// cada vão da rodoviária cabe dois ônibus (plataforma + fila). O terceiro espera fora, na "fila imaginária": no
+// próprio caminho, antes de chegar perto da rodoviária (a 22 m dela), sem parar na rua por onde os outros entram
+function esperaFora(L) {
+  if (L.sEspera !== undefined) return L.sEspera;
+  let s2 = L.sFila - passoFila(L);
+  for (; s2 > L.sFila - 400; s2 -= 2) { const q = pontoCaminho(L, s2); if (!naRodoviaria(q.x, q.z, 22)) break; }
+  return (L.sEspera = s2);
+}
+// dois ônibus (retângulos girados) se encostam? (teste dos eixos separadores; folga de 0,3 m)
+function retangulosBatem(ax, az, aa, al, bx, bz, ba, bl, w = 1.35) {
+  const eixos = [[Math.sin(aa), Math.cos(aa)], [Math.cos(aa), -Math.sin(aa)], [Math.sin(ba), Math.cos(ba)], [Math.cos(ba), -Math.sin(ba)]];
+  const dx = bx - ax, dz = bz - az;
+  for (const [ex, ez] of eixos) {
+    const proj = (ang, l) => Math.abs(Math.sin(ang) * ex + Math.cos(ang) * ez) * l + Math.abs(Math.cos(ang) * ex - Math.sin(ang) * ez) * w;
+    if (Math.abs(dx * ex + dz * ez) > proj(aa, al) + proj(ba, bl) + 0.3) return false;
+  }
+  return true;
+}
 function modeloSaida(L, m) { const lista = L.modelos.filter((x) => x === 'onibus' || modelos[x]); return lista.length ? lista[(((m % L.k) + L.k) % L.k) % lista.length] : 'onibus'; }
 function corpoOnibus(cor, modelo = 'onibus') { return civico.modeloCarro(modelo, cor); }
+// pontos de ônibus em 3D (modelos do Meshy), um estilo por região: cidade grande (moderno, banco de ferro), favelas e
+// interior (pichado) e aeroporto / perto das estações das cidades menores (estrutura verde). Os modelos carregam só
+// quando alguém chega perto (o pichado é pesado) e trocam o abrigo simples; longe, o abrigo simples continua
+const PONTOS3D = [], pontosBase = {}, pontosPedidos = new Set();
+let tempoPontos3d = 0;
+function tipoPonto(x, z, nome) {
+  if (/aeroporto/i.test(nome || '')) return 'ponto_aeroporto';
+  if (Math.abs(z) >= 880) return Math.hypot(x, Math.abs(z) - 934) < 95 ? 'ponto_aeroporto' : 'ponto_pichado';   // cidades e morros
+  if (/rodovia/i.test(nome || '')) return 'ponto_pichado';
+  return 'ponto_cidade';
+}
+function atualizarPontos3d(dt) {
+  if ((tempoPontos3d -= dt) > 0) return; tempoPontos3d = 1;
+  const f = foco();
+  for (const p of PONTOS3D) {
+    const d = Math.abs(p.x - f.x) + Math.abs(p.z - f.z);
+    if (d > 300) { if (p.glb) { p.glb.visible = false; p.simples.forEach((o) => { o.visible = true; }); } continue; }
+    const base = pontosBase[p.tipo];
+    if (!base) {
+      if (!pontosPedidos.has(p.tipo)) { pontosPedidos.add(p.tipo); carregarGLB(`assets/modelos/${p.tipo}.glb?v=1`).then((g) => { pontosBase[p.tipo] = prepararEstatico(g.scene); }).catch(() => {}); }
+      continue;
+    }
+    if (!p.glb) { p.glb = base.clone(true); p.glb.position.set(p.x, alturaChao(p.x, p.z), p.z); p.glb.rotation.y = p.ang + Math.PI; scene.add(p.glb); }   // banco virado para a rua (o modelo olha para +z)
+    p.glb.visible = !jogador.dentroCasa; p.simples.forEach((o) => { o.visible = false; });
+  }
+}
 function abrigo(x, z, ang, nome, cor) {
   const telhado = new THREE.MeshStandardMaterial({ color: cor, roughness: 0.5 }), poste = new THREE.MeshStandardMaterial({ color: '#555b63', roughness: 0.6, metalness: 0.4 });
   const vidro = new THREE.MeshStandardMaterial({ color: '#9fc3e6', roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.35 });
@@ -11182,9 +11229,11 @@ function abrigo(x, z, ang, nome, cor) {
   caixa(3.2, 0.1, 1.5, telhado, 0, 2.5, 0); caixa(3.2, 2.2, 0.05, vidro, 0, 1.35, -0.7);
   for (const sx of [-1.5, 1.5]) caixa(0.08, 2.5, 0.08, poste, sx, 1.25, -0.65);
   caixa(2.6, 0.08, 0.45, poste, 0, 0.5, -0.45);
+  const simples = [...g.children];   // o abrigo simples (some quando o modelo 3D chega)
   const r = rotuloSimples(`🚏 ${nome}`, 3.4); r.position.set(0, 3.15, 0); g.add(r);
   g.position.set(x, alturaChao(x, z), z); g.rotation.y = ang; scene.add(g);
   mundo.addCol({ tipo: 'circ', x, z, r: 0.6 });
+  PONTOS3D.push({ x, z, ang, tipo: tipoPonto(x, z, nome), simples, glb: null });
 }
 // pontos e lixeiras que caíram numa esquina (o abrigo ficaria na rua que cruza): anda até a calçada mais perto
 // (no máximo 30 m pelo mesmo trajeto). Precisa das ruas do mapa prontas; roda uma vez.
@@ -11243,6 +11292,33 @@ function montarRodovias() {
     const r = rotuloSimples(`🚌 ${c.nome.toUpperCase()}`, 9); r.position.set(cx, 6.2, c.z); scene.add(r);
   }
 }
+// quarteirão leste do terminal: pátio de espera (uma faixa pintada por linha, portão leste para entrar e oeste para sair)
+// e o saguão (prédio 3D, de frente para a rua de baixo, onde fica o ponto coberto das circulares)
+function montarTerminalLeste(R, y, plano, caixa, mat, branco) {
+  const T = TERMINAL_RODO, P = PATIO;
+  mundo.liberarQuadra(T.quadra.x, T.quadra.z);   // tira os prédios comuns que existiam no quarteirão
+  const asf = mat('#3b3f46'), calc = mat('#cfc8ba'), amarelo = new THREE.MeshBasicMaterial({ color: '#f2c230' });
+  // piso: pátio (asfalto) e calçada do saguão; a rua fechada entre os quarteirões fica no mesmo nível
+  plano((P.x0 + P.x1) / 2, (P.z0 + P.z1) / 2, P.x1 - P.x0, P.z1 - P.z0, asf, y + 0.012);
+  mundo.addPiso({ x0: 157, x1: T.x1, z0: P.z0, z1: P.z1, h: y });
+  plano((157 + T.x1) / 2, (P.z1 + T.z1) / 2, T.x1 - 157, T.z1 - P.z1, calc, y + 0.01);
+  mundo.addPiso({ x0: 157, x1: T.x1, z0: P.z1, z1: T.z1, h: y });
+  // faixas do pátio (cor da linha na cabeceira) e o nome
+  const linhas = LINHAS.filter((x) => !x.circular && x.faixa !== undefined);
+  P.faixas.forEach((zf, i) => {
+    for (const dz of [-2.05, 2.05]) for (let x = P.x0 + 6; x < P.x1 - 2; x += 4) plano(x, zf + dz, 2, 0.14, branco, y + 0.02);
+    const L = linhas[i]; if (L) { plano(P.x0 + 5, zf, 1.2, 3, new THREE.MeshBasicMaterial({ color: L.cor }), y + 0.022); const r = rotuloSimples(`${L.curto}`, 3); r.position.set(P.x0 + 5, 2.2, zf); scene.add(r); }
+  });
+  plano(209, P.z0 + 1, 7, 0.4, amarelo, y + 0.021); plano(161.5, P.z0 + 1, 7, 0.4, amarelo, y + 0.021);   // portões (entra a leste, sai a oeste)
+  const rp = rotuloSimples('🅿️ Pátio de espera dos ônibus', 6); rp.position.set((P.x0 + P.x1) / 2, 4.5, P.z0 + 2); scene.add(rp);
+  // saguão: modelo 3D (sólido); sem o modelo, um prédio simples no lugar
+  const S = T.saguao;
+  if (!glbEm('terminal_rodoviario', S.x, y, S.z, 1, 1, 1, 0)) {
+    caixa(S.x, y + 4, S.z, S.w, 8, S.d - 4, mat('#dfe4ea', { roughness: 0.4 }));
+    caixa(S.x, y + 8.4, S.z + 1, S.w + 2, 0.5, S.d, mat('#f4f4f2', { roughness: 0.5 }));
+  }
+  mundo.addCol({ tipo: 'caixa', x0: S.x - S.w / 2 + 0.5, x1: S.x + S.w / 2 - 0.5, z0: S.z - S.d / 2 + 1.5, z1: S.z + S.d / 2 - 4 });
+}
 // a Rodoviária: três faixas (uma por linha), ilhas de embarque cobertas, guichê do despacho e painéis com a próxima saída
 function montarRodoviaria() {
   const R = RODO, y = 0.18;
@@ -11270,7 +11346,8 @@ function montarRodoviaria() {
   caixa(155.5, y + 1.6, -252, 3, 3.2, 8, mat('#2b5fa8', { roughness: 0.5 }));
   const g = rotuloSimples('🚌 Despacho dos motoristas', 4.6); g.position.set(R.guiche.x, 3.9, R.guiche.z); scene.add(g);
   mundo.addCol({ tipo: 'caixa', x0: 154, x1: 157, z0: -256, z1: -248 });
-  const nome = rotuloSimples('🚌 RODOVIÁRIA', 9); nome.position.set(R.x, 8, R.z1 + 1); scene.add(nome);
+  montarTerminalLeste(R, y, plano, caixa, mat, branco);
+  const nome = rotuloSimples('🚌 TERMINAL RODOVIÁRIO', 11); nome.position.set(TERMINAL_RODO.saguao.x, 12.5, TERMINAL_RODO.z1 + 1); scene.add(nome);
   const fs = rotuloSimples('🧾 Fiscalização', 3.6); fs.position.set(PONTO_FISCAL.x + 2, 3.2, PONTO_FISCAL.z); scene.add(fs);
   // painéis com a próxima saída (atualizados a cada segundo)
   placasRodo = LINHAS.filter((x) => !x.circular).map((L) => {
@@ -11359,9 +11436,97 @@ function montarMiniRodoviarias() {
   }
 }
 let montadosQuadro = 0;
+// põe (ou reaproveita) o ônibus físico de uma saída no lugar q
+function colocarOnibus(L, m, chB, st, q, e, usados) {
+  const longe = Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) > 320 && !(jogador.onibus && jogador.onibus.L === L && jogador.onibus.m === m);
+  const mod = modeloSaida(L, m), chave = `${L.id}|${mod}`, i = usados.get(chave) || 0; usados.set(chave, i + 1);
+  const doTipo = onibusNpc.filter((x) => x.chave === chave);   // reaproveita os ônibus da mesma linha e modelo
+  // longe da câmera o ônibus é só um marcador vazio (não monta o modelo): monta de verdade quando chega perto
+  // montar o modelo de um ônibus pesa: no máximo um por quadro (os outros esperam um quadro como marcador vazio)
+  const monta = !longe && montadosQuadro < 1;
+  let b = doTipo[i]; if (!b) { b = { mesh: monta ? corpoOnibus(L.cor, mod) : new THREE.Group(), leve: !monta, L, mod, chave, comp: COMP_ONIBUS(mod) }; if (monta) montadosQuadro++; scene.add(b.mesh); onibusNpc.push(b); }
+  else if (b.leve && monta) { scene.remove(b.mesh); b.mesh = corpoOnibus(L.cor, mod); b.leve = false; montadosQuadro++; scene.add(b.mesh); }
+  b.m = m; b.x = q.x; b.z = q.z; b.ang = q.ang; b.parado = e.parado; b.ativo = true; b.e = e; b.chB = chB; b.desviando = !!st.desvio;
+  b.mesh.position.set(q.x, alturaChao(q.x, q.z), q.z); b.mesh.rotation.y = q.ang; b.mesh.visible = !jogador.dentroCasa && !longe;   // longe: não desenha, mas continua respeitando os outros
+  return { b, longe };
+}
+// ---- pátio de espera do terminal (como no Tietê): quando o vão da linha já tem dois ônibus, o terceiro não para na rua:
+// segue pelas ruas até o portão leste do pátio e espera na faixa da linha dele (uma faixa por linha, até 3 ônibus,
+// o primeiro que chegou sai primeiro). Quando abre vaga no vão, sai pelo portão oeste, contorna pela rua de cima e
+// entra na plataforma. A posição no pátio é animada por aqui; o horário da saída fica segurado enquanto isso.
+const PATIO = { x0: 158, x1: 210, z0: -265, z1: -244, faixas: [-262.4, -258.2, -254, -249.8, -245.6], slots: [174, 189.5, 205], filas: new Map() };
+const linhaDoPatio = (L) => LINHAS.filter((x) => !x.circular && x.faixa !== undefined).indexOf(L);
+// pontos de um caminho pelas ruas, deslocados para a faixa da direita
+function ladoDireito(pts, d = 2.6) {
+  const r = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)], dx = b.x - a.x, dz = b.z - a.z, n = Math.hypot(dx, dz);
+    const ang = n > 1e-6 ? Math.atan2(dx, dz) : 0; r.push({ x: pts[i].x - Math.cos(ang) * d, z: pts[i].z + Math.sin(ang) * d });   // direita de quem anda
+  }
+  return r;
+}
+function caminhoComp(pts) { const ac = [0]; for (let i = 1; i < pts.length; i++) ac.push(ac[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z)); return ac; }
+function pontoNoCaminho(pts, ac, d) {
+  d = Math.max(0, Math.min(ac[ac.length - 1], d)); let i = 1; while (i < ac.length - 1 && ac[i] < d) i++;
+  const a = pts[i - 1], b = pts[i], k = (d - ac[i - 1]) / Math.max(1e-6, ac[i] - ac[i - 1]);
+  return { x: a.x + (b.x - a.x) * k, z: a.z + (b.z - a.z) * k, ang: Math.atan2(b.x - a.x, b.z - a.z) };
+}
+// s do caminho da linha logo na boca da plataforma (rumo ao sul, z = -265)
+function sBocaPlataforma(L) {
+  if (L.sBoca !== undefined) return L.sBoca;
+  let melhor = L.sFila - 22, dm = Infinity;
+  for (let s2 = L.sFila - 60; s2 < L.sFila; s2 += 0.5) { const q = pontoCaminho(L, s2); if (Math.cos(q.ang) < 0.7) continue; const d = Math.abs(q.z + 265) + Math.abs(q.x - L.faixa); if (d < dm) { dm = d; melhor = s2; } }
+  return (L.sBoca = melhor);
+}
+function entrarPatio(L, m, chB, st, de) {
+  const li = linhaDoPatio(L); if (li < 0) return false;
+  const fila = PATIO.filas.get(li) || []; PATIO.filas.set(li, fila);
+  if (fila.length >= PATIO.slots.length) return false;   // pátio da linha cheio: espera na rua (raro)
+  const portao = { x: 216, z: -270 }, rua = mundo.caminhoRuas(de, portao); if (!rua) return false;
+  const zf = PATIO.faixas[li];
+  const pts = [...ladoDireito(rua.slice(1)), { x: 209, z: -267.4 }, { x: 208.5, z: zf }];
+  fila.push(chB);
+  st.patio = { fase: 'entra', pts, ac: caminhoComp(pts), d: 0, li, x: 0, ang: -Math.PI / 2 };
+  return true;
+}
+// devolve o lugar do ônibus no pátio neste quadro (ou null quando terminou e voltou para o caminho da linha)
+function andarPatio(L, m, chB, st, t, dt, eu) {
+  const P = st.patio, fila = PATIO.filas.get(P.li) || [], zf = PATIO.faixas[P.li];
+  const livre = (q) => !obstaculoAFrente(q.x, q.z, q.ang, eu ? new Set([eu]) : null, 9, eu);
+  if (P.fase === 'entra') {
+    const q = pontoNoCaminho(P.pts, P.ac, P.d);
+    if (livre(q)) P.d += Math.min(8, 3 + P.d * 0.5) * dt;
+    if (P.d >= P.ac[P.ac.length - 1]) { P.fase = 'fila'; P.x = 208.5; }
+    return q;
+  }
+  if (P.fase === 'fila') {   // anda pela faixa até a vaga (a 1ª fica mais a oeste); sai quando o vão da linha libera
+    const k = fila.indexOf(chB), alvo = PATIO.slots[Math.max(0, k)];
+    if (P.x > alvo) P.x = Math.max(alvo, P.x - 4 * dt);
+    let nq = 0; for (const [k2, s2] of estadoBus) if (k2 !== chB && k2.startsWith(L.id + '.') && s2.filaAtiva) nq++;
+    const vaoLivre = nq === 0 && !onibusNpc.some((o) => o.vivo && o.L === L && o.chB !== chB && o.e?.rota && !o.e.fila && o.e.s > sBocaPlataforma(L) - 2 && o.e.s < L.sFila + 1);
+    if (k === 0 && P.x <= alvo + 0.01 && vaoLivre) {
+      const boca = pontoCaminho(L, sBocaPlataforma(L));
+      const pts = [{ x: P.x, z: zf }, { x: 162, z: zf }, { x: 162, z: -272.6 }, { x: L.faixa + 4, z: -272.6 }, { x: L.faixa, z: -268.5 }, { x: boca.x, z: boca.z }];
+      P.fase = 'sai'; P.pts = pts; P.ac = caminhoComp(pts); P.d = 0; fila.shift();
+    }
+    return { x: P.x, z: zf, ang: -Math.PI / 2, parado: true };
+  }
+  // saindo: até a boca da plataforma; aí volta para o horário da linha (o atraso acompanha o tempo que esperou)
+  const q = pontoNoCaminho(P.pts, P.ac, P.d);
+  if (livre(q)) P.d += Math.min(7, 2 + P.d * 0.5) * dt;
+  if (P.d >= P.ac[P.ac.length - 1]) {
+    const alvo = sBocaPlataforma(L);
+    let lo = 0, hi = st.atraso;   // menor atraso que ainda deixa o ônibus antes da boca
+    for (let i = 0; i < 22; i++) { const md = (lo + hi) / 2, e2 = estadoSaida(L, m, t - md); if (e2 && e2.rota && e2.s > alvo) lo = md; else hi = md; }
+    st.atraso = hi; st.patio = null; st.sAnt = alvo; st.mAnt = m;
+    return null;
+  }
+  return q;
+}
 function atualizarOnibus(dt) {
   if (!miniRodoFeitas && mundo.listaRuas().length) montarMiniRodoviarias();
-  montarParadas();
+  montarParadas(); atualizarPontos3d(dt);
+  for (const f of PATIO.filas.values()) for (let k = f.length - 1; k >= 0; k--) if (!estadoBus.get(f[k])?.patio) f.splice(k, 1);   // quem saiu do pátio (ou sumiu) libera a vaga
   saidasOcupadas.clear(); for (const r of remotos.values()) if (r.meta?.on) saidasOcupadas.add(String(r.meta.on));
   const t = agoraServidor() / 1000;
   if ((tempoPlacas -= dt) <= 0) { tempoPlacas = 1; atualizarPlacasRodo(t); }
@@ -11378,6 +11543,13 @@ function atualizarOnibus(dt) {
       let e = estadoSaida(L, m, t - st.atraso); if (!e) continue;
       feitos.add(chB);
       estadoBus.set(chB, st);
+      if (st.patio) {
+        st.atraso += dt;   // o horário fica segurado enquanto ele está no pátio
+        const anterior = onibusNpc.find((o) => o.chB === chB)?.mesh;
+        const qp = andarPatio(L, m, chB, st, t, dt, anterior);
+        if (qp) { colocarOnibus(L, m, chB, st, qp, { rota: true, s: esperaFora(L), parado: !!qp.parado, patio: true }, usados); continue; }
+        e = estadoSaida(L, m, t - st.atraso); if (!e) continue;
+      }
       // ponto ocupado (linhas que dividem o mesmo ponto): quem chegou depois espera atrás, sem parar em cima do outro
       if (e.rota) {
         // o ponto em que está parado ou o próximo (a menos de 14 m)
@@ -11413,7 +11585,9 @@ function atualizarOnibus(dt) {
         // chegando: para atrás do último da fila (a fila do quadro anterior), sem encostar nele
         if (e.rota && e.s > L.sFila - 60) {
           let nq = 0; for (const [k2, s2] of estadoBus) if (k2 !== chB && k2.startsWith(L.id + '.') && s2.filaAtiva) nq++;
-          const lim = L.sFila - passoFila(L) * nq;
+          const jaDentro = st.mAnt === m && st.sAnt !== undefined && st.sAnt > esperaFora(L) + 0.5;   // já tinha passado do ponto de espera: não volta de ré
+          if (nq >= 1 && !jaDentro && !st.patio && e.s >= esperaFora(L) - 0.5 && !saidasOcupadas.has(`${L.id}.${m}`) && entrarPatio(L, m, chB, st, pontoCaminho(L, esperaFora(L)))) st.atraso += dt;
+          const lim = nq >= 1 && !jaDentro ? Math.min(L.sFila - passoFila(L) * nq, esperaFora(L)) : L.sFila - passoFila(L) * nq;   // vão cheio (2): espera fora
           if (e.s > lim) { st.atraso += dt; e = { ...e, s: Math.max(lim, 0), parado: true, chegando: true }; }
         }
         if (e.baia) { if (pl.baia) { e = { s: L.sFila, fila: true, parado: true }; st.atraso += dt; } else pl.baia = true; }   // segura na fila (o horário dele espera)
@@ -11453,7 +11627,17 @@ function atualizarOnibus(dt) {
           const dx = o.x - qq.x, dz = o.z - qq.z, d = dx * fx + dz * fz;
           return Math.abs(dx * fz - dz * fx) < 2.2 && d < (cp + o.comp) / 2 + 1.5 && (d > 0.3 || (d > -0.3 && o.chB < chB));
         }); };
-        if (encosta(q) && !encosta(pontoCaminho(L, sAnt))) {
+        // perto da rodoviária os caminhos se cruzam (entradas, saídas, circulares): vale o retângulo inteiro, em qualquer
+        // direção. Só não avança se o passo novo encostaria em alguém (se já estavam encostados, deixa separar).
+        // Quem está saindo da plataforma também deixa passar quem está chegando (olha 12 m à frente de quem chega)
+        const perto = naRodoviaria(q.x, q.z, 30), saindo = !L.circular && e.s < 30;
+        const cruza = (qq) => perto && onibusNpc.some((o) => {
+          if (!o.vivo || o.chB === chB || Math.abs(o.x - qq.x) + Math.abs(o.z - qq.z) > 40) return false;
+          if (retangulosBatem(qq.x, qq.z, qq.ang, cp / 2, o.x, o.z, o.ang, o.comp / 2)) return true;
+          const chega = o.e?.rota && !o.e.parado && !o.L.circular && o.e.s > o.L.sFila - 70;
+          return saindo && chega && retangulosBatem(qq.x, qq.z, qq.ang, cp / 2, o.x + Math.sin(o.ang) * 8, o.z + Math.cos(o.ang) * 8, o.ang, o.comp / 2 + 8);
+        });
+        if ((encosta(q) && !encosta(pontoCaminho(L, sAnt))) || (cruza(q) && !cruza(pontoCaminho(L, sAnt)))) {
           if (e.chegando) e = { ...e, s: sAnt };
           else {   // procura o atraso que deixa o ônibus no mesmo lugar do quadro anterior
             let lo = st.atraso, hi = st.atraso + 8;
@@ -11475,16 +11659,7 @@ function atualizarOnibus(dt) {
           }
         } else st.desvio = null;
         st.desvioAntes = !!dv && st.desvio === dv?.id; }
-      const longe = Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) > 320 && !(jogador.onibus && jogador.onibus.L === L && jogador.onibus.m === m);
-      const mod = modeloSaida(L, m), chave = `${L.id}|${mod}`, i = usados.get(chave) || 0; usados.set(chave, i + 1);
-      const doTipo = onibusNpc.filter((x) => x.chave === chave);   // reaproveita os ônibus da mesma linha e modelo
-      // longe da câmera o ônibus é só um marcador vazio (não monta o modelo): monta de verdade quando chega perto
-      // montar o modelo de um ônibus pesa: no máximo um por quadro (os outros esperam um quadro como marcador vazio)
-      const monta = !longe && montadosQuadro < 1;
-      let b = doTipo[i]; if (!b) { b = { mesh: monta ? corpoOnibus(L.cor, mod) : new THREE.Group(), leve: !monta, L, mod, chave, comp: COMP_ONIBUS(mod) }; if (monta) montadosQuadro++; scene.add(b.mesh); onibusNpc.push(b); }
-      else if (b.leve && monta) { scene.remove(b.mesh); b.mesh = corpoOnibus(L.cor, mod); b.leve = false; montadosQuadro++; scene.add(b.mesh); }
-      b.m = m; b.x = q.x; b.z = q.z; b.ang = q.ang; b.parado = e.parado; b.ativo = true; b.e = e; b.chB = chB; b.desviando = !!st.desvio;
-      b.mesh.position.set(q.x, alturaChao(q.x, q.z), q.z); b.mesh.rotation.y = q.ang; b.mesh.visible = !jogador.dentroCasa && !longe;   // longe: não desenha, mas continua respeitando os outros
+      const { b, longe } = colocarOnibus(L, m, chB, st, q, e, usados);
       // respeita quem está na frente: com um veículo parado à frente, espera (o horário dele atrasa um pouco)
       if (!e.parado && !e.fila) {
         // chegando na rodoviária: os ônibus da própria linha na fila e na plataforma estão no lugar deles (a fila já cuida)
@@ -11683,7 +11858,7 @@ const ehFiscal = () => jogador.perfil?.profissao === 'fiscal' || jogador.perfil?
 const PONTO_FISCAL = { x: 155.5, z: -229 };
 const atrasosRegistrados = new Set();
 let fiscalNpc = null, avisoAtrasoT = 0, ultimoAtrasoAvisado = '';
-const naRodoviaria = (x, z, m = 0) => x > RODO.x0 - m && x < RODO.x1 + m && z > RODO.z0 - m && z < RODO.z1 + m;
+const naRodoviaria = (x, z, m = 0) => x > RODO.x0 - m && x < TERMINAL_RODO.x1 + m && z > RODO.z0 - m && z < RODO.z1 + m;   // plataformas + pátio + saguão
 // ônibus atrasados agora: do sistema (na plataforma depois do horário) e de motoristas jogadores (parados na rodoviária)
 function onibusAtrasados(t) {
   const r = [];
@@ -11778,7 +11953,7 @@ function prepararTransporte() {
   for (const k of ['B', 'C', 'D']) mundo.semEstacionar(CATEGORIAS[k].rota.pts);
   for (const [x0, z0, x1, z1] of RODOVIAS) mundo.abrirTrilha([[x0, z0], [x1, z1]], 9);
   for (const c of RODO_CIDADES) mundo.abrirTrilha([[c.x0, c.z], [c.x1, c.z]], 4);
-  mundo.limparArea(RODO.x0 - 1, RODO.z0 - 1, RODO.x1 + 1, RODO.z1 + 1);
+  mundo.limparArea(RODO.x0 - 1, RODO.z0 - 1, TERMINAL_RODO.x1 + 1, RODO.z1 + 1);   // terminal inteiro (plataformas, pátio e saguão)
   mundo.limparArea(CENTRAL.x0 - 1, CENTRAL.z0 - 1, CENTRAL.x1 + 1, CENTRAL.z1 + 1); for (const S of SETORES) mundo.semEstacionar(S.cam.pts);
   mundo.limparArea(AUTOESCOLA.x0 - 1, AUTOESCOLA.z0 - 1, AUTOESCOLA.x1 + 1, AUTOESCOLA.z1 + 1);
   { const D = mundo.AREA51.deserto; mundo.limparArea(D.x0, D.z0, D.x1, D.z1); }   // deserto da Área 51
@@ -11794,6 +11969,8 @@ function prepararTransporte() {
 // mapa: rodoviária, linhas e pontos (o mapa grande desenha as linhas por cima)
 function desenharTransporteNoMapa(g) {
   g.fillStyle = '#3b3f46'; g.fillRect(RODO.x0, RODO.z0, RODO.x1 - RODO.x0, RODO.z1 - RODO.z0);
+  g.fillRect(PATIO.x0, PATIO.z0, PATIO.x1 - PATIO.x0, PATIO.z1 - PATIO.z0);   // pátio de espera
+  g.fillStyle = '#e8e4da'; g.fillRect(157, PATIO.z1, TERMINAL_RODO.x1 - 157, TERMINAL_RODO.z1 - PATIO.z1);   // saguão
   for (const L of LINHAS) if (!L.circular) { g.fillStyle = L.cor; g.fillRect(L.faixa - 1.4, RODO.z0 + 6, 2.8, 30); }
   g.fillStyle = '#4a4e57'; for (const [x0, z0, x1, z1] of RODOVIAS) g.fillRect(Math.min(x0, x1) - 5, Math.min(z0, z1) - 5, Math.abs(x1 - x0) + 10, Math.abs(z1 - z0) + 10);
   for (const a of AEROPORTOS) desenharAeroNoMapa(g, a);

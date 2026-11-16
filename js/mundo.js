@@ -579,6 +579,7 @@ function gerarMetropole() {
     if (i === 2) continue;                        // a avenida do meio não atravessa a ferrovia
     let cv = noCentro ? [[-METADE, METADE]] : [];
     if (i === -1 || i === N + 1) cv = cv.concat([[ruaC(1), ruaC(3)]]);
+    if (i === N + 1) cv = cv.concat([[-265, -221]]);   // x = 162: o trecho entre os dois quarteirões do terminal rodoviário vira parte dele
     for (const [a, b] of segs(-BORDA, BORDA, cv)) rua(c, (a + b) / 2, RW, b - a);
   }
 }
