@@ -5206,15 +5206,14 @@ function animarAve(g, dt, voando, plana = false) {
   if (u.modelo) { for (const w of u.asas) w.visible = voando; u.corpo3d.rotation.x = voando ? 0.6 : u.corpo.rotation.x * 0.8; u.corpo.rotation.x = 0; }   // o corpo deita para voar; pousado, só ele bica (as pernas ficam firmes)
 }
 // chão de um pássaro: o chão ou o telhado do prédio embaixo
-function chaoAve(x, z) { const t = tetoGeral(x, z), v = veiculoSob(x, z); return Math.max(alturaChao(x, z), t ? t.h : -1e9, v ? v.h : -1e9); }
+function chaoAve(x, z, veic = false) { const t = tetoGeral(x, z), v = veic ? veiculoSob(x, z) : null; return Math.max(alturaChao(x, z), t ? t.h : -1e9, v ? v.h : -1e9); }   // veic: só o pássaro de quem joga pousa em veículos (os bandos não, para não pesar)
 // veículos também são sólidos para quem voa: o corvo/pássaro pousa no teto de um caminhão, ônibus ou carro (e vai junto)
 function veiculoSob(x, z) {
-  let m = null, h = -1e9;
-  const visto = new Set();
+  let m = null, h = -1e9, ultimo = null;
   for (const o of corposNaRua()) {
-    const v = o.o; if (!v?.isObject3D || visto.has(v) || o.eu || v === jogador.carro?.mesh) continue;
+    const v = o.o; if (!v?.isObject3D || v === ultimo || o.eu || v === jogador.carro?.mesh) continue;
     if (Math.abs(o.x - x) > 10 || Math.abs(o.z - z) > 10) continue;
-    visto.add(v);
+    ultimo = v;
     const b = caixaDoVeiculo(v), a = v.rotation.y, sn = Math.sin(a), cs = Math.cos(a), dx = x - v.position.x, dz = z - v.position.z;
     const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
     if (lx < b.x0 || lx > b.x1 || lz < b.z0 || lz > b.z1) continue;
@@ -5410,7 +5409,7 @@ function voarAve(dt, dir, forca) {
         j.pos.x = sv.m.position.x + dx * c + dz * s; j.pos.z = sv.m.position.z - dx * s + dz * c; j.yaw += dyaw; a.y = sv.h; }
       a.sobre = sv.m; a.sobreP = { x: sv.m.position.x, z: sv.m.position.z }; a.sobreA = sv.m.rotation.y;
     } else a.sobre = null; }
-  const chao = chaoAve(j.pos.x, j.pos.z), noAr = a.y > chao + 0.08;
+  const chao = chaoAve(j.pos.x, j.pos.z, true), noAr = a.y > chao + 0.08;
   const vmax = noAr ? (a.tipo === 'corvo' ? 17 : 14) : 2.2;   // pousado: só dá pulinhos
   a.vel += ((forca > 0.05 ? forca * vmax : 0) - a.vel) * Math.min(1, dt * (noAr ? 2.5 : 8));
   if (forca > 0.05) j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 6);
@@ -5419,7 +5418,7 @@ function voarAve(dt, dir, forca) {
   if (t && a.y < t.h - 0.3) { nx = j.pos.x; nz = j.pos.z; a.vel *= 0.3; }   // parede de prédio: não atravessa
   const vy = sobe ? 6 : desce ? -6 : 0;
   a.y = Math.min(170, a.y + vy * dt);
-  const chao2 = chaoAve(nx, nz); if (a.y < chao2) a.y = chao2;
+  const chao2 = chaoAve(nx, nz, true); if (a.y < chao2) a.y = chao2;
   j.pos.set(nx, a.y, nz);
   const voando = a.y > chao2 + 0.08;
   a.g.position.set(nx, a.y + (voando ? 0 : peAve(a.g)), nz);
@@ -8157,7 +8156,34 @@ function desenharFome() {
 
 // o laço do jogo não pode parar: se algo der erro num quadro, avisa (uma vez a cada 20 s) e segue no próximo
 let ultimoErroQuadro = 0;
+// ---- 📊 medidor de desempenho (abra o jogo com ?diag=1 no fim do endereço; ?diag=0 desliga): mostra quadros por
+// segundo, as travadas (quadros acima de 50 ms) e quanto cada parte do jogo gastou no pior quadro. Desligado, custa nada.
+const DIAG = { on: false, k: null, t: 0, ini: 0, partes: new Map(), pior: new Map(), quadros: 0, travadas: 0, maior: 0, ult: 0, el: null, mostra: 0 };
+try { const q = (location.search.match(/[?&]diag=(\w+)/) || [])[1]; if (q != null) localStorage.setItem('fator_diag', q === '1' ? '1' : '0'); DIAG.on = localStorage.getItem('fator_diag') === '1'; } catch { /* sem armazenamento */ }
+function diag(nome) {
+  if (!DIAG.on) return;
+  const n = performance.now();
+  if (DIAG.k) DIAG.partes.set(DIAG.k, (DIAG.partes.get(DIAG.k) || 0) + n - DIAG.t);
+  DIAG.k = nome; DIAG.t = n;
+}
+function diagQuadro() {
+  if (!DIAG.on) return;
+  const n = performance.now();
+  diag(null);
+  if (DIAG.ult) {
+    const q = n - DIAG.ult; DIAG.quadros++;
+    if (q > 50) DIAG.travadas++;
+    if (q > DIAG.maior) { DIAG.maior = q; DIAG.pior = new Map(DIAG.partes); }   // o que gastou no quadro anterior à pior pausa
+  }
+  DIAG.ult = n; DIAG.partes.clear();
+  if (n - DIAG.mostra < 2000) return;
+  if (!DIAG.el) { DIAG.el = document.createElement('pre'); DIAG.el.style.cssText = 'position:fixed;left:4px;bottom:64px;z-index:9999;margin:0;padding:6px 8px;background:rgba(0,0,0,.72);color:#9f9;font:11px/1.35 monospace;pointer-events:none;border-radius:6px;max-width:70vw;white-space:pre-wrap'; document.body.appendChild(DIAG.el); }
+  const s = (n - DIAG.mostra) / 1000, top = [...DIAG.pior].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => `  ${k}: ${v.toFixed(1)} ms`).join('\n');
+  DIAG.el.textContent = `📊 ${(DIAG.quadros / s).toFixed(0)} qps · travadas ${DIAG.travadas} · pior ${DIAG.maior.toFixed(0)} ms\n${visual.nivelAtual()} · ${renderer.info.render.calls} desenhos · ${(renderer.info.render.triangles / 1000).toFixed(0)}k triâng. · ${renderer.info.programs?.length || 0} shaders\npior quadro:\n${top}`;
+  DIAG.mostra = n; DIAG.quadros = 0; DIAG.travadas = 0; DIAG.maior = 0;
+}
 function quadro() {
+  diagQuadro();
   try { quadroJogo(); } catch (e) {
     console.error(e);
     if (performance.now() - ultimoErroQuadro > 20000) { ultimoErroQuadro = performance.now(); try { aviso(`⚠️ Erro no jogo (mande print): ${String(e?.message || e).slice(0, 120)}`, 6); } catch { /* sem aviso */ } }
@@ -8165,29 +8191,36 @@ function quadro() {
 }
 function quadroJogo() {
   const dt = Math.min(relogio.getDelta(), 0.05);
+  diag('céu/clima');
   eixos.restaurar();   // a lógica do quadro usa a posição de sempre; o desenho das curvas volta no fim
   ferrovia.atualizar(agoraServidor() / 1000);
   atualizarCeu(agoraServidor() / 1000);
   ceu.atualizar(dt, camAtiva, noiteAtual, clima.atual(), clima.fatorTempo(), camAtiva === camP, SOL_DIR, horaAtual);
   clima.atualizar(dt, agoraServidor() / 1000, CICLO_DIA, { x: foco().x, y: (foco().y || 0) - 2, z: foco().z, dentro: !!jogador.dentroCasa && !averiguando }, { sol, hemi, cena: scene });
   tempoClima -= dt; if (tempoClima <= 0) { tempoClima = 30; carregarClima(); }
+  diag('mundo (LOD)');
   mundo.atualizar(dt);
   mundo.carrosPerto(foco().x, foco().z, dt);
   mundo.arvoresPerto(foco().x, foco().z, dt);
   mundo.propsPerto(foco().x, foco().z, dt); semaforos.atualizar(dt, foco().x, foco().z);
   mundo.predios3dPerto(foco().x, foco().z, dt);
   sedes.atualizar(dt);
+  diag('serviços/aves/sons');
   if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); voltarHelisServico(dt); atualizarLuzPoste(dt); checarTrem(); atualizarArmaPd(dt); atualizarBruxo(dt); atualizarAvesNpc(dt); atualizarBandos(dt); controleAve(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
+  diag('jogador');
   atualizarJogador(dt);
+  diag('veículos/logística');
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);
   atualizarRobos(dt);
   atualizarLogistica(dt);
+  diag('polícia/social/NPCs');
   atualizarPolicia(dt);
   atualizarSocial(dt);
   atualizarNPCs(dt);
   atualizarSoldados(dt);
   atualizarCacada(dt);
+  diag('obras/explosões');
   tempoArma -= dt; if (tempoArma <= 0) { tempoArma = 0.5; conferirArma(); }
   atualizarObras(dt); vigiarAlmoxarifado();   atualizarExplosoes(dt); atualizarExplosoesUltra(dt); atualizarOndas(dt); atualizarAtomicos(dt); atualizarRespingos(dt); atualizarRastro(dt); atualizarPrediosUltra(dt); atualizarSemPiloto(dt); atualizarContagemMorte();
   atualizarMira();
@@ -8196,22 +8229,28 @@ function quadroJogo() {
   atualizarPerdao(dt);
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
+  diag('remotos/voz');
   atualizarRemotos(dt); atualizarTatica(dt);
   voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
+  diag('ônibus/aviação/rodas');
   atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
+  diag('rede');
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
   atualizarBolas(dt);
+  diag('câmera/oclusão');
   atualizarCamera(dt);
   mundo.atualizarOclusao(dt, foco(), modo3D() ? new THREE.Vector3(0, 1, 0) : offsetCamera(anguloCamSuave));
+  diag('HUD');
   atualizarHUD(dt);
   // chuva molha o chão (asfalto escuro e brilhante); o visual ajusta brilho e cor pela noite e pela chuva
   const tc = clima.atual(), alvoMolhado = tc === 'chuva' || tc === 'tempestade' ? clima.fatorTempo() : 0;
   molhadoAtual += (alvoMolhado - molhadoAtual) * Math.min(1, dt * 0.4);
   mundo.molhar(molhadoAtual);
   visual.ajustar(noiteAtual, molhadoAtual);
+  diag('render (desenho)');
   visual.render(camAtiva);
   // cabine 3D por cima (só na primeira pessoa, dentro do veículo)
   for (const o of cenaCabine.children) if (o.isGroup || o.type === 'Group' || o.isObject3D && o.userData.local) o.visible = o === cabine3D;
@@ -11319,13 +11358,14 @@ function montarMiniRodoviarias() {
     const placa = textoSprite(`🚌 Mini Rodoviária de ${L.mini} · ${L.nome}`, { escala: 0.75, fundo: 'rgba(20,24,34,.9)', cor: '#ffd9a0' }); placa.position.set(x, y + 5, z); scene.add(placa);
   }
 }
+let montadosQuadro = 0;
 function atualizarOnibus(dt) {
   if (!miniRodoFeitas && mundo.listaRuas().length) montarMiniRodoviarias();
   montarParadas();
   saidasOcupadas.clear(); for (const r of remotos.values()) if (r.meta?.on) saidasOcupadas.add(String(r.meta.on));
   const t = agoraServidor() / 1000;
   if ((tempoPlacas -= dt) <= 0) { tempoPlacas = 1; atualizarPlacasRodo(t); }
-  const usados = new Map(), porLinha = new Map(), feitos = new Set();
+  const usados = new Map(), porLinha = new Map(), feitos = new Set(); montadosQuadro = 0;
   juncaoAntes.length = 0; for (const k2 of juncaoAgora) juncaoAntes.push(k2); juncaoAgora.length = 0;
   // pontos ocupados: quem já estava parado no quadro anterior continua dono (os outros esperam atrás)
   pontosOcupados.length = 0; for (const o of pontosAntes) pontosOcupados.push(o);
@@ -11439,8 +11479,10 @@ function atualizarOnibus(dt) {
       const mod = modeloSaida(L, m), chave = `${L.id}|${mod}`, i = usados.get(chave) || 0; usados.set(chave, i + 1);
       const doTipo = onibusNpc.filter((x) => x.chave === chave);   // reaproveita os ônibus da mesma linha e modelo
       // longe da câmera o ônibus é só um marcador vazio (não monta o modelo): monta de verdade quando chega perto
-      let b = doTipo[i]; if (!b) { b = { mesh: longe ? new THREE.Group() : corpoOnibus(L.cor, mod), leve: longe, L, mod, chave, comp: COMP_ONIBUS(mod) }; scene.add(b.mesh); onibusNpc.push(b); }
-      else if (b.leve && !longe) { scene.remove(b.mesh); b.mesh = corpoOnibus(L.cor, mod); b.leve = false; scene.add(b.mesh); }
+      // montar o modelo de um ônibus pesa: no máximo um por quadro (os outros esperam um quadro como marcador vazio)
+      const monta = !longe && montadosQuadro < 1;
+      let b = doTipo[i]; if (!b) { b = { mesh: monta ? corpoOnibus(L.cor, mod) : new THREE.Group(), leve: !monta, L, mod, chave, comp: COMP_ONIBUS(mod) }; if (monta) montadosQuadro++; scene.add(b.mesh); onibusNpc.push(b); }
+      else if (b.leve && monta) { scene.remove(b.mesh); b.mesh = corpoOnibus(L.cor, mod); b.leve = false; montadosQuadro++; scene.add(b.mesh); }
       b.m = m; b.x = q.x; b.z = q.z; b.ang = q.ang; b.parado = e.parado; b.ativo = true; b.e = e; b.chB = chB; b.desviando = !!st.desvio;
       b.mesh.position.set(q.x, alturaChao(q.x, q.z), q.z); b.mesh.rotation.y = q.ang; b.mesh.visible = !jogador.dentroCasa && !longe;   // longe: não desenha, mas continua respeitando os outros
       // respeita quem está na frente: com um veículo parado à frente, espera (o horário dele atrasa um pouco)
