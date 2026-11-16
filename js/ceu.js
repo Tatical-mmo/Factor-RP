@@ -1,17 +1,39 @@
-// Céu de verdade para quem olha para cima (câmeras 3D): estrelas e lua à noite, nuvens que mudam com o tempo
+// Céu de verdade para quem olha para cima (câmeras 3D): sol de dia, estrelas e lua à noite, nuvens que mudam com o tempo
 // (brancas no tempo limpo, cinzas na chuva, escuras na tempestade, claras na neve) e o raio desenhado no relâmpago.
 // Tudo acompanha a câmera e ignora a neblina; na câmera de cima (isométrica) fica escondido.
 import * as THREE from 'three';
 
-let grupo = null, estrelas = null, lua = null, nuvens = null, matNuvem = null, raios = [];
+let grupo = null, longe = null, estrelas = null, lua = null, luaBrilho = null, sol = null, solBrilho = null, nuvens = null, matNuvem = null, raios = [];
 const NUVENS = 34, BOLAS = 9, RAIO_N = 560, CEU = 600;   // a câmera enxerga até 700 m
-const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _cor = new THREE.Color();
 const nuv = [];   // { x, z, y, esc, bolas: [[dx, dy, dz, r]] }
 let rnd = 7;
 const aleat = () => { rnd = (rnd * 16807) % 2147483647; return (rnd - 1) / 2147483646; };
 
+// textura redonda: disco com crateras (lua) ou brilho que some na borda (halo do sol e da lua)
+function texturaRedonda(tipo) {
+  const t = 128, cv = document.createElement('canvas'); cv.width = cv.height = t; const g = cv.getContext('2d');
+  if (tipo === 'lua') {
+    g.fillStyle = '#f2eedb'; g.beginPath(); g.arc(t / 2, t / 2, t / 2 - 1, 0, 7); g.fill();
+    for (const [x, y, r, a] of [[44, 50, 16, 0.16], [80, 40, 10, 0.12], [70, 78, 20, 0.14], [38, 86, 9, 0.12], [92, 70, 7, 0.1], [58, 30, 6, 0.1]]) { g.fillStyle = `rgba(120,115,100,${a})`; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
+  } else {
+    const gr = g.createRadialGradient(t / 2, t / 2, 0, t / 2, t / 2, t / 2);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, t, t);
+  }
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; return tx;
+}
 export function iniciar(scene) {
   grupo = new THREE.Group(); scene.add(grupo);
+  // o céu de longe (estrelas, sol, lua, nuvens) anda com a câmera e encolhe para caber antes do "fim da visão" da
+  // câmera (que ficou curta por causa da neblina): antes ficava atrás dele e nada disso aparecia
+  longe = new THREE.Group(); grupo.add(longe);
+  const halo = texturaRedonda('brilho');
+  sol = new THREE.Mesh(new THREE.CircleGeometry(19, 32), new THREE.MeshBasicMaterial({ color: '#fff6d8', transparent: true, opacity: 0, fog: false, depthWrite: false, toneMapped: false }));
+  solBrilho = new THREE.Mesh(new THREE.PlaneGeometry(150, 150), new THREE.MeshBasicMaterial({ map: halo, color: '#ffe6a8', transparent: true, opacity: 0, fog: false, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+  sol.renderOrder = solBrilho.renderOrder = -1; longe.add(solBrilho, sol);
+  luaBrilho = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), new THREE.MeshBasicMaterial({ map: halo, color: '#9fb4ff', transparent: true, opacity: 0, fog: false, depthWrite: false, blending: THREE.AdditiveBlending }));
+  luaBrilho.renderOrder = -1; longe.add(luaBrilho);
   // estrelas: pontos numa cúpula grande
   const n = 1400, pos = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
@@ -20,14 +42,14 @@ export function iniciar(scene) {
   }
   const ge = new THREE.BufferGeometry(); ge.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   estrelas = new THREE.Points(ge, new THREE.PointsMaterial({ color: '#ffffff', size: 1.7, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false }));
-  estrelas.frustumCulled = false; estrelas.renderOrder = -2; grupo.add(estrelas);
+  estrelas.frustumCulled = false; estrelas.renderOrder = -2; longe.add(estrelas);
   // lua
-  lua = new THREE.Mesh(new THREE.CircleGeometry(22, 32), new THREE.MeshBasicMaterial({ color: '#f3efdc', transparent: true, opacity: 0, fog: false, depthWrite: false }));
-  lua.renderOrder = -1; grupo.add(lua);
+  lua = new THREE.Mesh(new THREE.CircleGeometry(20, 32), new THREE.MeshBasicMaterial({ map: texturaRedonda('lua'), transparent: true, opacity: 0, fog: false, depthWrite: false }));
+  lua.renderOrder = -1; longe.add(lua);
   // nuvens: várias bolas achatadas por nuvem (uma malha só)
   matNuvem = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, metalness: 0, transparent: true, opacity: 0.9, fog: false, depthWrite: false });
   nuvens = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 7), matNuvem, NUVENS * BOLAS);
-  nuvens.frustumCulled = false; nuvens.renderOrder = -1; grupo.add(nuvens);
+  nuvens.frustumCulled = false; nuvens.renderOrder = -1; longe.add(nuvens);
   for (let k = 0; k < NUVENS; k++) {
     const bolas = [];
     // nuvem fofa: base larga e quase reta, e "couve-flor" mais alta no meio (bolas menores nas pontas)
@@ -67,16 +89,27 @@ export function raio(centro, alturaChao, cam) {
 }
 
 // noite: 0 (dia) a 1 (noite); tempo: 'limpo' | 'chuva' | 'tempestade' | 'neve'; forca: 0..1; ativo: câmera 3D
-export function atualizar(dt, cam, noite, tempo, forca, ativo, sol) {
+export function atualizar(dt, cam, noite, tempo, forca, ativo, _solDir, hora = 12) {
   if (!grupo) return;
   grupo.visible = ativo;
   for (let i = raios.length - 1; i >= 0; i--) { const r = raios[i]; r.t += dt; r.o.material.opacity = r.o.userData.op * (r.t < 0.1 ? 1 : r.t < 0.17 ? 0.15 : r.t < 0.3 ? 1 : Math.max(0, 1 - (r.t - 0.3) * 3.5)); if (r.t > 0.6) { grupo.remove(r.o); r.o.geometry.dispose(); r.o.material.dispose(); raios.splice(i, 1); } }
   if (!ativo) return;
   const c = cam.position, fechado = tempo === 'limpo' ? 0 : forca;
-  estrelas.position.copy(c); estrelas.material.opacity = Math.max(0, noite - 0.25) / 0.75 * (1 - fechado * 0.95);
-  // lua: do lado oposto do sol (ou num canto do céu)
-  _p.set(-(sol?.x ?? 0.4), Math.max(0.35, Math.abs(sol?.y ?? 0.6)), -(sol?.z ?? 0.3)).normalize();
-  lua.position.copy(c).addScaledVector(_p, CEU - 40); lua.lookAt(c); lua.material.opacity = Math.max(0, noite - 0.3) / 0.7 * (1 - fechado * 0.9);
+  longe.position.copy(c); longe.scale.setScalar(Math.min(1, ((cam.far || 700) * 0.9) / CEU)); longe.updateMatrixWorld(true);
+  estrelas.material.opacity = Math.max(0, noite - 0.25) / 0.75 * (1 - fechado * 0.95);
+  // sol: nasce no leste às 6h, passa lá no alto ao meio-dia e se põe às 18h (laranja perto do horizonte)
+  const ang = (hora - 6) / 12 * Math.PI, el = Math.sin(ang);
+  _p.set(Math.cos(ang) * 0.9, el, 0.35).normalize();
+  sol.position.copy(_p).multiplyScalar(CEU - 60); solBrilho.position.copy(sol.position).multiplyScalar(1.01);
+  sol.lookAt(c); solBrilho.lookAt(c);
+  const vSol = THREE.MathUtils.smoothstep(el, -0.06, 0.04) * (1 - fechado * 0.92), baixo = 1 - THREE.MathUtils.smoothstep(el, 0.02, 0.35);
+  sol.material.opacity = vSol; sol.material.color.set('#fff6d8').lerp(_cor.set('#ff9a4a'), baixo * 0.85);
+  solBrilho.material.opacity = vSol * (0.55 + baixo * 0.35); solBrilho.material.color.set('#ffe6a8').lerp(_cor.set('#ff7a3a'), baixo);
+  // lua: do lado oposto do sol no céu (sobe quando o sol se põe e desce quando ele nasce)
+  _p.set(-Math.cos(ang) * 0.9, -el, -0.35).normalize();
+  lua.position.copy(_p).multiplyScalar(CEU - 60); luaBrilho.position.copy(lua.position).multiplyScalar(1.01); lua.lookAt(c); luaBrilho.lookAt(c);
+  const vLua = THREE.MathUtils.smoothstep(-el, -0.06, 0.06) * (1 - fechado * 0.9) * (0.25 + 0.75 * noite);
+  lua.material.opacity = vLua; luaBrilho.material.opacity = vLua * 0.35 * noite;
   // nuvens: quantas aparecem e a cor dependem do tempo; elas andam devagar com o vento e acompanham quem olha
   const cobertura = tempo === 'limpo' ? 0.3 : 0.3 + 0.7 * forca;
   const cor = tempo === 'tempestade' ? 0.28 : tempo === 'chuva' ? 0.52 : tempo === 'neve' ? 0.8 : 1;
@@ -88,7 +121,7 @@ export function atualizar(dt, cam, noite, tempo, forca, ativo, sol) {
     const vis = n.liga < cobertura;
     for (const [dx, dy, dz, r] of n.bolas) {
       const e = vis ? r * n.esc * (tempo === 'tempestade' ? 1.4 : 1) : 0.0001;
-      _m.compose(_p.set(n.x + dx * n.esc, n.y + dy, n.z + dz * n.esc), _q, _s.set(e * 1.1, e * 0.8, e)); nuvens.setMatrixAt(i++, _m);
+      _m.compose(_p.set(n.x + dx * n.esc - c.x, n.y + dy - c.y, n.z + dz * n.esc - c.z), _q, _s.set(e * 1.1, e * 0.8, e)); nuvens.setMatrixAt(i++, _m);   // relativo à câmera (o grupo anda com ela)
     }
   }
   nuvens.instanceMatrix.needsUpdate = true;

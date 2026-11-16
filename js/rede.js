@@ -486,6 +486,7 @@ function traduzirRpc(m) {
     'voce nao e lider de cla': 'Só o líder do clã pode fazer isso.',
     'jogador ja esta em um cla': 'Esse jogador já está em um clã.',
     'limite de membros': 'Limite de 15 membros.',
+    'limite de 10 carros': 'Limite de 10 carros por jogador. Venda um para comprar outro.',
     'o lider nao pode se expulsar': 'O líder não pode se expulsar.',
     'jogador nao e do seu cla': 'Esse jogador não é do seu clã.',
     'voce nao esta em um cla': 'Você não está em um clã.',

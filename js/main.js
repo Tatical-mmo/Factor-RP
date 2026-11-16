@@ -236,7 +236,7 @@ function atualizarCeu(t) {
   const S = THREE.MathUtils.smoothstep;
   const dia = S(elev, -0.12, 0.22), tarde = dia * (1 - S(elev, 0.05, 0.45));
   if (dia > 0.02) SOL_DIR.set(Math.cos(ang) * 0.9, Math.max(0.2, elev), 0.35).normalize();
-  else SOL_DIR.set(0.45, 1, -0.4).normalize();              // luz da lua
+  else SOL_DIR.set(-Math.cos(ang) * 0.9, Math.max(0.3, -elev), -0.35).normalize();   // luz da lua: vem de onde a lua está no céu
   sol.color.copy(CEU.lua).lerp(CEU.sol, dia).lerp(CEU.solTarde, tarde * 0.75);
   sol.intensity = 0.3 + 2.2 * dia;
   hemi.intensity = 0.4 + 0.55 * dia;   // menos luz "chapada": sombras com mais volume
@@ -1237,7 +1237,7 @@ function acaoContexto() {
   { const k = conteinerPerto(); if (k !== null) { arrombarConteiner(k); return; } }
   if (perto(civico.BANCO.balcao, 3.2)) { abrirServico('banco'); return; }
   if (perto(civico.BANCO.empregos, 3.2)) { abrirServico('empregos'); return; }
-  if (perto(civico.HOSPITAL.balcao, 3.2)) { abrirServico('hospital'); return; }
+  if (perto(civico.HOSPITAL.balcao, 3.2)) { entrarPublico('hospital', salaHospital, civico.HOSPITAL.balcao, '🏥 Hospital: recepção, enfermaria, farmácia e consultório.'); return; }
   if (perto(civico.BOMBEIROS.balcao, 3.2)) { entrarPublico('bombeiros', salaBombeiros, civico.BOMBEIROS.balcao, '🚒 Quartel dos bombeiros: balcão, quadro de incêndios, vestiário e enfermaria.'); return; }
   if (acaoOnibus()) return;
   if (acaoColeta()) return;
@@ -4005,6 +4005,14 @@ async function descarregarRoubo() {
 
 // ---------------------------------------------------------------- trânsito: ninguém atravessa ninguém
 let corposCache = null, corposT = 0;
+// veículo de jogador (o meu e o dos outros) ocupa o comprimento todo, não só o centro: um ônibus de 12 m parado no
+// ponto era "um ponto" no meio dele e o ônibus de trás chegava até encostar e empurrar
+const veicJogador = new WeakSet();
+function pontosDoVeiculo(r, m, x, z, ang, raio) {
+  const b = caixaDoVeiculo(m), fx = Math.sin(ang), fz = Math.cos(ang), comp = b.z1 - b.z0;
+  if (!(comp > 5.5) || !isFinite(comp)) { r.push({ o: m, x, z, r: raio }); return; }
+  const n = Math.ceil(comp / 4); for (let k = 0; k <= n; k++) { const t = b.z0 + 1.2 + (comp - 2.4) * k / n; r.push({ o: m, x: x + fx * t, z: z + fz * t, r: Math.max(raio, (b.x1 - b.x0) / 2 - 0.1) }); }
+}
 function corposNaRua() {
   if (corposCache && performance.now() - corposT < 40) return corposCache;
   const r = [];
@@ -4012,7 +4020,7 @@ function corposNaRua() {
   for (const c of caminhoes.values()) if (c.obj.visible && chao(c.obj)) r.push({ o: c.obj, x: c.obj.position.x, z: c.obj.position.z, r: c.d.tipo === 'caminhao' ? 2 : 1.6 });
   for (const v of carrosMundo.values()) if (v.mesh.visible) r.push({ o: v.mesh, x: v.mesh.position.x, z: v.mesh.position.z, r: 1.4 });
   for (const [id, x] of remotos) {
-    if (x.carro) r.push({ o: x.carro, x: x.carro.position.x, z: x.carro.position.z, r: 1.5 });
+    if (x.carro) { pontosDoVeiculo(r, x.carro, x.carro.position.x, x.carro.position.z, x.carro.rotation.y, 1.5); veicJogador.add(x.carro); }
     else if (x.av?.raiz.visible) r.push({ x: x.av.raiz.position.x, z: x.av.raiz.position.z, r: 0.45, pessoa: id });
   }
   for (const o of servicos.veiculosNpc()) r.push({ o, x: o.position.x, z: o.position.z, r: 1.9 });
@@ -4025,7 +4033,7 @@ function corposNaRua() {
   for (const b of onibusNpc) if (b.vivo) { const fx = Math.sin(b.ang), fz = Math.cos(b.ang), h = (b.comp || 12) / 2 - 2; for (let k = -h; k <= h + 0.01; k += h / Math.ceil(h / 4)) r.push({ o: b.mesh, x: b.x + fx * k, z: b.z + fz * k, r: 1.3 }); }
   for (const S of SETORES) if (S.npc?.visible) r.push({ o: S.npc, x: S.npc.position.x, z: S.npc.position.z, r: 1.6 });
   if (jogador.avatar && !jogador.carro && !jogador.passageiro && !jogador.onibus && !jogador.voo && !jogador.dentroCasa && !jogador.paraquedas) r.push({ x: jogador.pos.x, z: jogador.pos.z, r: 0.45, eu: true });
-  if (jogador.carro && !jogador.carro.voa && !jogador.carro.taxi) r.push({ o: jogador.carro.mesh, x: jogador.pos.x, z: jogador.pos.z, r: 1.6 });
+  if (jogador.carro && !jogador.carro.voa && !jogador.carro.taxi && jogador.carro.mesh) { pontosDoVeiculo(r, jogador.carro.mesh, jogador.pos.x, jogador.pos.z, jogador.carro.mesh.rotation.y, 1.6); veicJogador.add(jogador.carro.mesh); }
   corposCache = r; corposT = performance.now();
   return r;
 }
@@ -4042,7 +4050,7 @@ function frearAtras(st, o, dt, dist = 9, x = o.position.x, z = o.position.z, ang
   let bloq;
   if (longe && (st.prox = (st.prox || 0) - dt) > 0) bloq = st.ultimo;
   else { st.prox = 0.5; bloq = st.ultimo = st.fantasma <= 0 && obstaculoAFrente(x, z, ang, st.ignorar || o, dist, o); }
-  if (bloq) { const teto = bloq.fogo ? 1800 : 120; if ((st.atraso || 0) < teto) st.atraso = Math.min(teto, (st.atraso || 0) + dt); if (!bloq.fogo) st.bloq = (st.bloq || 0) + dt; if (st.bloq > paciencia) { st.fantasma = 2; st.bloq = 0; } }   // veículo em chamas: espera de verdade, nunca atravessa
+  if (bloq) { const teto = bloq.fogo ? 1800 : 120; if ((st.atraso || 0) < teto) st.atraso = Math.min(teto, (st.atraso || 0) + dt); if (!bloq.fogo && !veicJogador.has(bloq)) st.bloq = (st.bloq || 0) + dt; if (st.bloq > paciencia) { st.fantasma = 2; st.bloq = 0; } }   // veículo em chamas ou de jogador: espera de verdade, nunca atravessa
   else { st.bloq = 0; st.atraso = Math.max(0, (st.atraso || 0) - dt * (longe ? 1 : 0.35)); }
   return st.atraso;
 }
@@ -4814,7 +4822,76 @@ function animarAve(g, dt, voando, plana = false) {
   if (u.modelo) { for (const w of u.asas) w.visible = voando; u.corpo3d.rotation.x = voando ? 0.6 : u.corpo.rotation.x * 0.8; u.corpo.rotation.x = 0; }   // o corpo deita para voar; pousado, só ele bica (as pernas ficam firmes)
 }
 // chão de um pássaro: o chão ou o telhado do prédio embaixo
-function chaoAve(x, z) { const t = mundo.tetoEm(x, z); return Math.max(alturaChao(x, z), t ? t.h : -1e9); }
+function chaoAve(x, z) { const t = tetoGeral(x, z); return Math.max(alturaChao(x, z), t ? t.h : -1e9); }
+// TODA construção é sólida para quem voa (pássaro, corvo, helicóptero): além dos prédios da cidade (mundo.tetoEm),
+// os modelos 3D (prefeitura, PRF, delegacia, hospital, CRAS, Câmara, obras, casas, empresas, QG, rodoviária...) são
+// medidos por um raio de cima para baixo. As peças paradas da cena ficam numa grade (refeita a cada 30 s, para pegar
+// obra nova e casa nova); só olha as peças cuja caixa cobre o ponto, e guarda o resultado por meio metro.
+const solidos = { grade: new Map(), t: -1e9, cache: new Map() }, _bbSol = new THREE.Box3();
+const CEL_SOL = 24;
+function montarSolidos() {
+  solidos.grade.clear(); solidos.cache.clear(); solidos.t = performance.now();
+  scene.updateMatrixWorld();
+  const pula = (o) => { for (let p = o; p; p = p.parent) { const u = p.userData; if (u && (u.modelo || u.asas || u.corpo3d || u.avatar || u.semSolido)) return true; } return false; };
+  scene.traverse((o) => {
+    if (!o.isMesh || o.isSkinnedMesh || o.isInstancedMesh || o.isSprite || !o.geometry?.attributes?.position) return;
+    const m = o.material; if (!m || [].concat(m).some((q) => q.transparent && q.opacity < 0.9)) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    _bbSol.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+    const sx = _bbSol.max.x - _bbSol.min.x, sz = _bbSol.max.z - _bbSol.min.z;
+    if (!(sx < 140 && sz < 140) || sx * sz < 1) return;   // chão, ruas e malhas gigantes juntas: não é construção
+    const cx = (_bbSol.min.x + _bbSol.max.x) / 2, cz = (_bbSol.min.z + _bbSol.max.z) / 2;
+    if (_bbSol.max.y < alturaChao(cx, cz) + 1.2) return;   // calçada, tapete, placa baixa
+    if (pula(o)) return;   // veículos, pessoas e pássaros não são telhado
+    const it = { o, x0: _bbSol.min.x, x1: _bbSol.max.x, z0: _bbSol.min.z, z1: _bbSol.max.z };
+    for (let i = Math.floor(it.x0 / CEL_SOL); i <= Math.floor(it.x1 / CEL_SOL); i++) for (let k = Math.floor(it.z0 / CEL_SOL); k <= Math.floor(it.z1 / CEL_SOL); k++) {
+      const ch = i + ',' + k; if (!solidos.grade.has(ch)) solidos.grade.set(ch, []); solidos.grade.get(ch).push(it);
+    }
+  });
+}
+const visivelDeVerdade = (o) => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
+// mapa de alturas de cada modelo (1 m por célula), feito uma vez na primeira vez que alguém voa por cima: o raio direto
+// no modelo inteiro custava dezenas de ms a cada consulta. Cada triângulo marca a altura mais alta nas células que cobre.
+const mapasSol = new WeakMap(), _vA = new THREE.Vector3(), _vB = new THREE.Vector3(), _vC = new THREE.Vector3(), _nT = new THREE.Vector3();
+function mapaDoSolido(it) {
+  const o = it.o, e = o.matrixWorld.elements, assin = e[12] + e[13] * 7 + e[14] * 13 + e[0] * 3 + e[8] * 5;
+  let m = mapasSol.get(o); if (m && m.assin === assin) return m;
+  const RES = 1, x0 = it.x0, z0 = it.z0, nx = Math.max(1, Math.ceil((it.x1 - x0) / RES)), nz = Math.max(1, Math.ceil((it.z1 - z0) / RES));
+  const h = new Float32Array(nx * nz).fill(-1e9), ny = new Float32Array(nx * nz);
+  const pos = o.geometry.attributes.position, idx = o.geometry.index, n = idx ? idx.count : pos.count;
+  for (let t = 0; t + 2 < n; t += 3) {
+    const ia = idx ? idx.getX(t) : t, ib = idx ? idx.getX(t + 1) : t + 1, ic = idx ? idx.getX(t + 2) : t + 2;
+    _vA.fromBufferAttribute(pos, ia).applyMatrix4(o.matrixWorld); _vB.fromBufferAttribute(pos, ib).applyMatrix4(o.matrixWorld); _vC.fromBufferAttribute(pos, ic).applyMatrix4(o.matrixWorld);
+    const top = Math.max(_vA.y, _vB.y, _vC.y);
+    _nT.subVectors(_vB, _vA).cross(_vC.clone().sub(_vA)); const ly = Math.abs(_nT.y) / (_nT.length() || 1);
+    const i0 = Math.max(0, Math.floor((Math.min(_vA.x, _vB.x, _vC.x) - x0) / RES)), i1 = Math.min(nx - 1, Math.floor((Math.max(_vA.x, _vB.x, _vC.x) - x0) / RES));
+    const k0 = Math.max(0, Math.floor((Math.min(_vA.z, _vB.z, _vC.z) - z0) / RES)), k1 = Math.min(nz - 1, Math.floor((Math.max(_vA.z, _vB.z, _vC.z) - z0) / RES));
+    for (let i = i0; i <= i1; i++) for (let k = k0; k <= k1; k++) { const c = k * nx + i; if (top > h[c]) { h[c] = top; ny[c] = ly; } }
+  }
+  m = { assin, x0, z0, nx, nz, RES, h, ny }; mapasSol.set(o, m); return m;
+}
+function topoSolido(x, z) {
+  if (performance.now() - solidos.t > 30000) montarSolidos();
+  const ck = Math.round(x * 2) + ',' + Math.round(z * 2), c = solidos.cache.get(ck);
+  if (c !== undefined) return c;
+  const l = solidos.grade.get(Math.floor(x / CEL_SOL) + ',' + Math.floor(z / CEL_SOL)); let r = null;
+  if (l) for (const it of l) {
+    if (x < it.x0 || x > it.x1 || z < it.z0 || z > it.z1 || !visivelDeVerdade(it.o)) continue;
+    const m = mapaDoSolido(it), i = Math.min(m.nx - 1, Math.floor((x - m.x0) / m.RES)), k = Math.min(m.nz - 1, Math.floor((z - m.z0) / m.RES)), hh = m.h[k * m.nx + i];
+    if (hh > -1e8 && (!r || hh > r.h)) r = { h: hh, ny: m.ny[k * m.nx + i] };
+  }
+  if (solidos.cache.size > 4000) solidos.cache.clear();
+  solidos.cache.set(ck, r);
+  return r;
+}
+// telhado/topo onde dá para pousar: o mais alto entre o prédio da cidade e o modelo 3D. plano = laje (helicóptero pousa)
+function tetoGeral(x, z) {
+  const t = mundo.tetoEm(x, z), s = topoSolido(x, z);
+  if (!s || s.h < alturaChao(x, z) + 1 || (t && t.h >= s.h - 0.05)) return t;
+  let plano = Math.abs(s.ny) > 0.85;
+  if (plano) for (const [dx, dz] of [[2.2, 0], [-2.2, 0], [0, 2.2], [0, -2.2]]) { const q = topoSolido(x + dx, z + dz); if (!q || Math.abs(q.h - s.h) > 0.5) { plano = false; break; } }
+  return { h: s.h + 0.02, plano };
+}
 
 // ---- bandos NPC: pombos dando voltas nas praças e corvos lá no alto
 const avesNpc = [];
@@ -4930,7 +5007,7 @@ function voarAve(dt, dir, forca) {
   a.vel += ((forca > 0.05 ? forca * vmax : 0) - a.vel) * Math.min(1, dt * (noAr ? 2.5 : 8));
   if (forca > 0.05) j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 6);
   let nx = THREE.MathUtils.clamp(j.pos.x + Math.sin(j.yaw) * a.vel * dt, -1500, 1600), nz = THREE.MathUtils.clamp(j.pos.z + Math.cos(j.yaw) * a.vel * dt, -2000, 1900);
-  const t = mundo.tetoEm(nx, nz);
+  const t = tetoGeral(nx, nz);
   if (t && a.y < t.h - 0.3) { nx = j.pos.x; nz = j.pos.z; a.vel *= 0.3; }   // parede de prédio: não atravessa
   const vy = sobe ? 6 : desce ? -6 : 0;
   a.y = Math.min(170, a.y + vy * dt);
@@ -6254,6 +6331,26 @@ function mostrarRoboRemoto(n, dt) {
   n.av.mixer.update(dt);
 }
 
+// laço de ronda pelas ruas de verdade (grafo do asfalto): antes ligava os cantos em linha reta pela grade de ruas, e
+// fora do centro essa linha cortava terrenos sem rua (o caminhão dos bombeiros e as viaturas passavam por cima do
+// QG dos clãs). Entre um canto e o outro segue o caminho das ruas; sem caminho, fica a linha reta de antes.
+function lacoPelasRuas(cantos, faixa) {
+  const base = [];
+  const por = (x, z) => { const u = base[base.length - 1]; if (!u || Math.hypot(u[0] - x, u[1] - z) > 0.5) base.push([x, z]); };
+  cantos.forEach(([x, z], i) => {
+    const [x2, z2] = cantos[(i + 1) % cantos.length];
+    const c = mundo.caminhoRuas({ x, z }, { x: x2, z: z2 });
+    if (c && c.length > 3) for (const q of c.slice(1, -1)) por(q.x, q.z); else { por(x, z); por(x2, z2); }
+  });
+  if (base.length > 1 && Math.hypot(base[0][0] - base[base.length - 1][0], base[0][1] - base[base.length - 1][1]) < 0.5) base.pop();
+  const n = base.length, dir = (a, b) => { const dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1; return [dx / l, dz / l]; };
+  return base.map((p, i) => {   // faixa da direita: desloca cada ponto pela média das normais dos dois trechos
+    const a = dir(base[(i - 1 + n) % n], p), b = dir(p, base[(i + 1) % n]);
+    let ox = -a[1] - b[1], oz = a[0] + b[0]; const l = Math.hypot(ox, oz) || 1; ox /= l; oz /= l;
+    const k = faixa / Math.max(0.5, (-a[1]) * ox + a[0] * oz);   // na esquina o deslocamento cresce para manter a faixa
+    return [p[0] + ox * k, p[1] + oz * k];
+  });
+}
 // ---------------------------------------------------------------- viaturas robôs: rodam a cidade e caçam os muito procurados
 const viaturas = [];
 function criarViaturas() {
@@ -6261,7 +6358,7 @@ function criarViaturas() {
   const lacos = [[-1, -1, 5, 5], [0, 0, 4, 4], [1, -1, 3, 5], [-1, 1, 5, 3]];
   lacos.forEach(([a, b, c, d], k) => {
     const cantos = [[ruaC(a), ruaC(b)], [ruaC(c), ruaC(b)], [ruaC(c), ruaC(d)], [ruaC(a), ruaC(d)]];
-    const pts = cantos.map(([x, z], i) => { const nx = cantos[(i + 1) % 4][0] - x, nz = cantos[(i + 1) % 4][1] - z, l = Math.hypot(nx, nz); return [x - nz / l * faixa, z + nx / l * faixa]; });
+    const pts = lacoPelasRuas(cantos, faixa);
     const obj = civico.modeloCarro('viatura', '#ffffff'); scene.add(obj);
     viaturas.push({ id: 13 + k, obj, laco: laco(pts, true, civico.entreEixos('viatura')), vel: 7, fase: k * 120, perseguindo: false });
   });
@@ -6272,7 +6369,7 @@ function criarRondasBombeiros() {
   const faixa = 2.5;
   [[-2, -2, 2, 2], [1, -3, 6, 2], [-3, 2, 2, 7]].forEach(([a, b, c, d], k) => {
     const cantos = [[ruaC(a), ruaC(b)], [ruaC(c), ruaC(b)], [ruaC(c), ruaC(d)], [ruaC(a), ruaC(d)]];
-    const pts = cantos.map(([x, z], i) => { const nx = cantos[(i + 1) % 4][0] - x, nz = cantos[(i + 1) % 4][1] - z, l = Math.hypot(nx, nz); return [x - nz / l * faixa, z + nx / l * faixa]; });
+    const pts = lacoPelasRuas(cantos, faixa);
     const obj = civico.modeloCarro('bombeiros', '#ffffff'); scene.add(obj);
     rondasBombeiros.push({ obj, laco: laco(pts, true, civico.entreEixos('bombeiros')), vel: 6.5, fase: k * 170 + 40, st: { atraso: 0 } });
   });
@@ -6284,7 +6381,7 @@ function criarVansNpc() {
   [[-1, -3, 3, 1], [2, 1, 6, 5], [-4, -1, 0, 4], [0, 3, 5, 7]].forEach(([a, b, c, d], k) => {
     const cantos = [[ruaC(a), ruaC(b)], [ruaC(c), ruaC(b)], [ruaC(c), ruaC(d)], [ruaC(a), ruaC(d)]];
     if (k % 2) cantos.reverse();
-    const pts = cantos.map(([x, z], i) => { const nx = cantos[(i + 1) % 4][0] - x, nz = cantos[(i + 1) % 4][1] - z, l = Math.hypot(nx, nz); return [x - nz / l * faixa, z + nx / l * faixa]; });
+    const pts = lacoPelasRuas(cantos, faixa);
     const obj = civico.modeloCarro('van', ['#f2f2ee', '#d8d8d2', '#c9302c', '#2d5fa8'][k]); scene.add(obj);
     vansNpc.push({ id: k, obj, laco: laco(pts, true, civico.entreEixos('van')), vel: 7.5, fase: k * 97 + 23, st: { atraso: 0 } });
   });
@@ -7549,7 +7646,7 @@ function contexto() {
     } }
   if (perto(civico.BANCO.balcao, 3.2)) return ['banco: poupança e empréstimo', 'Banco'];
   if (perto(civico.BANCO.empregos, 3.2)) return ['agência de empregos: vagas nas empresas', 'Vagas'];
-  if (perto(civico.HOSPITAL.balcao, 3.2)) return ['hospital: tratamento e plantão médico', 'Hospital'];
+  if (perto(civico.HOSPITAL.balcao, 3.2)) return ['entrar no hospital', 'Entrar'];
   if (perto(civico.BOMBEIROS.balcao, 3.2)) return ['entrar no quartel dos bombeiros', 'Bombeiros'];
   { const o = contextoOnibus() || contextoAviacao() || contextoColeta(); if (o) return o; }
   if (Math.hypot(AUTOESCOLA.balcao.x - jogador.pos.x, AUTOESCOLA.balcao.z - jogador.pos.z) < 3) return ['autoescola: aulas e provas (carteiras B, C, D e brevê)', 'Autoescola'];
@@ -7664,7 +7761,7 @@ function quadroJogo() {
   eixos.restaurar();   // a lógica do quadro usa a posição de sempre; o desenho das curvas volta no fim
   ferrovia.atualizar(agoraServidor() / 1000);
   atualizarCeu(agoraServidor() / 1000);
-  ceu.atualizar(dt, camAtiva, noiteAtual, clima.atual(), clima.fatorTempo(), camAtiva === camP, SOL_DIR);
+  ceu.atualizar(dt, camAtiva, noiteAtual, clima.atual(), clima.fatorTempo(), camAtiva === camP, SOL_DIR, horaAtual);
   clima.atualizar(dt, agoraServidor() / 1000, CICLO_DIA, { x: foco().x, y: (foco().y || 0) - 2, z: foco().z, dentro: !!jogador.dentroCasa && !averiguando }, { sol, hemi, cena: scene });
   tempoClima -= dt; if (tempoClima <= 0) { tempoClima = 30; carregarClima(); }
   mundo.atualizar(dt);
@@ -8644,6 +8741,30 @@ function salaBombeiros() {
     caixa(2.2, 0.6, 1, '#e8ecef', 7, 0.3, -4); movel(i, 'maca', 7, -4, 2.2, 1); placa('Enfermaria', 7, -4, 1.8);
   });
 }
+// hospital por dentro: recepção (tratamento e plantão), enfermaria com leitos, farmácia, consultório e vestiário médico
+function salaHospital() {
+  return montarSala('hospital', 3300, 2800, 24, 16, { piso: '#dfe4e6', parede: '#f4f7f8', luz: '#f4fbff' }, (i) => {
+    const { caixa, placa } = i;
+    caixa(24, 0.35, 0.3, '#d62828', 0, 3.2, -7.8);   // faixa vermelha na parede do fundo
+    caixa(1.4, 0.4, 0.06, '#d62828', 0, 2.6, -7.9); caixa(0.4, 1.4, 0.06, '#d62828', 0, 2.6, -7.9);   // cruz
+    caixa(4, 1.1, 1.1, '#e9eef0', 0, 0.55, 2); caixa(4.1, 0.08, 1.2, '#2f8f83', 0, 1.14, 2); movel(i, 'recepcao', 0, 2, 4, 1.1); placa('Recepção', 0, 2, 2.3);
+    for (let k = 0; k < 4; k++) {   // enfermaria: leitos com lençol e travesseiro, cortina entre eles
+      const x = -10 + k * 2.4;
+      caixa(1, 0.55, 2.1, '#cfd6da', x, 0.28, -5.6); caixa(0.95, 0.12, 2, '#ffffff', x, 0.6, -5.6); caixa(0.7, 0.12, 0.4, '#e8f1ff', x, 0.72, -6.4);
+      if (k < 3) caixa(0.04, 2, 2.2, '#9ec9d6', x + 1.2, 1.2, -5.6);
+      i.obst.push([x - 0.55, x + 0.55, -6.7, -4.5]);
+    }
+    i.pontos.leitos = { x: i.base.x - 6.4, z: i.base.z - 3.6 }; placa('Enfermaria', -6.4, -5.6, 2.4);
+    for (let k = 0; k < 3; k++) caixa(2.6, 0.06, 0.45, '#b9c2c7', 8, 0.5 + k * 0.6, -7.4);   // farmácia: prateleiras com remédios
+    for (let k = 0; k < 8; k++) caixa(0.22, 0.28, 0.2, ['#e74c3c', '#3498db', '#f1c40f', '#2ecc71'][k % 4], 7 + (k % 4) * 0.6, 0.67 + Math.floor(k / 4) * 0.6, -7.4);
+    caixa(2.8, 1, 0.8, '#e9eef0', 8, 0.5, -5.8); movel(i, 'farmacia', 8, -5.8, 2.8, 0.8); placa('Farmácia', 8, -5.8, 2.2);
+    caixa(1.8, 0.75, 0.9, '#8a6a4a', 8, 0.38, 3); caixa(0.6, 0.9, 0.6, '#2b3a4a', 8, 0.45, 4.1); movel(i, 'consultorio', 8, 3, 1.8, 0.9); placa('Consultório', 8, 3, 2);
+    for (let k = 0; k < 4; k++) caixa(0.55, 1.8, 0.5, '#f0f3f5', -10.5 + k * 0.7, 0.9, 4.6);   // armários do vestiário
+    i.obst.push([-10.9, -8.2, 4.3, 4.9]); placa('👔 Vestiário médico', -9.4, 4.6, 2.6); i.pontos.vestiario = { x: i.base.x - 9.4, z: i.base.z + 3.5 };
+    for (let k = 0; k < 4; k++) caixa(0.5, 0.45, 0.5, '#2f8f83', -3 + k * 0.7, 0.23, 5.6);   // cadeiras da espera
+    placa('Espera', -2, 5.6, 1.6);
+  });
+}
 function salaPrefeitura() {
   return montarSala('prefeitura', 3000, 1600, 26, 14, { piso: '#7b6a55', parede: '#efe6d6', luz: '#fff2dc' }, (i) => {
     const { caixa, placa } = i;
@@ -8722,6 +8843,23 @@ SALAS.bombeiros = {
       return;
     }
     if (pontoInterior('maca', 2)) { jogador.vida = 100; desenharFome(); aviso('✚ Vida recuperada!'); }
+  },
+};
+SALAS.hospital = {
+  contexto: () => {
+    if (naPorta()) return ['sair do hospital', 'Sair'];
+    if (pontoInterior('recepcao', 1.8)) return ['recepção: tratamento e plantão médico', 'Hospital'];
+    if (pontoInterior('farmacia', 1.8)) return ['farmácia: remédios', 'Farmácia'];
+    if (pontoInterior('consultorio', 1.6)) return ['consultório: tratamento', 'Consulta'];
+    if (pontoInterior('vestiario', 1.6)) return ['vestiário: vestir ou tirar a farda', 'Farda'];
+    if (pontoInterior('leitos', 2.2)) return ['enfermaria: os leitos dos pacientes', 'Ver'];
+    return ['', ''];
+  },
+  acao: () => {
+    if (naPorta()) { sairSala(); return; }
+    if (pontoInterior('recepcao', 1.8) || pontoInterior('farmacia', 1.8) || pontoInterior('consultorio', 1.6)) { abrirServico('hospital'); return; }
+    if (pontoInterior('vestiario', 1.6)) { vestiario('Hospital'); return; }
+    if (pontoInterior('leitos', 2.2)) aviso('🛏️ Enfermaria: para se tratar, fale na recepção ou no consultório.', 3);
   },
 };
 SALAS.prefeitura = {
@@ -12102,7 +12240,7 @@ function pilotarHeli(c, dt, max) {
   let sobe = pedais.acel || teclas.has('r'); const desce = pedais.freio || teclas.has('f');
   if (c.motorParado) sobe = false;
   // em cima de um navio: o convés é o chão, e parado nele o navio leva o helicóptero junto
-  const chaoHeli = (x, z) => { const dk = convesEm(x, z); if (dk) return dk.h; const t = c.aviao || c.jato ? null : mundo.tetoEm(x, z); return t?.plano ? Math.max(alturaChao(x, z), t.h) : alturaChao(x, z); };   // laje de prédio também é chão (pouso no telhado)
+  const chaoHeli = (x, z) => { const dk = convesEm(x, z); if (dk) return dk.h; const t = c.aviao || c.jato ? null : tetoGeral(x, z); return t ? Math.max(alturaChao(x, z), t.h) : alturaChao(x, z); };   // laje de prédio é chão (pouso no telhado); telhado torto: não atravessa, mas não pousa
   if (c.alt < 0.5 && c.navio) {
     const n = NAVIOS[c.navio];
     if (n?.dx !== undefined) { const rx = jogador.pos.x - n.x0, rz = jogador.pos.z - n.z0, ca = Math.cos(n.dang), sa = Math.sin(n.dang); jogador.pos.x = n.x + rx * ca + rz * sa; jogador.pos.z = n.z - rx * sa + rz * ca; jogador.yaw += n.dang; }
@@ -12112,7 +12250,7 @@ function pilotarHeli(c, dt, max) {
   const ufo = c.servico === 'ovni', vsAlvo = c.motorParado ? -7 : sobe ? (ufo ? 7 : 3) : desce ? (ufo ? -6 : -2.5) : 0;
   c.vs = (c.vs || 0) + THREE.MathUtils.clamp(vsAlvo - (c.vs || 0), -(ufo ? 10 : 4) * dt, (ufo ? 10 : 4) * dt);
   const altAntes = c.alt; c.alt = Math.min(120, c.alt + c.vs * dt);
-  if (c.alt <= 1.5 && c.vs < 0 && !convesEm(jogador.pos.x, jogador.pos.z) && !mundo.tetoEm(jogador.pos.x, jogador.pos.z)?.plano) {   // pousando: precisa de chão livre (no convés e na laje pode)
+  if (c.alt <= 1.5 && c.vs < 0 && !convesEm(jogador.pos.x, jogador.pos.z) && !tetoGeral(jogador.pos.x, jogador.pos.z)?.plano) {   // pousando: precisa de chão livre (no convés e na laje pode)
     const t = jogador.pos.clone(); mundo.limitar(t);
     const livre = jogador.pos.clone(); resolverColisao(livre, c.raio || 2.2);
     const ocupado = Math.hypot(t.x - jogador.pos.x, t.z - jogador.pos.z) > 2 || Math.hypot(livre.x - jogador.pos.x, livre.z - jogador.pos.z) > 0.6;

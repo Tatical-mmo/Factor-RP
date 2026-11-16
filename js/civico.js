@@ -661,6 +661,10 @@ function modeloCarroBase(modelo, cor) {
   }
   const chave = modelo + cor;
   if (cacheCarro.has(chave)) return cacheCarro.get(chave).clone();
+  // viatura da polícia: usa o modelo da viatura (o SUV laranja pintado de azul continuava laranja); se um dia vier o
+  // viatura_pm.glb, ele entra no lugar
+  if (modelo === 'viatura') { const qual = ctx?.modelo?.('viatura_pm') ? 'viatura_pm' : ctx?.modelo?.('viatura_civil') ? 'viatura_civil' : null;
+    if (qual) { const o = veiculoGLBNovo(qual, cor); o.userData.modelo = 'viatura'; adicionarLuzes(o, 'viatura'); cacheCarro.set(chave, o); return o.clone(); } }
   const base = ctx?.modelo?.(GLB_CARRO[modelo]);
   if (base) {   // modelo 3D: pinta de leve com a cor escolhida (o presidencial fica como é)
     const g = base.clone(true); g.userData.glb = GLB_CARRO[modelo]; g.userData.modelo = modelo;
@@ -704,7 +708,7 @@ function modeloCarroBase(modelo, cor) {
 }
 
 // modelos 3D gerados (vêm com a frente em +x e tamanho 1): gira para +z, põe as rodas no chão e ajusta o comprimento
-const GLB_NOVOS = { caveirao: 6, viatura_civil: 4.6, viatura_prf: 4.7, saveiro: 4.4, saveiro_som: 4.4,
+const GLB_NOVOS = { caveirao: 6, viatura_pm: 4.6, viatura_civil: 4.6, viatura_prf: 4.7, saveiro: 4.4, saveiro_som: 4.4,
   // ônibus novos (Meshy): os da cidade (circulares) e os de viagem; vêm com a frente em -x
   onibus_amarelo: 12.5, onibus_branco: 12, onibus_laranja: 12, onibus_brasilsul: 14, onibus_viacao: 14 };
 const FRENTE_MENOS_X = new Set(['onibus_amarelo', 'onibus_branco', 'onibus_laranja', 'onibus_brasilsul', 'onibus_viacao']);
