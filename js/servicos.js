@@ -362,6 +362,7 @@ function heliDeFogo(dt) {
   }
   const h = heliNpc, o = h.obj.position, f = incendios.find((q) => q.id === h.f.id);
   h.t += dt; if (h.rotor) h.rotor.rotation.y += dt * 28;
+  { const bd = h.obj.getObjectByName('balde'); if (bd) bd.visible = o.y > pad.y + 2.5; }
   const voar = (x, z, y, vel) => {   // anda em linha reta até (x, z) e ajusta a altura
     const dx = x - o.x, dz = z - o.z, d = Math.hypot(dx, dz), passo = Math.min(d, vel * dt);
     if (d > 0.5) { o.x += dx / d * passo; o.z += dz / d * passo; h.obj.rotation.y = suave(h.obj.rotation.y, Math.atan2(dx, dz), dt * 2); }

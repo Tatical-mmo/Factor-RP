@@ -342,11 +342,32 @@ function separarRotor(base, R) {
   }
   if (rotor.children.length) base.add(rotor);
 }
+// helicóptero dos bombeiros: a bolsa de água pendurada embaixo (abaixo dos esquis) vira um nó "balde" que some no
+// pouso; o modelo desce para os esquis ficarem no chão (antes a bolsa era o "pé" e ele pousava em cima dela)
+const BALDE = { helicoptero_bombeiros: { y: 1.05, x: 0.8, desce: 1.05 } };
+function separarBalde(base, B) {
+  if (!B || base.userData.baldeFeito) return; base.userData.baldeFeito = true;
+  base.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(base.matrixWorld).invert(), v = new THREE.Vector3(), m = new THREE.Matrix4();
+  const balde = new THREE.Group(); balde.name = 'balde';
+  const malhas = []; base.traverse((o) => { if (o.isMesh && o.geometry?.index && o.parent?.name !== 'rotor') malhas.push(o); });
+  for (const o of malhas) {
+    const geo = o.geometry, pos = geo.attributes.position, idx = geo.index, fica = [], tira = []; m.multiplyMatrices(inv, o.matrixWorld);
+    const ok = (i) => { v.fromBufferAttribute(pos, i).applyMatrix4(m); return v.y < B.y && Math.abs(v.x) < B.x; };
+    for (let t = 0; t < idx.count; t += 3) { const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2); (ok(a) && ok(b) && ok(c) ? tira : fica).push(a, b, c); }
+    if (!tira.length) continue;
+    const gb = new THREE.BufferGeometry(); for (const k of Object.keys(geo.attributes)) gb.setAttribute(k, geo.attributes[k]); gb.setIndex(tira);
+    const mb = new THREE.Mesh(gb, o.material); mb.castShadow = true; mb.matrixAutoUpdate = false; mb.matrix.copy(m); balde.add(mb);
+    geo.setIndex(fica);
+  }
+  base.add(balde);
+  for (const c of base.children) c.position.y -= B.desce;
+}
 function heliDeServico(modelo, vaga, cor) {
-  const proprio = ctx.modelo?.(modelo); if (proprio) { GLB_CARRO[modelo] = modelo; SEM_TINTA.add(modelo); separarRotor(proprio, ROTOR[modelo]); }
+  const proprio = ctx.modelo?.(modelo); if (proprio) { GLB_CARRO[modelo] = modelo; SEM_TINTA.add(modelo); separarRotor(proprio, ROTOR[modelo]); separarBalde(proprio, BALDE[modelo]); }
   if (!ctx.modelo?.(GLB_CARRO[modelo])) return null;
   vaga.y += 0.12;   // os esquis em cima da laje (o raio pega a pintura do H)
   const m = modeloCarro(modelo, cor); m.position.set(vaga.x, vaga.y, vaga.z); m.rotation.y = vaga.ang; ctx.scene.add(m);
+  const bd = m.getObjectByName('balde'); if (bd) bd.visible = false;   // pousado: sem a bolsa
   return m;
 }
 // altura da laje embaixo de (x, z) num grupo recém-montado (raio de cima para baixo)
@@ -1096,6 +1117,11 @@ function adicionarLuzes(g, tipo, chave = null) {
     }
     const comp = grande ? 16 : 12, f = new THREE.Mesh(new THREE.PlaneGeometry(grande ? 6 : 4.8, comp).rotateX(-Math.PI / 2), M.feixe);
     f.position.set(cx, e.min.y + 0.06, e.max.z + comp / 2 - 0.5); f.rotation.y = Math.PI; f.renderOrder = 3; L.add(f);
+  } else if (heli) {   // helicóptero: nada nas pás; pisca-pisca na cauda (ponta e em cima da deriva) e um embaixo da barriga
+    const t = 0.9;
+    sp(M.estrobo, e.nz.x, e.nz.y, e.nz.z - 0.05, t * 2);
+    sp(M.giro, e.nz.x, e.nz.y + 0.45, e.nz.z + 0.3, t * 1.4);
+    sp(M.giro, cx, Math.max(e.min.y, 0) + 0.45, (e.min.z + e.max.z) / 2 + 1, t * 1.2);   // farol de baixo
   } else {
     const t = Math.max(0.9, w * 0.05);
     sp(M.navV, e.px.x, e.px.y, e.px.z, t * 1.3);   // ponta esquerda (o modelo olha para +Z: esquerda = +X)
