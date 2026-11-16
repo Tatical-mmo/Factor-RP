@@ -57,10 +57,17 @@ export function iniciar(c) {
   for (const m of [pocas, neveChao]) { m.frustumCulled = false; m.visible = false; m.renderOrder = 1; ctx.scene.add(m); }
 }
 
+const listaPocas = [];   // [x, z, raio] das poças de chuva em volta do jogador
+// tem poça d'água aqui? (para o espirro de quem pisa ou passa de carro)
+export function pocaEm(x, z) {
+  if (!pocas?.visible || tipoChao !== 'chuva' || chao < 0.3) return false;
+  for (const [px, pz, r] of listaPocas) if (Math.abs(x - px) < r && Math.abs(z - pz) < r && Math.hypot(x - px, z - pz) < r) return true;
+  return false;
+}
 // onde fica uma poça: perto do jogador, em pontos fixos de uma grade (para não "andar" com ele)
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _y = new THREE.Vector3(0, 1, 0);
 function espalhar(px, pz) {
-  centroChao = { x: px, z: pz };
+  centroChao = { x: px, z: pz }; listaPocas.length = 0;
   const G = 8, R = 9, gx = Math.round(px / G), gz = Math.round(pz / G);
   let np = 0, nn = 0;
   for (let i = -R; i <= R; i++) for (let j = -R; j <= R; j++) {
@@ -71,7 +78,7 @@ function espalhar(px, pz) {
     _q.setFromAxisAngle(_y, ang);
     if (np < NP && h1 < 0.32 && ctx.naRua(x, z)) {
       const r = 0.7 + hash(cx + 3, cz) * 1.6;
-      _m.compose(_p.set(x, y, z), _q, _s.set(r * (1 + h2 * 0.8), 1, r)); pocas.setMatrixAt(np++, _m);
+      _m.compose(_p.set(x, y, z), _q, _s.set(r * (1 + h2 * 0.8), 1, r)); pocas.setMatrixAt(np++, _m); listaPocas.push([x, z, r * (1 + h2 * 0.4)]);
     }
     if (nn < NP * 2 && h1 < 0.55) {
       const r = 0.8 + hash(cx + 7, cz) * 2.2;

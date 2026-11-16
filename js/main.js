@@ -2309,11 +2309,164 @@ function efeitoExplosao(x, y, z, k = 1, tinta = true, semOnda = false) {
   const tt = tinta ? new THREE.Mesh(geoExplosao, new THREE.MeshStandardMaterial({ color: '#1f9e46', transparent: true, opacity: 0.9, roughness: 0.6 })) : null;
   for (const m of [fogo, tt, fumaca]) if (m) { m.position.set(x, y + 1, z); scene.add(m); }
   explosoes.push({ fogo, tinta: tt || new THREE.Mesh(), fumaca, t: 0, k });
+  if (visual.nivelAtual() === 'ultra') explosaoUltra(x, y + 1, z, k);   // fogo fervendo, fumaça e estilhaços
   if (tt) manchar(new THREE.Vector3(x, alturaChao(x, z) + 0.02, z), new THREE.Vector3(0, 1, 0), '#1f9e46');
   const d = Math.hypot(x - jogador.pos.x, z - jogador.pos.z);
   somExplosao(x, y, z, k, d);
   if (k >= 1.4 && !semOnda && y - alturaChao(x, z) < 25) ondaDeChoque(x, y, z, 14 * k, 55, 0.5 + 0.2 * k);   // avião, helicóptero, bomba
   tremor = Math.max(tremor, d < 30 * k ? 0.35 * Math.min(2.5, k) : 0);
+}
+// ---- gráfico ultra: explosões ricas (bolas de fogo que fervem e esfriam, fumaça que sobe e faíscas que caem em arco)
+const explosoesUltra = [];
+function explosaoUltra(x, y, z, k = 1) {
+  const G = puffGeo(), NF = 16, NS = 12, NC = 26, s = Math.sqrt(k), rnd = (a, b) => a + Math.random() * (b - a);
+  const fogo = new THREE.InstancedMesh(G, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }), NF);
+  const fumo = new THREE.InstancedMesh(G, new THREE.MeshLambertMaterial({ color: '#4a4542', transparent: true, depthWrite: false, emissive: '#ff6a1a', emissiveIntensity: 0.5 }), NS);
+  const fai = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 0.08, 0.5), new THREE.MeshBasicMaterial({ color: '#ffd27a', toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), NC);
+  for (const m of [fogo, fumo, fai]) { m.frustumCulled = false; scene.add(m); }
+  const dir = () => new THREE.Vector3(rnd(-1, 1), rnd(-0.2, 1), rnd(-1, 1)).normalize();
+  explosoesUltra.push({ x, y, z, s, t: 0, fogo, fumo, fai, pf: Array.from({ length: NF }, () => ({ d: dir(), v: rnd(2.5, 5), r: rnd(0.6, 1.1) })),
+    ps: Array.from({ length: NS }, () => ({ d: dir(), v: rnd(1, 2.2), r: rnd(0.8, 1.3) })), pc: Array.from({ length: NC }, () => ({ d: dir(), v: rnd(10, 22) * s })) });
+}
+function atualizarExplosoesUltra(dt) {
+  const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), S3 = new THREE.Vector3(), C = new THREE.Color(), up = new THREE.Vector3(0, 0, 1);
+  for (let i = explosoesUltra.length - 1; i >= 0; i--) {
+    const e = explosoesUltra[i]; e.t += dt; const t = e.t, s = e.s, SS = THREE.MathUtils.smoothstep;
+    const vf = Math.min(1, t / (1.1 * s));   // fogo: 1,1 s (maior: mais tempo)
+    e.fogo.material.opacity = 0.95 * (1 - vf);
+    e.pf.forEach((q, k) => { const dist = q.v * s * (1 - Math.exp(-t * 4)); P.set(e.x + q.d.x * dist, e.y + q.d.y * dist + t * 1.2 * s, e.z + q.d.z * dist);
+      const r = q.r * s * (0.8 + 1.4 * SS(t, 0, 0.5)); M4.compose(P, Q.identity(), S3.set(r, r, r)); e.fogo.setMatrixAt(k, M4);
+      C.setRGB(1, 0.85 - 0.55 * vf, 0.55 - 0.5 * vf); e.fogo.setColorAt(k, C); });
+    const vs = Math.min(1, t / (4 * s));     // fumaça: 4 s subindo e abrindo
+    e.fumo.material.opacity = 0.75 * Math.sin(Math.PI * Math.min(1, vs * 1.05 + 0.08)); e.fumo.material.emissiveIntensity = 0.5 * (1 - SS(t, 0.2, 1.2));
+    e.ps.forEach((q, k) => { const dist = q.v * s * (1 - Math.exp(-t * 2)); P.set(e.x + q.d.x * dist, e.y + q.d.y * dist * 0.5 + t * 2.2 * s, e.z + q.d.z * dist);
+      const r = q.r * s * (1 + 2.2 * vs); M4.compose(P, Q.identity(), S3.set(r, r, r)); e.fumo.setMatrixAt(k, M4); });
+    const vc = Math.min(1, t / 1.4);          // faíscas: arco com gravidade, apontadas para onde vão
+    e.fai.material.opacity = 1 - vc;
+    e.pc.forEach((q, k) => { P.set(e.x + q.d.x * q.v * t, e.y + q.d.y * q.v * t - 4.9 * t * t, e.z + q.d.z * q.v * t);
+      S3.set(q.d.x * q.v, q.d.y * q.v - 9.8 * t, q.d.z * q.v).normalize(); Q.setFromUnitVectors(up, S3); M4.compose(P, Q, S3.set(1, 1, 1 + q.v * 0.05)); e.fai.setMatrixAt(k, M4); });
+    for (const m of [e.fogo, e.fumo, e.fai]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    if (t > 4.2 * s) { for (const m of [e.fogo, e.fumo, e.fai]) { scene.remove(m); m.material.dispose(); m.geometry !== puffGeo() && m.geometry.dispose(); } explosoesUltra.splice(i, 1); }
+  }
+}
+// ---- espirro d'água: quem pisa ou passa de carro numa poça de chuva levanta gotas e uma ondinha
+const MAX_GOTAS = 160, gotasAgua = [];
+let malhaGotas = null, aneisAgua = [];
+function respingo(x, z, forca = 1) {
+  if (!malhaGotas) { malhaGotas = new THREE.InstancedMesh(new THREE.SphereGeometry(0.05, 5, 4), new THREE.MeshBasicMaterial({ color: '#cfe3f5', transparent: true, opacity: 0.85, depthWrite: false }), MAX_GOTAS); malhaGotas.frustumCulled = false; malhaGotas.count = 0; scene.add(malhaGotas); }
+  const y = alturaChao(x, z) + 0.05, n = Math.round(6 + 8 * forca);
+  for (let k = 0; k < n; k++) { if (gotasAgua.length >= MAX_GOTAS) gotasAgua.shift(); const a = Math.random() * Math.PI * 2, v = (0.8 + Math.random() * 1.6) * forca; gotasAgua.push({ x, y, z, vx: Math.cos(a) * v, vz: Math.sin(a) * v, vy: (1.8 + Math.random() * 2.2) * Math.sqrt(forca), t: 0 }); }
+  const anel = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#dcebf7', transparent: true, opacity: 0.55, depthWrite: false }));
+  anel.position.set(x, y, z); anel.scale.setScalar(0.2); scene.add(anel); aneisAgua.push({ m: anel, t: 0, f: forca });
+}
+const _rsp = new Map();   // última posição de quem anda (para não espirrar parado)
+function atualizarRespingos(dt) {
+  const tenta = (chave, x, z, passo, forca) => {
+    const u = _rsp.get(chave); if (!u) { _rsp.set(chave, { x, z }); return; }
+    if (Math.hypot(x - u.x, z - u.z) < passo) return; u.x = x; u.z = z;
+    if (clima.pocaEm(x, z)) respingo(x, z, forca);
+  };
+  if (jogador.avatar && !jogador.dentroCasa) {
+    const c = jogador.carro;
+    if (c && !c.voa && c.mesh) { const a = c.mesh.rotation.y, fx = Math.sin(a), fz = Math.cos(a), v = Math.abs(c.vel || 0);
+      if (v > 2) for (const [lx, lz, k] of [[0.9, 1.3, 'a'], [-0.9, 1.3, 'b'], [0.9, -1.3, 'c'], [-0.9, -1.3, 'd']]) tenta('eu' + k, jogador.pos.x + fz * lx + fx * lz, jogador.pos.z - fx * lx + fz * lz, 0.6, Math.min(2.2, 0.8 + v / 10)); }
+    else if (!c && !jogador.voo && !jogador.pulo) tenta('pe', jogador.pos.x, jogador.pos.z, 0.7, 0.7);
+    for (const [id, r] of remotos) {
+      if (r.carro && r.carro.visible && !civico.CARROS[r.carroModelo]?.voa) tenta('c' + id, r.carro.position.x, r.carro.position.z, 1.2, 1.5);
+      else if (r.av?.raiz.visible) tenta('p' + id, r.av.raiz.position.x, r.av.raiz.position.z, 0.7, 0.7);
+    }
+  }
+  if (!malhaGotas) return;
+  const M4 = new THREE.Matrix4(); let n = 0;
+  for (let i = gotasAgua.length - 1; i >= 0; i--) { const g = gotasAgua[i]; g.t += dt; g.vy -= 9.8 * dt; g.x += g.vx * dt; g.y += g.vy * dt; g.z += g.vz * dt; if (g.t > 0.9) gotasAgua.splice(i, 1); }
+  for (const g of gotasAgua) { M4.makeTranslation(g.x, g.y, g.z); malhaGotas.setMatrixAt(n++, M4); }
+  malhaGotas.count = n; malhaGotas.instanceMatrix.needsUpdate = true;
+  for (let i = aneisAgua.length - 1; i >= 0; i--) { const a = aneisAgua[i]; a.t += dt; a.m.scale.setScalar(0.2 + a.t * 2.2 * a.f); a.m.material.opacity = 0.55 * (1 - a.t / 0.8); if (a.t > 0.8) { scene.remove(a.m); a.m.geometry.dispose(); a.m.material.dispose(); aneisAgua.splice(i, 1); } }
+}
+// ---- gráfico ultra: prédios 3D (Meshy) mais realistas. Da textura de cada um sai um mapa: o que é vidro (escuro e
+// azulado) vira espelho (reflete o céu) e, à noite, parte das janelas acende com luz amarelada; o resto ganha relevo.
+// Cada material tem uma cópia "ultra" que entra no lugar (sem mexer no original, que segue nos outros gráficos).
+const ultraPredio = new Map();   // material original -> material ultra (ou null: não deu para analisar)
+function materialUltra(mt) {
+  if (ultraPredio.has(mt)) return ultraPredio.get(mt);
+  let u = null;
+  try {
+    const img = mt.map?.image;
+    if (mt.isMeshStandardMaterial && img && (img.width || img.videoWidth)) {
+      const W = Math.min(512, img.width), H = Math.min(512, img.height), cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      const c2 = cv.getContext('2d'); c2.drawImage(img, 0, 0, W, H); const d = c2.getImageData(0, 0, W, H).data;
+      const cr = document.createElement('canvas'); cr.width = W; cr.height = H; const rr = cr.getContext('2d'), rd = rr.createImageData(W, H);
+      const ce = document.createElement('canvas'); ce.width = W; ce.height = H; const ee = ce.getContext('2d'), ed = ee.createImageData(W, H);
+      let vidro = 0;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4, r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255, l = 0.3 * r + 0.59 * g + 0.11 * b;
+        const ehVidro = l < 0.42 && b > r + 0.04 && b >= g - 0.02 || l < 0.16;   // vidro escuro/azulado
+        if (ehVidro) vidro++;
+        // canais do glTF: G = aspereza, B = metal
+        rd.data[i] = 255; rd.data[i + 1] = ehVidro ? 28 : 225; rd.data[i + 2] = ehVidro ? 150 : 0; rd.data[i + 3] = 255;
+        const cel = ((x >> 4) * 73856093 ^ (y >> 4) * 19349663) >>> 0, acesa = ehVidro && cel % 100 < 38;   // janelas acesas em blocos
+        ed.data[i] = acesa ? 255 : 0; ed.data[i + 1] = acesa ? 196 : 0; ed.data[i + 2] = acesa ? 120 : 0; ed.data[i + 3] = 255;
+      }
+      rr.putImageData(rd, 0, 0); ee.putImageData(ed, 0, 0);
+      const tx = (c) => { const t = new THREE.CanvasTexture(c); t.flipY = mt.map.flipY; t.wrapS = mt.map.wrapS; t.wrapT = mt.map.wrapT; t.channel = mt.map.channel; t.anisotropy = 8; return t; };
+      u = mt.clone();
+      if (vidro / (W * H) > 0.01) { u.metalnessRoughnessMap = null; u.roughnessMap = u.metalnessMap = tx(cr); u.roughness = 1; u.metalness = 1; }
+      const ems = tx(ce); ems.colorSpace = THREE.SRGBColorSpace; u.emissiveMap = ems; u.emissive = new THREE.Color('#ffffff'); u.emissiveIntensity = 0;
+      if (!u.bumpMap && !u.normalMap) { u.bumpMap = mt.map; u.bumpScale = 1.2; }
+      u.envMapIntensity = 1.6; u.userData.ultraPredio = 1;
+    }
+  } catch (e) { console.warn('prédio ultra:', e); u = null; }
+  ultraPredio.set(mt, u); return u;
+}
+let tPrediosUltra = 0, prediosEmUltra = false; const matOrigPredio = new WeakMap();
+function atualizarPrediosUltra(dt) {
+  const ultra = visual.nivelAtual() === 'ultra';
+  // janelas: acendem ao anoitecer (só um número muda, sem recompilar)
+  if (ultra) { const k = THREE.MathUtils.smoothstep(noiteAtual, 0.3, 0.75) * 1.4; for (const u of ultraPredio.values()) if (u) u.emissiveIntensity = k; }
+  if ((tPrediosUltra -= dt) > 0 && ultra === prediosEmUltra) return;
+  tPrediosUltra = 8; prediosEmUltra = ultra;
+  scene.traverse((o) => {
+    if (!o.isMesh || !o.userData.predio3d) return;
+    if (ultra) { if (!matOrigPredio.has(o)) { const u = materialUltra(o.material); if (u) { matOrigPredio.set(o, o.material); o.material = u; } } }
+    else if (matOrigPredio.has(o)) { o.material = matOrigPredio.get(o); matOrigPredio.delete(o); }
+  });
+}
+// ---- gráfico ultra: rastro de condensação dos aviões grandes e médios lá no alto; some aos poucos (~30 s)
+const RASTRO_N = 1800;
+let rastro = null, rastroI = 0, tRastro = 0;
+function montarRastro() {
+  const g = new THREE.BufferGeometry(), pos = new Float32Array(RASTRO_N * 3), nasc = new Float32Array(RASTRO_N).fill(-1e9);
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('nasc', new THREE.BufferAttribute(nasc, 1));
+  const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { uT: { value: 0 }, uEsc: { value: 300 } },
+    vertexShader: 'attribute float nasc; uniform float uT, uEsc; varying float vA; void main(){ float idade = uT - nasc; vA = idade < 0.0 || idade > 30.0 ? 0.0 : 0.55 * smoothstep(0.0, 0.6, idade) * (1.0 - idade / 30.0); vec4 mv = modelViewMatrix * vec4(position + vec3(0.0, -idade * 0.08, 0.0), 1.0); gl_PointSize = (3.0 + idade * 0.5) * uEsc / -mv.z; gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'varying float vA; void main(){ vec2 d = gl_PointCoord - 0.5; float r = dot(d, d) * 4.0; if (r > 1.0) discard; gl_FragColor = vec4(1.0, 1.0, 1.0, vA * (1.0 - r)); }' });
+  rastro = new THREE.Points(g, m); rastro.frustumCulled = false; scene.add(rastro);
+}
+function avioesParaRastro() {
+  const l = [];
+  for (const a of npcAvioes) if (a.mesh?.visible) l.push([a.mesh, a.porte]);
+  const c = jogador.carro; if (c?.aviao && c.mesh && c.porte !== 'pequeno') l.push([c.mesh, c.porte]);
+  for (const r of remotos.values()) if (r.carro?.visible && /^aviao_(grande|medio)/.test(r.carroModelo || '')) l.push([r.carro, r.carroModelo.slice(6)]);
+  return l;
+}
+const _vR = new THREE.Vector3();
+function atualizarRastro(dt) {
+  const ultra = visual.nivelAtual() === 'ultra';
+  if (!rastro) { if (!ultra) return; montarRastro(); }
+  rastro.visible = ultra; if (!ultra) return;
+  const agora = performance.now() / 1000; rastro.material.uniforms.uT.value = agora; rastro.material.uniforms.uEsc.value = innerHeight * 0.9;
+  if ((tRastro -= dt) > 0) return; tRastro = 0.1;
+  const pos = rastro.geometry.attributes.position, nasc = rastro.geometry.attributes.nasc;
+  for (const [m, porte] of avioesParaRastro()) {
+    if (m.position.y - alturaChao(m.position.x, m.position.z) < 90) continue;   // só lá no alto
+    if (!m.userData.motores) { const b = new THREE.Box3().setFromObject(m), w = (b.max.x - b.min.x) / (m.scale.x || 1); m.userData.motores = [w * 0.3, -w * 0.3].map((ox) => new THREE.Vector3(ox, (b.max.y - b.min.y) * 0.3, -(b.max.z - b.min.z) * 0.15)); }
+    for (const off of m.userData.motores) {
+      _vR.copy(off); m.localToWorld(_vR);
+      pos.setXYZ(rastroI, _vR.x, _vR.y, _vR.z); nasc.setX(rastroI, agora); rastroI = (rastroI + 1) % RASTRO_N;
+    }
+    void porte;
+  }
+  pos.needsUpdate = true; nasc.needsUpdate = true;
 }
 function atualizarExplosoes(dt) {
   for (let i = explosoes.length - 1; i >= 0; i--) {
@@ -2810,7 +2963,7 @@ async function iniciarJogo(perfil) {
   $('carregando').classList.remove('oculto');
   montarChao();
   // um modelo faltando não pode travar o jogo: ele só fica de fora (veículos e prédios têm versão feita por código)
-  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); } catch (e) { console.warn('modelo não carregou:', m, e); } });
+  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
   const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
   const skin = perfil.policial ? SKIN_POLICIA : id;
   const avatarP = criarAvatar(ROBOS.includes(skin) ? 'robos' : pastaJogador, skin);
@@ -2911,7 +3064,7 @@ async function iniciarJogo(perfil) {
     recarregar: () => { tempoLogistica = 0; },
   });
   iniciarLogistica();
-  servicos.iniciar({
+  servicos.iniciar({ ultra: () => visual.nivelAtual() === 'ultra',
     scene, textoSprite, altura: alturaChao, jogador: () => jogador, perfil: () => jogador.perfil, aviso, agora: agoraServidor,
     rastrear: (a) => rastrear(a), rastreio: () => rastreio, meuCla: () => jogador.cla, alcanceJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? 30 : jogador.carro?.servico === 'bombeiros' ? 16 : 10), origemJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? jogador.carro.mesh.position.clone().setY(jogador.carro.mesh.position.y - 0.4) : null), obstaculo: (x, z, a, o) => obstaculoAFrente(x, z, a, o), sinal: (x, z, a) => semaforos.sinalAFrente(x, z, a, 9), rondaPerto, posRonda, clas: () => [...clasCache.values()],
     guerrasMudaram: () => {
@@ -7952,7 +8105,7 @@ function quadroJogo() {
   atualizarSoldados(dt);
   atualizarCacada(dt);
   tempoArma -= dt; if (tempoArma <= 0) { tempoArma = 0.5; conferirArma(); }
-  atualizarObras(dt); vigiarAlmoxarifado();   atualizarExplosoes(dt); atualizarOndas(dt); atualizarAtomicos(dt); atualizarSemPiloto(dt); atualizarContagemMorte();
+  atualizarObras(dt); vigiarAlmoxarifado();   atualizarExplosoes(dt); atualizarExplosoesUltra(dt); atualizarOndas(dt); atualizarAtomicos(dt); atualizarRespingos(dt); atualizarRastro(dt); atualizarPrediosUltra(dt); atualizarSemPiloto(dt); atualizarContagemMorte();
   atualizarMira();
   civico.atualizarQuartel(jogador.pos);
   atualizarArea51(dt); atualizarBases(dt); atualizarQuartelExtras(dt); atualizarBaseAerea(dt); atualizarMisseis(dt); avisarAlistamentos(dt); atualizarMarinha(dt);
@@ -13268,7 +13421,7 @@ function montarArea51() {
     caixa(x, 7, z, 0.5, 14, 0.5, ferro, false); caixa(x, 14.2, z, 1.4, 0.8, 1.4, ferro, false);
     const l = new THREE.Mesh(new THREE.SphereGeometry(0.45, 10, 8), lamp); l.position.set(x, 14, z); g.add(l);
     const alvoX = (A51.x0 + A51.x1) / 2, alvoZ = 0, dx = alvoX - x, dz = alvoZ - z, L = Math.hypot(dx, 14, dz) * 0.55;
-    const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 9, L, 20, 1, true), luzCone);
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(9, 0.4, L, 20, 1, true), luzCone);   // a ponta fina sai da lâmpada
     cone.position.set(x + dx / Math.hypot(dx, 14, dz) * L / 2, 14 - 14 / Math.hypot(dx, 14, dz) * L / 2, z + dz / Math.hypot(dx, 14, dz) * L / 2);
     cone.lookAt(x, 14, z); cone.rotateX(-Math.PI / 2);
     // o holofote varre o pátio de um lado para o outro: o cone gira em volta da lâmpada
@@ -13906,7 +14059,7 @@ function pilotarJato(c, dt) {
   c.mesh.position.set(jogador.pos.x, chao + c.alt, jogador.pos.z);
   jogador.pos.y = chao;
   c.mesh.rotation.set(-c.pitch, jogador.yaw, c.noAr ? c.volante * 0.6 : 0, 'YXZ');
-  jato.chamas(c.mesh, acel ? 1 : c.vel / J.vmax * 0.35);
+  jato.chamas(c.mesh, acel ? 1 : c.vel / J.vmax * 0.35, visual.nivelAtual() === 'ultra');
   jogador.avatar.raiz.position.copy(jogador.pos);
   sons.continuo('aviaoG_alto', c.invisivel ? 0.15 : 0.35 + 0.4 * c.vel / J.vmax, 1.2 + c.vel / J.vmax * 0.5);
   controlesJato(c, dt);

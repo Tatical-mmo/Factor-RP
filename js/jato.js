@@ -14,7 +14,8 @@ function mats() {
   M = { cinza: m('#8a939b'), escuro: m('#3a3f45', { roughness: 0.7 }), preto: m('#24272b', { roughness: 0.85, metalness: 0.3 }),
     vidro: m('#1b2a38', { roughness: 0.05, metalness: 0.8, emissive: '#0c1a26' }), bocal: m('#5a4a3a', { emissive: '#3a1a08' }),
     pneu: m('#141414', { roughness: 0.9, metalness: 0 }), branco: m('#e8e8e8', { roughness: 0.4 }),
-    fogo: new THREE.MeshBasicMaterial({ color: '#ffb347', toneMapped: false, transparent: true, opacity: 0.85 }) };
+    fogo: new THREE.MeshBasicMaterial({ color: '#8cc4ff', toneMapped: false, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending }),   // chama do caça: azul fraco
+    fogoMissil: new THREE.MeshBasicMaterial({ color: '#ffb347', toneMapped: false, transparent: true, opacity: 0.85 }) };
   return M;
 }
 const caixa = (g, w, h, d, x, y, z, mat, r = [0, 0, 0]) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); o.position.set(x, y, z); o.rotation.set(...r); o.castShadow = true; g.add(o); return o; };
@@ -83,10 +84,12 @@ export function criarJato(tipo, glb) {
   }
   else g.add(tipo === 'caca_furtivo' ? cacaFurtivo() : tipo === 'asa_furtiva' ? asaFurtiva() : cacaLeve());
   g.userData.jato = tipo;
+  g.traverse((o) => { if (o.name === 'chama') o.visible = false; });   // desligado: sem fogo
   return g;
 }
 // pós-combustão: a chama cresce com a velocidade
-export function chamas(g, k) { g.traverse((o) => { if (o.name === 'chama') { o.visible = k > 0.05; o.scale.set(1, 0.4 + k * 1.2, 1); } }); }
+// a chama só aparece com o motor acelerando e só no gráfico ultra (azul fraco); parado ou nos outros níveis, nada
+export function chamas(g, k, ultra = false) { g.traverse((o) => { if (o.name === 'chama') { o.visible = ultra && k > 0.05; o.scale.set(1, 0.4 + k * 1.2, 1); } }); }
 
 // míssil: corpo branco, ponta cinza e fumaça
 export function criarMissil(glb) {
@@ -97,7 +100,7 @@ export function criarMissil(glb) {
     const p = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.6, 8), m.cinza); p.rotation.x = Math.PI / 2; p.position.z = 1.8; g.add(p);
     for (const a of [0, Math.PI / 2]) caixa(g, 0.9, 0.04, 0.4, 0, 0, -1.3, m.cinza, [0, 0, a]);
   }
-  const f = new THREE.Mesh(new THREE.ConeGeometry(0.25, 1.2, 8), m.fogo); f.rotation.x = -Math.PI / 2; f.position.z = -2.1; g.add(f);
+  const f = new THREE.Mesh(new THREE.ConeGeometry(0.25, 1.2, 8), m.fogoMissil); f.rotation.x = -Math.PI / 2; f.position.z = -2.1; g.add(f);
   return g;
 }
 const geoFum = new THREE.SphereGeometry(0.6, 8, 6);

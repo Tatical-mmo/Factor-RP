@@ -79,6 +79,16 @@ function criarFoco(f) {
     m.userData = { vida: k / 16, dur: 4 + Math.random() * 1.5, dx: (Math.random() - 0.5) * 2, dz: (Math.random() - 0.5) * 2 };
     g.add(m); fumacas.push(m);
   }
+  // gráfico ultra: brasas (faíscas que sobem dançando) e o miolo bem quente (branco-amarelado) no pé do fogo
+  const brasas = [], miolo = [];
+  for (let k = 0; k < 34; k++) {
+    const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: '#ffcf6a', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    m.userData = { vida: Math.random(), dur: 1.6 + Math.random() * 1.8, x0: 0, z0: 0, sobe: 0, fase: Math.random() * 6 }; m.visible = false; g.add(m); brasas.push(m);
+  }
+  for (let k = 0; k < 14; k++) {
+    const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: '#fff3c0', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    m.userData = { vida: Math.random(), dur: 0.35 + Math.random() * 0.3, x0: 0, z0: 0 }; m.visible = false; g.add(m); miolo.push(m);
+  }
   // brilho alaranjado no chão e marca de queimado
   const brilho = new THREE.Mesh(new THREE.PlaneGeometry(11, 11).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: tex, color: '#ff6a1a', transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
   brilho.position.y = 0.06; g.add(brilho);
@@ -88,7 +98,7 @@ function criarFoco(f) {
   if (f.tipo === 'veiculo') { const k = f.porte >= 2 ? 0.75 : 0.45; brilho.scale.setScalar(k); queimado.scale.setScalar(k * 1.3); }
   g.position.set(f.x, ctx.altura(f.x, f.z), f.z);
   ctx.scene.add(g);
-  return { g, chamas, fumacas, brilho };
+  return { g, chamas, fumacas, brilho, brasas, miolo };
 }
 
 const corTmp = new THREE.Color();
@@ -123,7 +133,24 @@ function atualizarFocos(dt) {
       sm.material.opacity = Math.sin(v * Math.PI) * 0.5 * (0.4 + forca * 0.6);
     }
     o.brilho.material.opacity = (0.35 + 0.25 * Math.sin(t * 11) * Math.sin(t * 7.3)) * forca + 0.1;
+    const ultra = ctx.ultra?.();
+    for (const b of o.brasas) {
+      b.visible = !!ultra; if (!ultra) continue;
+      const u = b.userData; u.vida += dt / u.dur;
+      if (u.vida >= 1) { u.vida = 0; const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * raio; u.x0 = Math.cos(a) * r; u.z0 = Math.sin(a) * r; u.sobe = (5 + Math.random() * 7) * (0.5 + forca * 0.5); }
+      const v = u.vida; b.position.set(u.x0 + Math.sin(t * 2.3 + u.fase) * 0.7 * v, 0.5 + v * u.sobe, u.z0 + Math.cos(t * 1.9 + u.fase) * 0.7 * v);
+      const e = 0.14 * (1 - v * 0.6); b.scale.set(e, e, 1); b.material.opacity = Math.min(1, (1 - v) * 2) * (0.6 + 0.4 * Math.sin(t * 20 + u.fase));
+    }
+    for (const c of o.miolo) {
+      c.visible = !!ultra; if (!ultra) continue;
+      const u = c.userData; u.vida += dt / u.dur;
+      if (u.vida >= 1) { u.vida = 0; const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * raio * 0.55; u.x0 = Math.cos(a) * r; u.z0 = Math.sin(a) * r; }
+      const v = u.vida; c.position.set(u.x0, 0.25 + v * 1.4 * forca, u.z0);
+      const e = (1.3 - v) * (0.5 + forca * 0.5); c.scale.set(e, e * 1.2, 1); c.material.opacity = (1 - v) * 0.8;
+    }
+    if (ultra) for (const sm of o.fumacas) sm.material.opacity = Math.min(0.75, sm.material.opacity * 1.35);   // fumaça mais densa
   }
+  luzDoFogo(dt, t);
   for (const [id, o] of focos) if (!ativos.has(id)) { ctx.scene.remove(o.g); o.g.traverse((x) => x.material?.dispose?.()); focos.delete(id); }
   // jatos d'água
   for (let i = jatos.length - 1; i >= 0; i--) {
@@ -132,6 +159,20 @@ function atualizarFocos(dt) {
   }
 }
 
+// gráfico ultra: o fogo mais perto ilumina em volta (uma luz laranja que treme); fica sempre na cena e só apaga, para não
+// recompilar os materiais
+let luzFogo = null;
+function luzDoFogo(dt, t) {
+  const ultra = ctx.ultra?.();
+  if (!ultra) { if (luzFogo) luzFogo.visible = false; return; }
+  if (!luzFogo) { luzFogo = new THREE.PointLight('#ff7a2a', 0, 26, 1.5); ctx.scene.add(luzFogo); }
+  luzFogo.visible = true;
+  const p = ctx.jogador().pos; let m = null, dm = 140;
+  for (const f of incendios) { const d = Math.hypot(f.x - p.x, f.z - p.z); if (d < dm) { dm = d; m = f; } }
+  if (!m) { luzFogo.intensity = 0; return; }
+  luzFogo.position.set(m.x, ctx.altura(m.x, m.z) + 2.2, m.z);
+  luzFogo.intensity = (m.tipo === 'veiculo' ? 18 : 30) * (0.8 + 0.2 * Math.sin(t * 13) * Math.sin(t * 7.7) + 0.08 * Math.sin(t * 31));
+}
 function esguichar(f, origem = null, n = 14) {
   const p = origem || ctx.jogador().pos, h = origem ? origem.y : p.y + 1.3;
   for (let k = 0; k < n; k++) {
