@@ -3276,7 +3276,7 @@ function atualizarRemotos(dt) {
     if (a.ave) { mostrarAveRemota(r, a, dt); raiz.visible = false; if (r.arma) r.arma.visible = false; r.av.mixer.update(dt); continue; }
     if (r.ave) { scene.remove(r.ave); r.ave = null; }
     if (r.carro && r.carroModelo === 'helicoptero_bombeiros') { const bd = r.carro.getObjectByName('balde'); if (bd) bd.visible = r.carro.position.y > alturaChao(r.carro.position.x, r.carro.position.z) + 2.5; }
-    if (r.carro && civico.CARROS[r.carroModelo]?.voa) { const ro = rotorDe(r.carro); if (ro) ro.rotation.y += dt * (r.carro.position.y > alturaChao(r.carro.position.x, r.carro.position.z) + 1 ? 28 : 12); }
+    if (r.carro && civico.CARROS[r.carroModelo]?.voa) { const ro = rotorDe(r.carro); if (ro) { ro.rotation.y += dt * (r.carro.position.y > alturaChao(r.carro.position.x, r.carro.position.z) + 1 ? 28 : 12); civico.rotorRapido(ro, true); } }
     if (a.pg) {   // passageiro de outro jogador (no jipe aberto aparece sentado)
       raiz.position.set(a.x, a.y, a.z); raiz.visible = false; if (r.algemas) r.algemas.visible = false; r.av.mixer.update(dt);
       const vp = a.pg === jogador.perfil?.id ? (jogador.carro?.modelo === 'militar' ? jogador.carro.mesh : null) : (remotos.get(a.pg)?.carroModelo === 'militar' ? remotos.get(a.pg).carro : null);
@@ -12615,7 +12615,7 @@ function pilotarHeli(c, dt, max) {
   jogador.pos.y = ch2; c.mesh.position.set(jogador.pos.x, ch2 + c.alt, jogador.pos.z);
   c.mesh.rotation.set(noAr ? c.vel / Math.max(max, 1) * (ufo ? 0.06 : 0.18) : 0, jogador.yaw, noAr ? c.volante * (ufo ? 0.05 : 0.12) : 0, 'YXZ');   // inclina para a frente e para o lado da curva
   { const bd = c.mesh.getObjectByName('balde'); if (bd) bd.visible = c.alt > 2.5; }   // bolsa de água: só voando (some para pousar)
-  const ro = c.mesh.userData.rotor || rotorDe(c.mesh); if (ro) { ro.visible = true; ro.rotation.y += dt * (c.motorParado ? 8 : c.alt > 0.3 || sobe ? 28 : 12); }
+  const ro = c.mesh.userData.rotor || rotorDe(c.mesh); if (ro) { ro.visible = true; ro.rotation.y += dt * (c.motorParado ? 8 : c.alt > 0.3 || sobe ? 28 : 12); civico.rotorRapido(ro, !c.motorParado); }
   jogador.avatar.raiz.position.copy(jogador.pos);
   const bp = $('vPairar'), revisa = c.alt <= 0 && !!chaveHeli(c) && Math.hypot(MECANICO_HANGAR.x - jogador.pos.x, MECANICO_HANGAR.z - jogador.pos.z) < 35;
   if (bp) { bp.style.display = revisa ? 'block' : 'none'; if (revisa && bp.dataset.rev !== '1') { bp.dataset.rev = '1'; bp.innerHTML = '🔧<br>REVISÃO'; } }

@@ -340,7 +340,30 @@ function separarRotor(base, R) {
     const pas = new THREE.Mesh(g, o.material); pas.castShadow = true; rotor.add(pas);
     geo.setIndex(fica);
   }
-  if (rotor.children.length) base.add(rotor);
+  if (!rotor.children.length) return;
+  // o eixo de verdade é o meio das pontas das pás (o x/z da tabela é só um chute): recentra tudo nele, senão gira torto
+  const bb = new THREE.Box3(); for (const pa of rotor.children) { pa.geometry.computeBoundingBox(); bb.union(pa.geometry.boundingBox); }
+  const cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2, raio = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) / 2, y = (bb.min.y + bb.max.y) / 2;
+  for (const pa of rotor.children) { pa.geometry.translate(-cx, 0, -cz); pa.geometry.computeBoundingSphere(); }
+  rotor.position.x += cx; rotor.position.z += cz;
+  // como no primeiro helicóptero: parado/devagar aparecem as pás do modelo; girando rápido elas somem e entra o
+  // "borrão" (disco translúcido + duas pás apagadas), que não pisca como pá de verdade girando na tela
+  const reais = new THREE.Group(); reais.name = 'pasReais'; reais.add(...rotor.children); rotor.add(reais);
+  const borrao = new THREE.Group(); borrao.name = 'borrao'; borrao.position.y = y; borrao.visible = false;
+  const disco = new THREE.Mesh(new THREE.CircleGeometry(raio, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#222', transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide }));
+  borrao.add(disco); borrao.userData.t = 0;
+  // parou de girar (ninguém chamou rotorRapido há um tempo): volta a mostrar as pás do modelo. Usa "this" porque cada
+  // clone copia esta função, e precisa mexer nos nós do próprio clone
+  disco.onBeforeRender = function () { const b = this.parent; if (performance.now() - b.userData.t > 400) { b.visible = false; const r = b.parent?.getObjectByName('pasReais'); if (r) r.visible = true; } };
+  for (const a of [0, Math.PI / 2]) { const pa = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, raio * 2), new THREE.MeshBasicMaterial({ color: '#333', transparent: true, opacity: 0.45, depthWrite: false })); pa.rotation.y = a; borrao.add(pa); }
+  rotor.add(borrao);
+  base.add(rotor);
+}
+// troca pás do modelo <-> borrão pela velocidade do giro (cada clone tem os seus nós; vale para jogador, remotos e NPCs)
+const _giroRotor = new WeakMap();
+export function rotorRapido(ro, rapido) {
+  let n = _giroRotor.get(ro); if (!n) { n = { r: ro.getObjectByName('pasReais'), b: ro.getObjectByName('borrao') }; _giroRotor.set(ro, n); }
+  if (n.r) n.r.visible = !rapido; if (n.b) { n.b.visible = rapido; if (rapido) n.b.userData.t = performance.now(); }
 }
 // helicóptero dos bombeiros: a bolsa de água pendurada embaixo (abaixo dos esquis) vira um nó "balde" que some no
 // pouso; o modelo desce para os esquis ficarem no chão (antes a bolsa era o "pé" e ele pousava em cima dela)
