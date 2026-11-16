@@ -565,6 +565,7 @@ export const configJogo = {
   async ler() { const { data, error } = await sb.from('config_jogo').select('*').eq('id', 1).maybeSingle(); if (error) throw error; return data; },
   salvar: (policia, crimes, chance) => rpc('admin_config', { p_policia: policia, p_crimes: crimes, p_chance: chance }),
   salvarRespawn: (seg) => rpc('admin_respawn', { p_seg: seg }),
+  npcRua: (n) => rpc('admin_npc_rua', { p_qtd: n }),
   salvarFavela: (preco, aluguel) => rpc('admin_favela_precos', { p_preco: preco, p_aluguel: aluguel }),
   presos: async (desde) => (await sel(sb.from('bandidos_presos').select('ciclo').gte('ciclo', desde))) || [],
   prenderBandido: (ciclo) => rpc('prender_bandido', { p_ciclo: ciclo }),

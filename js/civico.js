@@ -451,11 +451,17 @@ export function pontoNoCemiterio() {
 
 // tira do modelo os triângulos com os 3 vértices dentro de uma região (coordenadas do modelo inteiro);
 // a geometria é compartilhada pelas cópias, então isso é feito uma vez só por modelo
+// corta numa CÓPIA da geometria (guardada por modelo): antes cortava a geometria original do GLB, compartilhada com os
+// carros estacionados, que ficavam sem roda quando eram montados depois do primeiro carro de verdade
+const geoCortada = new WeakMap();
 export function removerTriangulos(g, dentro, marca) {
   g.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), v = new THREE.Vector3(), m = new THREE.Matrix4();
   g.traverse((o) => {
     if (!o.isMesh || !o.geometry?.index || o.geometry.userData[marca]) return;
-    const geo = o.geometry, pos = geo.attributes.position, idx = geo.index, fica = [];
+    const pronta = geoCortada.get(o.geometry)?.[marca]; if (pronta) { o.geometry = pronta; return; }
+    const orig = o.geometry, geo = orig.clone(), pos = geo.attributes.position, idx = geo.index, fica = [];
+    geo.userData = { ...orig.userData };
+    if (!geoCortada.has(orig)) geoCortada.set(orig, {}); geoCortada.get(orig)[marca] = geo; o.geometry = geo;
     m.multiplyMatrices(inv, o.matrixWorld);
     const ok = new Uint8Array(pos.count); for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(m); ok[i] = dentro(v.x, v.y, v.z) ? 1 : 0; }
     for (let t = 0; t < idx.count; t += 3) { const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2); if (!(ok[a] && ok[b] && ok[c])) fica.push(a, b, c); }

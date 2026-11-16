@@ -35,6 +35,7 @@ import * as jornal from './jornal.js';
 import * as visual from './visual.js';
 import { nivelTexto } from './empresa.js';
 import { iniciarPainel, atualizarBotao } from './painel.js';
+import { abrirTutorial, tutorialPrimeiraVez } from './tutorial.js';
 
 // ================================================================= CONTA E PERFIL
 let escolhido = null;
@@ -2197,25 +2198,45 @@ function atualizarBolas(dt) {
 
 // ================================================================= NPCs E TRÂNSITO
 const npcs = [];
+// moradores na calçada: o administrador escolhe quantos (0 a 40, padrão 4). Cada um dá a volta num quarteirão (os 4
+// primeiros nos de sempre, os outros espalhados pelo centro e pelos bairros em volta). Longe de você ficam escondidos.
+let excluirNpc = null, criandoNpcRua = false, tAjusteRua = 0;
+const QUADRAS_RUA = [[0, 1], [3, 2], [1, 0], [2, 3], [0, 0], [1, 1], [2, 2], [3, 3], [0, 2], [2, 0], [1, 3], [3, 1], [0, 3], [3, 0], [1, 2], [2, 1],
+  [-1, 0], [4, 1], [1, -1], [2, 4], [-1, 3], [4, 2], [0, -1], [3, 4], [-2, 0], [5, 3], [0, -2], [3, 5], [-1, -1], [4, 4], [-2, 3], [5, 0], [-1, 4], [4, -1], [2, -2], [1, 5], [-3, 1], [6, 2], [1, -3], [2, 6]];
+async function criarNpcRua(k) {
+  const lista = PERSONAGENS.map((p) => p.id).filter((id) => id !== excluirNpc);
+  const quem = lista[(k * 7 + 3) % lista.length];
+  const av = await criarAvatar('personagens', quem);
+  const [qx, qz] = QUADRAS_RUA[k % QUADRAS_RUA.length]; const cx = quadC(qx), cz = quadC(qz), d = QB / 2 - 1.1;
+  const rota = [[cx - d, cz - d], [cx + d, cz - d], [cx + d, cz + d], [cx - d, cz + d]];
+  if (k % 2) rota.reverse();
+  av.raiz.position.set(rota[0][0], 0.18, rota[0][1]);
+  scene.add(av.raiz); av.tocar('walk', { velocidade: 0.85 });
+  npcs.push({ av, rota, laco: laco(rota), vel: 1.4 + (k % 5) * 0.06, fase: k * 53 + 7, vida: 100, caido: 0, hostil: 0, tiro: 0, civil: true, rua: k });
+}
 async function criarNPCs(excluir) {
-  const opcoes = PERSONAGENS.map(p => p.id).filter(id => id !== excluir).sort(() => Math.random() - 0.5).slice(0, 4);
-  const quads = [[0, 1], [3, 2], [1, 0], [2, 3]];
-  for (let k = 0; k < opcoes.length; k++) {
-    try {
-      const av = await criarAvatar('personagens', opcoes[k]);
-      const [qx, qz] = quads[k]; const cx = quadC(qx), cz = quadC(qz), d = QB / 2 - 1.1;
-      const rota = [[cx - d, cz - d], [cx + d, cz - d], [cx + d, cz + d], [cx - d, cz + d]];
-      if (k % 2) rota.reverse();
-      av.raiz.position.set(rota[0][0], 0.18, rota[0][1]);
-      scene.add(av.raiz); av.tocar('walk', { velocidade: 0.85 });
-      npcs.push({ av, rota, laco: laco(rota), vel: 1.5, fase: k * 53 + 7, vida: 100, caido: 0, hostil: 0, tiro: 0, civil: true });
-    } catch (e) { console.warn('NPC não carregou', e); }
+  excluirNpc = excluir;
+  for (let k = 0; k < 4; k++) { try { await criarNpcRua(k); } catch (e) { console.warn('NPC não carregou', e); } }
+}
+function ajustarNpcsRua(dt) {
+  if ((tAjusteRua -= dt) > 0) return; tAjusteRua = 2;
+  const quer = THREE.MathUtils.clamp(Number(configJogo.npc_rua ?? 4), 0, 40), feitos = npcs.filter((n) => n.rua !== undefined);
+  for (const n of feitos) n.desligado = n.rua >= quer;
+  if (feitos.length < quer && !criandoNpcRua && feitos.length >= 4) {   // um de cada vez (cada um carrega um personagem)
+    criandoNpcRua = true;
+    criarNpcRua(feitos.length).catch(() => {}).finally(() => { criandoNpcRua = false; tAjusteRua = 0.5; });
   }
 }
 function atualizarNPCs(dt) {
+  ajustarNpcsRua(dt);
   for (const n of npcs) {
     if (n.bope) continue;   // BOPE: passoBot
     if (n.abduzido) { npcAbduzido(n, dt); continue; }
+    if (n.rua !== undefined && !n.conversa && !n.algemado && !(n.fugindoT > 0)) {   // morador desligado no painel ou longe: escondido e parado
+      const q = n.av.raiz.position, fora = n.desligado || Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z) > 160;
+      if (fora) { if (n.av.raiz.visible) n.av.raiz.visible = false; const p2 = patrulha(n); q.set(p2.x, 0.18, p2.z); continue; }
+      if (!n.av.raiz.visible) n.av.raiz.visible = true;
+    }
     if (n.ordem !== undefined) { const off = n.ordem >= configJogo.policia_robo; if (off !== !!n.fora) { n.fora = off; n.av.raiz.visible = !off; if (off) { n.perseguindo = false; n.cerco = null; } } if (off) continue; }
     if (n.bandido && banditoAtivo(n)) { atualizarBandido(n, dt); continue; }
     if (n.algemado) { npcAlgemado(n, dt); continue; }
@@ -2710,6 +2731,7 @@ async function iniciarJogo(perfil) {
   $('hud').classList.remove('oculto');
   $('carregando').classList.add('oculto');
   aviso(`Bem-vindo à cidade, ${nome}!`);
+  { const nova = Date.now() - Date.parse(jogador.perfil?.criado_em || 0) < 20 * 60000; setTimeout(() => tutorialPrimeiraVez(nova), 2500); }   // tutorial na primeira vez
   if (baixouQualidade) setTimeout(() => aviso(`⚠️ O celular ficou sem memória de vídeo duas vezes seguidas e o jogo reiniciou. Baixei a qualidade gráfica para ${baixouQualidade}; dá para voltar em ⚙️.`, 7), 4000);
   criarNPCs(id);
   conectarMultiplayer(perfil);
@@ -2775,6 +2797,7 @@ async function iniciarJogo(perfil) {
   $('menuItens').addEventListener('click', (e) => { if (e.target.closest('button') && e.target.closest('button').id !== 'btMenu') $('menuBar').classList.remove('aberto'); });
   $('btCamera').onclick = () => { trocarCamera(); $('menuBar').classList.remove('aberto'); };
   $('btCreditos').onclick = () => { creditos(); $('menuBar').classList.remove('aberto'); };
+  { const b = $('btTutorial'); if (b) b.onclick = () => { abrirTutorial(); $('menuBar').classList.remove('aberto'); }; }
   $('btSom').onclick = () => { const l = sons.alternar(); $('btSom').firstChild.textContent = l ? '🔊' : '🔇'; };
   $('btSom').firstChild.textContent = sons.estaLigado() ? '🔊' : '🔇';
   sons.preparar();
@@ -3922,7 +3945,7 @@ function acaoNoVeiculo() {
   if (c.jujuba) { const cj = contextoComprador(); if (cj) return ['comprador', cj[0], cj[1]]; }
   if (c.servico === 'bombeiros' && Math.abs(c.vel) < 2 && (servicos.estaApagando() || servicos.fogoProximo(15))) return ['jato', servicos.estaApagando() ? 'jogando água (toque para parar)' : 'jogar água no fogo (+400)', 'Jato'];
   if (c.servico === 'ambulancia' && Math.abs(c.vel) < 2 && feridoProximo(7)) return ['socorrer', 'socorrer o ferido (+250)', 'Socorrer'];
-  if (c.servico === 'ovni') { const alvo = alvoAbducao(); if (alvo) return ['abduzir', alvo.npc ? 'abduzir o morador' : `abduzir ${alvo.r.meta?.nome || 'o jogador'} (ele não vê nada e acorda em outro lugar)`, '👽 Abduzir']; }
+  if (c.servico === 'ovni') { const alvo = alvoAbducao(); if (alvo) return ['abduzir', alvo.npc ? (alvo.npc.policia ? 'abduzir o policial robô' : 'abduzir o morador') : `abduzir ${alvo.r.meta?.nome || 'o jogador'} (ele não vê nada e acorda em outro lugar)`, '👽 Abduzir']; }
   return null;
 }
 function donoDoVeiculo(c) { return empresas.get(c.d.empresa)?.dono === jogador.perfil?.id; }
@@ -4693,15 +4716,23 @@ function asaAve(sx, c1, c2, corvo) {
   if (!corvo) { const faixa = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.004, 0.025), matAve('#2b2f36')); faixa.position.set(sx * 0.22, 0.017, -0.03); g.add(faixa); }   // a listra escura do pombo
   return g;
 }
+// altura do centro do pássaro pousado (a sola dos pés no chão)
+const peAve = (g) => (-(g.userData.pernas?.userData.sola ?? -0.232) - 0.003) * g.scale.x;
 // pernas: coxa curta, canela fina e três dedos para a frente e um para trás; voando ficam recolhidas (somem)
-function pernasAve(corP, corCoxa) {
-  const pernas = new THREE.Group(), matP = matAve(corP);
-  for (const sx of [-0.055, 0.055]) {
-    const coxa = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.016, 0.05, 6), matAve(corCoxa)); coxa.position.set(sx, -0.12, 0.01); pernas.add(coxa);
-    const canela = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.09, 5), matP); canela.position.set(sx, -0.185, 0.02); pernas.add(canela);
-    for (const a of [-0.45, 0, 0.45]) { const d = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.006, 0.055), matP); d.position.set(sx + Math.sin(a) * 0.022, -0.229, 0.045 + Math.cos(a) * 0.004); d.rotation.y = a; pernas.add(d); }
-    const tras = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.006, 0.035), matP); tras.position.set(sx, -0.229, -0.005); pernas.add(tras);
+function pernasAve(corP, corCoxa, corvo = false) {
+  const pernas = new THREE.Group(), matP = matAve(corP), unha = matAve('#0c0c0c');
+  const L = corvo ? 0.11 : 0.09, dedo = corvo ? 0.075 : 0.055, base = -0.12 - 0.025 - L;   // y da sola
+  for (const sx of [-0.05, 0.05]) {
+    if (!corvo) { const coxa = new THREE.Mesh(new THREE.SphereGeometry(0.024, 8, 6), matAve(corCoxa)); coxa.scale.set(1, 1.3, 1); coxa.position.set(sx, -0.125, 0.015); pernas.add(coxa); }   // penas da coxa (no corvo a perna entra direto no corpo)
+    const topo = corvo ? -0.04 : -0.14, comp = topo - base;   // a canela do corvo sobe até dentro do corpo: sem vão nem "bolinha"
+    const canela = new THREE.Mesh(new THREE.CylinderGeometry(corvo ? 0.009 : 0.009, corvo ? 0.012 : 0.009, comp, 6), matP); canela.position.set(sx, (topo + base) / 2, 0.02); pernas.add(canela);
+    for (const a of [-0.5, 0, 0.5]) {   // três dedos para a frente, abertos
+      const d = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0065, dedo, 5).rotateX(Math.PI / 2), matP); d.position.set(sx + Math.sin(a) * dedo * 0.45, base + 0.004, 0.03 + Math.cos(a) * dedo * 0.5); d.rotation.y = a; pernas.add(d);
+      if (corvo) { const u = new THREE.Mesh(new THREE.ConeGeometry(0.004, 0.014, 4).rotateX(Math.PI / 2), unha); u.position.set(sx + Math.sin(a) * dedo * 0.95, base + 0.002, 0.03 + Math.cos(a) * dedo); u.rotation.y = a; pernas.add(u); }
+    }
+    const tras = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0065, dedo * 0.6, 5).rotateX(Math.PI / 2), matP); tras.position.set(sx, base + 0.004, 0.03 - dedo * 0.35); pernas.add(tras);
   }
+  pernas.userData.sola = base;
   return pernas;
 }
 // modelos do Meshy (corvo e pombo): sem as pernas/pedra de baixo (cortadas uma vez), na escala do pássaro
@@ -4734,7 +4765,7 @@ function criarAve(tipo, escala = 1) {
       const piv = new THREE.Group(); piv.position.set(sx * (corvo ? 0.1 : 0.11), 0.12, 0.03);
       piv.add(asaAve(sx, c1, c2, corvo)); corpoG.add(piv); asas.push(piv);
     }
-    const pernas = pernasAve(corvo ? '#2a2a2e' : '#c4553a', corvo ? '#141418' : '#6f7682'); corpoG.add(pernas);
+    const pernas = pernasAve(corvo ? '#3a3a40' : '#c4553a', corvo ? '#141418' : '#6f7682', corvo); corpoG.add(pernas);
     g.scale.setScalar(escala); g.userData = { asas, corpo: corpoG, corpo3d, pernas, modelo: true, fase: Math.random() * 6 };
     return g;
   }
@@ -4753,7 +4784,7 @@ function criarAve(tipo, escala = 1) {
     const ponta = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.015, 0.16), matAve(c2)); ponta.position.set(sx * 0.52, 0, -0.03); piv.add(ponta);
     corpoG.add(piv); asas.push(piv);
   }
-  const pernas = pernasAve(corvo ? '#1c1c1f' : '#c4553a', c1); corpoG.add(pernas);
+  const pernas = pernasAve(corvo ? '#3a3a40' : '#c4553a', c1, corvo); corpoG.add(pernas);
   g.scale.setScalar(escala); g.userData = { asas, corpo: corpoG, pernas, fase: Math.random() * 6 };
   return g;
 }
@@ -4780,7 +4811,55 @@ function criarAvesNpc() {
     avesNpc.push({ g, cx, cz, r: r * (0.8 + sorte(1) * 0.4), h: h + (sorte(2) - 0.5) * 6, a0: k / n * Math.PI * 2 + sorte(3) * 0.4, vel: (tipo === 'corvo' ? 0.12 : 0.22) * (0.85 + sorte(4) * 0.3), s0: sorte(5) * 6 });
   }
 }
+// ---- pombos no chão das praças: bicam o chão e fogem voando quando gente (jogador ou NPC) chega perto; do corvo do
+// administrador (e de qualquer jogador virado pássaro) eles não fogem. Depois de um tempo voltam e pousam de novo.
+const pombosChao = [];
+function criarPombosChao() {
+  const pontos = [[contratante?.x ?? 27, (contratante?.z ?? 27) + 6], [-135, -112], [quadC(-4), quadC(-4)], [quadC(7), quadC(7)], [quadC(1) + 12, quadC(2) - 14]];
+  pontos.forEach(([cx, cz], q) => {
+    for (let k = 0; k < 7; k++) {
+      const a = k / 7 * Math.PI * 2 + q, r = 0.8 + (k % 3) * 0.9, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+      const g = criarAve('pombo', 1); g.rotation.y = a * 2.3; g.position.set(x, alturaChao(x, z) + peAve(g), z); scene.add(g);
+      pombosChao.push({ g, x, z, cx, cz, voo: 0, ang: a, alt: 7 + (k % 4) * 2, passo: 0, t0: Math.random() * 5 });
+    }
+  });
+}
+function ameacasPerto(x, z, r) {
+  if (!jogador.ave && !jogador.carro && Math.hypot(jogador.pos.x - x, jogador.pos.z - z) < r) return true;
+  for (const rr of remotos.values()) { const a = rr.alvo; if (!a || a.ave || a.cv || a.vc || !rr.av?.raiz.visible) continue; if (Math.hypot(a.x - x, a.z - z) < r) return true; }
+  for (const n of npcs) { if (!n.av?.raiz.visible || n.abduzido) continue; const q = n.av.raiz.position; if (Math.abs(q.x - x) < r && Math.abs(q.z - z) < r && Math.hypot(q.x - x, q.z - z) < r) return true; }
+  return false;
+}
+function atualizarPombosChao(dt) {
+  if (!pombosChao.length) { if (contratante || performance.now() > 20000) criarPombosChao(); return; }
+  for (const p of pombosChao) {
+    const longe = Math.hypot(p.cx - jogador.pos.x, p.cz - jogador.pos.z) > 150; p.g.visible = !longe; if (longe) continue;
+    const g = p.g, chao = alturaChao(p.x, p.z) + peAve(g);
+    if (p.voo <= 0) {
+      if (ameacasPerto(g.position.x, g.position.z, 3.6)) {   // alguém chegou: o bando de perto levanta voo junto
+        for (const o of pombosChao) if (o.voo <= 0 && Math.hypot(o.cx - p.cx, o.cz - p.cz) < 1 && Math.hypot(o.g.position.x - g.position.x, o.g.position.z - g.position.z) < 4) { o.voo = 9 + Math.random() * 6; o.ang = Math.atan2(o.z - o.cz, o.x - o.cx); }
+      }
+    }
+    if (p.voo > 0) {
+      p.voo -= dt; p.ang += dt * 0.9;
+      const tx = p.cx + Math.cos(p.ang) * 9, tz = p.cz + Math.sin(p.ang) * 9, ty = alturaChao(p.cx, p.cz) + p.alt;
+      const pos = g.position; pos.x += (tx - pos.x) * Math.min(1, dt * 1.5); pos.z += (tz - pos.z) * Math.min(1, dt * 1.5); pos.y += (ty - pos.y) * Math.min(1, dt * 2);
+      g.rotation.set(0, -p.ang, 0.3); animarAve(g, dt, true);
+      if (p.voo <= 0 && ameacasPerto(p.x, p.z, 4.5)) p.voo = 4;   // ainda tem gente lá: dá mais uma volta
+    } else {
+      const pos = g.position, d = Math.hypot(p.x - pos.x, p.z - pos.z);
+      if (d > 0.08 || Math.abs(pos.y - chao) > 0.05) {   // voltando para o lugar dele e pousando
+        pos.x += (p.x - pos.x) * Math.min(1, dt * 1.8); pos.z += (p.z - pos.z) * Math.min(1, dt * 1.8); pos.y += (chao - pos.y) * Math.min(1, dt * 2.2);
+        g.rotation.set(0, Math.atan2(p.x - pos.x, p.z - pos.z), 0); animarAve(g, dt, d > 0.3);
+      } else {
+        p.passo -= dt; if (p.passo <= 0) { p.passo = 2 + Math.random() * 4; const a = Math.random() * Math.PI * 2; p.x = THREE.MathUtils.clamp(p.x + Math.cos(a) * 0.35, p.cx - 3, p.cx + 3); p.z = THREE.MathUtils.clamp(p.z + Math.sin(a) * 0.35, p.cz - 3, p.cz + 3); }
+        g.position.y = chao; animarAve(g, dt, false);
+      }
+    }
+  }
+}
 function atualizarAvesNpc(dt) {
+  atualizarPombosChao(dt);
   if (!avesNpc.length) { if (!atualizarAvesNpc.feito) { atualizarAvesNpc.feito = true; criarAvesNpc(); } return; }
   const px = jogador.pos.x, pz = jogador.pos.z;
   for (const b of avesNpc) {
@@ -4843,7 +4922,7 @@ function voarAve(dt, dir, forca) {
   const chao2 = chaoAve(nx, nz); if (a.y < chao2) a.y = chao2;
   j.pos.set(nx, a.y, nz);
   const voando = a.y > chao2 + 0.08;
-  a.g.position.set(nx, a.y + (voando ? 0 : 0.232 * a.g.scale.x), nz);
+  a.g.position.set(nx, a.y + (voando ? 0 : peAve(a.g)), nz);
   a.g.rotation.set(voando ? -Math.min(0.25, a.vel / 60) + vy * 0.02 : 0, j.yaw, 0, 'YXZ');
   animarAve(a.g, dt, voando || sobe, voando && !sobe && a.vel > 8);
   av.raiz.position.copy(j.pos); av.raiz.visible = false;
@@ -4951,7 +5030,7 @@ function atualizarBandos(dt) {
       c.g.visible = !longe; if (longe) continue;
       let tx, ty, tz;
       if (donoVoando) { c.ang += c.vel * dt * 0.8; tx = o.x + Math.cos(c.ang) * c.r; tz = o.z + Math.sin(c.ang) * c.r; ty = Math.max(chaoAve(tx, tz) + 1, o.y + c.h); }
-      else { tx = o.x + Math.cos(c.pa) * c.pr; tz = o.z + Math.sin(c.pa) * c.pr; ty = chaoAve(tx, tz) + 0.232 * c.g.scale.x; }
+      else { tx = o.x + Math.cos(c.pa) * c.pr; tz = o.z + Math.sin(c.pa) * c.pr; ty = chaoAve(tx, tz) + peAve(c.g); }
       const p = c.g.position, dx = tx - p.x, dy = ty - p.y, dz = tz - p.z, d = Math.hypot(dx, dy, dz);
       const k2 = Math.min(1, dt * (donoVoando ? 3 : 2.2)); p.x += dx * k2; p.y += dy * k2; p.z += dz * k2;
       const voando = donoVoando || d > 0.25;
@@ -4973,7 +5052,7 @@ function mostrarAveRemota(r, a, dt) {
   }
   r.aveEt.visible = !a.oc;
   const voando = a.y > chaoAve(a.x, a.z) + 0.1;
-  const p = r.ave.position, ax = p.x, az = p.z; p.lerp(new THREE.Vector3(a.x, a.y + (voando ? 0 : 0.232 * r.ave.scale.x), a.z), Math.min(1, dt * 8));
+  const p = r.ave.position, ax = p.x, az = p.z; p.lerp(new THREE.Vector3(a.x, a.y + (voando ? 0 : peAve(r.ave)), a.z), Math.min(1, dt * 8));
   r.ave.rotation.y = suavizarAngulo(r.ave.rotation.y, a.r, dt * 8);
   animarAve(r.ave, dt, voando, voando && Math.hypot(p.x - ax, p.z - az) / Math.max(dt, 1e-3) > 8);
 }
@@ -7607,7 +7686,7 @@ function quadroJogo() {
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
   atualizarBolas(dt);
   atualizarCamera(dt);
-  mundo.atualizarOclusao(dt, averiguando ? foco() : jogador.pos, modo3D() ? new THREE.Vector3(0, 1, 0) : offsetCamera(anguloCamSuave));
+  mundo.atualizarOclusao(dt, foco(), modo3D() ? new THREE.Vector3(0, 1, 0) : offsetCamera(anguloCamSuave));
   atualizarHUD(dt);
   // chuva molha o chão (asfalto escuro e brilhante); o visual ajusta brilho e cor pela noite e pela chuva
   const tc = clima.atual(), alvoMolhado = tc === 'chuva' || tc === 'tempestade' ? clima.fatorTempo() : 0;
@@ -12927,8 +13006,8 @@ function alvoAbducao() {
     const d = Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z); if (d < dm) { dm = d; melhor = { id, r }; }
   }
   if (melhor) return melhor;
-  npcs.forEach((n, idx) => {   // moradores da calçada (não os robôs da polícia nem os bandidos)
-    if (n.policia || n.bandido || n.abduzido || n.algemado || n.conversa || !n.av?.raiz.visible) return;
+  npcs.forEach((n, idx) => {   // moradores da calçada e os robôs da polícia/PRF (não os bandidos nem o BOPE)
+    if (n.bope || n.bandido || n.abduzido || n.algemado || n.conversa || n.fora || !n.av?.raiz.visible) return;
     const p = n.av.raiz.position, d = Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z); if (d < dm) { dm = d; melhor = { npc: n, idx }; }
   });
   return melhor;
@@ -12944,7 +13023,7 @@ function abduzir(alvo) {
   if (alvo.npc) {
     abducaoPronta = agora + 30000;   // morador: recarga curta
     iniciarAbducaoNpc(alvo.npc, c.mesh.position.y);
-    conexao.enviar('abducao', { npc: alvo.idx, de: jogador.perfil.id, x: r2(jogador.pos.x), z: r2(jogador.pos.z), y: r2(c.mesh.position.y), h: r2(c.alt || 10) });
+    conexao.enviar('abducao', { npc: alvo.idx, chave: chaveNpc(alvo.npc), de: jogador.perfil.id, x: r2(jogador.pos.x), z: r2(jogador.pos.z), y: r2(c.mesh.position.y), h: r2(c.alt || 10) });
     const p = alvo.npc.av.raiz.position; conexao.enviar('ovniAbducao', { x: Math.round(p.x), z: Math.round(p.z), lugar: regiaoDe(p.x, p.z) });
     aviso('👽 Morador subindo no feixe…', 3); return;
   }
@@ -12958,7 +13037,7 @@ function receberAbducao(e) {
   if (r?.carro?.visible) feixeEm(r.carro, Number(e.h) || 10);
   else { const o = new THREE.Group(); o.position.set(e.x, e.y, e.z); scene.add(o); feixeEm(o, Number(e.h) || 10); setTimeout(() => scene.remove(o), 7000); }
   if (Math.hypot(e.x - jogador.pos.x, e.z - jogador.pos.z) < 120) sons.abducao?.();
-  if (e.npc !== undefined) { const n = npcs[Number(e.npc)]; if (n && !n.abduzido) iniciarAbducaoNpc(n, Number(e.y)); return; }
+  if (e.npc !== undefined) { const n = (e.chave && npcs.find((k) => chaveNpc(k) === e.chave)) || npcs[Number(e.npc)]; if (n && !n.abduzido) iniciarAbducaoNpc(n, Number(e.y)); return; }
   if (e.alvo !== jogador.perfil.id) return;
   const j = jogador, agora = performance.now();
   const motivo = j.dentroCasa ? 'está dentro de um lugar fechado' : j.carro || j.trem || j.passageiro || j.onibus || j.voo ? 'está num veículo' : j.morto ? 'está caído'
@@ -13071,12 +13150,14 @@ function guardarOvni(c) {
 }
 
 // morador abduzido: sobe girando no feixe, some e volta à calçada depois de 3 min
+// cada NPC tem uma chave igual em todo celular (a ordem da lista muda de um para outro)
+const chaveNpc = (n) => (n.rua !== undefined ? 'rua:' + n.rua : n.policia ? 'robo:' + n.id : null);
 function iniciarAbducaoNpc(n, yTopo) {
   const p = n.av.raiz.position; n.abduzido = { t: 0, chao: p.y, topo: Math.max(p.y + 3, (yTopo || p.y + 12) - 1.5) };
   n.av.tocar('idle');
 }
 function npcAbduzido(n, dt) {
-  const A = n.abduzido, r = n.av.raiz; A.t += dt;
+  const A = n.abduzido, r = n.av.raiz; A.t += dt; if (n.policia) { n.perseguindo = false; n.cerco = null; }
   if (A.t < 4.5) { r.position.y = A.chao + (A.t / 4.5) * (A.topo - A.chao); r.rotation.y += dt * 2; n.av.mixer.update(dt); return; }
   r.visible = false;
   if (A.t > 180) { n.abduzido = null; r.visible = true; r.position.y = A.chao; n.av.tocar('walk', { velocidade: 0.85 }); }

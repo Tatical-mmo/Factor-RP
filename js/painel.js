@@ -225,6 +225,9 @@ async function abaCidade() {
   c.innerHTML = `<div class="sub">🚓 Polícia robô na rua</div>
     <p class="dica">Quantos policiais robô patrulham a metrópole (0 a 20). Os agentes robô da PRF continuam iguais.</p>
     <div class="botoes"><input id="cPol" type="range" min="0" max="20" value="${cf.policia_robo}" style="flex:1"><b id="cPolN" style="min-width:32px;text-align:center">${cf.policia_robo}</b></div>
+    <div class="sub">🚶 Moradores na rua</div>
+    <p class="dica">Quantos moradores (NPCs) andam nas calçadas, de 0 a 40. Cada um dá a volta num quarteirão (centro e bairros em volta); longe de você ficam escondidos para não pesar no celular.</p>
+    <div class="botoes"><input id="cRua" type="range" min="0" max="40" value="${cf.npc_rua ?? 4}" style="flex:1"><b id="cRuaN" style="min-width:32px;text-align:center">${cf.npc_rua ?? 4}</b><button id="cRuaOk">Salvar</button></div>
     <div class="sub">🦹 Crimes de NPC</div>
     <p class="dica">Ligado, a cada 2 minutos pode acontecer um assalto de NPC numa loja (com a chance abaixo). O ladrão foge pelas ruas por até 3 minutos; Polícia, PRF e Exército em serviço recebem o alerta e prendem chegando perto (+300).</p>
     <div class="botoes"><label><input type="checkbox" id="cCrimes" ${cf.crimes_npc ? 'checked' : ''}> Ligado</label></div>
@@ -286,6 +289,11 @@ async function abaCidade() {
     catch (e) { msg(/admin_favela|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 83_casas_favela.sql no SQL Editor do Supabase.' : e.message, false); }
   };
   $('cPol').oninput = () => { $('cPolN').textContent = $('cPol').value; };
+  $('cRua').oninput = () => { $('cRuaN').textContent = $('cRua').value; };
+  $('cRuaOk').onclick = async () => {
+    try { await rede.configJogo.npcRua(Number($('cRua').value)); ctx.configMudou?.(); msg(`Moradores na rua: ${$('cRua').value}. Os novos vão aparecendo aos poucos.`); }
+    catch (e) { msg(/admin_npc_rua|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 98_npcs_rua.sql no SQL Editor do Supabase.' : e.message, false); }
+  };
   $('cChance').oninput = () => { $('cChanceN').textContent = $('cChance').value + '%'; };
   $('cResp').oninput = () => { $('cRespN').textContent = $('cResp').value + ' s'; };
   $('cSalvar').onclick = async () => {

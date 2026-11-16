@@ -135,6 +135,11 @@ function chaoDoMorro(x, z, rua) {
   if (naRuaMorro(x, z)) return nat + 0.1;
   return (serra ? naMalha(morro, 0, -1340, 900, 380, 90, 38, x, z) : naMalha(morroPorto, 1000, 1030, 200, 164, 80, 66, x, z)) ?? nat;
 }
+// dentro de uma favela (com a rua dela e um pouco de folga) ou numa rua de morro
+function naFavela(x, z) {
+  for (const f of Object.values(FAVELAS)) if (x > f.x0 - 4 && x < f.x1 + 4 && z > f.z0 - 4 && z < f.z1 + 4) return true;
+  return naRuaMorro(x, z);
+}
 function naRuaMorro(x, z) {
   if (!((z < -1090 && z > -1400 && x > -175 && x < 175) || (z > 930 && z < 1112 && x > 80 && x < 1100))) return false;
   for (const [rx, rz, w, d, , desenhar] of ruasMorro) if (desenhar && Math.abs(x - rx) <= w / 2 && Math.abs(z - rz) <= d / 2) return true;
@@ -455,6 +460,7 @@ export function limparArea(x0, z0, x1, z1) {
 }
 function rua(x, z, w, d) { ruas.push([x, z, w, d, d > w]); }
 const ruasMorro = [];   // [x, z, w, d, vertical, desenhar]
+export function listaRuasMorro() { return ruasMorro; }
 function ruaMorro(x0, z0, x1, z1, desenhar = true) {   // de ponta a ponta, no eixo
   const vert = x0 === x1, w = vert ? RW : Math.abs(x1 - x0) + RW, d = vert ? Math.abs(z1 - z0) + RW : RW;
   ruasMorro.push([(x0 + x1) / 2, (z0 + z1) / 2, w, d, vert, desenhar]);
@@ -666,6 +672,11 @@ function gerarFavelas() {
   ruaMorro(935, 1000, 1050, 1000); ruaMorro(935, 1045, 1050, 1045);
   for (const x of [915, 937, 959, 981]) LOTES_FAVELA.push({ x, z: 927.5, portao: { x, z: 941 } });
   limparArea(878, 910, 1100, 1112);
+  // nada de árvore no asfalto das ruas dos morros (as pontas das ruas dos lotes saíam da área limpa)
+  for (const [rx, rz, w, d] of ruasMorro) for (let k = arvores.length - 1; k >= 0; k--) {
+    const [x, z, , c] = arvores[k]; if (Math.abs(x - rx) > w / 2 + 1.2 || Math.abs(z - rz) > d / 2 + 1.2) continue;
+    if (c) Object.assign(c, { x: 1e7, z: 1e7, r: 0 }); arvores.splice(k, 1);
+  }
   // ---- lajes das bases de clã (topo plano) e a rampa da rua até elas
   for (const [f, rampa] of [[F.serra, { x0: -5, x1: 5, de: -1320, ate: F.serra.base.z + F.serra.base.d / 2 }], [F.porto, { x0: 1045, x1: 1055, de: 1050, ate: F.porto.base.z - F.porto.base.d / 2 }]]) {
     const b = f.base, x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
@@ -1027,6 +1038,7 @@ export function atualizarOclusao(dt, pos, dirCamera) {
       for (const i of gradeEd.get(k) || []) {
         if (vistos.has(i)) continue; vistos.add(i);
         const e = edificios[i];
+        if (pos.y > e.y + e.h - 1.5 && Math.abs(pos.x - e.x) < e.w / 2 + 3 && Math.abs(pos.z - e.z) < e.d / 2 + 3) continue;   // em cima do telhado (helicóptero/pássaro): o prédio fica inteiro
         _box.min.set(e.x - e.w / 2, e.y, e.z - e.d / 2); _box.max.set(e.x + e.w / 2, e.y + e.h + (e.tipo === 'casa' ? 2.6 : 2.2), e.z + e.d / 2);
         if (_ray.intersectsBox(_box)) agora.add(i);
       }
@@ -1206,6 +1218,7 @@ function montarMobiliario() {
     for (let t = a + 8; t < b - 6; t += 27) {
       if (!longe(t, RW / 2 + 3)) continue;
       const [px, pz] = ponto(t, lado * (RW / 2 + 0.9));
+      if (naFavela(px, pz)) { lado = -lado; continue; }   // nas favelas o poste da cidade caía no meio das ruas do morro
       postes.push([px, pz, vert ? (lado > 0 ? -Math.PI / 2 : Math.PI / 2) : (lado > 0 ? Math.PI : 0)]);
       const [qx, qz] = ponto(t, lado * (RW / 2 - 1.6)); poca(qx, qz, 5.5);
       lado = -lado;
@@ -1214,7 +1227,7 @@ function montarMobiliario() {
       if (rnd() > 0.3 || !longe(t, RW / 2 + 5)) continue;
       const lat = (rnd() < 0.5 ? -1 : 1) * (RW / 2 - 1.15);
       const [px, pz] = ponto(t, lat);
-      if (pertoDeCorredor(px, pz)) continue;   // faixa por onde passam os ônibus
+      if (pertoDeCorredor(px, pz) || naFavela(px, pz)) continue;   // faixa por onde passam os ônibus
       carros.push([px, pz, vert ? (lat > 0 ? 0 : Math.PI) : (lat > 0 ? Math.PI / 2 : -Math.PI / 2)]);
     }
   }
@@ -1336,7 +1349,7 @@ export function carrosPerto(px, pz, dt) {
   for (const [, k] of perto) {
     const c = E.carros[k], im = E.glb[c.tipo]; if (!im || conta[c.tipo] >= E.max) continue;
     _q.setFromAxisAngle(_e.set(0, 1, 0), c.rot); _m.compose(_v.set(c.x, 0.02, c.z), _q, _e.set(1, 1, 1));
-    im.setMatrixAt(conta[c.tipo], _m); im.setColorAt(conta[c.tipo], _c.set('#ffffff').lerp(new THREE.Color(c.cor), 0.45)); conta[c.tipo]++;
+    im.setMatrixAt(conta[c.tipo], _m); im.setColorAt(conta[c.tipo], _c.set('#ffffff').lerp(new THREE.Color(c.cor), 0.25)); conta[c.tipo]++;   // tinta leve (forte, as rodas ficavam roxas/coloridas)
     novo.add(k);
   }
   E.glb.forEach((im, i) => { if (!im) return; im.count = conta[i]; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; });
@@ -1386,6 +1399,7 @@ function planejarProps() {
   }
   for (const c of CIDADES) for (const cx of CID.colunas) for (const rz of CID.ruas) {   // cidades
     const z = c.s * rz;
+    if (naFavela(cx, z)) continue;
     CRUZAMENTOS.push({ x: cx, z }); for (const [sx, sz] of [[1, 1], [-1, -1], [1, -1], [-1, 1]]) addCol({ tipo: 'circ', x: cx + sx * d, z: z + sz * d, r: 0.25 });
   }
   // hidrantes: dois por quarteirão (metrópole e cidades)
