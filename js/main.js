@@ -194,6 +194,11 @@ const sol = new THREE.DirectionalLight('#fff2dc', 2.1);
 sol.castShadow = true;
 sol.shadow.mapSize.set(TOQUE ? 1024 : 2048, TOQUE ? 1024 : 2048);
 const SOMBRA = 34;
+// ultra: a sombra cobre uma área maior (mapa 4096, mesma nitidez); nos outros níveis, a de sempre
+function ajustarSombraQualidade() {
+  const S = visual.nivelAtual() === 'ultra' ? 64 : SOMBRA;
+  if (sol.shadow.camera.right !== S) { Object.assign(sol.shadow.camera, { left: -S, right: S, top: S, bottom: -S, far: S > 40 ? 260 : 160 }); sol.shadow.camera.updateProjectionMatrix(); }
+}
 Object.assign(sol.shadow.camera, { left: -SOMBRA, right: SOMBRA, top: SOMBRA, bottom: -SOMBRA, near: 1, far: 160 });
 sol.shadow.bias = -0.0004;
 sol.shadow.normalBias = 0.03;
@@ -207,7 +212,7 @@ try {
   localStorage.setItem('fator_perdeu', marcas.join(','));
   if (marcas.length >= 2) {   // caiu 2 vezes em 10 minutos: aí sim baixa um nível (uma queda só é normal ao trocar de app)
     localStorage.removeItem('fator_perdeu');
-    const n = visual.nivelAtual(), novo = n === 'alto' ? 'medio' : n === 'medio' ? 'baixo' : null;
+    const n = visual.nivelAtual(), novo = n === 'ultra' ? 'alto' : n === 'alto' ? 'medio' : n === 'medio' ? 'baixo' : null;
     if (novo) { visual.definirNivel(novo); baixouQualidade = visual.NIVEIS[novo]; }
   }
 } catch { /* sem armazenamento */ }
@@ -248,16 +253,17 @@ function atualizarCeu(t) {
   mundo.definirNoite(noite);
   noiteAtual = noite;
   // neblina leve no fundo da cena (mesma cor do céu): dá profundidade e esconde o fim do mapa
-  if (scene.fog) { scene.fog.color.copy(scene.background); scene.fog.near = 175 + (1 - molhadoAtual) * 25; scene.fog.far = 330 - molhadoAtual * 90; }
+  if (scene.fog) { const ul = visual.nivelAtual() === 'ultra' ? 1.25 : 1; scene.fog.color.copy(scene.background); scene.fog.near = (175 + (1 - molhadoAtual) * 25) * ul; scene.fog.far = (330 - molhadoAtual * 90) * ul; }
   // câmera 3D (atrás do personagem e primeira pessoa): distância de visão curta, como no Minecraft. O que fica além
   // some na neblina e nem é desenhado; conforme você anda, o que está na frente aparece e o de trás some.
   if (scene.fog && modo3D()) {
-    const q = visual.nivelAtual(), alcance = q === 'alto' ? 260 : q === 'medio' ? 190 : 140;
+    const q = visual.nivelAtual(), alcance = q === 'ultra' ? 380 : q === 'alto' ? 260 : q === 'medio' ? 190 : 140;   // ultra: ~7 quarteirões
     scene.fog.far = Math.min(scene.fog.far, alcance); scene.fog.near = Math.min(scene.fog.near, alcance * 0.45);
     if (Math.abs(camP.far - (alcance + 5)) > 1) { camP.far = alcance + 5; camP.updateProjectionMatrix(); }
   }
   for (const m of luzesCasas) m.emissiveIntensity = noite * 1.1;
   civico.brilhoOutdoors(noite);
+  if (visual.nivelAtual() === 'ultra' && (tNitidas -= 1) <= 0) { tNitidas = 600; visual.nitidas(); }   // texturas que chegaram depois (~10 s)
   // dentro de qualquer prédio (casas, delegacia, prefeitura, hospital, CRAS, Câmara, cadeia...: todos os interiores)
   // a luz é das lâmpadas, igual de dia e de noite: não depende do sol nem da lua
   const alvo = jogador.dentroCasa || jogador.pos.x >= 1900 ? 1 : 0;
@@ -270,7 +276,29 @@ function atualizarCeu(t) {
     scene.environmentIntensity = THREE.MathUtils.lerp(scene.environmentIntensity, Math.max(scene.environmentIntensity, 0.4), k);
   }
 }
-let luzInterna = 0;
+let luzInterna = 0, tNitidas = 0;
+// gráfico ultra, à noite: o poste mais perto vira uma luz de verdade, que projeta a sombra do personagem e dos carros
+// (a sombra muda de lado conforme você passa pelo poste). Uma luz só, que pula para o poste mais perto.
+let luzPoste = null, tPoste = 0;
+function atualizarLuzPoste(dt) {
+  const ultra = visual.nivelAtual() === 'ultra', quer = ultra && noiteAtual > 0.35 && !jogador.dentroCasa;
+  // fora do ultra some; no ultra fica sempre na cena (só apaga): ligar e desligar luz recompila os materiais (engasga)
+  if (!ultra) { if (luzPoste) luzPoste.visible = false; return; }
+  if (luzPoste) luzPoste.visible = true;
+  if (!quer) { if (luzPoste) luzPoste.intensity = 0; return; }
+  if (!luzPoste) {
+    luzPoste = new THREE.SpotLight('#ffd7a0', 40, 26, 1.05, 0.55, 1.4); luzPoste.castShadow = true;
+    luzPoste.shadow.mapSize.set(1024, 1024); luzPoste.shadow.bias = -0.0008; luzPoste.shadow.camera.near = 0.5; luzPoste.shadow.camera.far = 28;
+    scene.add(luzPoste); scene.add(luzPoste.target);
+  }
+  if ((tPoste -= dt) > 0 && luzPoste.intensity > 0) return; tPoste = 0.4;
+  const f = foco(); let m = null, dm = 22;
+  for (const [x, z] of mundo.LUZES_POSTE) { const d = Math.abs(x - f.x) + Math.abs(z - f.z); if (d < dm) { dm = d; m = [x, z]; } }
+  if (!m) { luzPoste.intensity = 0; return; }
+  const h = alturaChao(m[0], m[1]);
+  luzPoste.position.set(m[0], h + 5.1, m[1]); luzPoste.target.position.set(m[0], h, m[1]); luzPoste.target.updateMatrixWorld();
+  luzPoste.intensity = 40 * Math.min(1, (noiteAtual - 0.35) / 0.3); luzPoste.visible = true;
+}
 // quantos segundos somar ao relógio para que agora seja a hora h (o ciclo continua dali)
 function deslocParaHora(h) {
   h = ((h % 24) + 24) % 24;
@@ -322,7 +350,7 @@ function trocarCamera() {
   } })));
 }
 window.addEventListener('resize', () => { visual.redimensionar(); ajustarCamera(); });
-ajustarCamera();
+ajustarCamera(); ajustarSombraQualidade();
 function offsetCamera(ang) {
   const a = Math.PI / 4 + ang * Math.PI / 2;
   return new THREE.Vector3(Math.sin(a) * Math.SQRT2, 1, Math.cos(a) * Math.SQRT2).normalize();
@@ -2912,9 +2940,9 @@ async function iniciarJogo(perfil) {
   const rotuloGrafico = () => { const b = $('btGrafico'); if (b) b.querySelector('span').textContent = `Gráficos: ${visual.NIVEIS[visual.nivelAtual()]}`; };
   rotuloGrafico();
   $('btGrafico').onclick = () => {
-    const ordem = ['baixo', 'medio', 'alto'], prox = ordem[(ordem.indexOf(visual.nivelAtual()) + 1) % 3];
-    visual.definirNivel(prox); rotuloGrafico(); ajustarCamera();
-    aviso(`✨ Gráficos: ${visual.NIVEIS[prox]}${prox === 'baixo' ? ' (mais leve, sem efeitos)' : prox === 'alto' ? ' (mais bonito, pesa mais)' : ''}`, 2.5);
+    const ordem = ['baixo', 'medio', 'alto', 'ultra'], prox = ordem[(ordem.indexOf(visual.nivelAtual()) + 1) % ordem.length];
+    visual.definirNivel(prox); rotuloGrafico(); ajustarCamera(); ajustarSombraQualidade();
+    aviso(`✨ Gráficos: ${visual.NIVEIS[prox]}${prox === 'baixo' ? ' (mais leve, sem efeitos)' : prox === 'alto' ? ' (mais bonito, pesa mais)' : prox === 'ultra' ? ' (máximo: vê mais longe, sombras e texturas nítidas; pesa bastante)' : ''}`, 3);
   };
   $('btConta').onclick = () => { abrirServico('conta'); $('menuBar').classList.remove('aberto'); };
   carregarBloqueios();
@@ -7912,7 +7940,7 @@ function quadroJogo() {
   mundo.propsPerto(foco().x, foco().z, dt); semaforos.atualizar(dt, foco().x, foco().z);
   mundo.predios3dPerto(foco().x, foco().z, dt);
   sedes.atualizar(dt);
-  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); voltarHelisServico(dt); checarTrem(); atualizarArmaPd(dt); atualizarBruxo(dt); atualizarAvesNpc(dt); atualizarBandos(dt); controleAve(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
+  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); voltarHelisServico(dt); atualizarLuzPoste(dt); checarTrem(); atualizarArmaPd(dt); atualizarBruxo(dt); atualizarAvesNpc(dt); atualizarBandos(dt); controleAve(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);
@@ -13180,6 +13208,7 @@ function regiaoDe(x, z) {
   const p = []; if (z < -150) p.push('norte'); else if (z > 150) p.push('sul'); if (x > 150) p.push('leste'); else if (x < -150) p.push('oeste');
   return p.length ? `zona ${p.join('-')} da Metrópole` : 'centro da Metrópole';
 }
+const holofotesA51 = [];
 function montarArea51() {
   if (area51) return;
   const g = new THREE.Group(); scene.add(g);
@@ -13241,7 +13270,10 @@ function montarArea51() {
     const alvoX = (A51.x0 + A51.x1) / 2, alvoZ = 0, dx = alvoX - x, dz = alvoZ - z, L = Math.hypot(dx, 14, dz) * 0.55;
     const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 9, L, 20, 1, true), luzCone);
     cone.position.set(x + dx / Math.hypot(dx, 14, dz) * L / 2, 14 - 14 / Math.hypot(dx, 14, dz) * L / 2, z + dz / Math.hypot(dx, 14, dz) * L / 2);
-    cone.lookAt(x, 14, z); cone.rotateX(-Math.PI / 2); g.add(cone);
+    cone.lookAt(x, 14, z); cone.rotateX(-Math.PI / 2);
+    // o holofote varre o pátio de um lado para o outro: o cone gira em volta da lâmpada
+    const piv = new THREE.Group(); piv.position.set(x, 14, z); g.add(piv); cone.position.sub(piv.position); piv.add(cone);
+    holofotesA51.push({ piv, fase: holofotesA51.length * 1.7 });
   }
   // deserto: dunas baixas e cactos (fora do muro e da estrada)
   const duna = M('#c9a46c'), cacto = M('#4f7a3a');
@@ -13281,6 +13313,7 @@ function atualizarArea51(dt) {
     const abre = ok && Math.hypot(p.x - A51.x1, p.z) < 18;
     area51.cancela.rotation.x = THREE.MathUtils.lerp(area51.cancela.rotation.x, abre ? -Math.PI / 2 * 0.95 : 0, Math.min(1, dt * 3));
     area51.luzCone.opacity = 0.16 * noiteAtual;
+    { const tt = agora / 1000; for (const h of holofotesA51) h.piv.rotation.y = Math.sin(tt * 0.35 + h.fase) * 0.65; }
   }
   // de fora não entra (nem pousando)
   if (!ok && !jogador.abducao && dentroArea51(p.x, p.z)) {

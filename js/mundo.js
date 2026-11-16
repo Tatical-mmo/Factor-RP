@@ -910,7 +910,7 @@ function montarMalhas() {
   pinho.castShadow = true; pinho.receiveShadow = true; if (pinheiros.length) scene.add(pinho);
   tronco.castShadow = true; copa.castShadow = true; copa.receiveShadow = true; scene.add(tronco); if (folhosas.length) scene.add(copa);
   // árvores 3D (GLB) perto do jogador; as de longe continuam leves
-  const MAXA = window.matchMedia?.('(pointer: coarse)').matches ? 70 : 150;
+  const MAXA = window.matchMedia?.('(pointer: coarse)').matches ? 70 : 150, MAXA_ULTRA = 220;   // capacidade do ultra (o normal usa só MAXA)
   // modelos novos (prop_arvore / prop_pinheiro, altura 1 centrada) quando existem; senão os antigos
   const ESC = [0.68, 0.6, 0.78], ALVO = [4.4, 4.8];
   const glbA = [['prop_arvore', 'arvore_comum'], ['prop_pinheiro', 'arvore_pinheiro'], ['arvore_palmeira']].map((nomes, k) => {
@@ -920,10 +920,10 @@ function montarMalhas() {
     const geo = malha.geometry.clone().applyMatrix4(new THREE.Matrix4().copy(base.matrixWorld).invert().multiply(malha.matrixWorld));
     if (n.startsWith('prop_')) { geo.computeBoundingBox(); const bb = geo.boundingBox; geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2); ESC[k] = ALVO[k] / ((bb.max.y - bb.min.y) || 1); }
     const m = [].concat(malha.material)[0].clone(); m.vertexColors = true; m.flatShading = true; m.roughness = 0.9;
-    const im = new THREE.InstancedMesh(geo, m, MAXA); im.count = 0; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; scene.add(im);
+    const im = new THREE.InstancedMesh(geo, m, MAXA_ULTRA); im.count = 0; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; scene.add(im);
     return im;
   });
-  arvoresLod = { info, tronco, copa, pinho, glb: glbA, max: MAXA, t: 0, ESC };
+  arvoresLod = { info, tronco, copa, pinho, glb: glbA, max: MAXA, maxUltra: MAXA_ULTRA, t: 0, ESC };
   // arbustos da mata (sem colisão)
   if (arbustos.length) {
     const ab = new THREE.InstancedMesh(geoCopa([[0, 0.45, 0, 0.7], [0.55, 0.3, 0.2, 0.5], [-0.5, 0.3, -0.2, 0.55]]), MAT.copa, arbustos.length);
@@ -1099,7 +1099,7 @@ function rumo3d(e) {
 export function predios3dPerto(px, pz, dt) {
   if (!modelos3d || !malhaPredios) return;
   if ((tempo3d -= dt) > 0) return; tempo3d = 0.7;
-  const q = ctx.qualidade?.() || 'medio', max = q === 'alto' ? 36 : q === 'medio' ? 16 : 6, raio = q === 'alto' ? 150 : q === 'medio' ? 100 : 65;
+  const q = ctx.qualidade?.() || 'medio', max = q === 'ultra' ? 64 : q === 'alto' ? 36 : q === 'medio' ? 16 : 6, raio = q === 'ultra' ? 240 : q === 'alto' ? 150 : q === 'medio' ? 100 : 65;
   const perto = [];
   if (max) for (const k of chaves(px - raio, pz - raio, px + raio, pz + raio)) for (const i of gradeEd.get(k) || []) {
     const e = edificios[i]; if (cortados.has(i)) continue; const t = tipo3d(e); if (!t || !modelos3d[t]) continue;
@@ -1171,6 +1171,7 @@ export function montar(contexto) {
 // chamado depois que a ferrovia acrescentou os prédios dela
 // ---------------------------------------------------------------- mobiliário urbano: meio-fio, faixas, postes e carros
 const pocas = [];                 // luz dos postes no chão (aparece à noite)
+export const LUZES_POSTE = [];   // [x, z] da lâmpada de cada poste (gráfico ultra: luz que faz sombra de verdade)
 export function poca(x, z, r = 5) { pocas.push([x, z, r]); }
 let matCabeca = null, matPoca = null;
 
@@ -1220,7 +1221,7 @@ function montarMobiliario() {
       const [px, pz] = ponto(t, lado * (RW / 2 + 0.9));
       if (naFavela(px, pz)) { lado = -lado; continue; }   // nas favelas o poste da cidade caía no meio das ruas do morro
       postes.push([px, pz, vert ? (lado > 0 ? -Math.PI / 2 : Math.PI / 2) : (lado > 0 ? Math.PI : 0)]);
-      const [qx, qz] = ponto(t, lado * (RW / 2 - 1.6)); poca(qx, qz, 5.5);
+      const [qx, qz] = ponto(t, lado * (RW / 2 - 1.6)); poca(qx, qz, 5.5); LUZES_POSTE.push([qx, qz]);
       lado = -lado;
     }
     for (let t = a + 6; t < b - 6; t += 6.5) {
@@ -1285,7 +1286,7 @@ function montarMobiliario() {
     if (!malha) return null;
     const geo = malha.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, malha.matrixWorld));
     const mat = [].concat(malha.material)[0].clone(); mat.color = new THREE.Color('#ffffff');
-    const im = new THREE.InstancedMesh(geo, mat, MAX); im.count = 0; im.receiveShadow = true; im.frustumCulled = false; scene.add(im);
+    const im = new THREE.InstancedMesh(geo, mat, 28); im.count = 0; im.receiveShadow = true; im.frustumCulled = false; scene.add(im);   // capacidade do ultra
     return im;
   });
   estacionados = { carros, caixas: [ic, iv, ir], glb, max: MAX, t: 0 };
@@ -1296,10 +1297,11 @@ export function arvoresPerto(px, pz, dt) {
   const A = arvoresLod; if (!A || !A.glb.some(Boolean)) return;
   if ((A.t -= dt) > 0) return; A.t = 0.5;
   const conta = [0, 0, 0], novo = new Set();
-  const perto = []; A.info.forEach((a, k) => { const d = Math.abs(a.x - px) + Math.abs(a.z - pz); if (d < 120) perto.push([d, k]); });
+  const ultra = ctx.qualidade?.() === 'ultra', lim = ultra ? 220 : 120;   // ultra: árvores 3D até mais longe
+  const perto = []; A.info.forEach((a, k) => { const d = Math.abs(a.x - px) + Math.abs(a.z - pz); if (d < lim) perto.push([d, k]); });
   perto.sort((a, b) => a[0] - b[0]);
   for (const [, k] of perto) {
-    const a = A.info[k], im = A.glb[a.tipo]; if (!im || conta[a.tipo] >= A.max) continue;
+    const a = A.info[k], im = A.glb[a.tipo]; if (!im || conta[a.tipo] >= (ultra ? A.maxUltra : A.max)) continue;
     const e = a.sc * A.ESC[a.tipo];
     _q.setFromAxisAngle(_e.set(0, 1, 0), a.giro); _m.compose(_v.set(a.x, a.y, a.z), _q, _e.set(e, e, e));
     im.setMatrixAt(conta[a.tipo]++, _m); novo.add(k);
@@ -1344,10 +1346,11 @@ export function tirarCarroRua(k, fora) {
 export function carrosPerto(px, pz, dt) {
   const E = estacionados; if (!E || !E.glb.some(Boolean)) return;
   if ((E.t -= dt) > 0) return; E.t = 0.4;
-  const perto = E.carros.map((c, k) => [c.fora ? 1e9 : Math.hypot(c.x - px, c.z - pz), k]).filter(([d]) => d < 70).sort((a, b) => a[0] - b[0]).slice(0, E.max * 2);
+  const ultra = ctx.qualidade?.() === 'ultra', maxC = ultra ? 28 : E.max;   // ultra: carros 3D até mais longe
+  const perto = E.carros.map((c, k) => [c.fora ? 1e9 : Math.hypot(c.x - px, c.z - pz), k]).filter(([d]) => d < (ultra ? 130 : 70)).sort((a, b) => a[0] - b[0]).slice(0, maxC * 2);
   const conta = E.glb.map(() => 0), novo = new Set();
   for (const [, k] of perto) {
-    const c = E.carros[k], im = E.glb[c.tipo]; if (!im || conta[c.tipo] >= E.max) continue;
+    const c = E.carros[k], im = E.glb[c.tipo]; if (!im || conta[c.tipo] >= maxC) continue;
     _q.setFromAxisAngle(_e.set(0, 1, 0), c.rot); _m.compose(_v.set(c.x, 0.02, c.z), _q, _e.set(1, 1, 1));
     im.setMatrixAt(conta[c.tipo], _m); im.setColorAt(conta[c.tipo], _c.set('#ffffff').lerp(new THREE.Color(c.cor), 0.25)); conta[c.tipo]++;   // tinta leve (forte, as rodas ficavam roxas/coloridas)
     novo.add(k);
@@ -1383,8 +1386,16 @@ export function molhar(f) {
   MAT.asfalto.roughness = 0.88 - 0.62 * f; MAT.asfalto.color.setScalar(1 - 0.3 * f); MAT.asfalto.envMapIntensity = 1 + 1.6 * f;
   MAT.calcada.roughness = 0.92 - 0.45 * f; MAT.calcada.color.setScalar(1 - 0.2 * f); MAT.calcada.envMapIntensity = 1 + 0.8 * f;
 }
+// gráfico ultra: água mais lisa e espelhada, ondas mais marcadas e andando mais rápido (reflete o céu e o sol)
 export function atualizar(dt) {
-  if (MAT?.agua.normalMap) { MAT.agua.normalMap.offset.x += dt * 0.004; MAT.agua.normalMap.offset.y += dt * 0.0025; }
+  const A = MAT?.agua; if (!A?.normalMap) return;
+  const ultra = ctx?.qualidade?.() === 'ultra';
+  A.normalMap.offset.x += dt * (ultra ? 0.011 : 0.004); A.normalMap.offset.y += dt * (ultra ? 0.007 : 0.0025);
+  if (A.userData.ultra !== ultra) {
+    A.userData.ultra = ultra;
+    A.roughness = ultra ? 0.04 : 0.12; A.metalness = ultra ? 0.4 : 0.25; A.envMapIntensity = ultra ? 1.8 : 1;
+    A.normalScale.set(ultra ? 1.15 : 0.6, ultra ? 1.15 : 0.6); A.color.set(ultra ? '#2f6f99' : '#3e7ea6');
+  }
 }
 
 // semáforos nos cruzamentos do centro e hidrantes nas esquinas dos quarteirões do centro

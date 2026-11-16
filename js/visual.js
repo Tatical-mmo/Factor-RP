@@ -3,6 +3,8 @@
 //   baixo  → resolução 1x, sombra simples 1024 (celular fraco)
 //   medio  → sem pós-processamento (leve), sombra suave 1024, resolução até 1,5x
 //   alto   → brilho só à noite (postes, faróis) + cor e vinheta suaves, sombra 2048
+//   ultra  → tudo do alto + resolução cheia, sombra 4096 cobrindo mais área, texturas nítidas de longe (anisotrópico)
+//            e visão mais longe (o resto do jogo lê o nível: prédios 3D, árvores e carros detalhados mais longe)
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -10,7 +12,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-export const NIVEIS = { baixo: 'Baixa', medio: 'Média', alto: 'Alta' };
+export const NIVEIS = { baixo: 'Baixa', medio: 'Média', alto: 'Alta', ultra: 'Ultra' };
+const comEfeitos = () => nivel === 'alto' || nivel === 'ultra';
 const CHAVE = 'fator_qualidade';
 let R = null, cena = null, sol = null, comp = null, passeRender = null, bloom = null, cor = null, saida = null, nivel = 'medio';
 let toque = false, falhou = false;
@@ -61,14 +64,31 @@ function montarComposer() {
 function aplicar() {
   if (!R) return;
   const dpr = window.devicePixelRatio || 1;
-  const pr = nivel === 'baixo' ? 1 : nivel === 'medio' ? Math.min(dpr, toque ? 1.25 : 2) : Math.min(dpr, toque ? 1.5 : 2);   // celular na média: 1,25x (bem mais leve, quase a mesma nitidez)
+  const pr = nivel === 'baixo' ? 1 : nivel === 'medio' ? Math.min(dpr, toque ? 1.25 : 2) : nivel === 'ultra' ? Math.min(dpr, 2.5) : Math.min(dpr, toque ? 1.5 : 2);   // celular na média: 1,25x (bem mais leve, quase a mesma nitidez)
   R.setPixelRatio(pr);
   R.shadowMap.type = nivel === 'baixo' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
-  const tam = nivel === 'alto' ? 2048 : 1024;
+  const tam = nivel === 'ultra' ? 4096 : nivel === 'alto' ? 2048 : 1024;
   if (sol && sol.shadow.mapSize.x !== tam) { sol.shadow.mapSize.set(tam, tam); sol.shadow.map?.dispose(); sol.shadow.map = null; }
   cena.traverse((o) => { if (o.material && !Array.isArray(o.material)) o.material.needsUpdate = true; });   // troca do tipo de sombra
-  if (nivel === 'alto') montarComposer();
+  if (comEfeitos()) montarComposer();
+  nitidas();   // liga ou desliga o relevo e a nitidez do ultra
   redimensionar();
+}
+// ultra: filtro anisotrópico nas texturas (o chão, as ruas e as paredes não borram quando vistos de lado ou de longe)
+let anisoFeito = new WeakSet();
+// e relevo: a própria textura vira mapa de relevo (grama, asfalto, terra, calçada e paredes ganham volume com a luz)
+export function nitidas() {
+  if (!R) return;
+  const ultra = nivel === 'ultra', max = R.capabilities.getMaxAnisotropy?.() || 1;
+  cena.traverse((o) => {
+    if (!o.isMesh || o.isSkinnedMesh) return;
+    for (const m of [].concat(o.material || [])) {
+      if (ultra && max > 1) for (const k of ['map', 'normalMap', 'roughnessMap']) { const t = m[k]; if (t && !anisoFeito.has(t)) { anisoFeito.add(t); t.anisotropy = Math.min(16, max); t.needsUpdate = true; } }
+      if (!m.isMeshStandardMaterial || m.transparent) continue;
+      if (ultra && m.map && !m.normalMap && !m.bumpMap && m.roughness >= 0.8) { m.bumpMap = m.map; m.bumpScale = 1.6; m.userData.relevoUltra = true; m.needsUpdate = true; }
+      else if (!ultra && m.userData.relevoUltra) { m.bumpMap = null; m.userData.relevoUltra = false; m.needsUpdate = true; }
+    }
+  });
 }
 export function redimensionar() {
   if (!R) return;
@@ -97,7 +117,7 @@ export function ajustar(noite, molhado) {
   }
 }
 export function render(camera) {
-  if (nivel !== 'alto' || !comp) { R.render(cena, camera); return; }
+  if (!comEfeitos() || !comp) { R.render(cena, camera); return; }
   passeRender.camera = camera;
   try { comp.render(); } catch (e) { console.warn('pós-processamento desligado', e); falhou = true; comp = null; R.render(cena, camera); }
 }
