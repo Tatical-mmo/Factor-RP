@@ -64,6 +64,10 @@ export async function criarPerfil(id, nome, personagem) {
   if (error) throw new Error(traduzir(error));
   return data;
 }
+export async function salvarPrefs(id, prefs) {   // gráfico, câmera, tutorial visto (coluna prefs: supabase/102_prefs.sql)
+  const { error } = await sb.from('perfis').update({ prefs }).eq('id', id);
+  if (error) throw error;
+}
 export async function salvarPosicao(id, x, z, fome) {
   const dados = { pos_x: x, pos_z: z, visto_em: new Date().toISOString() };
   if (typeof fome === 'number') dados.fome = Math.max(0, Math.min(100, Math.round(fome * 10) / 10));

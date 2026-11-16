@@ -82,10 +82,14 @@ function desenhar() {
   el.querySelector('#tutFechar').textContent = pag === PAGINAS.length - 1 ? '✕' : 'Pular';
   el.querySelector('#tutFechar').style.fontSize = pag === PAGINAS.length - 1 ? '20px' : '14px';
 }
-function fechar() { el?.classList.add('oculto'); try { localStorage.setItem(CHAVE, '1'); } catch { /* sem armazenamento */ } }
+let aoFechar = null;
+function fechar() { el?.classList.add('oculto'); try { localStorage.setItem(CHAVE, '1'); } catch { /* sem armazenamento */ } aoFechar?.(); aoFechar = null; }
 export function abrirTutorial() { if (!el) montar(); pag = 0; el.classList.remove('oculto'); desenhar(); }
-// primeira vez neste aparelho (ou conta nova): abre sozinho
-export function tutorialPrimeiraVez(contaNova) {
+// abre sozinho uma vez por jogador: a conta guarda que ele já viu (vistoNaConta). Conta antiga sem essa marca usa a do
+// aparelho; conta nova sempre vê. Ao fechar (ou pular), marcaVisto grava na conta. Dá para rever em ☰ → 📖 Tutorial.
+export function tutorialPrimeiraVez(contaNova, vistoNaConta = false, marcaVisto = null) {
+  if (vistoNaConta) return;
   let visto = false; try { visto = localStorage.getItem(CHAVE) === '1'; } catch { /* nada */ }
-  if (!visto || contaNova) abrirTutorial();
+  if (visto && !contaNova) { marcaVisto?.(); return; }
+  aoFechar = marcaVisto; abrirTutorial();
 }

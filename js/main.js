@@ -352,12 +352,31 @@ function ajustarCamera() {
 // pás do rotor dos helicópteros 3D (nó "rotor" dentro do modelo)
 const rotores = new WeakMap();
 function rotorDe(o) { if (!rotores.has(o)) rotores.set(o, o.getObjectByName('rotor') || null); return rotores.get(o); }
+// ---- preferências do jogador na conta (perfis.prefs): gráfico, câmera e tutorial visto. O navegador do celular às
+// vezes apaga o armazenamento local (aba anônima, app que abre o link, limpeza automática): aí vale o que está na conta.
+function salvarPref(k, v) {
+  const p = jogador.perfil; if (!p) return;
+  p.prefs = { ...(p.prefs || {}), [k]: v };
+  rede.salvarPrefs(p.id, p.prefs).catch(() => {});
+}
+function aplicarPrefs() {
+  const pr = jogador.perfil?.prefs || {};
+  if (baixouQualidade) salvarPref('grafico', visual.nivelAtual());   // o jogo baixou sozinho (sem memória): guarda o novo
+  else if (visual.NIVEIS[pr.grafico] && pr.grafico !== visual.nivelAtual()) {
+    visual.definirNivel(pr.grafico); ajustarCamera(); ajustarSombraQualidade();
+    const b = $('btGrafico'); if (b) b.querySelector('span').textContent = `Gráficos: ${visual.NIVEIS[pr.grafico]}`;
+  }
+  if (['iso', 'atras', 'livre'].includes(pr.cam) && pr.cam !== modoCam) {
+    if (modo3D() !== (pr.cam === 'livre')) olhar.yaw = Math.PI / 4 + anguloCamSuave * Math.PI / 2 + Math.PI;
+    modoCam = pr.cam; try { localStorage.setItem('fator_cam', modoCam); } catch { /* sem armazenamento */ }
+  }
+}
 function trocarCamera() {
   const opc = [['iso', '🗺️ De cima (padrão)', 'Câmera de cima (padrão).'], ['atras', '🎥 De cima, atrás do personagem', 'Câmera de cima que gira e acompanha para onde você anda.'],
     ['livre', '🌆 3D livre', 'Visão 3D: arraste na tela para girar e inclinar; pinça (ou rodinha) aproxima.']];   // a primeira pessoa (personagem e veículo) foi retirada
   escolher('🎥 Câmera', 'Escolha como ver o jogo (fica salvo).', opc.map(([m, r, t]) => ({ rotulo: `${m === modoCam ? '✅ ' : ''}${r}`, fn: () => {
     if (modo3D() !== (m === 'livre' || m === 'p1')) olhar.yaw = Math.PI / 4 + anguloCamSuave * Math.PI / 2 + Math.PI;   // começa olhando para o mesmo lado da câmera de cima
-    modoCam = m; try { localStorage.setItem('fator_cam', modoCam); } catch { /* sem armazenamento */ }
+    modoCam = m; try { localStorage.setItem('fator_cam', modoCam); } catch { /* sem armazenamento */ } salvarPref('cam', modoCam);
     if (modoCam === 'iso') { anguloCam = Math.round(anguloCamSuave); camAtras = false; }
     olhar.pitch = m === 'p1' ? -0.05 : olhar.pitch; aviso(`🎥 ${t}`, 3.5);
   } })));
@@ -3053,7 +3072,9 @@ async function iniciarJogo(perfil) {
   $('hud').classList.remove('oculto');
   $('carregando').classList.add('oculto');
   aviso(`Bem-vindo à cidade, ${nome}!`);
-  { const nova = Date.now() - Date.parse(jogador.perfil?.criado_em || 0) < 20 * 60000; setTimeout(() => tutorialPrimeiraVez(nova), 2500); }   // tutorial na primeira vez
+  aplicarPrefs();   // gráfico e câmera que o jogador escolheu (salvos na conta: valem em qualquer aparelho e não somem)
+  { const nova = Date.now() - Date.parse(jogador.perfil?.criado_em || 0) < 20 * 60000, pr = jogador.perfil?.prefs || {};
+    setTimeout(() => tutorialPrimeiraVez(nova, !!pr.tutorial, () => salvarPref('tutorial', 1)), 2500); }   // tutorial: uma vez por jogador
   if (baixouQualidade) setTimeout(() => aviso(`⚠️ O celular ficou sem memória de vídeo duas vezes seguidas e o jogo reiniciou. Baixei a qualidade gráfica para ${baixouQualidade}; dá para voltar em ⚙️.`, 7), 4000);
   criarNPCs(id);
   conectarMultiplayer(perfil);
@@ -3107,7 +3128,7 @@ async function iniciarJogo(perfil) {
   rotuloGrafico();
   $('btGrafico').onclick = () => {
     const ordem = ['baixo', 'medio', 'alto', 'ultra'], prox = ordem[(ordem.indexOf(visual.nivelAtual()) + 1) % ordem.length];
-    visual.definirNivel(prox); rotuloGrafico(); ajustarCamera(); ajustarSombraQualidade();
+    visual.definirNivel(prox); rotuloGrafico(); ajustarCamera(); ajustarSombraQualidade(); salvarPref('grafico', prox);
     aviso(`✨ Gráficos: ${visual.NIVEIS[prox]}${prox === 'baixo' ? ' (mais leve, sem efeitos)' : prox === 'alto' ? ' (mais bonito, pesa mais)' : prox === 'ultra' ? ' (máximo: vê mais longe, sombras e texturas nítidas; pesa bastante)' : ''}`, 3);
   };
   $('btConta').onclick = () => { abrirServico('conta'); $('menuBar').classList.remove('aberto'); };
