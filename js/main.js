@@ -1191,7 +1191,7 @@ function acaoContexto() {
     const a = acaoNoVeiculo();
     if (a?.[0] === 'descarregar') descarregarRoubo();
     else if (a?.[0] === 'comprador') contextoComprador()?.[2]();
-    else if (a?.[0] === 'jato') servicos.apagar(servicos.fogoProximo(15) || servicos.listaIncendios()[0]);
+    else if (a?.[0] === 'jato') servicos.apagar(servicos.fogoProximo(jogador.carro?.servico === 'helicoptero_bombeiros' ? 28 : 15) || servicos.listaIncendios()[0]);
     else if (a?.[0] === 'socorrer') socorrerFerido(feridoProximo(7));
     else if (a?.[0] === 'abduzir') abduzir(alvoAbducao());
     else sairCarro();
@@ -1464,6 +1464,15 @@ function sairCarro() {
   if (c.aula && c.aula === aula) { if (c.aula.voo && c.alt > 1.5) { aviso('Pouse antes de sair.', 2); return; } encerrarAula(false, 'Você saiu do veículo da prova.'); return; }
   if (c.voa && !c.caminhao) {
     if (c.alt > 1.5) { aviso('Pare para pousar antes de sair.', 2); return; }
+    // helicóptero de serviço pousado no próprio heliponto: fica lá e o piloto desce pela escada até a porta do prédio
+    if (c.servico === 'helicoptero_resgate' || c.servico === 'helicoptero_bombeiros') {
+      const base = c.servico === 'helicoptero_resgate' ? civico.HOSPITAL : civico.BOMBEIROS, v = base.heliVaga;
+      if (v && Math.hypot(jogador.pos.x - v.x, jogador.pos.z - v.z) < 7 && Math.abs((c.mesh.position.y || 0) - v.y) < 2.5) {
+        jogador.carro = null; modoVolante(false); c.mesh.position.set(v.x, v.y, v.z); c.mesh.rotation.y = v.ang;
+        const sai = base === civico.HOSPITAL ? civico.HOSPITAL.saida : civico.BOMBEIROS.balcao;
+        teleportar(sai.x, sai.z); jogador.avatar.raiz.visible = true; aviso('🚁 Helicóptero no heliponto. Você desceu pela escada.', 3); return;
+      }
+    }
     if ((jogador.pos.y || 0) > alturaChao(jogador.pos.x, jogador.pos.z) + 1.5) { aviso('🚁 Pousado no telhado: desça até o chão para sair do helicóptero.', 3); return; }
     const t = jogador.pos.clone(); mundo.limitar(t);
     if (Math.hypot(t.x - jogador.pos.x, t.z - jogador.pos.z) > 2) { aviso('Pouse numa cidade ou na mata para descer.', 2.5); return; }
@@ -2770,7 +2779,7 @@ async function iniciarJogo(perfil) {
   iniciarLogistica();
   servicos.iniciar({
     scene, textoSprite, altura: alturaChao, jogador: () => jogador, perfil: () => jogador.perfil, aviso, agora: agoraServidor,
-    rastrear: (a) => rastrear(a), rastreio: () => rastreio, meuCla: () => jogador.cla, alcanceJato: () => (jogador.carro?.servico === 'bombeiros' ? 16 : 10), obstaculo: (x, z, a, o) => obstaculoAFrente(x, z, a, o), sinal: (x, z, a) => semaforos.sinalAFrente(x, z, a, 9), rondaPerto, posRonda, clas: () => [...clasCache.values()],
+    rastrear: (a) => rastrear(a), rastreio: () => rastreio, meuCla: () => jogador.cla, alcanceJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? 30 : jogador.carro?.servico === 'bombeiros' ? 16 : 10), origemJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? jogador.carro.mesh.position.clone().setY(jogador.carro.mesh.position.y - 0.4) : null), obstaculo: (x, z, a, o) => obstaculoAFrente(x, z, a, o), sinal: (x, z, a) => semaforos.sinalAFrente(x, z, a, 9), rondaPerto, posRonda, clas: () => [...clasCache.values()],
     guerrasMudaram: () => {
       atualizarCla();
       const novo = servicos.clasInimigos(jogador.cla, [...clasCache.values()]);
@@ -3911,6 +3920,29 @@ function servicoProximo() {
   if (!base?.veiculo || Math.hypot(base.veiculo.position.x - jogador.pos.x, base.veiculo.position.z - jogador.pos.z) > 5.5) return null;
   return { base, modelo: prof === 'medico' ? 'ambulancia' : prof === 'exercito' ? 'militar' : 'bombeiros' };
 }
+// helicóptero de serviço no heliponto (hospital: médicos; quartel: bombeiros). Sobe pela escada de dentro do prédio
+// direto para o helicóptero; quem não é da profissão em serviço não pilota (o admin pilota tudo)
+function pegarHeliServico(base, modelo, prof) {
+  if (!base.heli) { aviso('🚁 O helicóptero ainda não chegou ao heliponto.', 3); return; }
+  if (jogador.perfil?.profissao !== prof && jogador.perfil?.cargo !== 'admin') { aviso(prof === 'medico' ? '🚁 Só médicos em plantão pilotam o helicóptero de resgate.' : '🚁 Só bombeiros em serviço pilotam o helicóptero.', 3.5); return; }
+  if (remotosNoVeiculo(base.heli)) { aviso('🚁 O helicóptero está em uso.', 2.5); return; }
+  if (!base.heli.visible) { aviso('🚁 O helicóptero saiu para apagar um incêndio. Espere ele voltar.', 3); return; }
+  sairSala();
+  entrarServico({ base: { veiculo: base.heli }, modelo });
+  aviso(modelo === 'helicoptero_bombeiros' ? '🚁 Helicóptero dos bombeiros: voe até o fogo (🔥), pare em cima, fique abaixo de 40 m e toque em Água.' : '🚁 Helicóptero de resgate: acelere para decolar. Pousa em laje plana e no chão.', 5);
+}
+const remotosNoVeiculo = (m) => [...remotos.values()].some((r) => r.carro && Math.hypot(r.carro.position.x - m.position.x, r.carro.position.z - m.position.z) < 1 && Math.abs(r.carro.position.y - m.position.y) < 1);
+// helicóptero de serviço largado fora do heliponto: depois de 3 min sem ninguém, volta sozinho
+let tempoHelis = 0;
+function voltarHelisServico(dt) {
+  if ((tempoHelis -= dt) > 0) return; tempoHelis = 5;
+  for (const base of [civico.HOSPITAL, civico.BOMBEIROS]) {
+    const h = base.heli, v = base.heliVaga; if (!h || !v) continue;
+    if (jogador.carro?.mesh === h || Math.hypot(h.position.x - v.x, h.position.z - v.z) < 1) { h.userData.largado = 0; continue; }
+    h.userData.largado = (h.userData.largado || 0) + 5;
+    if (h.userData.largado > 180) { h.position.set(v.x, v.y, v.z); h.rotation.y = v.ang; h.userData.largado = 0; }
+  }
+}
 function militar() { return jogador.perfil?.profissao === 'exercito' || jogador.perfil?.cargo === 'admin'; }
 let meuMilitar = null;   // { modelo, mesh }: o veículo do Exército que você pegou (fica onde você deixar)
 function podePilotarHeliExercito() { return jogador.perfil?.cargo === 'admin' || (jogador.patenteNivel || 0) >= 8; }
@@ -3956,6 +3988,7 @@ function acaoNoVeiculo() {
   const c = jogador.carro;
   if (podeDescarregar()) return ['descarregar', `saquear as ${c.carga} caixas aqui`, 'Saquear'];
   if (c.jujuba) { const cj = contextoComprador(); if (cj) return ['comprador', cj[0], cj[1]]; }
+  if (c.servico === 'helicoptero_bombeiros' && Math.abs(c.vel) < 3 && c.alt > 3 && c.alt < 40 && (servicos.estaApagando() || servicos.fogoProximo(28))) return ['jato', servicos.estaApagando() ? 'jogando água (toque para parar)' : 'jogar água do alto no fogo (+400)', 'Água'];
   if (c.servico === 'bombeiros' && Math.abs(c.vel) < 2 && (servicos.estaApagando() || servicos.fogoProximo(15))) return ['jato', servicos.estaApagando() ? 'jogando água (toque para parar)' : 'jogar água no fogo (+400)', 'Jato'];
   if (c.servico === 'ambulancia' && Math.abs(c.vel) < 2 && feridoProximo(7)) return ['socorrer', 'socorrer o ferido (+250)', 'Socorrer'];
   if (c.servico === 'ovni') { const alvo = alvoAbducao(); if (alvo) return ['abduzir', alvo.npc ? (alvo.npc.policia ? 'abduzir o policial robô' : 'abduzir o morador') : `abduzir ${alvo.r.meta?.nome || 'o jogador'} (ele não vê nada e acorda em outro lugar)`, '👽 Abduzir']; }
@@ -4888,7 +4921,7 @@ function topoSolido(x, z) {
 function tetoGeral(x, z) {
   const t = mundo.tetoEm(x, z), s = topoSolido(x, z);
   if (!s || s.h < alturaChao(x, z) + 1 || (t && t.h >= s.h - 0.05)) return t;
-  let plano = Math.abs(s.ny) > 0.85;
+  let plano = true;   // laje: o ponto e os 4 em volta (2,2 m) na mesma altura (a pintura do H tem degrauzinhos inclinados)
   if (plano) for (const [dx, dz] of [[2.2, 0], [-2.2, 0], [0, 2.2], [0, -2.2]]) { const q = topoSolido(x + dx, z + dz); if (!q || Math.abs(q.h - s.h) > 0.5) { plano = false; break; } }
   return { h: s.h + 0.02, plano };
 }
@@ -7770,7 +7803,7 @@ function quadroJogo() {
   mundo.propsPerto(foco().x, foco().z, dt); semaforos.atualizar(dt, foco().x, foco().z);
   mundo.predios3dPerto(foco().x, foco().z, dt);
   sedes.atualizar(dt);
-  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); checarTrem(); atualizarArmaPd(dt); atualizarBruxo(dt); atualizarAvesNpc(dt); atualizarBandos(dt); controleAve(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
+  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); voltarHelisServico(dt); checarTrem(); atualizarArmaPd(dt); atualizarBruxo(dt); atualizarAvesNpc(dt); atualizarBandos(dt); controleAve(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);
@@ -8739,6 +8772,7 @@ function salaBombeiros() {
     const poste = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.6, 10), i.mat('#cfcfcf', 0.3, 0.9)); poste.position.set(-6, 1.8, 3); g.add(poste);
     i.pontos.poste = { x: i.base.x - 6, z: i.base.z + 3.8 }; placa('Mastro (descida rápida)', -6, 3, 3.1);
     caixa(2.2, 0.6, 1, '#e8ecef', 7, 0.3, -4); movel(i, 'maca', 7, -4, 2.2, 1); placa('Enfermaria', 7, -4, 1.8);
+    caixa(1.6, 2.4, 0.3, '#8a9399', 9.5, 1.2, 6.6); movel(i, 'heliponto', 9.5, 6.2, 1.6, 0.6, [0, -1]); placa('🚁 Escada para a laje', 9.5, 6.4, 2.8);
   });
 }
 // hospital por dentro: recepção (tratamento e plantão), enfermaria com leitos, farmácia, consultório e vestiário médico
@@ -8761,6 +8795,7 @@ function salaHospital() {
     caixa(1.8, 0.75, 0.9, '#8a6a4a', 8, 0.38, 3); caixa(0.6, 0.9, 0.6, '#2b3a4a', 8, 0.45, 4.1); movel(i, 'consultorio', 8, 3, 1.8, 0.9); placa('Consultório', 8, 3, 2);
     for (let k = 0; k < 4; k++) caixa(0.55, 1.8, 0.5, '#f0f3f5', -10.5 + k * 0.7, 0.9, 4.6);   // armários do vestiário
     i.obst.push([-10.9, -8.2, 4.3, 4.9]); placa('👔 Vestiário médico', -9.4, 4.6, 2.6); i.pontos.vestiario = { x: i.base.x - 9.4, z: i.base.z + 3.5 };
+    caixa(1.6, 2.4, 0.3, '#8a9399', 11, 1.2, 7.6); caixa(1.4, 0.12, 0.6, '#cfd6da', 11, 0.3, 7.2); movel(i, 'heliponto', 11, 7.2, 1.6, 0.6, [0, -1]); placa('🚁 Escada do heliponto', 11, 7.4, 2.8);
     for (let k = 0; k < 4; k++) caixa(0.5, 0.45, 0.5, '#2f8f83', -3 + k * 0.7, 0.23, 5.6);   // cadeiras da espera
     placa('Espera', -2, 5.6, 1.6);
   });
@@ -8832,6 +8867,7 @@ SALAS.bombeiros = {
     if (pontoInterior('quadro', 1.8)) return [`incêndios na cidade (${servicos.listaIncendios().length})`, 'Ver'];
     if (pontoInterior('poste', 1.4)) return ['descer pelo mastro e sair para a rua', 'Descer'];
     if (pontoInterior('maca', 2)) return ['enfermaria: curar a vida', 'Curar'];
+    if (pontoInterior('heliponto', 1.8)) return ['subir à laje: helicóptero dos bombeiros', 'Helicóptero'];
     return ['', ''];
   },
   acao: () => {
@@ -8842,7 +8878,8 @@ SALAS.bombeiros = {
       escolher('🔥 Incêndios', l.length ? 'Toque para marcar no mapa:' : 'Nenhum incêndio agora.', l.length ? l.map((f, k) => ({ rotulo: `🔥 Incêndio ${k + 1}`, fn: () => rastrear({ nome: '🔥 Incêndio', x: f.x, z: f.z }) })) : [{ rotulo: 'Ok', fn: () => {} }]);
       return;
     }
-    if (pontoInterior('maca', 2)) { jogador.vida = 100; desenharFome(); aviso('✚ Vida recuperada!'); }
+    if (pontoInterior('maca', 2)) { jogador.vida = 100; desenharFome(); aviso('✚ Vida recuperada!'); return; }
+    if (pontoInterior('heliponto', 1.8)) pegarHeliServico(civico.BOMBEIROS, 'helicoptero_bombeiros', 'bombeiro');
   },
 };
 SALAS.hospital = {
@@ -8852,12 +8889,14 @@ SALAS.hospital = {
     if (pontoInterior('farmacia', 1.8)) return ['farmácia: remédios', 'Farmácia'];
     if (pontoInterior('consultorio', 1.6)) return ['consultório: tratamento', 'Consulta'];
     if (pontoInterior('vestiario', 1.6)) return ['vestiário: vestir ou tirar a farda', 'Farda'];
+    if (pontoInterior('heliponto', 1.8)) return ['subir ao heliponto: helicóptero de resgate (médicos)', 'Helicóptero'];
     if (pontoInterior('leitos', 2.2)) return ['enfermaria: os leitos dos pacientes', 'Ver'];
     return ['', ''];
   },
   acao: () => {
     if (naPorta()) { sairSala(); return; }
     if (pontoInterior('recepcao', 1.8) || pontoInterior('farmacia', 1.8) || pontoInterior('consultorio', 1.6)) { abrirServico('hospital'); return; }
+    if (pontoInterior('heliponto', 1.8)) { pegarHeliServico(civico.HOSPITAL, 'helicoptero_resgate', 'medico'); return; }
     if (pontoInterior('vestiario', 1.6)) { vestiario('Hospital'); return; }
     if (pontoInterior('leitos', 2.2)) aviso('🛏️ Enfermaria: para se tratar, fale na recepção ou no consultório.', 3);
   },
