@@ -235,12 +235,15 @@
   #menuBar button span { font-size:13px; }
   #menuItens { display:none; flex-direction:column; gap:5px; background:rgba(15,19,27,.9); border:1px solid var(--borda); border-radius:12px; padding:6px; }
   #menuBar.aberto #menuItens { display:flex; }
+  /* a lista rola quando não cabe (celular em pé com muitos itens) e fica por cima do joystick */
+  #menuBar.aberto { z-index:12; }
+  #menuItens { max-height:calc(100vh - 210px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); max-height:calc(100dvh - 210px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; -webkit-overflow-scrolling:touch; }
   #menuBar.aberto #btMenu { background:var(--destaque); color:#20160a; }
   #menuItens .oculto { display:none !important; }
   /* celular deitado: o menu vira grade com rolagem e cabe na tela */
   @media (orientation: landscape) and (max-height: 560px) {
     #menuBar { top:calc(8px + env(safe-area-inset-top)); left:calc(300px + env(safe-area-inset-left)); max-height:calc(100vh - 16px); }
-    #menuBar.aberto #menuItens { display:grid; grid-template-columns:repeat(2, auto); max-height:calc(100vh - 70px); overflow-y:auto; }
+    #menuBar.aberto #menuItens { display:grid; grid-template-columns:repeat(2, auto); max-height:calc(100vh - 70px); max-height:calc(100dvh - 70px); overflow-y:auto; }
     #menuItens button { height:34px; }
   }
   @media (min-width: 900px) and (pointer: fine) {
@@ -297,33 +300,33 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261116n",
-  "./js/mundo.js": "./js/mundo.js?v=20261116n",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261116n",
-  "./js/cla.js": "./js/cla.js?v=20261116n",
-  "./js/config.js": "./js/config.js?v=20261116n",
-  "./js/empresa.js": "./js/empresa.js?v=20261116n",
-  "./js/loja.js": "./js/loja.js?v=20261116n",
-  "./js/painel.js": "./js/painel.js?v=20261116n",
-  "./js/rede.js": "./js/rede.js?v=20261116n",
-  "./js/sedes.js": "./js/sedes.js?v=20261116n",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261116n",
-  "./js/civico.js": "./js/civico.js?v=20261116n",
-  "./js/ovni.js": "./js/ovni.js?v=20261116n",
-  "./js/jato.js": "./js/jato.js?v=20261116n",
-  "./js/governo.js": "./js/governo.js?v=20261116n",
-  "./js/servicos.js": "./js/servicos.js?v=20261116n",
-  "./js/sons.js": "./js/sons.js?v=20261116n",
-  "./js/voz.js": "./js/voz.js?v=20261116n",
-  "./js/clima.js": "./js/clima.js?v=20261116n",
-  "./js/ceu.js": "./js/ceu.js?v=20261116n",
-  "./js/semaforos.js": "./js/semaforos.js?v=20261116n",
-  "./js/cabine.js": "./js/cabine.js?v=20261116n",
-  "./js/eixos.js": "./js/eixos.js?v=20261116n",
-  "./js/racoes.js": "./js/racoes.js?v=20261116n",
-  "./js/jornal.js": "./js/jornal.js?v=20261116n",
-  "./js/visual.js": "./js/visual.js?v=20261116n",
-  "./js/tutorial.js": "./js/tutorial.js?v=20261116n"
+  "./js/main.js": "./js/main.js?v=20261116o",
+  "./js/mundo.js": "./js/mundo.js?v=20261116o",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261116o",
+  "./js/cla.js": "./js/cla.js?v=20261116o",
+  "./js/config.js": "./js/config.js?v=20261116o",
+  "./js/empresa.js": "./js/empresa.js?v=20261116o",
+  "./js/loja.js": "./js/loja.js?v=20261116o",
+  "./js/painel.js": "./js/painel.js?v=20261116o",
+  "./js/rede.js": "./js/rede.js?v=20261116o",
+  "./js/sedes.js": "./js/sedes.js?v=20261116o",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261116o",
+  "./js/civico.js": "./js/civico.js?v=20261116o",
+  "./js/ovni.js": "./js/ovni.js?v=20261116o",
+  "./js/jato.js": "./js/jato.js?v=20261116o",
+  "./js/governo.js": "./js/governo.js?v=20261116o",
+  "./js/servicos.js": "./js/servicos.js?v=20261116o",
+  "./js/sons.js": "./js/sons.js?v=20261116o",
+  "./js/voz.js": "./js/voz.js?v=20261116o",
+  "./js/clima.js": "./js/clima.js?v=20261116o",
+  "./js/ceu.js": "./js/ceu.js?v=20261116o",
+  "./js/semaforos.js": "./js/semaforos.js?v=20261116o",
+  "./js/cabine.js": "./js/cabine.js?v=20261116o",
+  "./js/eixos.js": "./js/eixos.js?v=20261116o",
+  "./js/racoes.js": "./js/racoes.js?v=20261116o",
+  "./js/jornal.js": "./js/jornal.js?v=20261116o",
+  "./js/visual.js": "./js/visual.js?v=20261116o",
+  "./js/tutorial.js": "./js/tutorial.js?v=20261116o"
 } }
 </script>
 </head>
@@ -519,7 +522,7 @@
 </div>
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 15/11 · carros com rodas (16n)</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 15/11 · luz nos prédios (16o)</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

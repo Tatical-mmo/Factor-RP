@@ -94,7 +94,7 @@ export function atualizar(dt, seg, ciclo, centro, luzes) {
 
   // escurecer
   const esc = f * ({ chuva: 0.42, tempestade: 0.6, neve: 0.3 }[tipo] || 0);
-  if (esc > 0) {
+  if (esc > 0 && !centro?.dentro) {   // dentro de prédio a luz é a das lâmpadas: chuva não escurece
     luzes.sol.intensity *= 1 - esc * 0.85;
     luzes.hemi.intensity *= 1 - esc * 0.45;
     luzes.cena.environmentIntensity *= 1 - esc * 0.5;

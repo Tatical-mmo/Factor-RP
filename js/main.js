@@ -220,6 +220,7 @@ const CEU = {
   dia: new THREE.Color('#a9c8de'), noite: new THREE.Color('#0d1730'), tarde: new THREE.Color('#e8a27a'),
   sol: new THREE.Color('#fff2dc'), solTarde: new THREE.Color('#ffae6a'), lua: new THREE.Color('#9fb4ff'),
   hemiDia: new THREE.Color('#dfeeff'), hemiNoite: new THREE.Color('#4a5f92'), chaoDia: new THREE.Color('#8a7457'), chaoNoite: new THREE.Color('#2a2833'),
+  lampada: new THREE.Color('#fff4e0'), chaoLampada: new THREE.Color('#8c7a66'),   // luz das lâmpadas (interiores)
 };
 let horaAtual = 12, noiteAtual = 0, molhadoAtual = 0;
 const ajusteHora = { desloc: 0, fixa: null };   // ajuste do admin (config_jogo): adiantar o ciclo ou travar uma hora
@@ -257,7 +258,19 @@ function atualizarCeu(t) {
   }
   for (const m of luzesCasas) m.emissiveIntensity = noite * 1.1;
   civico.brilhoOutdoors(noite);
+  // dentro de qualquer prédio (casas, delegacia, prefeitura, hospital, CRAS, Câmara, cadeia...: todos os interiores)
+  // a luz é das lâmpadas, igual de dia e de noite: não depende do sol nem da lua
+  const alvo = jogador.dentroCasa || jogador.pos.x >= 1900 ? 1 : 0;
+  luzInterna += (alvo - luzInterna) * Math.min(1, 0.15);
+  if (luzInterna > 0.01) {
+    const k = luzInterna;
+    sol.color.lerp(CEU.lampada, k); sol.intensity = THREE.MathUtils.lerp(sol.intensity, Math.max(sol.intensity, 1.5), k);
+    hemi.color.lerp(CEU.lampada, k); hemi.groundColor.lerp(CEU.chaoLampada, k);
+    hemi.intensity = THREE.MathUtils.lerp(hemi.intensity, Math.max(hemi.intensity, 1.05), k);
+    scene.environmentIntensity = THREE.MathUtils.lerp(scene.environmentIntensity, Math.max(scene.environmentIntensity, 0.4), k);
+  }
 }
+let luzInterna = 0;
 // quantos segundos somar ao relógio para que agora seja a hora h (o ciclo continua dali)
 function deslocParaHora(h) {
   h = ((h % 24) + 24) % 24;
@@ -4722,15 +4735,17 @@ const peAve = (g) => (-(g.userData.pernas?.userData.sola ?? -0.232) - 0.003) * g
 function pernasAve(corP, corCoxa, corvo = false) {
   const pernas = new THREE.Group(), matP = matAve(corP), unha = matAve('#0c0c0c');
   const L = corvo ? 0.11 : 0.09, dedo = corvo ? 0.075 : 0.055, base = -0.12 - 0.025 - L;   // y da sola
-  for (const sx of [-0.05, 0.05]) {
-    if (!corvo) { const coxa = new THREE.Mesh(new THREE.SphereGeometry(0.024, 8, 6), matAve(corCoxa)); coxa.scale.set(1, 1.3, 1); coxa.position.set(sx, -0.125, 0.015); pernas.add(coxa); }   // penas da coxa (no corvo a perna entra direto no corpo)
-    const topo = corvo ? -0.04 : -0.14, comp = topo - base;   // a canela do corvo sobe até dentro do corpo: sem vão nem "bolinha"
-    const canela = new THREE.Mesh(new THREE.CylinderGeometry(corvo ? 0.009 : 0.009, corvo ? 0.012 : 0.009, comp, 6), matP); canela.position.set(sx, (topo + base) / 2, 0.02); pernas.add(canela);
+  // a canela continua do toco que sobrou das pernas do modelo (medido: ponta do toco em y -0.12, x ±0.049 z -0.028 no
+  // corvo; x ±0.031 z 0.005 no pombo): toco + canela formam a perna dobrada, sem perna "solta" ao lado do toco
+  const zp = corvo ? -0.028 : 0.005;
+  for (const sx of corvo ? [-0.049, 0.049] : [-0.031, 0.031]) {
+    const topo = -0.112, comp = topo - base;
+    const canela = new THREE.Mesh(new THREE.CylinderGeometry(corvo ? 0.0065 : 0.006, corvo ? 0.0075 : 0.0065, comp, 6), matP); canela.position.set(sx, (topo + base) / 2, zp); pernas.add(canela);
     for (const a of [-0.5, 0, 0.5]) {   // três dedos para a frente, abertos
-      const d = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0065, dedo, 5).rotateX(Math.PI / 2), matP); d.position.set(sx + Math.sin(a) * dedo * 0.45, base + 0.004, 0.03 + Math.cos(a) * dedo * 0.5); d.rotation.y = a; pernas.add(d);
-      if (corvo) { const u = new THREE.Mesh(new THREE.ConeGeometry(0.004, 0.014, 4).rotateX(Math.PI / 2), unha); u.position.set(sx + Math.sin(a) * dedo * 0.95, base + 0.002, 0.03 + Math.cos(a) * dedo); u.rotation.y = a; pernas.add(u); }
+      const d = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0065, dedo, 5).rotateX(Math.PI / 2), matP); d.position.set(sx + Math.sin(a) * dedo * 0.45, base + 0.004, zp + 0.01 + Math.cos(a) * dedo * 0.5); d.rotation.y = a; pernas.add(d);
+      if (corvo) { const u = new THREE.Mesh(new THREE.ConeGeometry(0.004, 0.014, 4).rotateX(Math.PI / 2), unha); u.position.set(sx + Math.sin(a) * dedo * 0.95, base + 0.002, zp + 0.01 + Math.cos(a) * dedo); u.rotation.y = a; pernas.add(u); }
     }
-    const tras = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0065, dedo * 0.6, 5).rotateX(Math.PI / 2), matP); tras.position.set(sx, base + 0.004, 0.03 - dedo * 0.35); pernas.add(tras);
+    const tras = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0065, dedo * 0.6, 5).rotateX(Math.PI / 2), matP); tras.position.set(sx, base + 0.004, zp + 0.01 - dedo * 0.35); pernas.add(tras);
   }
   pernas.userData.sola = base;
   return pernas;
@@ -4765,7 +4780,7 @@ function criarAve(tipo, escala = 1) {
       const piv = new THREE.Group(); piv.position.set(sx * (corvo ? 0.1 : 0.11), 0.12, 0.03);
       piv.add(asaAve(sx, c1, c2, corvo)); corpoG.add(piv); asas.push(piv);
     }
-    const pernas = pernasAve(corvo ? '#3a3a40' : '#c4553a', corvo ? '#141418' : '#6f7682', corvo); corpoG.add(pernas);
+    const pernas = pernasAve(corvo ? '#3a3a40' : '#c9485c', corvo ? '#141418' : '#6f7682', corvo); corpoG.add(pernas);
     g.scale.setScalar(escala); g.userData = { asas, corpo: corpoG, corpo3d, pernas, modelo: true, fase: Math.random() * 6 };
     return g;
   }
@@ -4784,7 +4799,7 @@ function criarAve(tipo, escala = 1) {
     const ponta = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.015, 0.16), matAve(c2)); ponta.position.set(sx * 0.52, 0, -0.03); piv.add(ponta);
     corpoG.add(piv); asas.push(piv);
   }
-  const pernas = pernasAve(corvo ? '#3a3a40' : '#c4553a', c1, corvo); corpoG.add(pernas);
+  const pernas = pernasAve(corvo ? '#3a3a40' : '#c9485c', c1, corvo); corpoG.add(pernas);
   g.scale.setScalar(escala); g.userData = { asas, corpo: corpoG, pernas, fase: Math.random() * 6 };
   return g;
 }
