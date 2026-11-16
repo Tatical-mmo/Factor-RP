@@ -2010,6 +2010,19 @@ function atualizarDanoVeiculos(dt) {
 }
 // ---- queda de avião ou helicóptero: explosão do tamanho dele, carcaça queimando e foco de incêndio (os bombeiros apagam).
 // Caiu de baixo (até uns 10 m, ou só tocou errado no chão): sobrevive com -40. De mais alto: morre (com paraquedas, ejete antes).
+// nome da aeronave para os avisos e para o registro da queda (antes tudo o que não era avião virava "helicóptero")
+function nomeAeronave(c) {
+  const m = c?.modelo || c?.servico || '';
+  if (c?.aviao || /^aviao_/.test(m)) return { o: 'o avião', de: 'avião' };
+  if (m === 'ovni') return { o: 'o óvni', de: 'óvni' };
+  if (c?.jato || /^(caca_|asa_furtiva)/.test(m)) return { o: 'o caça', de: 'caça' };
+  if (m === 'helicoptero_resgate') return { o: 'o helicóptero de resgate', de: 'helicóptero de resgate' };
+  if (m === 'helicoptero_bombeiros') return { o: 'o helicóptero dos bombeiros', de: 'helicóptero dos bombeiros' };
+  if (m === 'helicoptero_exercito') return { o: 'o helicóptero do Exército', de: 'helicóptero do Exército' };
+  if (/^helicoptero/.test(m) || c?.voa) return { o: 'o helicóptero', de: 'helicóptero' };
+  const n = civico.CARROS[m]?.nome; return n ? { o: 'o ' + n.toLowerCase(), de: n.toLowerCase() } : { o: 'o veículo', de: 'veículo' };
+}
+const maiuscula = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 const ESCALA_QUEDA = { pequeno: 2, medio: 3, grande: 4.5 };
 const escalaAeronave = (c) => (c.aviao ? ESCALA_QUEDA[c.porte] || 2 : 2.5);
 function explosaoAeronave(c, mesh, pil, fatal) {
@@ -2017,7 +2030,7 @@ function explosaoAeronave(c, mesh, pil, fatal) {
   const e = { x: Math.round(p.x * 10) / 10, y: Math.round(chao * 10) / 10, z: Math.round(p.z * 10) / 10, cv: null, de: jogador.perfil?.id, k, ae: 1, mod: c.modelo, r: Math.round((mesh?.rotation.y || 0) * 100) / 100, pil, fatal: fatal ? 1 : 0 };
   efeitoExplosao(e.x, e.y, e.z, k, false); carcaca(e.x, e.z, e.mod, e.r); conexao?.enviar('explosao', e);
   for (const [id, r] of remotos) if (r.av?.raiz.visible && Math.hypot(e.x - r.av.raiz.position.x, e.z - r.av.raiz.position.z) < 4.5 * k) aplicarDanoRemoto(id, 50);
-  rede.aviacao.incendioQueda(e.x, e.z, `Queda de ${c.aviao ? 'avião' : 'helicóptero'}`).catch(() => {});
+  rede.aviacao.incendioQueda(e.x, e.z, `Queda de ${nomeAeronave(c).de}`).catch(() => {});
   if (mesh) scene.remove(mesh);
   // helicóptero do jogador (comprado): some por 30 s e volta, como os carros
   const meu = !c.aviao && !c.servico && carrosMundo.has(c.id) ? c.id : null;
@@ -12343,7 +12356,7 @@ function pilotarHeli(c, dt, max) {
     if (ocupado && !c.motorParado) { c.alt = Math.max(c.alt, 1.5); c.vs = 0; if (performance.now() - (c.avisoOcupado || 0) > 3000) { c.avisoOcupado = performance.now(); aviso('🚁 Lugar ocupado: pouse em chão livre.', 2); } }
   }
   if (c.alt <= 0) {   // tocou o chão
-    if (c.motorParado && c.vs < -4 && (c.altRec || 0) > 1.5) { acidenteVeiculo(c, '💥 O helicóptero caiu com o motor parado!'); return; }
+    if (c.motorParado && c.vs < -4 && (c.altRec || 0) > 1.5) { acidenteVeiculo(c, `💥 ${maiuscula(nomeAeronave(c).o)} caiu com o motor parado!`); return; }
     c.alt = 0; c.vs = 0; if (c.voou) { c.voou = false; c.tVoo = 0; }
   }
   if (c.alt > 6 && !c.voou) { c.voou = true; c.tVoo = 0; contarVooHeli(c); }
@@ -12407,7 +12420,7 @@ function heliParaRevisar() {
 // prédios no caminho de aviões e helicópteros: abaixo do telhado = bateu (cai, com as regras de queda)
 function aeronaveEmPredio(c, chao) {
   const topo = mundo.topoPredio(jogador.pos.x, jogador.pos.z);
-  if (topo > 0 && chao + c.alt < topo - 0.5) { acidenteVeiculo(c, `💥 ${c.aviao ? 'O avião' : 'O helicóptero'} bateu num prédio!`); return true; }
+  if (topo > 0 && chao + c.alt < topo - 0.5) { acidenteVeiculo(c, `💥 ${maiuscula(nomeAeronave(c).o)} bateu num prédio!`); return true; }
   return false;
 }
 // alarme: prédio mais alto que você no caminho dos próximos 3 segundos
