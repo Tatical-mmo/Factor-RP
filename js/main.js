@@ -2995,7 +2995,7 @@ async function iniciarJogo(perfil) {
   $('carregando').classList.remove('oculto');
   montarChao();
   // um modelo faltando não pode travar o jogo: ele só fica de fora (veículos e prédios têm versão feita por código)
-  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
+  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
   const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
   const skin = perfil.policial ? SKIN_POLICIA : id;
   const avatarP = criarAvatar(ROBOS.includes(skin) ? 'robos' : pastaJogador, skin);
@@ -3189,7 +3189,7 @@ async function iniciarJogo(perfil) {
     embarcarNavio: (id) => embarcarAdmin(id),
     guardasBases: () => ({ a51: 28, quartel: 16, aerea: 16, naval: 16, ...GUARDAS_CONF }),
     definirGuardas: (base, n) => rede.guardas.definir(base, n).then(() => { GUARDAS_CONF[base] = n; const B = BASES.find((b) => b.id === base); if (B) ajustarGuardas(B); }),
-    veiculosTeste: () => Object.entries(civico.CARROS).map(([id, c]) => ({ id, nome: `${c.voa ? (id.startsWith('aviao') ? '✈️' : '🚁') : id.includes('onibus') ? '🚌' : id.includes('caminhao') || id === 'bombeiros' ? '🚚' : id === 'tanque' ? '🪖' : '🚗'} ${c.nome}${id === 'onibus_executivo2' ? ' 2' : ''}` })),
+    veiculosTeste: () => Object.entries(civico.CARROS).filter(([id]) => civico.temModelo(id)).map(([id, c]) => ({ id, nome: `${c.voa ? (id.startsWith('aviao') ? '✈️' : '🚁') : id.includes('onibus') ? '🚌' : id.includes('caminhao') || id === 'bombeiros' ? '🚚' : id === 'tanque' ? '🪖' : '🚗'} ${c.nome}${id === 'onibus_executivo2' ? ' 2' : ''}` })),
     testarVeiculo,
     bueiro: (k) => BUEIROS[k], irPara: (x, z) => { jogador.dentroCasa = null; teleportar(x, z); }, marcar: (a) => rastrear(a),
   });

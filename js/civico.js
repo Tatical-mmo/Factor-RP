@@ -546,6 +546,8 @@ export function atualizarSirenes(t, raiz) {
   raiz.traverse((o) => { if (o.userData.sirene !== undefined) o.visible = o.userData.sirene === fase; });
 }
 // ambulância e caminhão dos bombeiros parados na base (somem enquanto alguém dirige)
+// o veículo tem arquivo 3D carregado? (os que perderam o arquivo viravam o "modelo do sistema" no teste do admin)
+export function temModelo(id) { const g = GLB_CARRO[id]; return !g || !!ctx.modelo?.(g); }
 function veiculoDeServico(modelo, vaga) {
   if (!ctx.modelo?.(GLB_CARRO[modelo]) && !DO_EXERCITO.has(modelo)) return null;
   const m = modeloCarro(modelo, '#ffffff');
@@ -710,7 +712,7 @@ export const RODAS = {
   carro_esportivo: { estilo: 'esporte', eixos: [[-1.19, 0.36], [1.31, 0.36]], cy: 0.36, xo: 1.0, xi: 0.71 },
   carro_presidencial: { estilo: 'carro', eixos: [[-1.85, 0.44], [2.12, 0.44]], cy: 0.44, xo: 1.23, xi: 0.85 },
   exercito_jipe: { estilo: 'militar', eixos: [[-1.08, 0.46], [1.34, 0.46]], cy: 0.45, xo: 0.97, xi: 0.59 },
-  ambulancia: { estilo: 'suv', eixos: [[-1.58, 0.47], [1.78, 0.47]], cy: 0.47, xo: 1.4, xi: 0.94 },
+  ambulancia: { estilo: 'suv', eixos: [[-1.34, 0.38], [1.88, 0.38]], cy: 0.38, xo: 0.96, xi: 0.7 },   // nova (16aj): van tipo Sprinter do SAMU
   caminhao_bombeiros: { estilo: 'pesado', eixos: [[-2.4, 0.58], [-1.3, 0.58], [2.45, 0.58]], cy: 0.58, xo: 1.33, xi: 0.86 },   // modelo novo (16r): eixo duplo atrás
   caminhao: { estilo: 'pesado', eixos: [[-2.72, 0.48], [-1.71, 0.48], [3.41, 0.49]], cy: 0.49, xo: 1.18, xi: 0.8 },
   caminhao_lixo: { estilo: 'pesado', eixos: [[-1.6, 0.56], [-0.4, 0.56], [2.8, 0.56]], cy: 0.56, xo: 1.56, xi: 1.0 },   // modelo novo (16r): eixo duplo atrás
@@ -863,7 +865,7 @@ function modeloCarroBase(modelo, cor) {
     const g = base.clone(true); g.userData.glb = GLB_CARRO[modelo]; g.userData.modelo = modelo;
     if (modelo === 'militar') removerTriangulos(g, VIDRO_JIPE, 'semVidro');
     if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
-    else if (SEM_TINTA.has(modelo)) { const sr = { ambulancia: [3.4, 0.9], bombeiros: [2.45, 3.1] }[modelo]; if (sr) sirene(g, sr); }
+    else if (SEM_TINTA.has(modelo)) { const sr = { ambulancia: [2.56, 0.85], bombeiros: [2.45, 3.1] }[modelo]; if (sr) sirene(g, sr); }
     else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), modelo.startsWith('onibus') ? 0.38 : modelo === 'caminhao_lixo' ? 0.12 : modelo === 'helicoptero_bombeiros' ? 0.9 : 0.45); } });
     try { paraBrisaLimpo(g, GLB_CARRO[modelo]); } catch (e) { console.warn('para-brisa:', modelo, e); }
     if (VIDROS[GLB_CARRO[modelo]]) { g.updateMatrixWorld(true); vidrosEscuros(g, VIDROS[GLB_CARRO[modelo]]); }
