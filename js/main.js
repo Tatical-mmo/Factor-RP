@@ -1152,6 +1152,7 @@ function pertoContratante() { return contratante && Math.hypot(contratante.x - j
 
 function livre() {
   if (jogador.morto) return false;
+  if (jogador.ave) { aviso('🐦 Você é um pássaro: volte a ser gente (pousado no chão) para isso.', 2); return false; }
   if (jogador.trem) { aviso('Você está no trem.'); return false; }
   if (jogador.carro) { aviso('Saia do carro primeiro.'); return false; }
   if (jogador.algemado) { aviso('Você está algemado.'); return false; }
@@ -1161,6 +1162,7 @@ function livre() {
 }
 
 function acaoContexto() {
+  if (jogador.ave) { if (bruxoPerto()) falarBruxo(); else aviso(jogador.ave.y > chaoAve(jogador.pos.x, jogador.pos.z) + 0.3 ? '🐦 Voando: ⬆️/⬇️ sobem e descem; pousado, dá para voltar a ser gente.' : '🐦 Pousado.', 2); return; }
   if (jogador.onibus) { acaoNoOnibus(); return; }
   if (jogador.voo) { aviso('Você está voando: desce quando o avião chegar.', 2); return; }
   if (jogador.trem) {
@@ -1199,6 +1201,8 @@ function acaoContexto() {
   if (pertoSedeBope()) { entrarSedeBope(); return; }
   if (pertoDelegacia()) { entrarPublico('delegacia', () => salaDelegacia('delegacia', 1100 + 0, 'Delegacia', '#f1c40f'), pontos.delegacia, '🚓 Delegacia: balcão de serviço, procurados, celas e estande de tiro.'); return; }
   if (pertoContratante()) { abrirMissoes(); return; }
+  if (pedraPerto()) { pegarPedra(); return; }
+  if (bruxoPerto()) { falarBruxo(); return; }
   if (jogador.perfil.prf) { const alvo = eleitoralProximo(2.4); if (alvo) { prenderEleitoral(alvo); return; } }
   if (jogador.perfil.profissao === 'medico') { const fer = feridoProximo(2.8); if (fer) { socorrerFerido(fer); return; } }
   if (pertoPrateleira()) { pegarRemediosAlmox(); return; }
@@ -1446,6 +1450,7 @@ function sairCarro() {
   if (c.aula && c.aula === aula) { if (c.aula.voo && c.alt > 1.5) { aviso('Pouse antes de sair.', 2); return; } encerrarAula(false, 'Você saiu do veículo da prova.'); return; }
   if (c.voa && !c.caminhao) {
     if (c.alt > 1.5) { aviso('Pare para pousar antes de sair.', 2); return; }
+    if ((jogador.pos.y || 0) > alturaChao(jogador.pos.x, jogador.pos.z) + 1.5) { aviso('🚁 Pousado no telhado: desça até o chão para sair do helicóptero.', 3); return; }
     const t = jogador.pos.clone(); mundo.limitar(t);
     if (Math.hypot(t.x - jogador.pos.x, t.z - jogador.pos.z) > 2) { aviso('Pouse numa cidade ou na mata para descer.', 2.5); return; }
   }
@@ -2811,6 +2816,7 @@ async function iniciarJogo(perfil) {
     minhaPosicao: () => jogador.pos,
     teleportar,
     esconderArmaPd: () => rede.pd.esconder(jogador.pos.x, jogador.pos.z),
+    esconderPedra: () => rede.bruxo.esconder(jogador.pos.x, jogador.pos.z),
     locais: () => LOCAIS,
     objetosNaRua: () => objetosNaRua(),
     testeDefesa: (base, tipo) => testeDefesa(base, tipo),
@@ -2933,6 +2939,10 @@ function atualizarRemotos(dt) {
         r.arma.visible = false; r.av.mixer.update(dt); continue;
       }
     }
+    if (!!a.oc !== !!r.oc) { r.oc = !!a.oc; if (r.et) r.et.visible = !r.oc; if (r.status) r.status.visible = !r.oc; }   // nome escondido (equipe se passando por NPC)
+    if (!!a.ave !== !!r.eraAve) { if (r.eraAve !== undefined && Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z) < 150) fumacaPreta(a.x, a.y + 0.9, a.z); r.eraAve = !!a.ave; }
+    if (a.ave) { mostrarAveRemota(r, a, dt); raiz.visible = false; if (r.arma) r.arma.visible = false; r.av.mixer.update(dt); continue; }
+    if (r.ave) { scene.remove(r.ave); r.ave = null; }
     if (r.carro && civico.CARROS[r.carroModelo]?.voa) { const ro = rotorDe(r.carro); if (ro) ro.rotation.y += dt * (r.carro.position.y > alturaChao(r.carro.position.x, r.carro.position.z) + 1 ? 28 : 12); }
     if (a.pg) {   // passageiro de outro jogador (no jipe aberto aparece sentado)
       raiz.position.set(a.x, a.y, a.z); raiz.visible = false; if (r.algemas) r.algemas.visible = false; r.av.mixer.update(dt);
@@ -2995,7 +3005,7 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), iv: j.carro?.invisivel ? 1 : 0, mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? (j.paraquedas.mesh ? 1 : 2) : 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), iv: j.carro?.invisivel ? 1 : 0, mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? (j.paraquedas.mesh ? 1 : 2) : 0, ave: j.ave ? (j.ave.tipo === 'corvo' ? 1 : 2) : 0, bd: j.ave?.bando ? 1 : 0, oc: nomeOculto ? 1 : 0 };
   const u = ultimoEnvio;
   const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs || u.iv !== est.iv || u.mh !== est.mh || u.ap !== est.ap || u.sg !== est.sg;
   if (!mudou && tempoKeepAlive > 0) return;
@@ -3551,7 +3561,7 @@ async function iniciarLogistica() {
     robo: (r) => aoRobo(r),
     barricada: () => { tBarricadas = 0; },
     incendio: () => servicos.recarregarFogo(),   // fogo novo ou apagado: todos veem na hora
-    armaPd: (a) => aoArmaPd(a),
+    armaPd: (a) => aoArmaPd(a), pedra: (p) => aoPedra(p), ave: (m) => somAveRemoto(m),
     membro: () => { recarregar(); atualizarJanelaEmpresa(); },
     pedido: () => atualizarJanelaEmpresa(),
     territorio: () => { tempoSocial = Math.min(tempoSocial, 0.3); atualizarCla(); },
@@ -3651,7 +3661,7 @@ function etiquetaStatus(r) {
   const fundo = m.ferido ? 'rgba(200,40,40,.95)' : m.recompensa > 0 ? 'rgba(110,0,0,.97)' : inimigo ? 'rgba(140,10,10,.95)' : m.crimes > 0 ? 'rgba(170,30,30,.92)' : m.prefeito ? 'rgba(242,194,48,.95)' : m.policial && m.bope ? 'rgba(15,15,15,.95)' : m.policial ? 'rgba(30,70,160,.92)'
     : m.prf ? 'rgba(20,40,90,.95)' : m.profissao === 'medico' ? 'rgba(240,240,240,.95)' : m.profissao === 'bombeiro' ? 'rgba(200,60,20,.95)' : m.profissao === 'exercito' ? 'rgba(62,78,40,.95)' : 'rgba(40,40,40,.85)';
   r.status = textoSprite(txt, { escala: 0.6, cor: m.prefeito || m.profissao === 'medico' && !m.ferido && !inimigo && !(m.crimes > 0) ? '#20160a' : '#ffffff', fundo });
-  r.status.position.y = alturaNome(r.av) + 0.45; r.av.raiz.add(r.status);
+  r.status.position.y = alturaNome(r.av) + 0.45; r.av.raiz.add(r.status); if (r.oc) r.status.visible = false;
 }
 
 function aplicarDanoRemoto(id, valor) {
@@ -4660,6 +4670,405 @@ function atualizarArmaPd(dt) {
   brilhoPd.position.y = -0.55; brilhoPd.scale.setScalar(1 + Math.sin(t * 4) * 0.15);
 }
 
+// ================================================================= PÁSSAROS
+// Pássaros feitos por código (corpo, cabeça, bico, cauda e asas que batem). NPCs voam em bandos pela cidade; a equipe
+// (corvo do administrador, pombo do moderador) e quem ganhou o feitiço do Bruxo viram pássaro para voar e observar.
+const MAT_AVE = {};
+function matAve(cor, brilho = 0) { return (MAT_AVE[cor + brilho] ||= new THREE.MeshStandardMaterial({ color: cor, roughness: brilho ? 0.35 : 0.8, metalness: brilho })); }
+// asa de verdade: contorno afinando até a ponta, com as penas primárias recortadas (escura) e as cobertas por cima (clara)
+const geoAsa = {};
+function asaAve(sx, c1, c2, corvo) {
+  const chave = sx + (corvo ? 'c' : 'p');
+  if (!geoAsa[chave]) {
+    const forma = (pts) => { const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))); const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.01, bevelEnabled: false }).rotateX(Math.PI / 2); if (sx < 0) geo.scale(-1, 1, 1); return geo; };
+    const prim = corvo   // corvo: pontas abertas como dedos; pombo: asa mais pontuda
+      ? [[0, 0.1], [0.2, 0.12], [0.42, 0.1], [0.62, 0.04], [0.7, -0.02], [0.64, -0.05], [0.66, -0.09], [0.58, -0.08], [0.58, -0.13], [0.5, -0.1], [0.48, -0.14], [0.41, -0.1], [0.36, -0.13], [0.28, -0.1], [0.2, -0.12], [0.1, -0.1], [0, -0.09]]
+      : [[0, 0.1], [0.2, 0.12], [0.42, 0.09], [0.6, 0.03], [0.72, -0.04], [0.6, -0.06], [0.52, -0.09], [0.44, -0.08], [0.36, -0.11], [0.28, -0.09], [0.2, -0.11], [0.1, -0.09], [0, -0.09]];
+    const cob = [[0, 0.1], [0.2, 0.12], [0.36, 0.1], [0.42, 0.05], [0.36, 0.0], [0.26, 0.02], [0.18, -0.02], [0.08, 0], [0, -0.02]];
+    geoAsa[chave] = [forma(prim), forma(cob)];
+  }
+  const g = new THREE.Group();
+  const m1 = new THREE.Mesh(geoAsa[chave][0], new THREE.MeshStandardMaterial({ color: c2, roughness: corvo ? 0.4 : 0.85, metalness: corvo ? 0.25 : 0, side: THREE.DoubleSide })); m1.castShadow = true; g.add(m1);
+  const m2 = new THREE.Mesh(geoAsa[chave][1], new THREE.MeshStandardMaterial({ color: c1, roughness: corvo ? 0.4 : 0.85, metalness: corvo ? 0.25 : 0, side: THREE.DoubleSide })); m2.position.y = 0.011; g.add(m2);
+  if (!corvo) { const faixa = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.004, 0.025), matAve('#2b2f36')); faixa.position.set(sx * 0.22, 0.017, -0.03); g.add(faixa); }   // a listra escura do pombo
+  return g;
+}
+// pernas: coxa curta, canela fina e três dedos para a frente e um para trás; voando ficam recolhidas (somem)
+function pernasAve(corP, corCoxa) {
+  const pernas = new THREE.Group(), matP = matAve(corP);
+  for (const sx of [-0.055, 0.055]) {
+    const coxa = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.016, 0.05, 6), matAve(corCoxa)); coxa.position.set(sx, -0.12, 0.01); pernas.add(coxa);
+    const canela = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.09, 5), matP); canela.position.set(sx, -0.185, 0.02); pernas.add(canela);
+    for (const a of [-0.45, 0, 0.45]) { const d = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.006, 0.055), matP); d.position.set(sx + Math.sin(a) * 0.022, -0.229, 0.045 + Math.cos(a) * 0.004); d.rotation.y = a; pernas.add(d); }
+    const tras = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.006, 0.035), matP); tras.position.set(sx, -0.229, -0.005); pernas.add(tras);
+  }
+  return pernas;
+}
+// modelos do Meshy (corvo e pombo): sem as pernas/pedra de baixo (cortadas uma vez), na escala do pássaro
+const CORTE_AVE = { corvo: { y: -0.46, z: 0.15, alt: 0.42 }, pombo: { y: -0.84, z: 0.05, alt: 0.34 } };
+const modeloAve = {};
+function corpoModeloAve(tipo) {
+  const base = modelos['ave_' + tipo]; if (!base) return null;
+  if (!modeloAve[tipo]) {
+    const m = base.clone(true), C = CORTE_AVE[tipo];
+    m.traverse((o) => {   // tira os triângulos abaixo da barriga (pés do modelo e a pedra do corvo)
+      if (!o.isMesh || !o.geometry.index) return;
+      const g = o.geometry.clone(), pos = g.attributes.position, idx = g.index.array, novo = [];
+      for (let i = 0; i < idx.length; i += 3) if (pos.getY(idx[i]) >= C.y && pos.getY(idx[i + 1]) >= C.y && pos.getY(idx[i + 2]) >= C.y) novo.push(idx[i], idx[i + 1], idx[i + 2]);
+      g.setIndex(novo); g.computeBoundingSphere(); o.geometry = g; o.castShadow = true;
+    });
+    const bb = new THREE.Box3().setFromObject(m), k = C.alt / Math.max(0.01, bb.max.y - C.y);
+    m.scale.setScalar(k); m.position.set(0, -0.12 - C.y * k, -C.z * k);   // a barriga fica onde as pernas encaixam
+    modeloAve[tipo] = m;
+  }
+  return modeloAve[tipo].clone(true);
+}
+function criarAve(tipo, escala = 1) {
+  const corvo = tipo === 'corvo', g = new THREE.Group(), corpoG = new THREE.Group(); g.add(corpoG);
+  const mod = corpoModeloAve(tipo);
+  if (mod) {   // corpo do Meshy; as asas e as pernas continuam por código (asas abertas só voando)
+    const corpo3d = new THREE.Group(); corpo3d.add(mod); corpoG.add(corpo3d);
+    const c1 = corvo ? '#141418' : '#7f8794', c2 = corvo ? '#0b0b0d' : '#3e434c';
+    const asas = [];
+    for (const sx of [-1, 1]) {
+      const piv = new THREE.Group(); piv.position.set(sx * (corvo ? 0.1 : 0.11), 0.12, 0.03);
+      piv.add(asaAve(sx, c1, c2, corvo)); corpoG.add(piv); asas.push(piv);
+    }
+    const pernas = pernasAve(corvo ? '#2a2a2e' : '#c4553a', corvo ? '#141418' : '#6f7682'); corpoG.add(pernas);
+    g.scale.setScalar(escala); g.userData = { asas, corpo: corpoG, corpo3d, pernas, modelo: true, fase: Math.random() * 6 };
+    return g;
+  }
+  const c1 = corvo ? '#151518' : '#8b919b', c2 = corvo ? '#0b0b0d' : '#5d6672', bico = corvo ? '#26262a' : '#d9a85a';
+  const esf = (r, cor, sx, sy, sz, x, y, z, br) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), matAve(cor, br)); m.scale.set(sx, sy, sz); m.position.set(x, y, z); m.castShadow = true; corpoG.add(m); return m; };
+  esf(0.16, c1, 1, 0.9, 1.9, 0, 0, 0, corvo ? 0.3 : 0);                          // corpo
+  esf(0.1, c2, 1, 1, 1.05, 0, 0.1, 0.28, corvo ? 0.3 : 0);                       // cabeça
+  if (!corvo) esf(0.085, '#4f7d6c', 1.1, 0.9, 1, 0, 0.04, 0.2);                  // pescoço furta-cor do pombo
+  const b = new THREE.Mesh(new THREE.ConeGeometry(0.035, corvo ? 0.16 : 0.09, 6).rotateX(Math.PI / 2), matAve(bico)); b.position.set(0, 0.09, corvo ? 0.44 : 0.4); corpoG.add(b);
+  for (const sx of [-1, 1]) { const o = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 4), matAve(corvo ? '#d8d0a0' : '#c43a1f')); o.position.set(sx * 0.07, 0.13, 0.34); corpoG.add(o); }
+  const cauda = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.025, 0.2), matAve(c2)); cauda.position.set(0, 0.02, -0.38); corpoG.add(cauda);
+  const asas = [];
+  for (const sx of [-1, 1]) {
+    const piv = new THREE.Group(); piv.position.set(sx * 0.12, 0.06, 0.02);
+    const w = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.02, 0.22), matAve(c1, corvo ? 0.3 : 0)); w.position.x = sx * 0.23; w.castShadow = true; piv.add(w);
+    const ponta = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.015, 0.16), matAve(c2)); ponta.position.set(sx * 0.52, 0, -0.03); piv.add(ponta);
+    corpoG.add(piv); asas.push(piv);
+  }
+  const pernas = pernasAve(corvo ? '#1c1c1f' : '#c4553a', c1); corpoG.add(pernas);
+  g.scale.setScalar(escala); g.userData = { asas, corpo: corpoG, pernas, fase: Math.random() * 6 };
+  return g;
+}
+// voando: bate as asas; pousado: asas fechadas e o corpo dá umas bicadas
+function animarAve(g, dt, voando, plana = false) {
+  const u = g.userData; u.fase += dt * (voando ? (plana ? 4 : 13) : 2);
+  const a = voando ? (plana ? 0.15 + Math.sin(u.fase) * 0.12 : Math.sin(u.fase) * 0.75) : 1.25;
+  u.asas[0].rotation.z = -a; u.asas[1].rotation.z = a;
+  for (const w of u.asas) w.rotation.y = voando ? 0 : (w === u.asas[0] ? -1 : 1) * 1.1;
+  u.corpo.rotation.x = voando ? 0 : Math.max(0, Math.sin(u.fase * 0.7)) * 0.35;
+  u.pernas.visible = !voando;
+  if (u.modelo) { for (const w of u.asas) w.visible = voando; u.corpo3d.rotation.x = voando ? 0.6 : u.corpo.rotation.x * 0.8; u.corpo.rotation.x = 0; }   // o corpo deita para voar; pousado, só ele bica (as pernas ficam firmes)
+}
+// chão de um pássaro: o chão ou o telhado do prédio embaixo
+function chaoAve(x, z) { const t = mundo.tetoEm(x, z); return Math.max(alturaChao(x, z), t ? t.h : -1e9); }
+
+// ---- bandos NPC: pombos dando voltas nas praças e corvos lá no alto
+const avesNpc = [];
+function criarAvesNpc() {
+  const bandos = [[0, 0, 22, 16, 5, 'pombo'], [-135, -135, 28, 20, 4, 'pombo'], [135, 135, 30, 18, 4, 'pombo'], [-189, 243, 26, 22, 4, 'pombo'], [243, -189, 32, 24, 4, 'pombo'], [60, -60, 70, 55, 3, 'corvo'], [-80, 120, 90, 65, 2, 'corvo']];
+  for (const [cx, cz, r, h, n, tipo] of bandos) for (let k = 0; k < n; k++) {
+    const g = criarAve(tipo, tipo === 'corvo' ? 1.3 : 1); scene.add(g);
+    const sorte = (q) => { const v = Math.sin((cx * 12.9898 + cz * 78.233 + k * 37.719 + q * 11.3) * 0.1) * 43758.5453; return v - Math.floor(v); };   // igual em todo celular
+    avesNpc.push({ g, cx, cz, r: r * (0.8 + sorte(1) * 0.4), h: h + (sorte(2) - 0.5) * 6, a0: k / n * Math.PI * 2 + sorte(3) * 0.4, vel: (tipo === 'corvo' ? 0.12 : 0.22) * (0.85 + sorte(4) * 0.3), s0: sorte(5) * 6 });
+  }
+}
+function atualizarAvesNpc(dt) {
+  if (!avesNpc.length) { if (!atualizarAvesNpc.feito) { atualizarAvesNpc.feito = true; criarAvesNpc(); } return; }
+  const px = jogador.pos.x, pz = jogador.pos.z;
+  for (const b of avesNpc) {
+    const longe = Math.hypot(b.cx - px, b.cz - pz) > 260; b.g.visible = !longe; if (longe) continue;
+    const ts = agoraServidor() / 1000 % 100000; b.a = b.a0 + b.vel * ts; b.sobe = b.s0 + ts * 0.4;   // posição pela hora do servidor: todos veem os pombos no mesmo lugar
+    const x = b.cx + Math.cos(b.a) * b.r, z = b.cz + Math.sin(b.a) * b.r, y = alturaChao(b.cx, b.cz) + b.h + Math.sin(b.sobe) * 2.5;
+    b.g.position.set(x, y, z); b.g.rotation.set(0, -b.a, 0.35);   // tangente do círculo, inclinado na curva
+    animarAve(b.g, dt, true, Math.sin(b.a * 3) > 0.3);
+  }
+}
+
+// ---- o jogador vira pássaro
+let nomeOculto = false, aveSobe = false, aveDesce = false;
+const equipeAve = () => ['admin', 'moderador'].includes(jogador.perfil?.cargo);
+const presenteAve = () => { const t = jogador.perfil?.passaro_ate; return !!t && Date.parse(t) > agoraServidor(); };
+function podeVirarAve() {
+  const j = jogador;
+  if (j.carro || j.passageiro || j.trem || j.onibus || j.voo || j.paraquedas || j.embarcado) { aviso('Saia do veículo primeiro.', 2); return false; }
+  if (j.dentroCasa) { aviso('Saia do prédio para voar.', 2); return false; }
+  if (j.morto || j.algemado || j.pena > 0 || j.ferido) { aviso('Agora não dá para virar pássaro.', 2); return false; }
+  return true;
+}
+function alternarAve(presente = false) {
+  const j = jogador;
+  if (j.ave) {   // volta a ser gente: só pousado no chão (no telhado não)
+    const chaoRua = alturaChao(j.pos.x, j.pos.z);
+    if (j.ave.y > chaoRua + 0.6) { aviso(j.ave.y > chaoAve(j.pos.x, j.pos.z) + 0.4 ? '🐦 Pouse no chão (⬇️) para voltar a ser gente.' : '🐦 Desça do telhado: pouse no chão para voltar a ser gente.', 2.5); return; }
+    virarGente(); return;
+  }
+  if (!podeVirarAve()) return;
+  if (j.carregando) { scene.remove(j.carregando); j.carregando = null; }
+  if (j.armado) alternarArmaForcado(false);
+  const tipo = j.perfil?.cargo === 'admin' ? 'corvo' : 'pombo';
+  const g = criarAve(tipo, tipo === 'corvo' ? 2 : 1.7); scene.add(g);
+  j.ave = { tipo, g, y: j.pos.y + 0.6, presente: presente || !equipeAve(), vel: 0 };
+  j.avatar.raiz.visible = false; j.alvo = null;
+  fumacaPreta(j.pos.x, j.pos.y + 0.9, j.pos.z); efeitoPena(j.pos.x, j.pos.y + 1, j.pos.z, tipo);
+  aviso(tipo === 'corvo' ? '🐦‍⬛ Você virou um CORVO. ⬆️ sobe, ⬇️ desce; pousa no chão e nos telhados.' : '🐦 Você virou um PÁSSARO. ⬆️ sobe, ⬇️ desce; pousa no chão e nos telhados.', 4);
+}
+function virarGente(msg) {
+  const j = jogador, a = j.ave; if (!a) return;
+  scene.remove(a.g); j.ave = null; aveSobe = aveDesce = false; removerBando('eu');
+  j.pos.y = alturaChao(j.pos.x, j.pos.z); resolverColisao(j.pos, j.raio);
+  j.avatar.raiz.position.copy(j.pos); j.avatar.raiz.visible = true; j.avatar.tocar('idle', { fade: 0.2 });
+  fumacaPreta(j.pos.x, j.pos.y + 0.9, j.pos.z); efeitoPena(j.pos.x, j.pos.y + 1, j.pos.z, a.tipo);
+  if (msg) aviso(msg, 3.5);
+}
+function voarAve(dt, dir, forca) {
+  const j = jogador, a = j.ave, av = j.avatar;
+  const sobe = aveSobe || teclas.has(' ') || teclas.has('r'), desce = aveDesce || teclas.has('f') || teclas.has('c');
+  const chao = chaoAve(j.pos.x, j.pos.z), noAr = a.y > chao + 0.08;
+  const vmax = noAr ? (a.tipo === 'corvo' ? 17 : 14) : 2.2;   // pousado: só dá pulinhos
+  a.vel += ((forca > 0.05 ? forca * vmax : 0) - a.vel) * Math.min(1, dt * (noAr ? 2.5 : 8));
+  if (forca > 0.05) j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 6);
+  let nx = THREE.MathUtils.clamp(j.pos.x + Math.sin(j.yaw) * a.vel * dt, -1500, 1600), nz = THREE.MathUtils.clamp(j.pos.z + Math.cos(j.yaw) * a.vel * dt, -2000, 1900);
+  const t = mundo.tetoEm(nx, nz);
+  if (t && a.y < t.h - 0.3) { nx = j.pos.x; nz = j.pos.z; a.vel *= 0.3; }   // parede de prédio: não atravessa
+  const vy = sobe ? 6 : desce ? -6 : 0;
+  a.y = Math.min(170, a.y + vy * dt);
+  const chao2 = chaoAve(nx, nz); if (a.y < chao2) a.y = chao2;
+  j.pos.set(nx, a.y, nz);
+  const voando = a.y > chao2 + 0.08;
+  a.g.position.set(nx, a.y + (voando ? 0 : 0.232 * a.g.scale.x), nz);
+  a.g.rotation.set(voando ? -Math.min(0.25, a.vel / 60) + vy * 0.02 : 0, j.yaw, 0, 'YXZ');
+  animarAve(a.g, dt, voando || sobe, voando && !sobe && a.vel > 8);
+  av.raiz.position.copy(j.pos); av.raiz.visible = false;
+}
+// botões: equipe tem o 🐦 fixo ao lado do menu e o 🙈 (esconde o nome); voando aparecem ⬆️ e ⬇️
+function controleAve() {
+  const j = jogador, fixos = document.querySelector('#menuBar .fixos');
+  if (fixos && !$('btAve')) {
+    const b = document.createElement('button'); b.id = 'btAve'; b.title = 'Virar pássaro'; b.onclick = () => alternarAve(false); fixos.appendChild(b);
+    const o = document.createElement('button'); o.id = 'btOculto'; o.title = 'Esconder o nome (passar por NPC)'; o.onclick = () => { nomeOculto = !nomeOculto; if (j.etiqueta) j.etiqueta.visible = !nomeOculto; aviso(nomeOculto ? '🙈 Nome escondido: os outros veem você como um NPC.' : '👁️ Nome visível de novo.', 2.5); }; fixos.appendChild(o);
+    const ctl = document.createElement('div'); ctl.id = 'aveCtl';
+    ctl.style.cssText = 'position:fixed;right:14px;bottom:250px;z-index:31;display:none;flex-direction:column;gap:10px';
+    for (const [id, txt, fn] of [['btGrasnar', '📣', () => grasnar()], ['btBando', '🐦‍⬛', () => alternarBando()]]) {   // só o corvo: grasnar e chamar o bando
+      const k = document.createElement('button'); k.id = id; k.textContent = txt; k.onclick = fn;
+      k.style.cssText = 'width:64px;height:64px;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(40,20,60,.8);color:#fff;font-size:26px';
+      ctl.appendChild(k);
+    }
+    for (const [id, txt] of [['btAveSobe', '⬆️'], ['btAveDesce', '⬇️']]) {
+      const k = document.createElement('button'); k.id = id; k.textContent = txt;
+      k.style.cssText = 'width:64px;height:64px;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(20,24,34,.75);color:#fff;font-size:26px;touch-action:none';
+      const liga = (v) => (e) => { e.preventDefault(); if (id === 'btAveSobe') aveSobe = v; else aveDesce = v; };
+      k.addEventListener('pointerdown', liga(true)); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) k.addEventListener(ev, liga(false));
+      ctl.appendChild(k);
+    }
+    document.body.appendChild(ctl);
+  }
+  const eq = equipeAve();
+  { const b = $('btAve'); if (b) { b.style.display = eq ? '' : 'none'; const t = j.ave ? '🧍' : j.perfil?.cargo === 'admin' ? '🐦‍⬛' : '🐦'; if (b.textContent !== t) b.textContent = t; } }
+  { const o = $('btOculto'); if (o) { o.style.display = eq ? '' : 'none'; const t = nomeOculto ? '🙈' : '👁️'; if (o.textContent !== t) o.textContent = t; } }
+  { const c = $('aveCtl'); if (c) { const v = j.ave ? 'flex' : 'none'; if (c.style.display !== v) c.style.display = v; } }
+  for (const id of ['btGrasnar', 'btBando']) { const b = $(id); if (b) { const v = j.ave?.tipo === 'corvo' ? '' : 'none'; if (b.style.display !== v) b.style.display = v; } }
+  { const b = $('btBando'); if (b) { const on = !!j.ave?.bando; b.style.background = on ? 'rgba(130,60,200,.9)' : 'rgba(40,20,60,.8)'; } }
+  if (!eq && nomeOculto) { nomeOculto = false; if (j.etiqueta) j.etiqueta.visible = true; }
+  if (j.ave && j.ave.presente && !eq && !presenteAve()) { j.pos.y = alturaChao(j.pos.x, j.pos.z); virarGente('🐦 O feitiço do Bruxo acabou: você voltou a ser gente.'); }
+}
+// botão Extra de quem ganhou o feitiço do Bruxo (a equipe usa o 🐦 fixo)
+function contextoAvePresente() {
+  if (equipeAve() || !presenteAve()) return null;
+  const min = Math.max(0, Math.ceil((Date.parse(jogador.perfil.passaro_ate) - agoraServidor()) / 60000));
+  if (jogador.ave) return [`voltar a ser gente (pouse no chão) · feitiço: ${min} min`, '🧍 Voltar', () => alternarAve()];
+  if (jogador.carro || jogador.passageiro || jogador.trem || jogador.dentroCasa || jogador.morto || jogador.algemado) return null;
+  return [`virar pássaro (feitiço do Bruxo, ${min} min) — bom para fugir`, '🐦 Voar', () => alternarAve(true)];
+}
+// fumaça preta da transformação (todos veem: os outros disparam quando o pássaro aparece ou some)
+function fumacaPreta(x, y, z) {
+  for (let k = 0; k < 16; k++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: texFumaca(), color: k % 3 ? '#141414' : '#2a2433', transparent: true, opacity: 0.9, depthWrite: false }));
+    const a = Math.random() * Math.PI * 2, rr = Math.random() * 0.5; sp.position.set(x + Math.cos(a) * rr, y - 0.4 + Math.random() * 1.2, z + Math.sin(a) * rr); sp.scale.setScalar(0.6 + Math.random() * 0.5); scene.add(sp);
+    const v = new THREE.Vector3(Math.cos(a) * (0.6 + Math.random()), 0.5 + Math.random() * 1.2, Math.sin(a) * (0.6 + Math.random())); let t = 0;
+    const vida = 1.1 + Math.random() * 0.6;
+    const passo = () => { t += 0.016; sp.position.addScaledVector(v, 0.016); v.multiplyScalar(0.97); sp.scale.multiplyScalar(1.025); sp.material.opacity = Math.max(0, 0.9 * (1 - t / vida)); if (t < vida) requestAnimationFrame(passo); else { scene.remove(sp); sp.material.dispose(); } };
+    requestAnimationFrame(passo);
+  }
+}
+// penas voando quando vira ou desvira
+function efeitoPena(x, y, z, tipo) {
+  for (let k = 0; k < 10; k++) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.05), new THREE.MeshBasicMaterial({ color: tipo === 'corvo' ? '#1a1a1a' : '#9aa0aa', side: THREE.DoubleSide, transparent: true }));
+    p.position.set(x, y, z); scene.add(p);
+    const v = new THREE.Vector3((Math.random() - 0.5) * 3, Math.random() * 2.5, (Math.random() - 0.5) * 3); let t = 0;
+    const passo = () => { t += 0.016; p.position.addScaledVector(v, 0.016); v.y -= 0.03; p.rotation.x += 0.2; p.rotation.y += 0.13; p.material.opacity = Math.max(0, 1 - t / 1.5); if (t < 1.5) requestAnimationFrame(passo); else { scene.remove(p); p.geometry.dispose(); p.material.dispose(); } };
+    requestAnimationFrame(passo);
+  }
+}
+// ---- o corvo grasna (só quando você aperta) e chama o bando: corvos NPC que voam em volta e pousam em roda quando
+// você pousa; não se afastam. O bando grasna junto de vez em quando.
+function grasnar() {
+  const j = jogador; if (j.ave?.tipo !== 'corvo') return;
+  if (performance.now() - (grasnar.t || 0) < 900) return; grasnar.t = performance.now();
+  sons.tocar('corvo', { vol: 0.9 });
+  conexao?.enviar('ave', { id: j.perfil.id, som: 'corvo', x: j.pos.x, y: j.pos.y, z: j.pos.z });
+  const u = j.ave.g.userData; u.fase += 2;   // um bater de asas
+}
+function alternarBando() {
+  const a = jogador.ave; if (a?.tipo !== 'corvo') return;
+  a.bando = !a.bando;
+  if (a.bando) { sons.tocar('corvos', { vol: 0.9 }); conexao?.enviar('ave', { id: jogador.perfil.id, som: 'corvos', x: jogador.pos.x, y: jogador.pos.y, z: jogador.pos.z }); aviso('🐦‍⬛ Você chamou o bando: os corvos vêm voar com você e pousam em volta quando você pousa.', 3.5); }
+  else { removerBando('eu'); aviso('🐦‍⬛ O bando foi embora.', 2); }
+}
+function somAveRemoto(m) {
+  if (!m || m.id === jogador.perfil?.id) return;
+  const d = Math.hypot(m.x - jogador.pos.x, m.z - jogador.pos.z);
+  sons.tocar(m.som === 'corvos' ? 'corvos' : 'corvo', { vol: 0.9, dist: d, raio: 90 });
+}
+const bandos = new Map();   // dono ('eu' ou id do jogador) -> { aves: [...], somEm }
+function removerBando(dono) { const b = bandos.get(dono); if (!b) return; for (const c of b.aves) scene.remove(c.g); bandos.delete(dono); }
+function atualizarBandos(dt) {
+  const donos = new Map();
+  if (jogador.ave?.bando) donos.set('eu', { x: jogador.pos.x, y: jogador.ave.y, z: jogador.pos.z, eu: true });
+  for (const [id, r] of remotos) if (r.alvo?.ave && r.alvo.bd && r.ave) donos.set(id, { x: r.ave.position.x, y: r.alvo.y, z: r.ave.position.z });
+  for (const k of [...bandos.keys()]) if (!donos.has(k)) removerBando(k);
+  const t = performance.now() / 1000;
+  for (const [k, o] of donos) {
+    let b = bandos.get(k);
+    if (!b) {
+      b = { aves: [], somEm: t + 15 + Math.random() * 15 }; bandos.set(k, b);
+      for (let i = 0; i < 8; i++) {
+        const g = criarAve('corvo', 1.4); g.position.set(o.x + (Math.random() - 0.5) * 30, o.y + 12 + Math.random() * 8, o.z + (Math.random() - 0.5) * 30); scene.add(g);   // chegam voando de longe
+        b.aves.push({ g, ang: i / 8 * Math.PI * 2, r: 3 + Math.random() * 4, h: -1 + Math.random() * 3.5, vel: (0.9 + Math.random() * 0.5) * (i % 2 ? 1 : -1), pa: i / 8 * Math.PI * 2 + Math.random() * 0.5, pr: 1.6 + Math.random() * 2.2 });
+      }
+    }
+    const longe = Math.hypot(o.x - jogador.pos.x, o.z - jogador.pos.z) > 200;
+    const donoVoando = o.y > chaoAve(o.x, o.z) + 0.15;
+    for (const c of b.aves) {
+      c.g.visible = !longe; if (longe) continue;
+      let tx, ty, tz;
+      if (donoVoando) { c.ang += c.vel * dt * 0.8; tx = o.x + Math.cos(c.ang) * c.r; tz = o.z + Math.sin(c.ang) * c.r; ty = Math.max(chaoAve(tx, tz) + 1, o.y + c.h); }
+      else { tx = o.x + Math.cos(c.pa) * c.pr; tz = o.z + Math.sin(c.pa) * c.pr; ty = chaoAve(tx, tz) + 0.232 * c.g.scale.x; }
+      const p = c.g.position, dx = tx - p.x, dy = ty - p.y, dz = tz - p.z, d = Math.hypot(dx, dy, dz);
+      const k2 = Math.min(1, dt * (donoVoando ? 3 : 2.2)); p.x += dx * k2; p.y += dy * k2; p.z += dz * k2;
+      const voando = donoVoando || d > 0.25;
+      if (Math.hypot(dx, dz) > 0.05) c.g.rotation.y = suavizarAngulo(c.g.rotation.y, Math.atan2(dx, dz), dt * 6);
+      else if (!voando) c.g.rotation.y = suavizarAngulo(c.g.rotation.y, Math.atan2(o.x - p.x, o.z - p.z), dt * 2);   // pousados, olham para o dono
+      c.g.rotation.z = donoVoando ? -0.35 * Math.sign(c.vel) : 0;
+      animarAve(c.g, dt, voando, voando && donoVoando && Math.sin(c.ang * 2) > 0.2);
+    }
+    if (!longe && t > b.somEm) { b.somEm = t + 18 + Math.random() * 14; sons.tocar('corvos', { vol: 0.55, dist: Math.hypot(o.x - jogador.pos.x, o.z - jogador.pos.z), raio: 90 }); }
+  }
+}
+
+// pássaro de outro jogador
+function mostrarAveRemota(r, a, dt) {
+  if (!r.ave || r.aveTipo !== a.ave) {
+    if (r.ave) scene.remove(r.ave);
+    r.aveTipo = a.ave; r.ave = criarAve(a.ave === 1 ? 'corvo' : 'pombo', a.ave === 1 ? 2 : 1.7); r.ave.position.set(a.x, a.y, a.z); scene.add(r.ave);
+    r.aveEt = textoSprite(r.meta?.nome || '', { escala: 0.55, cor: '#f2a33a' }); r.aveEt.position.y = 0.55; r.ave.add(r.aveEt);
+  }
+  r.aveEt.visible = !a.oc;
+  const voando = a.y > chaoAve(a.x, a.z) + 0.1;
+  const p = r.ave.position, ax = p.x, az = p.z; p.lerp(new THREE.Vector3(a.x, a.y + (voando ? 0 : 0.232 * r.ave.scale.x), a.z), Math.min(1, dt * 8));
+  r.ave.rotation.y = suavizarAngulo(r.ave.rotation.y, a.r, dt * 8);
+  animarAve(r.ave, dt, voando, voando && Math.hypot(p.x - ax, p.z - az) / Math.max(dt, 1e-3) > 8);
+}
+
+// ================================================================= O BRUXO e a pedra preciosa
+let pedra = null, objPedra = null, objBruxo = null, bruxoVisivel = false;
+function aoPedra(p) {
+  const antes = pedra; pedra = p;
+  if (p?.ativa && p.dono === jogador.perfil?.id && !(antes?.dono === p.dono && antes?.ativa)) setTimeout(() => falarBruxo(), 900);
+}
+function pedraPerto() { return !!(pedra?.ativa && !pedra.dono && !jogador.carro && !jogador.ave && Math.hypot(pedra.x - jogador.pos.x, pedra.z - jogador.pos.z) < 3.5); }
+function bruxoPerto() { return !!(pedra?.ativa && pedra.dono && pedra.dono === jogador.perfil?.id && Math.hypot(pedra.x - jogador.pos.x, pedra.z - jogador.pos.z) < 5); }
+async function pegarPedra() {
+  const j = jogador, bx = j.pos.x + Math.sin(j.yaw) * 2.6, bz = j.pos.z + Math.cos(j.yaw) * 2.6;
+  try {
+    await rede.bruxo.pegar(j.pos.x, j.pos.z, bx, bz);
+    j.avatar.tocar('pegar', { umaVez: true, velocidade: 1.5, fade: 0.1 }); j.trava = 1;
+    aoPedra({ ...pedra, dono: j.perfil.id, x: bx, z: bz });
+    aviso('💎 Você achou a PEDRA PRECIOSA! O Bruxo apareceu na sua frente…', 4);
+  } catch (e) { aviso(e.message, 3); }
+}
+function falarBruxo() {
+  if (!bruxoPerto() && !(pedra?.dono === jogador.perfil?.id)) return;
+  const pedir = (k, ok) => () => rede.bruxo.desejo(k).then((r) => {
+    if (r.passaro_ate) jogador.perfil.passaro_ate = r.passaro_ate;
+    if (k === 'perdao') { jogador.perfil.crimes = 0; jogador.perfil.eleitoral = false; jogador.perfil.recompensa = 0; conexao?.rastrear(metaPresenca()); }
+    aviso(ok(r), 7); recarregarInventario?.();
+  }).catch((e) => aviso(e.message, 3));
+  escolher('🧙 O Bruxo', '<b>“Você encontrou a minha pedra… Faça UM pedido, e eu desapareço.”</b>', [
+    { rotulo: '🐦 Virar pássaro durante um ciclo (quando quiser — ótimo para fugir)', fn: pedir('passaro', () => '🐦 Feitiço lançado! Use o botão Extra "🐦 Voar" quando quiser, por 32 minutos.') },
+    { rotulo: '⚖️ Ser perdoado de todos os crimes', fn: pedir('perdao', () => '⚖️ Seus crimes sumiram como fumaça. Você está limpo.') },
+    { rotulo: '💰 Riqueza: de 1 a 10 milhões de moedas (a sorte decide)', fn: pedir('dinheiro', (r) => `💰 O Bruxo encheu seus bolsos: +${num(r.valor)} moedas!`) },
+    { rotulo: '✨ A arma amarela (dourada), com 2 balas', fn: pedir('arma', () => '✨ A ARMA DOURADA é sua: 2 balas. Saque a arma para usar.') },
+    { rotulo: '🤔 Pensar mais um pouco', fn: () => aviso('🧙 “Estarei aqui esperando o seu pedido…”', 3) },
+  ]);
+}
+function criarBruxo() {
+  const g = new THREE.Group(), glb = modelos.npc_bruxo;
+  if (glb) {
+    const m = glb.clone(true), bb = new THREE.Box3().setFromObject(m), k = 1.95 / Math.max(0.01, bb.max.y - bb.min.y);
+    m.scale.setScalar(k); m.position.y = -bb.min.y * k; m.traverse((q) => { if (q.isMesh) q.castShadow = true; }); g.add(m);
+  } else {   // manto, barba, chapéu pontudo e cajado com o cristal (até o personagem 3D do Bruxo carregar)
+    const proc = new THREE.Group(); g.add(proc);
+    criarAvatar('personagens', 'Bruxo').then((av) => { proc.visible = false; g.add(av.raiz); av.tocar('idle'); avataresObra.add(av); }).catch(() => {});
+    const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.7, ...o });
+    const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; proc.add(o); return o; };
+    add(new THREE.ConeGeometry(0.55, 1.5, 14, 1, true), M('#3b1f5c', { side: THREE.DoubleSide }), 0, 0.75, 0);
+    add(new THREE.CylinderGeometry(0.2, 0.32, 0.5, 12), M('#3b1f5c'), 0, 1.35, 0);
+    add(new THREE.SphereGeometry(0.17, 14, 10), M('#c99a78'), 0, 1.72, 0);
+    add(new THREE.ConeGeometry(0.15, 0.55, 10).rotateX(Math.PI), M('#e9e6e0'), 0, 1.45, 0.12);
+    add(new THREE.CylinderGeometry(0.42, 0.42, 0.04, 20), M('#2a1442'), 0, 1.86, 0);
+    add(new THREE.ConeGeometry(0.22, 0.75, 14), M('#2a1442'), 0, 2.24, 0).rotation.z = 0.12;
+    add(new THREE.TorusGeometry(0.2, 0.025, 6, 20).rotateX(Math.PI / 2), M('#d4af37', { metalness: 0.8, roughness: 0.3 }), 0, 1.92, 0);
+    add(new THREE.CylinderGeometry(0.03, 0.035, 1.9, 8), M('#5a3a1e'), 0.5, 0.95, 0.15);
+    add(new THREE.OctahedronGeometry(0.11), new THREE.MeshStandardMaterial({ color: '#b48cff', emissive: '#8a4dff', emissiveIntensity: 1.6 }), 0.5, 1.98, 0.15);
+  }
+  const luz = new THREE.PointLight('#a066ff', 6, 7, 1.6); luz.position.set(0, 1.6, 0.4); g.add(luz);
+  const aura = new THREE.Mesh(new THREE.RingGeometry(0.6, 1.1, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#9a5cff', transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false })); aura.position.y = 0.04; g.add(aura); g.userData.aura = aura;
+  const et = textoSprite('🧙 O Bruxo', { escala: 0.6, fundo: 'rgba(60,20,100,.92)' }); et.position.y = 2.75; g.add(et);
+  scene.add(g); return g;
+}
+function fumacaBruxo(x, y, z) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: '#7d3cff', transparent: true, opacity: 0.7, depthWrite: false })); m.position.set(x, y + 1.1, z); m.scale.setScalar(0.3); scene.add(m);
+  let t = 0; const passo = () => { t += 0.016; m.scale.setScalar(0.3 + t * 3); m.material.opacity = Math.max(0, 0.7 * (1 - t / 0.9)); if (t < 0.9) requestAnimationFrame(passo); else { scene.remove(m); m.material.dispose(); } };
+  requestAnimationFrame(passo);
+}
+function atualizarBruxo() {
+  if (!pedra && !atualizarBruxo.pediu) { atualizarBruxo.pediu = true; rede.bruxo.estado().then((p) => { if (p) aoPedra(p); }).catch(() => {}); }
+  const t = performance.now() / 1000;
+  // a pedra escondida: brilha e gira, só aparece de perto (o administrador vê de longe)
+  const solta = pedra?.ativa && !pedra.dono;
+  if (solta && !objPedra) {
+    objPedra = new THREE.Group();
+    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.28), new THREE.MeshStandardMaterial({ color: '#7ff0ff', emissive: '#2fb8ff', emissiveIntensity: 1.2, metalness: 0.3, roughness: 0.05, transparent: true, opacity: 0.92 }));
+    gem.scale.set(1, 1.5, 1); objPedra.add(gem);
+    const anel = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.9, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#5fe0ff', transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })); anel.position.y = -0.55; objPedra.add(anel);
+    scene.add(objPedra);
+  }
+  if (objPedra) {
+    objPedra.visible = !!solta && (Math.hypot(pedra.x - jogador.pos.x, pedra.z - jogador.pos.z) < 14 || jogador.perfil?.cargo === 'admin');
+    if (objPedra.visible) { objPedra.position.set(pedra.x, alturaChao(pedra.x, pedra.z) + 0.65 + Math.sin(t * 2) * 0.12, pedra.z); objPedra.children[0].rotation.y = t * 1.8; objPedra.children[1].scale.setScalar(1 + Math.sin(t * 4) * 0.15); }
+  }
+  // o Bruxo: aparece na frente de quem achou a pedra e some depois do pedido
+  const ver = !!(pedra?.ativa && pedra.dono);
+  if (ver && !objBruxo) objBruxo = criarBruxo();
+  if (ver !== bruxoVisivel && objBruxo) { bruxoVisivel = ver; objBruxo.visible = ver; fumacaBruxo(objBruxo.visible ? pedra.x : objBruxo.position.x, alturaChao(pedra?.x ?? 0, pedra?.z ?? 0), objBruxo.visible ? pedra.z : objBruxo.position.z); }
+  if (ver && objBruxo) {
+    const y = alturaChao(pedra.x, pedra.z);
+    objBruxo.position.set(pedra.x, y + 0.15 + Math.sin(t * 1.6) * 0.1, pedra.z);
+    const d = pedra.dono === jogador.perfil?.id ? jogador.pos : remotos.get(pedra.dono)?.av?.raiz.position;
+    if (d) objBruxo.rotation.y = Math.atan2(d.x - pedra.x, d.z - pedra.z);
+    objBruxo.userData.aura.rotation.z = t; objBruxo.userData.aura.material.opacity = 0.35 + Math.sin(t * 3) * 0.12;
+  }
+}
+
 // ---------------------------------------------------------------- roubo de carros de jogador
 function carroAlheioProximo() {
   if (jogador.carro || jogador.trem) return null;
@@ -4928,6 +5337,7 @@ function receberDano(d) {
 }
 
 async function morrerLocal(pd = false) {
+  if (jogador.ave) virarGente();
   const j = jogador;
   if (j.carro) sairCarro();
   if (armaPd?.dono === j.perfil?.id) rede.pd.soltar(j.pos.x, j.pos.z).catch(() => {});
@@ -6413,6 +6823,7 @@ function montarLocais() {
 }
 
 function teleportar(x, z) {
+  if (jogador.ave) virarGente();
   if (jogador.embarcado) { if (jogador.embarcado.leme) largarLeme(); jogador.embarcado = null; conexao?.rastrear(metaPresenca()); }
   if (jogador.carro) sairCarro();
   if (jogador.trem) { ferrovia.ocultarTeto(jogador.trem.li, jogador.trem.k, false); jogador.trem = null; }
@@ -6565,6 +6976,7 @@ function atualizarJogador(dt) {
   if (j.embarcado) { seguirNavio(dt, dir, forca); return; }
   { const ej = !!(j.carro?.voa && !j.carro.caminhao && (j.carro.alt || 0) >= 8 && qtdItem('paraquedas') > 0); if (ej !== document.body.classList.contains('ejetar')) document.body.classList.toggle('ejetar', ej); }
   if (j.paraquedas) { descerParaquedas(dt, dir, forca); return; }
+  if (j.ave) { voarAve(dt, dir, forca); return; }
   if (j.voo) { seguirVoo(); return; }
   if (j.onibus) { seguirOnibus(); av.mixer.update(dt); return; }
   if (j.passageiro) {
@@ -7026,6 +7438,8 @@ function contexto() {
     return [`o trem para ${dest} chega em ${n} s`, `Trem ${n}s`];
   }
   if (jogador.perfil?.policial && procuradoProximo(2.4)) return ['algemar e prender o procurado', 'Prender'];
+  if (pedraPerto()) return ['pegar a pedra preciosa e invocar o Bruxo', '💎 Pegar'];
+  if (bruxoPerto()) return ['falar com o Bruxo: faça o seu pedido', '🧙 Falar'];
   if (jogador.perfil?.prf && eleitoralProximo(2.4)) return ['prender por crime eleitoral (PRF)', 'Prender'];
   if (jogador.perfil?.profissao === 'medico' && feridoProximo(2.8)) return ['socorrer o ferido (+250)', 'Socorrer'];
   if (obraNaFrente()) return ['obra da prefeitura em andamento', 'Obra'];
@@ -7165,7 +7579,7 @@ function quadroJogo() {
   mundo.propsPerto(foco().x, foco().z, dt); semaforos.atualizar(dt, foco().x, foco().z);
   mundo.predios3dPerto(foco().x, foco().z, dt);
   sedes.atualizar(dt);
-  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); checarTrem(); atualizarArmaPd(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
+  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); checarTrem(); atualizarArmaPd(dt); atualizarBruxo(dt); atualizarAvesNpc(dt); atualizarBandos(dt); controleAve(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
   atualizarJogador(dt);
   atualizarCaminhao(dt);
   atualizarCaminhoes(dt);
@@ -8446,6 +8860,7 @@ function sequestroSemCla() {
 }
 // botão extra dos crimes de clã (ao lado do botão de ação, que continua com Entrar/Arrombar/Dirigir)
 function contextoCrime() {
+  { const ap = contextoAvePresente(); if (ap) return ap; }
   if (jogador.carregando) return null;
   { const r = contextoRacoes(); if (r) return r; }
   { const jj = jujubaParaSequestrar(); if (jj) return ['sequestrar o caminhão de rações (crime de clã)', '🔫 Sequestrar', () => sequestrarJujuba(jj)]; }
@@ -11593,7 +12008,7 @@ function pilotarHeli(c, dt, max) {
   let sobe = pedais.acel || teclas.has('r'); const desce = pedais.freio || teclas.has('f');
   if (c.motorParado) sobe = false;
   // em cima de um navio: o convés é o chão, e parado nele o navio leva o helicóptero junto
-  const chaoHeli = (x, z) => { const dk = convesEm(x, z); return dk ? dk.h : alturaChao(x, z); };
+  const chaoHeli = (x, z) => { const dk = convesEm(x, z); if (dk) return dk.h; const t = c.aviao || c.jato ? null : mundo.tetoEm(x, z); return t?.plano ? Math.max(alturaChao(x, z), t.h) : alturaChao(x, z); };   // laje de prédio também é chão (pouso no telhado)
   if (c.alt < 0.5 && c.navio) {
     const n = NAVIOS[c.navio];
     if (n?.dx !== undefined) { const rx = jogador.pos.x - n.x0, rz = jogador.pos.z - n.z0, ca = Math.cos(n.dang), sa = Math.sin(n.dang); jogador.pos.x = n.x + rx * ca + rz * sa; jogador.pos.z = n.z - rx * sa + rz * ca; jogador.yaw += n.dang; }
@@ -11603,7 +12018,7 @@ function pilotarHeli(c, dt, max) {
   const ufo = c.servico === 'ovni', vsAlvo = c.motorParado ? -7 : sobe ? (ufo ? 7 : 3) : desce ? (ufo ? -6 : -2.5) : 0;
   c.vs = (c.vs || 0) + THREE.MathUtils.clamp(vsAlvo - (c.vs || 0), -(ufo ? 10 : 4) * dt, (ufo ? 10 : 4) * dt);
   const altAntes = c.alt; c.alt = Math.min(120, c.alt + c.vs * dt);
-  if (c.alt <= 1.5 && c.vs < 0 && !convesEm(jogador.pos.x, jogador.pos.z)) {   // pousando: precisa de chão livre (no convés pode)
+  if (c.alt <= 1.5 && c.vs < 0 && !convesEm(jogador.pos.x, jogador.pos.z) && !mundo.tetoEm(jogador.pos.x, jogador.pos.z)?.plano) {   // pousando: precisa de chão livre (no convés e na laje pode)
     const t = jogador.pos.clone(); mundo.limitar(t);
     const livre = jogador.pos.clone(); resolverColisao(livre, c.raio || 2.2);
     const ocupado = Math.hypot(t.x - jogador.pos.x, t.z - jogador.pos.z) > 2 || Math.hypot(livre.x - jogador.pos.x, livre.z - jogador.pos.z) > 0.6;
@@ -14780,7 +15195,7 @@ function alturaVeiculoEm(x, z) {
 }
 function pular() {
   const j = jogador;
-  if (!j.avatar || j.morto || j.carro || j.passageiro || j.onibus || j.voo || j.trem || j.pulo || j.trava > 0 || j.algemado || j.rendido || j.paraquedas || j.pena > 0 || j.ferido) return;
+  if (!j.avatar || j.ave || j.morto || j.carro || j.passageiro || j.onibus || j.voo || j.trem || j.pulo || j.trava > 0 || j.algemado || j.rendido || j.paraquedas || j.pena > 0 || j.ferido) return;
   if (j.carregando) { aviso('Solte a caixa antes de pular.', 2); return; }
   const dx = Math.sin(j.yaw), dz = Math.cos(j.yaw), x0 = j.pos.x, z0 = j.pos.z, av = j.avatar;
   const correndo = performance.now() - (j.ultimoMov || 0) < 250;

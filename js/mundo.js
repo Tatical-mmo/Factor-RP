@@ -87,6 +87,17 @@ export function topoPredio(x, z) {
   for (const i of l) { const e = edificios[i]; if (e && Math.abs(x - e.x) <= e.w / 2 && Math.abs(z - e.z) <= e.d / 2) h = Math.max(h, (e.y || 0) + e.h); }
   return h;
 }
+// telhado onde dá para pousar (pássaro e helicóptero): altura e se é laje plana (casa tem telhado inclinado)
+export function tetoEm(x, z) {
+  const l = gradeEd.get(Math.floor(x / CEL) + ',' + Math.floor(z / CEL)); if (!l) return null;
+  let r = null;
+  for (const i of l) {
+    const e = edificios[i]; if (!e || e.removido || Math.abs(x - e.x) > e.w / 2 || Math.abs(z - e.z) > e.d / 2) continue;
+    const casa = e.tipo === 'casa', h = (e.y || 0) + e.h + (casa ? 1.2 : 0.02);
+    if (!r || h > r.h) r = { h, plano: !casa && e.w >= 6 && e.d >= 6 };
+  }
+  return r;
+}
 export function addCol(c) {
   const [x0, z0, x1, z1] = c.tipo === 'circ' ? [c.x - c.r, c.z - c.r, c.x + c.r, c.z + c.r] : [c.x0, c.z0, c.x1, c.z1];
   for (const k of chaves(x0, z0, x1, z1)) { if (!grade.has(k)) grade.set(k, []); grade.get(k).push(c); }

@@ -411,7 +411,7 @@ function abaEu() {
   if (pode('imortal')) h += `<div class="sub">Modo imortal</div><div class="botoes"><button id="pImortal" class="${eu.imortal ? 'ativo' : ''}">${eu.imortal ? 'Imortal: ligado' : 'Imortal: desligado'}</button></div>`;
   if (pode('invisivel')) h += `<div class="sub">Modo invisível</div><p class="dica">Os jogadores não veem você (nem no minimapa). A equipe continua vendo.</p><div class="botoes"><button id="pInvis" class="${eu.invisivel ? 'ativo' : ''}">${eu.invisivel ? '👻 Invisível: ligado' : '👻 Invisível: desligado'}</button></div>`;
   if (eu.cargo === 'admin' || eu.cargo === 'moderador') h += '<div class="sub">🔊 Som das Saveiros (últimos links)</div><div id="pSons" class="dica">Carregando…</div>';
-  if (eu.cargo === 'admin') h += '<div class="sub">Evento: arma dourada</div><p class="dica">Esconde a arma dourada (2 balas) exatamente onde você está. Quem achar pega; depois dos 2 tiros ela some.</p><div class="botoes"><button id="pArmaPd">✨ Esconder a arma dourada aqui</button></div>';
+  if (eu.cargo === 'admin') h += '<div class="sub">Evento: arma dourada</div><p class="dica">Esconde a arma dourada (2 balas) exatamente onde você está. Quem achar pega; depois dos 2 tiros ela some.</p><div class="botoes"><button id="pArmaPd">✨ Esconder a arma dourada aqui</button></div><div class="sub">Evento: pedra do Bruxo</div><p class="dica">Esconde a pedra preciosa exatamente onde você está. Quem achar invoca o Bruxo e faz UM pedido: virar pássaro por um ciclo, perdão de todos os crimes, 1 a 10 milhões ou a arma dourada.</p><div class="botoes"><button id="pPedra">💎 Esconder a pedra do Bruxo aqui</button></div>';
   if (eu.cargo === 'admin') h += '<div class="sub">🐀 Bueiro secreto dos Lixeiros</div><div id="pBueiro" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') h += '<div class="sub">⚖️ Perdoar crimes</div><div id="pPerdao" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') h += '<div class="sub">Prefeitura</div><div id="pPref" class="dica">Carregando…</div>';
@@ -444,6 +444,7 @@ function abaEu() {
   c.innerHTML = h;
   if ($('pBueiro')) blocoBueiro();
   const apd = $('pArmaPd'); if (apd) apd.onclick = () => executar(() => ctx.esconderArmaPd(), 'Arma dourada escondida aqui. Todos foram avisados do evento.');
+  const ppd = $('pPedra'); if (ppd) ppd.onclick = () => executar(() => ctx.esconderPedra(), 'Pedra do Bruxo escondida aqui. Todos foram avisados do evento.');
   const b = $('pImortal'); if (b) b.onclick = () => executar(() => rede.painel.imortal(!eu.imortal), eu.imortal ? 'Modo imortal desligado.' : 'Modo imortal ligado.');
   const bi = $('pInvis'); if (bi) bi.onclick = () => executar(() => rede.tatica.invisivel(!eu.invisivel), eu.invisivel ? 'Modo invisível desligado.' : 'Modo invisível ligado: os jogadores não veem você.');
   if ($('pSons')) rede.tatica.sonsRecentes().then((l) => {

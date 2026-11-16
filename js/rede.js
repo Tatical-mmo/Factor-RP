@@ -111,6 +111,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'abducaoRes' }, ({ payload }) => eventos.abducaoRes?.(payload));
   canal.on('broadcast', { event: 'ovniVisto' }, ({ payload }) => eventos.ovniVisto?.(payload));
   canal.on('broadcast', { event: 'ovniAbducao' }, ({ payload }) => eventos.ovniAbducao?.(payload));
+  canal.on('broadcast', { event: 'ave' }, ({ payload }) => eventos.ave?.(payload));   // grasnado do corvo e do bando
   canal.on('broadcast', { event: 'tatica' }, ({ payload }) => eventos.tatica?.(payload));   // granadas, blindagem, troca de motorista
   canal.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
@@ -156,6 +157,8 @@ function traduzirRpc(m) {
     'esse paciente acabou de ser medicado': 'Esse paciente acabou de ser medicado: espere 1 minuto.',
     'adicional de 0 a 100 por cento': 'O adicional vai de 0 a 100%.',
     'esse terreno ja tem obra': 'Esse terreno já tem obra.',
+    'a pedra ja foi achada': 'Alguém já achou a pedra preciosa.',
+    'o bruxo nao atende voce': 'O Bruxo só atende quem achou a pedra.',
     'valor de 1 a 10.000.000 por jogador': 'O valor vai de 1 a 10.000.000 por jogador.',
     'escolha quem recebe': 'Escolha quem recebe.',
     'nenhum jogador para receber': 'Nenhum jogador para receber (ninguém online ou nomes não encontrados).',
@@ -780,6 +783,12 @@ export const pd = {
   acertar: (alvo) => rpc('acertar_pd', { p_alvo: alvo }),
   soltar: (x, z) => rpc('soltar_arma_pd', { p_x: x, p_z: z }),
 };
+export const bruxo = {
+  estado: () => sel(sb.from('pedra_bruxo').select('*').eq('id', 1).maybeSingle()),
+  esconder: (x, z) => rpc('esconder_pedra_bruxo', { p_x: x, p_z: z }),
+  pegar: (x, z, bx, bz) => rpc('pegar_pedra_bruxo', { p_x: x, p_z: z, p_bx: bx, p_bz: bz }),
+  desejo: (escolha) => rpc('bruxo_desejo', { p_escolha: escolha }),
+};
 export const amigos = {
   listar: () => rpc('meus_amigos'),
   pedir: (nome) => rpc('pedir_amizade', { p_nome: nome }),
@@ -938,6 +947,7 @@ export function escutarLogistica(eventos) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'incendios' }, () => eventos.incendio?.())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'barricadas' }, () => eventos.barricada?.())
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'arma_pd' }, (p) => eventos.armaPd?.(p.new))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedra_bruxo' }, (p) => eventos.pedra?.(p.new))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'clas' }, (p) => eventos.cla?.(p))
     .subscribe();
   return () => sb.removeChannel(canal);
