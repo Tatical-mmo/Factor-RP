@@ -59,6 +59,17 @@ export function montarQuartelExercito() {
   const teto = new THREE.Group(); g.add(teto);
   b(escuro, W + 0.6, 0.5, D + 0.6, cx, H + 0.25, cz, teto); b(oliva, W - 6, 1.2, D - 5, cx, H + 1.1, cz, teto);
   EXERCITO.teto = teto;
+  // QG do Exército em 3D (predio_exercito.glb) por fora: as paredes daqui só aparecem quando você entra (o modelo some)
+  { const glb = ctx.modelo?.('predio_exercito');
+    if (glb) {
+      const paredes = g.children.slice(0, g.children.indexOf(teto));
+      const casca = new THREE.Group(); casca.position.set(cx, 0.15, cz); casca.rotation.y = -Math.PI / 2;   // modelo com a frente em +x: vira para a porta (+z)
+      const m = glb.clone(true); casca.add(m); m.updateMatrixWorld(true);
+      const bb = new THREE.Box3().setFromObject(m), tam = bb.getSize(new THREE.Vector3()), k = (W + 2) / Math.max(tam.x, tam.z);
+      m.scale.setScalar(k); m.position.set(-(bb.min.x + bb.max.x) / 2 * k, -bb.min.y * k, -(bb.min.z + bb.max.z) / 2 * k);
+      m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      ctx.scene.add(casca); EXERCITO.casca = { glb: casca, paredes };
+    } }
   // interior
   const piso = new THREE.Mesh(new THREE.PlaneGeometry(W - 2 * e, D - 2 * e).rotateX(-Math.PI / 2), mat('#8d8a7a', { roughness: 0.7 })); piso.position.set(cx, 0.14, cz); piso.receiveShadow = true; g.add(piso);
   const tapete = new THREE.Mesh(new THREE.PlaneGeometry(3, 10).rotateX(-Math.PI / 2), mat('#7a1f22', { roughness: 1 })); tapete.position.set(C.porta.x, 0.15, C.z1 - 6); g.add(tapete);
@@ -133,7 +144,10 @@ export function alvoTextura() {
 // o teto do Comando some quando o jogador está dentro
 export function atualizarQuartel(p) {
   const C = EXERCITO.comando; if (!EXERCITO.teto) return;
-  EXERCITO.teto.visible = !(p.x > C.x0 && p.x < C.x1 && p.z > C.z0 && p.z < C.z1);
+  const dentro = p.x > C.x0 && p.x < C.x1 && p.z > C.z0 && p.z < C.z1;
+  EXERCITO.teto.visible = !dentro && !EXERCITO.casca;
+  const K = EXERCITO.casca;
+  if (K && K.dentro !== dentro) { K.dentro = dentro; K.glb.visible = !dentro; for (const o of K.paredes) o.visible = dentro; }
   const G = EXERCITO.garagem;   // garagem: o telhado some quando você chega perto, para ver os veículos
   if (G) EXERCITO.tetoGaragem.visible = !(p.x > G.x0 - 4 && p.x < G.x1 + 4 && p.z > G.z0 - 12 && p.z < G.z1 + 2);
 }
@@ -356,7 +370,10 @@ function montarHospitalGLB(glb) {
   const hx = X + 1, hz = Z + 3.5, hy = lajeEm(g, hx, hz, alto);   // no H do heliponto (medido no modelo)
   HOSPITAL.heliVaga = { x: hx, y: hy, z: hz, ang: Math.PI };
   HOSPITAL.heli = heliDeServico('helicoptero_resgate', HOSPITAL.heliVaga, '#ffffff');
-  ctx.balcao(HOSPITAL.balcao.x, HOSPITAL.balcao.z, '#d62828', 'Hospital', 'Tratamento e plantão médico');
+  // entra direto pela porta do prédio (sem a barraquinha); a praça de concreto do modelo é chão (não afunda)
+  Object.assign(HOSPITAL.balcao, { x: X, z: Z - prof / 2 });
+  Object.assign(HOSPITAL.saida, { x: X - 3, z: Z - prof / 2 - 1.5 });
+  ctx.addPiso?.({ x0: X - LARG / 2 + 1, x1: X + LARG / 2 - 1, z0: Z - prof / 2 + 0.5, z1: Z + prof / 2 - 0.5, h: 0.6 });
   montarAlmoxarifado();
 }
 export function montarHospital() {
@@ -438,7 +455,9 @@ function montarBombeirosGLB(glb) {
   const hx = X + BOMBEIROS_H.dx, hz = Z + BOMBEIROS_H.dz, hy = lajeEm(g, hx, hz, alto);
   BOMBEIROS.heliVaga = { x: hx, y: hy, z: hz, ang: Math.PI };
   BOMBEIROS.heli = heliDeServico('helicoptero_bombeiros', BOMBEIROS.heliVaga, '#d62020');
-  ctx.balcao(BOMBEIROS.balcao.x, BOMBEIROS.balcao.z, '#c81e1e', 'Quartel dos Bombeiros', 'Entre em serviço e apague incêndios');
+  // entra direto pela porta do quartel (sem a barraquinha); a base de concreto do modelo é chão (não afunda)
+  Object.assign(BOMBEIROS.balcao, { x: X - 6, z: Z - 7.2 - 2.4 });
+  ctx.addPiso?.({ x0: X - LARG / 2 + 1, x1: X + LARG / 2 - 1, z0: Z - prof / 2 + 0.6, z1: Z + prof / 2 - 0.6, h: 0.79 });
 }
 const BOMBEIROS_H = { dx: 1.2, dz: -0.6 };   // H do heliponto em relação ao centro do quartel (medido no modelo)
 export function montarBombeiros() {

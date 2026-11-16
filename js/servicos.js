@@ -166,7 +166,8 @@ async function passoApagar(dt) {
   const j = ctx.jogador();
   const alcance = ctx.alcanceJato?.() || 10;
   if (!f || j.morto || Math.hypot(f.x - j.pos.x, f.z - j.pos.z) > alcance) { apagando = null; return; }
-  esguichar(f, alcance > 10 ? new THREE.Vector3(j.pos.x, j.pos.y + 3.6, j.pos.z) : null, alcance > 10 ? 22 : 14);
+  const doAlto = ctx.origemJato?.();   // helicóptero: a água cai lá de cima
+  esguichar(f, doAlto || (alcance > 10 ? new THREE.Vector3(j.pos.x, j.pos.y + 3.6, j.pos.z) : null), doAlto ? 30 : alcance > 10 ? 22 : 14);
   try {
     const v = await rede.saude.apagar(f.id);
     f.vida = v;
@@ -345,6 +346,40 @@ function npcsDeFogo(dt) {
   }
   for (const chave of npcs.keys()) if (chave.startsWith('fogo') && !ativos.has(chave)) voltarNpc(chave);
 }
+// helicóptero NPC dos bombeiros: sai da laje do quartel quando tem incêndio (que não seja de veículo) e nenhum jogador
+// está com ele; sobe, voa até o fogo, fica parado em cima jogando água e volta para a laje (pousa e fica lá)
+let heliNpc = null;
+const ALT_HELI = 24;
+function heliDeFogo(dt) {
+  const B = civico.BOMBEIROS, pad = B.heliVaga, base = B.heli;
+  if (!heliNpc) {
+    if (!pad || !base || !base.visible || ctx.jogador().carro?.mesh === base || Math.hypot(base.position.x - pad.x, base.position.z - pad.z) > 1) return;
+    const agora = ctx.agora(), f = incendios.find((q) => q.tipo !== 'veiculo' && (agora - Date.parse(q.inicio)) / 1000 > saidaDoFogo(q) + 8);
+    if (!f) return;
+    const obj = civico.modeloCarro('helicoptero_bombeiros', '#d62020'); obj.position.copy(base.position); obj.rotation.y = base.rotation.y; ctx.scene.add(obj);
+    base.visible = false;
+    heliNpc = { obj, f, fase: 'sobe', t: 0, jato: 0, rotor: obj.getObjectByName('rotor') };
+  }
+  const h = heliNpc, o = h.obj.position, f = incendios.find((q) => q.id === h.f.id);
+  h.t += dt; if (h.rotor) h.rotor.rotation.y += dt * 28;
+  const voar = (x, z, y, vel) => {   // anda em linha reta até (x, z) e ajusta a altura
+    const dx = x - o.x, dz = z - o.z, d = Math.hypot(dx, dz), passo = Math.min(d, vel * dt);
+    if (d > 0.5) { o.x += dx / d * passo; o.z += dz / d * passo; h.obj.rotation.y = suave(h.obj.rotation.y, Math.atan2(dx, dz), dt * 2); }
+    o.y += THREE.MathUtils.clamp(y - o.y, -5 * dt, 5 * dt);
+    return d < 1 && Math.abs(y - o.y) < 0.5;
+  };
+  const altoEm = (x, z) => Math.max(pad.y, ctx.altura(x, z)) + ALT_HELI;
+  if (h.fase === 'sobe') { if (voar(o.x, o.z, pad.y + ALT_HELI, 0) || !f) h.fase = f ? 'vai' : 'volta'; }
+  else if (h.fase === 'vai') { if (!f) h.fase = 'volta'; else if (voar(f.x, f.z + 3, altoEm(f.x, f.z), 22)) { h.fase = 'apaga'; h.t = 0; } }
+  else if (h.fase === 'apaga') {
+    if (!f || h.t > 90) h.fase = 'volta';
+    else { voar(f.x, f.z + 3, ctx.altura(f.x, f.z) + 18, 4); h.jato -= dt; if (h.jato <= 0) { h.jato = 0.4; esguichar(f, new THREE.Vector3(o.x, o.y - 0.6, o.z), 10); } }
+  } else if (h.fase === 'volta') { if (voar(pad.x, pad.z, altoEm(pad.x, pad.z), 22)) h.fase = 'pousa'; }
+  else if (h.fase === 'pousa' && voar(pad.x, pad.z, pad.y, 0)) {
+    ctx.scene.remove(h.obj); heliNpc = null;
+    base.position.set(pad.x, pad.y, pad.z); base.rotation.y = pad.ang; base.visible = true;
+  }
+}
 // ambulância NPC: vai até o ferido e, ao chegar, chama aoChegar (o atendimento leva 2,5 s)
 export function chamarAmbulancia(chave, alvo, aoChegar, atraso = 1.5) {
   const ex = npcs.get('amb' + chave);
@@ -366,6 +401,7 @@ export function atualizar(dt) {
   if (tempoPonto <= 0) { tempoPonto = 60; baterPonto(); }
   atualizarFocos(dt);
   npcsDeFogo(dt);
+  heliDeFogo(dt);
   atualizarNpcs(dt);
   passoApagar(dt);
   desenharHud();

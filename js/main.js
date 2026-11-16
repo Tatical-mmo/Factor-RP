@@ -13105,6 +13105,7 @@ function montarArea51() {
   const placa = textoSprite('⚠️ ÁREA 51 · ACESSO RESTRITO AO EXÉRCITO', { escala: 0.8, fundo: 'rgba(150,30,20,.94)' }); placa.position.set(A51.x1 + 2, 7, 0); g.add(placa);
   const placa2 = textoSprite('🚫 Proibido fotografar · uso de força autorizado', { escala: 0.55, fundo: 'rgba(40,40,40,.9)' }); placa2.position.set(-660, 3.2, 8); g.add(placa2);
   // hangar: paredes altas e o teto aberto no meio (o óvni sai por cima)
+  const iCasca = g.children.length;
   const Hg = A51.hangar, hx0 = Hg.x - Hg.w / 2, hx1 = Hg.x + Hg.w / 2, hz0 = Hg.z - Hg.d / 2, hz1 = Hg.z + Hg.d / 2, HH = 11;
   const chapa = M('#6f757b', { metalness: 0.5, roughness: 0.6 }), ferro = M('#3b3f44');
   caixa(Hg.x, HH / 2, hz0, Hg.w, HH, 0.5, chapa, true); caixa(Hg.x, HH / 2, hz1, Hg.w, HH, 0.5, chapa, true);
@@ -13116,6 +13117,7 @@ function montarArea51() {
   for (const zz of [hz0 + 3, hz1 - 3]) caixa(Hg.x, HH + 0.2, zz, Hg.w + 0.6, 0.4, 6.4, ferro);                     // faixas do teto (o meio fica aberto)
   const folhas = [-1, 1].map((sg) => caixa(Hg.x, HH + 0.75, Hg.z + sg * 4.4, Hg.w + 0.4, 0.35, 8.9, chapa, false));   // teto que abre: as duas folhas deslizam para os lados
   for (let x = hx0 + 3; x < hx1; x += 7) caixa(x, HH + 0.1, Hg.z, 0.35, 0.35, Hg.d - 12, ferro, false, false);     // vigas
+  const paredesHangar = g.children.slice(iCasca);   // paredes, faixas, folhas do teto e vigas
   plano(Hg.x, Hg.z, Hg.w, Hg.d, M('#55595e'), 0.03);
   { const an = new THREE.Mesh(new THREE.RingGeometry(7, 7.5, 48), amarelo); an.rotation.x = -Math.PI / 2; an.position.set(Hg.x, 0.04, Hg.z); g.add(an); }
   const pl3 = textoSprite('HANGAR 18', { escala: 0.6, fundo: 'rgba(40,46,40,.92)' }); pl3.position.set(hx1 + 0.6, HH - 1.5, Hg.z - 2); g.add(pl3);
@@ -13144,7 +13146,11 @@ function montarArea51() {
     caixa(x, 2, z, 3.2, 4, 3.2, M('#6b6f5e'), true); caixa(x, 4.6, z, 3.4, 1.2, 0.15, ferro, false, false);
   }
   const baterias = [[-860, -85], [-860, 35]].map(([x, z]) => criarBateria(g, x, z));
-  area51 = { g, portao, cancela, luzCone, folhas, abertura: 0 };
+  // por fora o hangar é o bunker 3D (predio_area51.glb), escondendo o óvni; o hangar de chapa aparece quando você entra
+  // ou quando o teto abre para o óvni sair/voltar
+  const casca = predioGLB('predio_area51', Hg.x, Hg.z, Hg.w + 4, 0, { nucleo: 0 });
+  if (casca) for (const o of paredesHangar) o.visible = false;
+  area51 = { g, portao, cancela, luzCone, folhas, abertura: 0, casca: casca && { glb: casca.g, paredes: paredesHangar, mostra: false } };
   const x0 = A51.x0, x1 = A51.x1, z0 = A51.z0, z1 = A51.z1, ronda = laco([[x0 + 28, z0 + 15], [x1 - 15, z0 + 15], [x1 - 15, z1 - 15], [x0 + 28, z1 - 15]]);
   registrarBase({ id: 'a51', nome: 'Área 51', rect: A51, aviso: 40, tiro: 15, acesso: acessoArea51, acessoAr: (c) => c.servico === 'ovni' || acessoArea51(),
     aa: { cx: (x0 + x1) / 2, cz: 0, raio: 250 }, baterias, rotulo: 'Exército · Área 51',
@@ -13295,6 +13301,9 @@ function tetoHangar(dt) {
   let abre = jogador.carro?.servico === 'ovni' && perto(jogador.carro.mesh);
   for (const r of remotos.values()) if (r.carroModelo === 'ovni' && perto(r.carro)) abre = true;
   area51.abertura = THREE.MathUtils.clamp(area51.abertura + (abre ? 1 : -1) * dt / 3, 0, 1);   // 3 s para abrir ou fechar
+  { const K = area51.casca, Hh = mundo.AREA51.hangar, p = jogador.pos;
+    const dentro = Math.abs(p.x - Hh.x) < Hh.w / 2 + 0.5 && Math.abs(p.z - Hh.z) < Hh.d / 2 + 0.5, mostra = dentro || area51.abertura > 0.01;
+    if (K && K.mostra !== mostra) { K.mostra = mostra; K.glb.visible = !mostra; for (const o of K.paredes) o.visible = mostra; } }
   const k = area51.abertura * area51.abertura * (3 - 2 * area51.abertura);
   area51.folhas.forEach((f, i) => { f.position.z = H.z + (i ? 1 : -1) * (4.4 + 8.8 * k); });
 }
@@ -13541,6 +13550,30 @@ function abrirCancela(braco, abre, dt) { braco.rotation.x = THREE.MathUtils.lerp
 // ---- Quartel: cancela, guarita de alistamento do lado de fora, soldados com ordem de atirar e antiaéreo
 const GUARITA_ALIST = { x: 122, z: 1063.5 };
 let quartelExtras = null;
+// prédio 3D do Meshy colocado num ponto (x, z): o maior lado do modelo vira "maior" metros, gira "giro" (rad) e
+// cortaBase (0..1) tira a laje de baixo do modelo (calçada, água) até essa fração da altura. nucleo: fração da
+// largura/fundo que vira parede sólida (o resto em volta é pátio, muro baixo, sacos de areia...)
+function predioGLB(nome, x, z, maior, giro = 0, { cortaBase = 0, nucleo = 0.6 } = {}) {
+  const glb = modelos[nome]; if (!glb) return null;
+  const g = new THREE.Group(); g.position.set(x, alturaChao(x, z), z); g.rotation.y = giro;
+  const m = glb.clone(true); m.updateMatrixWorld(true);
+  const bb = new THREE.Box3().setFromObject(m);
+  if (cortaBase > 0) {
+    const corte = bb.min.y + (bb.max.y - bb.min.y) * cortaBase;
+    civico.removerTriangulos(m, (px, py) => py < corte, 'semBase_' + nome);
+    const b2 = new THREE.Box3(), v = new THREE.Vector3();   // a caixa de novo, só com o que ficou
+    m.traverse((o) => { if (!o.isMesh) return; const p = o.geometry.attributes.position, ix = o.geometry.index; for (let t = 0; t < ix.count; t++) b2.expandByPoint(v.fromBufferAttribute(p, ix.getX(t)).applyMatrix4(o.matrixWorld)); });
+    bb.copy(b2);
+  }
+  const tam = bb.getSize(new THREE.Vector3()), k = maior / Math.max(tam.x, tam.z);
+  m.scale.setScalar(k); m.position.set(-(bb.min.x + bb.max.x) / 2 * k, -bb.min.y * k, -(bb.min.z + bb.max.z) / 2 * k);
+  m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  g.add(m); scene.add(g);
+  const c = Math.cos(giro), sn = Math.sin(giro), hw = tam.x * k / 2 * nucleo, hd = tam.z * k / 2 * nucleo;
+  const ex = Math.abs(hw * c) + Math.abs(hd * sn), ez = Math.abs(hw * sn) + Math.abs(hd * c);
+  if (nucleo > 0) colisores.push({ tipo: 'caixa', x0: x - ex, x1: x + ex, z0: z - ez, z1: z + ez });
+  return { g, alto: tam.y * k };
+}
 function montarQuartelExtras() {
   const Q = mundo.QUARTEL, pz = Q.portao.z, g = new THREE.Group(); scene.add(g);
   const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, ...o });
@@ -13599,10 +13632,14 @@ function montarBaseAerea() {
   caixa(gx + 11, 1.5, B.z0 + 4, 4, 3, 4, M('#6d7a52'), true); caixa(gx + 11, 3.15, B.z0 + 4, 4.6, 0.3, 4.6, M('#3f4733'));
   const pl = textoSprite('✈️ BASE AÉREA · ACESSO RESTRITO AO EXÉRCITO', { escala: 0.75, fundo: 'rgba(30,60,110,.94)' }); pl.position.set(gx, 6.5, B.z0 - 2); g.add(pl);
   // hangares abertos para o pátio (um para cada caça) e a torre
+  // o hangar principal (o maior) é o modelo 3D da Aeronáutica (hangar e torre, sem a laje branca), portão para a pista;
+  // as paredes daqui continuam como parede sólida, só não aparecem
+  const hangar3d = predioGLB('predio_aeronautica', 455, 1005, 40, -Math.PI / 2, { cortaBase: 0.05, nucleo: 0 });
   for (const [hx, w] of [[350, 26], [395, 28], [455, 40]]) {
-    const z0 = 990, d = 30, HH = 10;
-    caixa(hx, HH / 2, z0, w, HH, 0.5, chapa, true); caixa(hx - w / 2, HH / 2, z0 + d / 2, 0.5, HH, d, chapa, true); caixa(hx + w / 2, HH / 2, z0 + d / 2, 0.5, HH, d, chapa, true);
-    caixa(hx, HH + 0.3, z0 + d / 2, w + 1, 0.6, d + 1, M('#55595e'));
+    const z0 = 990, d = 30, HH = 10, esconde = hx === 455 && hangar3d;
+    const ps = [caixa(hx, HH / 2, z0, w, HH, 0.5, chapa, true), caixa(hx - w / 2, HH / 2, z0 + d / 2, 0.5, HH, d, chapa, true), caixa(hx + w / 2, HH / 2, z0 + d / 2, 0.5, HH, d, chapa, true),
+      caixa(hx, HH + 0.3, z0 + d / 2, w + 1, 0.6, d + 1, M('#55595e'))];
+    if (esconde) { for (const q of ps) q.visible = false; continue; }
     plano(hx, z0 + d / 2, w, d, M('#5a5d62'), 2);
   }
   caixa(560, 9, 1005, 6, 18, 6, M('#d9d4c8'), true); caixa(560, 19.5, 1005, 9, 3, 9, M('#2a3a4a', { roughness: 0.15, metalness: 0.6, emissive: '#10202c' })); caixa(560, 21.3, 1005, 10, 0.6, 10, M('#4a4f55'));
@@ -13926,7 +13963,7 @@ function montarBaseNaval() {
   const braco = cancelaEm(g, gx - 8, N.z0 - 1, 16, 'x', '#2c5fd3');
   const pl = textoSprite('⚓ BASE NAVAL · ACESSO RESTRITO ÀS FORÇAS ARMADAS', { escala: 0.75, fundo: 'rgba(24,52,96,.95)' }); pl.position.set(gx, 6.5, N.z0 - 2); g.add(pl);
   // comando naval com a central de mísseis, alojamento e cais com dois píeres até os navios
-  caixa(700, 4, 1030, 30, 8, 18, M('#d8d3c4'), true); caixa(700, 8.3, 1030, 31, 0.6, 19, azul);
+  if (!predioGLB('predio_marinha', 700, 1030, 40, 0, { cortaBase: 0.124, nucleo: 0.55 })) { caixa(700, 4, 1030, 30, 8, 18, M('#d8d3c4'), true); caixa(700, 8.3, 1030, 31, 0.6, 19, azul); }   // comando naval: modelo 3D sem o cais e a água do modelo
   const pl2 = textoSprite('⚓ Comando Naval · 🚀 Central de Mísseis', { escala: 0.55, fundo: 'rgba(24,52,96,.95)' }); pl2.position.set(700, 10.5, 1030); g.add(pl2);
   caixa(820, 3, 1035, 36, 6, 14, M('#c9c3b2'), true);
   caixa((N.x0 + N.x1) / 2, 0.4, 1112, N.x1 - N.x0, 0.8, 4, concreto);

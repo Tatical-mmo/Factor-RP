@@ -21,11 +21,28 @@ function materiais() {
   return M;
 }
 
+// o modelo do Meshy veio com o feixe de abdução grudado embaixo (um cone fino): sai tudo o que fica abaixo do casco
+// (32% de baixo da altura). Corta uma vez na geometria do modelo (só o óvni usa)
+function semFeixe(c) {
+  c.updateMatrixWorld(true); const b = new THREE.Box3().setFromObject(c), corte = b.min.y + (b.max.y - b.min.y) * 0.32;
+  const inv = new THREE.Matrix4().copy(c.matrixWorld).invert(), m = new THREE.Matrix4(), v = new THREE.Vector3();
+  c.traverse((o) => {
+    if (!o.isMesh || !o.geometry?.index || o.geometry.userData.semFeixe) return;
+    const pos = o.geometry.attributes.position, idx = o.geometry.index, fica = []; m.multiplyMatrices(inv, o.matrixWorld);
+    const y = (i) => v.fromBufferAttribute(pos, i).applyMatrix4(m).y;
+    for (let t = 0; t < idx.count; t += 3) { const a = idx.getX(t), bb = idx.getX(t + 1), cc = idx.getX(t + 2); if (!(y(a) < corte && y(bb) < corte && y(cc) < corte)) fica.push(a, bb, cc); }
+    o.geometry.setIndex(fica); o.geometry.computeBoundingBox(); o.geometry.computeBoundingSphere(); o.geometry.userData.semFeixe = true;
+  });
+  return corte;
+}
 export function criarOvni(glb) {
   const m = materiais(), g = new THREE.Group(); g.name = 'ovni';
   if (glb) {   // casco do modelo 3D, ajustado para ~12 m de diâmetro
-    const c = glb.clone(true), b = new THREE.Box3().setFromObject(c), s = 12 / Math.max(0.01, b.max.x - b.min.x, b.max.z - b.min.z);
+    const c = glb.clone(true), corte = semFeixe(c);
+    const b = new THREE.Box3().setFromObject(c); b.min.y = Math.max(b.min.y, corte);   // a caixa ainda conta os vértices do feixe
+    const s = 12 / Math.max(0.01, b.max.x - b.min.x, b.max.z - b.min.z);
     c.scale.setScalar(s); c.position.y = -b.min.y * s + 0.4; g.add(c);
+    g.userData.glb = true;
   } else {
     const perfil = [[0, 0.5], [2.2, 0.55], [4.8, 0.9], [6, 1.35], [6.05, 1.5], [4.8, 1.9], [2.6, 2.25], [0, 2.3]].map(([r, y]) => new THREE.Vector2(r, y));
     const disco = new THREE.Mesh(new THREE.LatheGeometry(perfil, 48), m.casco); disco.castShadow = true; g.add(disco);
@@ -38,8 +55,9 @@ export function criarOvni(glb) {
       const pe = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 0.08, 12), m.escuro); pe.position.set(p.position.x, 0.04, p.position.z); g.add(pe);
     }
   }
-  // anel de luzes coloridas (gira) e luzes de baixo (piscam)
+  // anel de luzes coloridas (gira) e luzes de baixo (piscam); o modelo 3D já tem as luzes vermelhas dele
   const giro = new THREE.Group(); giro.name = 'ovniGiro'; giro.position.y = 1.42; g.add(giro);
+  if (g.userData.glb) { const halo = new THREE.Mesh(new THREE.SphereGeometry(8.2, 24, 12), m.halo); halo.position.y = 1.3; halo.scale.y = 0.42; halo.name = 'ovniHalo'; g.add(halo); g.userData.ovni = true; return g; }
   const bola = new THREE.SphereGeometry(0.26, 10, 8);
   for (let k = 0; k < N_LUZES; k++) { const a = k / N_LUZES * Math.PI * 2, l = new THREE.Mesh(bola, m.anel[k % m.anel.length]); l.position.set(Math.cos(a) * (RAIO + 0.5), 0, Math.sin(a) * (RAIO + 0.5)); giro.add(l); }
   for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2, l = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), m.baixo); l.position.set(Math.cos(a) * 3.6, 0.62, Math.sin(a) * 3.6); g.add(l); }
