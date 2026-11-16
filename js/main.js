@@ -14014,6 +14014,7 @@ function menuCentralMisseis() {
     { rotulo: p.cargo === 'admin' ? '🚀 Lançar agora' : '📨 Pedir autorização', fn: () => rede.marinha.pedirMissil(x, z).then((r) => {
       if (r?.status === 'lancado') dispararCruzeiro(x, z, p.nome); else aviso('📨 Pedido enviado ao General Supremo. Ele decide em até 10 min.', 4);
     }).catch((e) => aviso(e.message, 4)) },
+    ...(p.cargo === 'admin' ? [{ rotulo: '🧪 Testar (só você vê, sem recarga)', fn: () => { receberCruzeiro({ x: Math.round(x), z: Math.round(z), autor: p.nome, t: agoraServidor(), teste: true }); if (salaAtual()) sairSala(); teleportar(x + 70, z); aviso('🧪 Míssil de teste a caminho (20 s): você foi levado para 70 m do alvo para ver o impacto. Só você vê e não fere ninguém.', 5); } }] : []),
     { rotulo: 'Cancelar', fn: () => {} }]);
 }
 function dispararCruzeiro(x, z, autor) {
@@ -14039,7 +14040,7 @@ function atualizarCruzeiros(dt) {
       scene.remove(c.mesh); cruzeiros.splice(i, 1);
       for (let n = 0; n < 6; n++) efeitoExplosao(c.x + (Math.random() - 0.5) * 16, alvo.y + Math.random() * 4, c.z + (Math.random() - 0.5) * 16, 2.2, false, true);
       ondaDeChoque(c.x, alvo.y, c.z, 110, 120, 1.6);   // a maior do jogo: ~2 quarteirões
-      if (!jogador.dentroCasa && !jogador.morto) {
+      if (!jogador.dentroCasa && !jogador.morto && !c.teste) {   // teste do admin: só o efeito
         const carro = jogador.carro;
         if (dj < 25) { if (carro && !carro.explodiu) acidenteVeiculo(carro, '💥 Atingido por um míssil de cruzeiro!'); jogador.ultimoAgressor = null; danoLocal(999); }
         else if (dj < 45) { jogador.ultimoAgressor = null; danoLocal(40); aviso('💥 A explosão do míssil feriu você!', 3); }
