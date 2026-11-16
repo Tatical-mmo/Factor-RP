@@ -626,7 +626,8 @@ function ligarDenunciaBloqueio(c) {
 async function telaConta(c) {
   const eu = ctx.perfil(), bl = (await rede.conta.bloqueios().catch(() => [])) || [];
   c.innerHTML = `<div class="sub">Sua conta</div><p class="dica">Jogador: <b>${esc(eu.nome)}</b></p>
-    <div class="botoes"><a href="privacidade.html" target="_blank" rel="noopener"><button>📄 Política de privacidade</button></a></div>
+    <div class="botoes"><a href="privacidade.html" target="_blank" rel="noopener"><button>📄 Política de privacidade</button></a><a href="termos.html" target="_blank" rel="noopener"><button>📜 Termos de uso</button></a></div>
+    <p class="dica">Classificação indicativa: <b>não recomendado para menores de 16 anos</b>. Pais e responsáveis: o <b>🛡️ Modo protegido</b> (no menu ☰) desliga o chat e a voz com um PIN.</p>
     <div class="sub">Bloqueados (${bl.length})</div>
     <div class="lista">${bl.length ? bl.map((x) => `<div class="linha item"><span class="nm"><b>${esc(x.perfil?.nome || '?')}</b></span><span class="bts"><button data-bloq="${x.alvo}" data-sim="0">Desbloquear</button></span></div>`).join('') : '<span class="vazio">Ninguém bloqueado.</span>'}</div>
     <div class="sub" style="color:#ff8a80">Excluir minha conta</div>

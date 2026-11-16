@@ -1,5 +1,7 @@
 # Fator RP
 
+**Endereço principal:** https://fator-rp.kitsunesistems.workers.dev (Cloudflare Workers, publica sozinho a cada atualização do GitHub; comando de implantação `rm -rf .git .github && npx wrangler deploy --assets=. --name=fator-rp --compatibility-date=2026-11-01`). O GitHub Pages (https://tatical-mmo.github.io/Factor-RP/) continua no ar como reserva.
+
 MMO sandbox de negócios, conflito e vida urbana. Versão atual: **etapa 7**, completa: cidade, multiplayer, trabalho, logística, combate, polícia, clãs, territórios e casas.
 
 ## O que já funciona
@@ -1563,3 +1565,4 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Trânsito calmo (16ah)**: ônibus e veículos NPC parados no trânsito não tremem nem balançam mais: o desenho passa por um filtro de posição e velocidade (sem atraso andando) e, quase parado, trava como desligado até andar de verdade (30 cm). O amortecedor ignora os tranquinhos de poucos centímetros; freada e arrancada de verdade continuam.
 - **Teste admin (16ai)**: a lista 🧪 Testar veículo do painel só mostra veículos com arquivo 3D carregado (o "Ônibus" genérico, sem arquivo, aparecia como o modelo do sistema).
 - **Ambulância nova (16aj)**: modelo novo (van tipo Sprinter do SAMU, assets/modelos/ambulancia.glb, 6 m, frente +z), rodas que giram medidas no modelo (eixos -1,34 e 1,88, raio 0,38) e a sirene piscando na barra de luz do teto. Vale para a ambulância do hospital e a dos médicos.
+- **Proteção ECA (16ak)**: ECA Digital (Lei 15.211/2025) e LGPD. Classificação indicativa 16 na tela de entrada e na Conta; páginas termos.html (novos Termos de Uso) e privacidade.html (atualizada). Filtro do chat (js/seguranca.js): telefone, e-mail, links, @perfis, redes sociais, endereço, CEP, CPF e Pix bloqueiam a mensagem; palavrões viram ***; o filtro vale também no que chega. Tocar numa mensagem do chat abre Denunciar (o texto vai junto) / Bloquear. ☰ Modo protegido: os pais ligam com PIN (4 a 8 números) e somem chat de texto e voz em qualquer aparelho; 5 PINs errados travam 15 min; a equipe destrava com admin_dados_privados. ☰ Apoie o jogo: só maiores de 18 (data de nascimento pedida uma vez, guardada na tabela dados_privados que ninguém lê), doação voluntária sem recompensa (link do GitHub Sponsors em APOIO_URL). Rode supabase/103_eca_digital.sql.

@@ -151,6 +151,9 @@ async function rpc(nome, args = {}) {
 function traduzirRpc(m) {
   const t = {
     'sem permissao': 'Você não tem esse poder.',
+    'data de nascimento invalida': 'Data de nascimento inválida.',
+    'data de nascimento ja informada': 'A data de nascimento já foi informada. Para corrigir, fale com a equipe.',
+    'o pin deve ter de 4 a 8 numeros': 'O PIN deve ter de 4 a 8 números.',
     'so funcionarios do hospital em servico': 'Só funcionários do hospital em serviço.',
     'va ate o almoxarifado do hospital': 'Vá até a prateleira do almoxarifado do hospital.',
     'voce ja esta com 20 remedios': 'Sua maleta já está com 20 remédios.',
@@ -532,6 +535,12 @@ export const conta = {
   denunciar: (alvo, motivo, detalhes) => rpc('denunciar', { p_alvo: alvo, p_motivo: motivo, p_detalhes: detalhes || null }),
   bloquear: (alvo, sim) => rpc('bloquear', { p_alvo: alvo, p_sim: !!sim }),
   bloqueios: () => sel(sb.from('bloqueios').select('alvo,em,perfil:perfis!bloqueios_alvo_fkey(nome)')),
+};
+// proteções (ECA Digital): idade (só para o apoio/doação) e modo protegido dos pais (supabase/103_eca_digital.sql)
+export const seguranca = {
+  meus: () => rpc('meus_dados_privados'),
+  nascimento: (d) => rpc('definir_nascimento', { p_data: d }),
+  protegido: (ligar, pin) => rpc('modo_protegido', { p_ligar: !!ligar, p_pin: String(pin || '') }),
 };
 export const lixeiros = {
   secreto: (k) => rpc('bueiro_secreto', { p_bueiro: k }),

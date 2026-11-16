@@ -22,6 +22,7 @@ import { iniciarGoverno, abrirPrefeitura, abrirConcessionaria, abrirServico, atu
 import * as servicos from './servicos.js';
 import * as sons from './sons.js';
 import * as voz from './voz.js';
+import * as seguranca from './seguranca.js';
 import * as clima from './clima.js';
 import * as ceu from './ceu.js';
 import * as semaforos from './semaforos.js';
@@ -3133,6 +3134,11 @@ async function iniciarJogo(perfil) {
   };
   $('btConta').onclick = () => { abrirServico('conta'); $('menuBar').classList.remove('aberto'); };
   carregarBloqueios();
+  // proteções (ECA Digital): modo protegido dos pais, apoio só para maiores, denúncia na mensagem do chat
+  seguranca.iniciar({ aviso, escolher, aoMudar: aplicarProtegido,
+    bloquear: (id, nome) => rede.conta.bloquear(id, true).then(() => { carregarBloqueios(); aviso(`🚫 ${nome || 'Jogador'} bloqueado: some do seu chat e da sua voz.`, 4); }).catch((e) => aviso(e.message, 4)) });
+  { const b = $('btProtegido'); if (b) b.onclick = () => { $('menuBar').classList.remove('aberto'); seguranca.abrirProtegido(); }; }
+  { const b = $('btApoie'); if (b) b.onclick = () => { $('menuBar').classList.remove('aberto'); seguranca.abrirApoio(); }; }
   $('btTrabalho').onclick = () => abrirServico('trabalho');
   $('btTatica').onclick = () => abrirTatica('geral');
   $('btJornal').onclick = () => { abrirServico('jornal'); $('menuBar').classList.remove('aberto'); };
@@ -3253,7 +3259,7 @@ function conectarMultiplayer(perfil) {
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
     tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1),
     explosao: (e) => receberExplosao(e),
-    voz: (m) => voz.receber(m), gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
+    voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
     abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), cruzeiro: (e) => receberCruzeiro(e), navio: (e) => receberNavio(e),
     meta: () => metaPresenca(),
@@ -4970,7 +4976,7 @@ function carregarAmigos() {
 }
 function iniciarChat() {
   const caixa = $('chatCaixa'), txt = $('chatTexto');
-  const abrir = () => { caixa.classList.remove('oculto'); txt.focus(); };
+  const abrir = () => { if (seguranca.protegido()) { aviso('🛡️ Modo protegido: o chat está desligado.'); return; } caixa.classList.remove('oculto'); txt.focus(); };
   const fechar = () => { caixa.classList.add('oculto'); txt.blur(); };
   $('btChat').onclick = () => (caixa.classList.contains('oculto') ? abrir() : fechar());
   $('chatFechar').onclick = fechar;
@@ -4980,8 +4986,11 @@ function iniciarChat() {
     if (!t) { fechar(); return; }
     if (performance.now() - ultimoChat < 1200) { aviso('Calma: uma mensagem por segundo.'); return; }
     if (chatPrivado && !amigosIds.size) { aviso('Você ainda não tem amigos. Adicione em 👥 Amigos.'); return; }
+    if (seguranca.protegido()) { aviso('🛡️ Modo protegido: o chat está desligado.'); fechar(); return; }
+    const f = seguranca.filtrar(t);
+    if (f.contato) { aviso('🛡️ Por segurança, o chat não aceita telefone, endereço, e-mail, links, redes sociais nem Pix.', 5); return; }
     ultimoChat = performance.now();
-    const m = { de: jogador.perfil.id, nome: jogador.perfil.nome, texto: t, privado: chatPrivado };
+    const m = { de: jogador.perfil.id, nome: jogador.perfil.nome, texto: f.texto, privado: chatPrivado };
     conexao?.enviar('chat', m);
     mostrarChat(m, true); txt.value = '';
   };
@@ -4997,7 +5006,9 @@ function receberChat(m) {
   if (averiguando && m.de === averiguando.id) mostrarFalaAveriguado(m);   // equipe averiguando vê tudo o que ele escreve (até o privado)
   if (m.privado && !amigosIds.has(m.de)) return;      // modo privado: só os amigos veem
   if (bloqueados.has(m.de)) return;                   // bloqueado: some do meu chat
-  mostrarChat({ ...m, texto: m.texto.slice(0, 120), nome: String(m.nome || '?').slice(0, 24) }, false);
+  if (seguranca.protegido()) return;                  // modo protegido (pais): sem chat
+  const original = m.texto.slice(0, 120), f = seguranca.filtrar(original);   // filtra também o que chega (quem burlar o próprio jogo não fura)
+  mostrarChat({ ...m, texto: f.contato ? '🛡️ (mensagem bloqueada: tinha contato pessoal)' : f.texto, original, nome: String(m.nome || '?').slice(0, 24) }, false);
 }
 function mostrarChat(m, meu) {
   // linha no canto (some em 20 s)
@@ -5005,6 +5016,7 @@ function mostrarChat(m, meu) {
   if (m.privado) linha.className = 'privado';
   const b = document.createElement('b'); b.textContent = `${m.privado ? '🔒 ' : ''}${m.nome}: `;
   linha.append(b, document.createTextNode(m.texto));
+  if (!meu) { linha.classList.add('tocavel'); linha.title = 'Tocar para denunciar ou bloquear'; linha.onclick = () => seguranca.menuMensagem(m); }
   log.append(linha);
   while (log.children.length > 6) log.firstChild.remove();
   setTimeout(() => { linha.style.opacity = '0'; setTimeout(() => linha.remove(), 1000); }, 20000);
@@ -8266,6 +8278,15 @@ function posarAperto(av) {
   _vd.set(fx, -0.12 + balanco, fz).normalize(); apontarOsso(b.ante, b.mao, _vd.clone());
 }
 
+// ---------------------------------------------------------------- modo protegido (pais): esconde chat e voz
+async function aplicarProtegido() {
+  const on = seguranca.protegido();
+  $('btChat')?.classList.toggle('oculto', on);
+  if (on) { $('chatCaixa')?.classList.add('oculto'); const l = $('chatLog'); if (l) l.innerHTML = ''; }
+  if (on) while (voz.modoAtual() !== 'off') { const antes = voz.modoAtual(); await voz.alternar(); if (voz.modoAtual() === antes) break; }
+  desenharBotaoVoz();
+  const b = $('btProtegido'); if (b) b.innerHTML = `🛡️<span>Modo protegido: ${on ? 'ligado' : 'desligado'}</span>`;
+}
 // ---------------------------------------------------------------- botão de voz
 function desenharBotaoVoz() {
   const m = voz.modoAtual(), bt = $('btVoz'), pt = $('btFalar');
@@ -8275,6 +8296,7 @@ function desenharBotaoVoz() {
 {
   const bt = $('btVoz'), pt = $('btFalar');
   if (bt) bt.onclick = async () => {
+    if (seguranca.protegido()) { aviso('🛡️ Modo protegido: o chat de voz está desligado.'); return; }
     const m = await voz.alternar(); desenharBotaoVoz();
     if (m === 'cla' && !jogador.claInfo?.nome) aviso('🎙️ Voz do clã: você não está em um clã. Ninguém vai ouvir.', 4);
     else aviso({ off: '🔇 Voz desligada.', perto: '🎙️ Voz: quem está perto (40 m). Segure 🎙️ (ou V) para falar.', cla: '🎙️ Voz do clã: só os membros online ouvem. Segure 🎙️ (ou V) para falar.' }[m], 4);
