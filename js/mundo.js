@@ -1099,7 +1099,7 @@ function rumo3d(e) {
 export function predios3dPerto(px, pz, dt) {
   if (!modelos3d || !malhaPredios) return;
   if ((tempo3d -= dt) > 0) return; tempo3d = 0.7;
-  const q = ctx.qualidade?.() || 'medio', max = q === 'ultra' ? 64 : q === 'alto' ? 36 : q === 'medio' ? 16 : 6, raio = q === 'ultra' ? 240 : q === 'alto' ? 150 : q === 'medio' ? 100 : 65;
+  const q = ctx.qualidade?.() || 'medio', max = q === 'ultra' || q === 'alto' ? 64 : q === 'medio' ? 16 : 6, raio = q === 'ultra' || q === 'alto' ? 240 : q === 'medio' ? 100 : 65;
   const perto = [];
   if (max) for (const k of chaves(px - raio, pz - raio, px + raio, pz + raio)) for (const i of gradeEd.get(k) || []) {
     const e = edificios[i]; if (cortados.has(i)) continue; const t = tipo3d(e); if (!t || !modelos3d[t]) continue;
@@ -1297,7 +1297,7 @@ export function arvoresPerto(px, pz, dt) {
   const A = arvoresLod; if (!A || !A.glb.some(Boolean)) return;
   if ((A.t -= dt) > 0) return; A.t = 0.5;
   const conta = [0, 0, 0], novo = new Set();
-  const ultra = ctx.qualidade?.() === 'ultra', lim = ultra ? 220 : 120;   // ultra: árvores 3D até mais longe
+  const ultra = /^(ultra|alto)$/.test(ctx.qualidade?.()), lim = ultra ? 220 : 120;   // alto vê tão longe quanto o ultra (árvores 3D até mais longe)
   const perto = []; A.info.forEach((a, k) => { const d = Math.abs(a.x - px) + Math.abs(a.z - pz); if (d < lim) perto.push([d, k]); });
   perto.sort((a, b) => a[0] - b[0]);
   for (const [, k] of perto) {
@@ -1346,7 +1346,7 @@ export function tirarCarroRua(k, fora) {
 export function carrosPerto(px, pz, dt) {
   const E = estacionados; if (!E || !E.glb.some(Boolean)) return;
   if ((E.t -= dt) > 0) return; E.t = 0.4;
-  const ultra = ctx.qualidade?.() === 'ultra', maxC = ultra ? 28 : E.max;   // ultra: carros 3D até mais longe
+  const ultra = /^(ultra|alto)$/.test(ctx.qualidade?.()), maxC = ultra ? 28 : E.max;   // ultra: carros 3D até mais longe
   const perto = E.carros.map((c, k) => [c.fora ? 1e9 : Math.hypot(c.x - px, c.z - pz), k]).filter(([d]) => d < (ultra ? 130 : 70)).sort((a, b) => a[0] - b[0]).slice(0, maxC * 2);
   const conta = E.glb.map(() => 0), novo = new Set();
   for (const [, k] of perto) {

@@ -195,6 +195,16 @@ sol.castShadow = true;
 sol.shadow.mapSize.set(TOQUE ? 1024 : 2048, TOQUE ? 1024 : 2048);
 const SOMBRA = 34;
 // ultra: a sombra cobre uma área maior (mapa 4096, mesma nitidez); nos outros níveis, a de sempre
+// o sol (e a caixa da sombra) fica no CHÃO embaixo da câmera, nunca na altura de quem voa (antes, com o ovni lá no alto,
+// o chão saía da caixa da sombra e as sombras piscavam). E anda "de texel em texel" da sombra: sem tremedeira ao mover.
+const _sx = new THREE.Vector3(), _sy = new THREE.Vector3(), _sc = new THREE.Vector3();
+function posicionarSol(x, z) {
+  const d = _sc.copy(SOL_DIR).normalize(); _sx.set(0, 1, 0).cross(d).normalize(); _sy.copy(d).cross(_sx).normalize();
+  const tx = (sol.shadow.camera.right - sol.shadow.camera.left) / (sol.shadow.mapSize.x || 1024);
+  const c = new THREE.Vector3(x, alturaChao(x, z), z), a = Math.round(c.dot(_sx) / tx) * tx - c.dot(_sx), b = Math.round(c.dot(_sy) / tx) * tx - c.dot(_sy);
+  c.addScaledVector(_sx, a).addScaledVector(_sy, b);
+  sol.target.position.copy(c); sol.position.copy(c).addScaledVector(SOL_DIR, 80);
+}
 function ajustarSombraQualidade() {
   const S = visual.nivelAtual() === 'ultra' ? 64 : SOMBRA;
   if (sol.shadow.camera.right !== S) { Object.assign(sol.shadow.camera, { left: -S, right: S, top: S, bottom: -S, far: S > 40 ? 260 : 160 }); sol.shadow.camera.updateProjectionMatrix(); }
@@ -253,11 +263,11 @@ function atualizarCeu(t) {
   mundo.definirNoite(noite);
   noiteAtual = noite;
   // neblina leve no fundo da cena (mesma cor do céu): dá profundidade e esconde o fim do mapa
-  if (scene.fog) { const ul = visual.nivelAtual() === 'ultra' ? 1.25 : 1; scene.fog.color.copy(scene.background); scene.fog.near = (175 + (1 - molhadoAtual) * 25) * ul; scene.fog.far = (330 - molhadoAtual * 90) * ul; }
+  if (scene.fog) { const ul = /^(ultra|alto)$/.test(visual.nivelAtual()) ? 1.25 : 1; /* alto vê tão longe quanto o ultra */ scene.fog.color.copy(scene.background); scene.fog.near = (175 + (1 - molhadoAtual) * 25) * ul; scene.fog.far = (330 - molhadoAtual * 90) * ul; }
   // câmera 3D (atrás do personagem e primeira pessoa): distância de visão curta, como no Minecraft. O que fica além
   // some na neblina e nem é desenhado; conforme você anda, o que está na frente aparece e o de trás some.
   if (scene.fog && modo3D()) {
-    const q = visual.nivelAtual(), alcance = q === 'ultra' ? 380 : q === 'alto' ? 260 : q === 'medio' ? 190 : 140;   // ultra: ~7 quarteirões
+    const q = visual.nivelAtual(), alcance = q === 'ultra' || q === 'alto' ? 380 : q === 'medio' ? 190 : 140;   // ultra: ~7 quarteirões
     scene.fog.far = Math.min(scene.fog.far, alcance); scene.fog.near = Math.min(scene.fog.near, alcance * 0.45);
     if (Math.abs(camP.far - (alcance + 5)) > 1) { camP.far = alcance + 5; camP.updateProjectionMatrix(); }
   }
@@ -281,23 +291,26 @@ let luzInterna = 0, tNitidas = 0;
 // (a sombra muda de lado conforme você passa pelo poste). Uma luz só, que pula para o poste mais perto.
 let luzPoste = null, tPoste = 0;
 function atualizarLuzPoste(dt) {
-  const ultra = visual.nivelAtual() === 'ultra', quer = ultra && noiteAtual > 0.35 && !jogador.dentroCasa;
+  const ultra = visual.nivelAtual() === 'ultra', fo = foco(), quer = ultra && noiteAtual > 0.35 && !jogador.dentroCasa && !jogador.carro?.voa && !jogador.carro?.aviao && !jogador.voo && (fo.y || 0) < 8;
   // fora do ultra some; no ultra fica sempre na cena (só apaga): ligar e desligar luz recompila os materiais (engasga)
   if (!ultra) { if (luzPoste) luzPoste.visible = false; return; }
   if (luzPoste) luzPoste.visible = true;
-  if (!quer) { if (luzPoste) luzPoste.intensity = 0; return; }
+  if (!quer) { if (luzPoste) luzPoste.intensity = Math.max(0, luzPoste.intensity - dt * 80); return; }
   if (!luzPoste) {
     luzPoste = new THREE.SpotLight('#ffd7a0', 40, 26, 1.05, 0.55, 1.4); luzPoste.castShadow = true;
     luzPoste.shadow.mapSize.set(1024, 1024); luzPoste.shadow.bias = -0.0008; luzPoste.shadow.camera.near = 0.5; luzPoste.shadow.camera.far = 28;
     scene.add(luzPoste); scene.add(luzPoste.target);
   }
-  if ((tPoste -= dt) > 0 && luzPoste.intensity > 0) return; tPoste = 0.4;
-  const f = foco(); let m = null, dm = 22;
+  const alvoI = 40 * Math.min(1, (noiteAtual - 0.35) / 0.3);
+  // troca de poste: apaga devagar, pula, acende devagar
+  if (luzPoste.userData.prox) { luzPoste.intensity = Math.max(0, luzPoste.intensity - dt * 120); if (luzPoste.intensity > 0) return; const [px, pz] = luzPoste.userData.prox; luzPoste.userData.prox = null;
+    const h = alturaChao(px, pz); luzPoste.position.set(px, h + 5.1, pz); luzPoste.target.position.set(px, h, pz); luzPoste.target.updateMatrixWorld(); luzPoste.userData.em = px + ',' + pz; }
+  else if (luzPoste.userData.em) luzPoste.intensity = Math.min(alvoI, luzPoste.intensity + dt * 80);
+  if ((tPoste -= dt) > 0) return; tPoste = 0.4;
+  const f = fo; let m = null, dm = 22;
   for (const [x, z] of mundo.LUZES_POSTE) { const d = Math.abs(x - f.x) + Math.abs(z - f.z); if (d < dm) { dm = d; m = [x, z]; } }
-  if (!m) { luzPoste.intensity = 0; return; }
-  const h = alturaChao(m[0], m[1]);
-  luzPoste.position.set(m[0], h + 5.1, m[1]); luzPoste.target.position.set(m[0], h, m[1]); luzPoste.target.updateMatrixWorld();
-  luzPoste.intensity = 40 * Math.min(1, (noiteAtual - 0.35) / 0.3); luzPoste.visible = true;
+  if (!m) { luzPoste.userData.em = null; luzPoste.intensity = Math.max(0, luzPoste.intensity - 0.4 * 80); return; }
+  if (luzPoste.userData.em !== m[0] + ',' + m[1]) luzPoste.userData.prox = m;
 }
 // quantos segundos somar ao relógio para que agora seja a hora h (o ciclo continua dali)
 function deslocParaHora(h) {
@@ -7825,7 +7838,7 @@ function atualizarCamera3D(dt) {
   }
   if (tremor > 0) { tremor -= dt; camP.position.x += (Math.random() - 0.5) * tremor; camP.position.y += (Math.random() - 0.5) * tremor; }
   const c = camP.position; alvoCam.set(c.x + Math.sin(olhar.yaw) * 25, 0, c.z + Math.cos(olhar.yaw) * 25);
-  sol.position.copy(alvoCam).addScaledVector(SOL_DIR, 80); sol.target.position.copy(alvoCam);
+  posicionarSol(alvoCam.x, alvoCam.z);
   for (const p of predios) if (p.opac < 0.99) { p.opac = 1; for (const m of p.mats) { m.transparent = false; m.opacity = 1; m.depthWrite = true; } }
   const mira1 = $('mira1p'); if (mira1) mira1.classList.toggle('oculto', modoCam !== 'p1' || !!v);
 }
@@ -7875,8 +7888,7 @@ function atualizarCamera(dt) {
   camera.position.copy(alvoCam).addScaledVector(off, 150);
   if (tremor > 0) { tremor -= dt; camera.position.x += (Math.random() - 0.5) * tremor * 2; camera.position.z += (Math.random() - 0.5) * tremor * 2; }
   camera.lookAt(alvoCam);
-  sol.position.copy(alvoCam).addScaledVector(SOL_DIR, 80);
-  sol.target.position.copy(alvoCam);
+  posicionarSol(alvoCam.x, alvoCam.z);
   // prédios na frente do jogador ficam transparentes
   const origem = camAtiva.position.clone();
   const cabeca = new THREE.Vector3(jogador.pos.x, jogador.pos.y + 1.2, jogador.pos.z);
