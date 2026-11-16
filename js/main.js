@@ -4439,12 +4439,12 @@ function atualizarSons() {
   }
   // helicópteros dos jogadores (executivo e do Exército): o mesmo som do helicóptero das empresas
   const somHeli = (alt, vol) => { const k = THREE.MathUtils.clamp(alt / 12, 0, 1); sons.continuo('helicoptero_baixo', vol * (1 - k)); sons.continuo('helicoptero_alto', vol * k); };
-  if (jogador.carro?.servico === 'ovni') sons.zumbido(0.5);
+  if (jogador.carro?.servico === 'ovni') { /* óvni é silencioso */ }
   else if (jogador.carro?.voa && !jogador.carro.caminhao && !jogador.carro.aviao && !jogador.carro.jato) somHeli(jogador.carro.alt || 0, 0.6);
-  if (jogador.passageiro?.piloto) { const o = jogador.passageiro.c.obj; const mp = remotos.get(jogador.passageiro.piloto)?.carroModelo; if (mp === 'ovni') sons.zumbido(0.5); else if (civico.CARROS[mp]?.voa && !String(mp).startsWith('aviao')) somHeli(o.position.y - alturaChao(o.position.x, o.position.z), 0.6); }
+  if (jogador.passageiro?.piloto) { const o = jogador.passageiro.c.obj; const mp = remotos.get(jogador.passageiro.piloto)?.carroModelo; if (mp === 'ovni') { /* silencioso */ } else if (civico.CARROS[mp]?.voa && !String(mp).startsWith('aviao')) somHeli(o.position.y - alturaChao(o.position.x, o.position.z), 0.6); }
   for (const r of remotos.values()) {
     if (!r.carro || !civico.CARROS[r.carroModelo]?.voa || civico.CARROS[r.carroModelo]?.jato || String(r.carroModelo).startsWith('aviao') || jogador.passageiro?.piloto && remotos.get(jogador.passageiro.piloto) === r) continue;
-    if (r.carroModelo === 'ovni') { if (r.carro.visible) sons.zumbido(0.45 * sons.perto(dist(r.carro), 90)); continue; }
+    if (r.carroModelo === 'ovni') continue;   // óvni não faz barulho nenhum
     somHeli(r.carro.position.y - alturaChao(r.carro.position.x, r.carro.position.z), 0.55 * sons.perto(dist(r.carro), 110));
   }
   // trem: barulho dentro e perto; buzina quando passa perto
