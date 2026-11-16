@@ -2141,7 +2141,7 @@ function ondaDeChoque(x, y, z, R, vel, forca = 1) {
   const anel = new THREE.Mesh(geoAnel, mat('#fff1d0', 0.85, true)), po = new THREE.Mesh(geoAnelPo, mat('#8c7b66', 0.55, false)), domo = new THREE.Mesh(geoDomo, mat('#ffffff', 0.32, true));
   for (const m of [anel, po]) { m.rotation.x = -Math.PI / 2; m.position.set(x, chao, z); m.scale.setScalar(0.5); m.renderOrder = 5; scene.add(m); }
   domo.position.set(x, chao - 0.2, z); domo.scale.setScalar(0.5); scene.add(domo);
-  ondas.push({ anel, po, domo, x, z, R, vel, forca, t: 0, atingiu: Math.hypot(jogador.pos.x - x, jogador.pos.z - z) > R });
+  ondas.push({ anel, po, domo, x, z, R, vel, forca, t: 0, atingiu: Math.hypot(jogador.pos.x - x, jogador.pos.z - z) > R, domoOp: R > 200 ? 0.12 : 0.32 });   // a onda gigante: domo bem mais transparente
 }
 function atualizarOndas(dt) {
   for (let i = ondas.length - 1; i >= 0; i--) {
@@ -2149,7 +2149,7 @@ function atualizarOndas(dt) {
     const r = o.vel * o.t, u = Math.min(1, r / o.R);
     o.anel.scale.setScalar(Math.max(0.5, r)); o.anel.material.opacity = 0.85 * (1 - u) * (1 - u);
     const rp = r * 0.55; o.po.scale.setScalar(Math.max(0.5, rp)); o.po.material.opacity = 0.55 * Math.max(0, 1 - rp / (o.R * 0.6));
-    const rd = Math.min(r * 0.7, o.R * 0.4); o.domo.scale.set(rd, rd * 0.75, rd); o.domo.material.opacity = 0.32 * Math.max(0, 1 - o.t / (o.R * 0.5 / o.vel + 0.25));
+    const rd = Math.min(r * 0.7, o.R * 0.4); o.domo.scale.set(rd, rd * 0.75, rd); o.domo.material.opacity = o.domoOp * Math.max(0, 1 - o.t / (o.R * 0.5 / o.vel + 0.25));
     if (!o.atingiu) {
       const dx = jogador.pos.x - o.x, dz = jogador.pos.z - o.z, d = Math.hypot(dx, dz);
       if (r >= d) {
@@ -2167,6 +2167,47 @@ function atualizarOndas(dt) {
       jogador.pos.x += e.vx * q * dt; jogador.pos.z += e.vz * q * dt; resolverColisao(jogador.pos, jogador.raio);
     }
     if (r >= o.R * 1.05 && rp >= o.R * 0.6 && !(o.empurra?.t > 0)) { for (const m of [o.anel, o.po, o.domo]) { scene.remove(m); m.material.dispose(); } ondas.splice(i, 1); }
+  }
+}
+// ---- explosão do míssil de cruzeiro como uma bomba atômica: clarão que ofusca a tela, bola de fogo que sobe, coluna
+// de fumaça e o "chapéu" do cogumelo que cresce e fica no céu; a onda de choque é sentida a ~6 quarteirões (324 m)
+const atomicos = [];
+function cogumeloAtomico(x, y, z) {
+  const chao = alturaChao(x, z) + 0.2, add = (m) => { scene.add(m); return m; };
+  const basic = (cor, op, soma) => new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: op, depthWrite: false, toneMapped: false, blending: soma ? THREE.AdditiveBlending : THREE.NormalBlending, fog: false });
+  const fumo = (cor, op) => new THREE.MeshStandardMaterial({ color: cor, transparent: true, opacity: op, roughness: 1, depthWrite: false, emissive: '#ff6a1a', emissiveIntensity: 0.6, fog: false });
+  const esf = new THREE.SphereGeometry(1, 28, 18);
+  const clarao = add(new THREE.Mesh(esf, basic('#fffbe8', 1, true))); clarao.position.set(x, chao + 8, z);
+  const bola = add(new THREE.Mesh(esf, basic('#ffb347', 0.95, false))); bola.position.set(x, chao + 10, z);
+  const coluna = add(new THREE.Mesh(new THREE.CylinderGeometry(1, 1.5, 1, 20, 1, true), fumo('#7a5a44', 0.85))); coluna.position.set(x, chao, z);
+  const chapeu = add(new THREE.Mesh(esf, fumo('#8a6a52', 0.9))); chapeu.position.set(x, chao + 30, z);
+  const aro = add(new THREE.Mesh(new THREE.TorusGeometry(1, 0.38, 14, 40), fumo('#6b5040', 0.85))); aro.rotation.x = Math.PI / 2; aro.position.set(x, chao + 26, z);
+  const saia = add(new THREE.Mesh(new THREE.TorusGeometry(1, 0.25, 10, 40), fumo('#9a8a7a', 0.5))); saia.rotation.x = Math.PI / 2; saia.position.set(x, chao + 2, z);   // poeira rolando no chão
+  atomicos.push({ x, z, chao, clarao, bola, coluna, chapeu, aro, saia, t: 0 });
+  // clarão na tela: mais forte quanto mais perto (vê de longe também)
+  const d = Math.hypot(jogador.pos.x - x, jogador.pos.z - z);
+  if (d < 900 && !jogador.dentroCasa) {
+    let fl = $('claraoAtomico'); if (!fl) { fl = document.createElement('div'); fl.id = 'claraoAtomico'; fl.style.cssText = 'position:fixed;inset:0;background:#fffdf2;pointer-events:none;z-index:40;opacity:0;transition:opacity 2.6s ease-out'; document.body.appendChild(fl); }
+    fl.style.transition = 'none'; fl.style.opacity = String(Math.max(0.25, 1 - d / 900)); void fl.offsetWidth; fl.style.transition = 'opacity 2.6s ease-out'; fl.style.opacity = '0';
+  }
+  ondaDeChoque(x, chao, z, 324, 115, 2.2);   // 6 quarteirões
+  tremor = Math.max(tremor, d < 324 ? 1.6 : 0.4);
+}
+function atualizarAtomicos(dt) {
+  for (let i = atomicos.length - 1; i >= 0; i--) {
+    const a = atomicos[i]; a.t += dt; const t = a.t, S = THREE.MathUtils.smoothstep;
+    const c = S(t, 0, 0.35) * 70; a.clarao.scale.setScalar(Math.max(1, c)); a.clarao.material.opacity = Math.max(0, 1 - t / 1.6);
+    const sobe = S(t, 0.2, 14), hb = 12 + sobe * 95;   // a bola de fogo sobe e esfria (laranja -> vermelho escuro)
+    a.bola.position.y = a.chao + hb; a.bola.scale.setScalar(26 + 10 * S(t, 0, 3));
+    a.bola.material.color.setRGB(1, 0.7 - 0.45 * S(t, 1, 10), 0.28 - 0.25 * S(t, 1, 10)); a.bola.material.opacity = 0.95 * (1 - S(t, 8, 18));
+    a.coluna.scale.set(7 + 5 * S(t, 1, 12), Math.max(1, hb), 7 + 5 * S(t, 1, 12)); a.coluna.position.y = a.chao + hb / 2;
+    const rc = 14 + 44 * S(t, 0.5, 16);   // chapéu do cogumelo
+    a.chapeu.position.y = a.chao + hb + 8; a.chapeu.scale.set(rc, rc * 0.42, rc);
+    a.aro.position.y = a.chao + hb + 2; a.aro.scale.setScalar(rc * 0.95);
+    { const rs = 10 + 150 * S(t, 0, 6); a.saia.scale.set(rs, rs, Math.min(rs, 30) * 0.5); } a.saia.material.opacity = 0.45 * (1 - S(t, 4, 14));   // anel de poeira baixo (não uma parede)
+    const some = 1 - S(t, 30, 55), brasa = 0.6 * (1 - S(t, 4, 20));   // fumaça perde o brilho e some devagar
+    for (const m of [a.coluna, a.chapeu, a.aro]) { m.material.opacity = 0.88 * some; m.material.emissiveIntensity = brasa; }
+    if (t > 56) { for (const m of [a.clarao, a.bola, a.coluna, a.chapeu, a.aro, a.saia]) { scene.remove(m); m.material.dispose(); } atomicos.splice(i, 1); }
   }
 }
 function efeitoExplosao(x, y, z, k = 1, tinta = true, semOnda = false) {
@@ -7818,7 +7859,7 @@ function quadroJogo() {
   atualizarSoldados(dt);
   atualizarCacada(dt);
   tempoArma -= dt; if (tempoArma <= 0) { tempoArma = 0.5; conferirArma(); }
-  atualizarObras(dt); vigiarAlmoxarifado();   atualizarExplosoes(dt); atualizarOndas(dt); atualizarSemPiloto(dt); atualizarContagemMorte();
+  atualizarObras(dt); vigiarAlmoxarifado();   atualizarExplosoes(dt); atualizarOndas(dt); atualizarAtomicos(dt); atualizarSemPiloto(dt); atualizarContagemMorte();
   atualizarMira();
   civico.atualizarQuartel(jogador.pos);
   atualizarArea51(dt); atualizarBases(dt); atualizarQuartelExtras(dt); atualizarBaseAerea(dt); atualizarMisseis(dt); avisarAlistamentos(dt); atualizarMarinha(dt);
@@ -14014,7 +14055,7 @@ function menuCentralMisseis() {
     { rotulo: p.cargo === 'admin' ? '🚀 Lançar agora' : '📨 Pedir autorização', fn: () => rede.marinha.pedirMissil(x, z).then((r) => {
       if (r?.status === 'lancado') dispararCruzeiro(x, z, p.nome); else aviso('📨 Pedido enviado ao General Supremo. Ele decide em até 10 min.', 4);
     }).catch((e) => aviso(e.message, 4)) },
-    ...(p.cargo === 'admin' ? [{ rotulo: '🧪 Testar (só você vê, sem recarga)', fn: () => { receberCruzeiro({ x: Math.round(x), z: Math.round(z), autor: p.nome, t: agoraServidor(), teste: true }); if (salaAtual()) sairSala(); teleportar(x + 70, z); aviso('🧪 Míssil de teste a caminho (20 s): você foi levado para 70 m do alvo para ver o impacto. Só você vê e não fere ninguém.', 5); } }] : []),
+    ...(p.cargo === 'admin' ? [{ rotulo: '🧪 Testar (só você vê, sem recarga)', fn: () => { receberCruzeiro({ x: Math.round(x), z: Math.round(z), autor: p.nome, t: agoraServidor(), teste: true }); if (salaAtual()) sairSala(); teleportar(x + 230, z); aviso('🧪 Míssil de teste a caminho (20 s): você foi levado para 230 m do alvo para ver o cogumelo e sentir a onda. Só você vê e não fere ninguém.', 5); } }] : []),
     { rotulo: 'Cancelar', fn: () => {} }]);
 }
 function dispararCruzeiro(x, z, autor) {
@@ -14035,15 +14076,15 @@ function atualizarCruzeiros(dt) {
     const ant = c.mesh.position.clone(); c.mesh.position.copy(pos); if (k > 0.01) c.mesh.lookAt(pos.clone().add(pos.clone().sub(ant)));
     if ((c.fum -= dt) <= 0) { c.fum = 0.06; fumacas.push(jato.fumaca(scene, pos.clone())); }
     const dj = Math.hypot(jogador.pos.x - c.x, jogador.pos.z - c.z), resta = Math.ceil(20 * (1 - k));
-    if (dj < 160 && resta !== c.avisado) { c.avisado = resta; aviso(`🚨 MÍSSIL DE CRUZEIRO A CAMINHO DESTA ÁREA! Fuja: ${resta} s`, 1.2); if (resta % 3 === 0) sons.radio?.(); }
+    if (dj < 340 && resta !== c.avisado) { c.avisado = resta; aviso(`🚨 MÍSSIL DE CRUZEIRO A CAMINHO DESTA ÁREA! Fuja: ${resta} s`, 1.2); if (resta % 3 === 0) sons.radio?.(); }
     if (k >= 1) {
       scene.remove(c.mesh); cruzeiros.splice(i, 1);
-      for (let n = 0; n < 6; n++) efeitoExplosao(c.x + (Math.random() - 0.5) * 16, alvo.y + Math.random() * 4, c.z + (Math.random() - 0.5) * 16, 2.2, false, true);
-      ondaDeChoque(c.x, alvo.y, c.z, 110, 120, 1.6);   // a maior do jogo: ~2 quarteirões
+      for (let n = 0; n < 6; n++) efeitoExplosao(c.x + (Math.random() - 0.5) * 30, alvo.y + Math.random() * 6, c.z + (Math.random() - 0.5) * 30, 3.2, false, true);
+      cogumeloAtomico(c.x, alvo.y, c.z);   // clarão, cogumelo e onda de choque de ~6 quarteirões
       if (!jogador.dentroCasa && !jogador.morto && !c.teste) {   // teste do admin: só o efeito
         const carro = jogador.carro;
-        if (dj < 25) { if (carro && !carro.explodiu) acidenteVeiculo(carro, '💥 Atingido por um míssil de cruzeiro!'); jogador.ultimoAgressor = null; danoLocal(999); }
-        else if (dj < 45) { jogador.ultimoAgressor = null; danoLocal(40); aviso('💥 A explosão do míssil feriu você!', 3); }
+        if (dj < 60) { if (carro && !carro.explodiu) acidenteVeiculo(carro, '💥 Atingido por um míssil de cruzeiro!'); jogador.ultimoAgressor = null; danoLocal(999); }
+        else if (dj < 120) { jogador.ultimoAgressor = null; danoLocal(40); aviso('💥 A explosão do míssil feriu você!', 3); }
       }
     }
   }
