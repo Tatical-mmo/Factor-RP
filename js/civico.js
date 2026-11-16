@@ -164,7 +164,7 @@ export const CARROS = {
   militar: { nome: 'Jipe do Exército', preco: 0, vel: 14 },
   exercito_caminhao: { nome: 'Caminhão do Exército', preco: 0, vel: 11 },
   helicoptero_exercito: { nome: 'Helicóptero do Exército', preco: 0, vel: 26, voa: true },
-  ovni: { nome: 'Óvni do Exército', preco: 0, vel: 42, voa: true },
+  ovni: { nome: 'Óvni do Exército', preco: 0, vel: 62, voa: true },
   caca_leve: { nome: 'Caça leve', preco: 0, vel: 95, voa: true, jato: true },
   caca_furtivo: { nome: 'Caça furtivo', preco: 0, vel: 120, voa: true, jato: true },
   asa_furtiva: { nome: 'Asa furtiva', preco: 0, vel: 80, voa: true, jato: true },

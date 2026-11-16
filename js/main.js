@@ -4517,7 +4517,7 @@ function atualizarSons() {
   }
   // helicópteros dos jogadores (executivo e do Exército): o mesmo som do helicóptero das empresas
   const somHeli = (alt, vol) => { const k = THREE.MathUtils.clamp(alt / 12, 0, 1); sons.continuo('helicoptero_baixo', vol * (1 - k)); sons.continuo('helicoptero_alto', vol * k); };
-  if (jogador.carro?.servico === 'ovni') { /* óvni é silencioso */ }
+  if (jogador.carro?.servico === 'ovni' || jogador.carro?.modelo === 'ovni') { /* óvni é silencioso (também no teste do admin) */ }
   else if (jogador.carro?.voa && !jogador.carro.caminhao && !jogador.carro.aviao && !jogador.carro.jato) somHeli(jogador.carro.alt || 0, 0.6);
   if (jogador.passageiro?.piloto) { const o = jogador.passageiro.c.obj; const mp = remotos.get(jogador.passageiro.piloto)?.carroModelo; if (mp === 'ovni') { /* silencioso */ } else if (civico.CARROS[mp]?.voa && !String(mp).startsWith('aviao')) somHeli(o.position.y - alturaChao(o.position.x, o.position.z), 0.6); }
   for (const r of remotos.values()) {
@@ -12292,8 +12292,8 @@ function pilotarHeli(c, dt, max) {
   }
   const noAr = c.alt > 0.3, chao = chaoHeli(jogador.pos.x, jogador.pos.z);
   // altura: sobe 3 m/s, desce 2,5 m/s (sem tranco); com o motor falhando, cai a 7 m/s
-  const ufo = c.servico === 'ovni', vsAlvo = c.motorParado ? -7 : sobe ? (ufo ? 7 : 3) : desce ? (ufo ? -6 : -2.5) : 0;
-  c.vs = (c.vs || 0) + THREE.MathUtils.clamp(vsAlvo - (c.vs || 0), -(ufo ? 10 : 4) * dt, (ufo ? 10 : 4) * dt);
+  const ufo = c.servico === 'ovni' || c.modelo === 'ovni', vsAlvo = c.motorParado ? -7 : sobe ? (ufo ? 12 : 3) : desce ? (ufo ? -10 : -2.5) : 0;
+  c.vs = (c.vs || 0) + THREE.MathUtils.clamp(vsAlvo - (c.vs || 0), -(ufo ? 24 : 4) * dt, (ufo ? 24 : 4) * dt);
   const altAntes = c.alt; c.alt = Math.min(120, c.alt + c.vs * dt);
   if (c.alt <= 1.5 && c.vs < 0 && !convesEm(jogador.pos.x, jogador.pos.z) && !tetoGeral(jogador.pos.x, jogador.pos.z)?.plano) {   // pousando: precisa de chão livre (no convés e na laje pode)
     const t = jogador.pos.clone(); mundo.limitar(t);
@@ -12312,10 +12312,11 @@ function pilotarHeli(c, dt, max) {
     if (c.tVoo > c.falhaEm) { c.motorParado = true; tremor = 0.4; aviso(`🔥 FALHA NO MOTOR! O helicóptero estava sem revisão e está caindo${qtdItem('paraquedas') ? ' — ejete (🪂)!' : '!'}`, 6); }
   }
   // frente/ré e giro (só no ar); no chão fica parado
-  const alvoV = noAr ? (frente >= 0 ? frente * max : frente * max * 0.3) : 0;
-  c.vel += THREE.MathUtils.clamp(alvoV - c.vel, -5 * dt, 4 * dt);
-  c.volante = (c.volante || 0) + (lado - (c.volante || 0)) * Math.min(1, dt * 5);
-  if (noAr) jogador.yaw -= c.volante * 1.3 * dt;
+  // óvni: mais rápido, arranca e para na hora (sem embalo) e vira firme, sem atraso no comando
+  const alvoV = noAr ? (frente >= 0 ? frente * max : frente * max * (ufo ? 0.7 : 0.3)) : 0;
+  c.vel += THREE.MathUtils.clamp(alvoV - c.vel, -(ufo ? 30 : 5) * dt, (ufo ? 22 : 4) * dt);
+  c.volante = (c.volante || 0) + (lado - (c.volante || 0)) * Math.min(1, dt * (ufo ? 16 : 5));
+  if (noAr) jogador.yaw -= c.volante * (ufo ? 2.4 : 1.3) * dt;
   jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * dt, -1500, 1600);
   jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * dt, -2000, 1900);
   // prédios: alarme e batida
