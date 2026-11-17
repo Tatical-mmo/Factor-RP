@@ -4446,8 +4446,38 @@ function corposNaRua() {
 }
 // veículo do sistema que segue um horário: se tem alguém parado na frente, ele espera (o atraso cresce) e depois
 // recupera devagar. Se ficar travado muito tempo (cruzamento), passa uma vez sem esperar, para não travar tudo.
+// Impasse entre dois veículos (um trava o outro, como no cruzamento): preferência de quem vem pela DIREITA
+// (Código de Trânsito, art. 29, III, c). Quem cede espera e, se estiver no caminho do outro, dá uma pequena ré
+// (uns 2,5 m), só se atrás estiver livre. Depois segura alguns segundos para o outro passar.
+const travas = new WeakMap();   // veículo -> { por: veículo que o trava, t }
+function cedeAVez(st, o, dt, dist, x, z, ang, bloq) {
+  const agora = performance.now();
+  if (st.re) {   // dando ré: o horário volta (o veículo recua pelo caminho) até 2,5 m ou até ter alguém atrás
+    st.re.t += dt;
+    const atras = obstaculoAFrente(x, z, ang + Math.PI, st.ignorar || o, Math.max(4, dist - 4), o);
+    if (atras || st.re.t > 3 || Math.hypot(x - st.re.x, z - st.re.z) > 2.5) { st.re = null; st.cede = 5; }
+    else { st.atraso = (st.atraso || 0) + dt * 2.2; return true; }
+  }
+  if (st.cede > 0) { st.cede -= dt; st.atraso = (st.atraso || 0) + dt; return true; }
+  if (!bloq || bloq === true || bloq.fogo || !bloq.position) return false;
+  travas.set(o, { por: bloq, t: agora });
+  const ele = travas.get(bloq);
+  if (!ele || ele.por !== o || agora - ele.t > 1000 || (st.bloq || 0) < 1.5) return false;
+  // os dois se travam: cede quem tem o outro mais à sua direita
+  const ox = bloq.position.x, oz = bloq.position.z, ab = bloq.rotation.y;
+  const minhaDir = (ox - x) * -Math.cos(ang) + (oz - z) * Math.sin(ang);
+  const delaDir = (x - ox) * -Math.cos(ab) + (z - oz) * Math.sin(ab);
+  const cedo = Math.abs(minhaDir - delaDir) > 0.3 ? minhaDir > delaDir : o.id < bloq.id;
+  if (!cedo) return false;
+  travas.delete(o); st.bloq = 0;
+  // estou no caminho dele? (ele me vê bem à frente): então recuo um pouco
+  const fx = Math.sin(ab), fz = Math.cos(ab), f = (x - ox) * fx + (z - oz) * fz, lat = Math.abs((x - ox) * fz - (z - oz) * fx);
+  if (f > 0 && f < dist + 6 && lat < 3.5) st.re = { x, z, t: 0 }; else st.cede = 5;
+  st.atraso = (st.atraso || 0) + dt; return true;
+}
 function frearAtras(st, o, dt, dist = 9, x = o.position.x, z = o.position.z, ang = o.rotation.y, paciencia = 40) {
   st.fantasma = Math.max(0, (st.fantasma || 0) - dt);
+  if ((st.re || st.cede > 0) && cedeAVez(st, o, dt, dist, x, z, ang, null)) return st.atraso;
   // sinal vermelho à frente: espera na faixa (não conta para a "paciência" de travamento)
   // (medido do bico do veículo: um ônibus comprido não para com a frente já dentro do cruzamento)
   const meio = Math.max(0, dist - 7), bx = x + Math.sin(ang) * meio, bz = z + Math.cos(ang) * meio;
@@ -4457,14 +4487,15 @@ function frearAtras(st, o, dt, dist = 9, x = o.position.x, z = o.position.z, ang
   { const k = !st.sirene && semaforos.cruzamentoAFrente(bx, bz, ang, 3.5);
     if (k && obstaculoAFrente(x, z, ang, st.ignorar || o, meio + k.dl + k.largura + Math.max(6, dist - 1), o)) {
       st.bloqCruz = (st.bloqCruz || 0) + dt;
-      if (st.bloqCruz < 25) { if ((st.atraso || 0) < 120) st.atraso = Math.min(120, (st.atraso || 0) + dt); return st.atraso; }
+      if (st.bloqCruz < 60) { if ((st.atraso || 0) < 120) st.atraso = Math.min(120, (st.atraso || 0) + dt); return st.atraso; }
     } else st.bloqCruz = 0; }
   // longe de quem joga a checagem é mais espaçada (meio segundo), mas continua: ninguém "entra" no outro fora da vista
   const f = foco(), longe = Math.abs(x - f.x) + Math.abs(z - f.z) > 260;
   let bloq;
   if (longe && (st.prox = (st.prox || 0) - dt) > 0) bloq = st.ultimo;
   else { st.prox = 0.5; bloq = st.ultimo = st.fantasma <= 0 && obstaculoAFrente(x, z, ang, st.ignorar || o, dist, o); }
-  if (bloq) { const teto = bloq.fogo ? 1800 : 120; if ((st.atraso || 0) < teto) st.atraso = Math.min(teto, (st.atraso || 0) + dt); if (!bloq.fogo && !veicJogador.has(bloq)) st.bloq = (st.bloq || 0) + dt; if (st.bloq > (Math.abs(x - f.x) + Math.abs(z - f.z) < 160 ? 240 : paciencia)) { st.fantasma = 2; st.bloq = 0; } }   // à vista de quem joga, ninguém atravessa ninguém (só destrava um nó de verdade, depois de 4 min)   // veículo em chamas ou de jogador: espera de verdade, nunca atravessa
+  if (bloq && cedeAVez(st, o, dt, dist, x, z, ang, bloq)) return st.atraso;
+  if (bloq) { const teto = bloq.fogo ? 1800 : 120; if ((st.atraso || 0) < teto) st.atraso = Math.min(teto, (st.atraso || 0) + dt); if (!bloq.fogo && !veicJogador.has(bloq)) st.bloq = (st.bloq || 0) + dt; if (st.bloq > (Math.abs(x - f.x) + Math.abs(z - f.z) < 160 ? 600 : paciencia)) { st.fantasma = 2; st.bloq = 0; } }   // à vista de quem joga, ninguém atravessa ninguém (só destrava um nó de verdade, depois de 4 min)   // veículo em chamas ou de jogador: espera de verdade, nunca atravessa
   else { st.bloq = 0; st.atraso = Math.max(0, (st.atraso || 0) - dt * (longe ? 1 : 0.35)); }
   return st.atraso;
 }

@@ -1598,3 +1598,7 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - **Ao ser preso:** **EM CANA** em azul, com a sirene enviada pelo dono (Pixabay) metalizada e uma porta de ferro batendo. O jogador vai para a cela na pancada.
   - Fonte Bangers (licença OFL, assets/fontes, com o texto da licença). Sons em assets/sons/apagado.mp3 e em_cana.mp3 (sons.tocarTela).
   - **Selo BETA** na tela de entrada, na de personagem e na de abertura, mais no título da aba e na versão.
+- **Preferência no cruzamento (16av)**: quando dois veículos se travam (um à frente do outro, como no cruzamento), vale a preferência de quem vem pela direita (CTB, art. 29, III, c), em frearAtras/cedeAVez.
+  - Quem cede espera. Se estiver no caminho do outro, dá uma ré de ~2,5 m, só com espaço atrás (verifica quem está atrás), e depois segura 5 s para o outro passar.
+  - Perto de quem joga, o "atravessar o outro" de emergência só acontece depois de 10 min (antes era 4).
+  - Quem espera para entrar num cruzamento travado aguenta 60 s (antes entrava aos 25 s e fechava o cruzamento).
