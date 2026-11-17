@@ -891,7 +891,21 @@ class Avatar {
     if (!this.acoes[nome]) this.acoes[nome] = this.mixer.clipAction(this.clipes[nome]);
     return this.acoes[nome];
   }
+  // emotes e gestos de conversa: o arquivo de animações só baixa na primeira vez, e cada personagem adapta a sua
+  garantir(nome) {
+    if (this.clipes[nome]) return Promise.resolve(true);
+    const g = this.gltf; if (!g || !ANIM_EXTRAS.has(nome)) return Promise.resolve(false);
+    g.userData.extras ||= {};
+    g.userData.extras[nome] ||= obterBaseEmotes().then((b) => { const c = b?.animations.find((a) => a.name === nome); return c ? adaptarClipe(c, b.scene, g.scene) : null; }).catch(() => null);
+    return g.userData.extras[nome].then((c) => { if (c) this.clipes[nome] = c; return !!c; });
+  }
   tocar(nome, { fade = 0.2, umaVez = false, velocidade = 1 } = {}) {
+    if (!this.clipes[nome] && ANIM_EXTRAS.has(nome)) {   // ainda não carregou: toca assim que chegar (se ainda for a vez dela)
+      this.querExtra = nome;
+      this.garantir(nome).then((ok) => { if (ok && this.querExtra === nome && this.nomeAtual !== nome) this.tocar(nome, { fade, umaVez, velocidade }); });
+      return;
+    }
+    this.querExtra = null;
     const real = this.clipes[nome] ? nome : this.clipes[RESERVA_ANIM[nome]] ? RESERVA_ANIM[nome] : null;   // personagem antigo sem a animação nova
     if (!real) return;
     if (this.nomeAtual === nome && !umaVez) { this.atual.setEffectiveTimeScale(velocidade); return; }
@@ -936,6 +950,37 @@ const ARQ_ANIMACOES = ['animacoes_base', 'animacoes_caixa', 'animacoes_pulo', 'a
 function obterBasesAnimacoes() {
   if (!basesAnimacoes) basesAnimacoes = Promise.all(ARQ_ANIMACOES.map((a) => carregarGLB(`assets/personagens/${a}.glb`).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => null))).then((l) => l.filter(Boolean));
   return basesAnimacoes;
+}
+// emotes (dançar, dor de cabeça, exercício, equilibrar, "não" com o dedo...) e gestos de conversa: um arquivo só com o
+// esqueleto e as animações (assets/personagens/animacoes_emotes.glb), baixado na primeira vez que alguém usa
+const GESTOS_CONVERSA = ['conversa1', 'conversa2', 'conversa3', 'conversa4'];
+const EMOTES = [
+  { id: 'danca1', nome: 'Dança 1', ic: '🕺' }, { id: 'danca2', nome: 'Dança 2', ic: '💃' }, { id: 'danca3', nome: 'Dança 3', ic: '🕺' }, { id: 'danca4', nome: 'Dança 4', ic: '💃' },
+  { id: 'empolgado', nome: 'Empolgado', ic: '🤩' }, { id: 'contas', nome: 'Dança das contas', ic: '📿' }, { id: 'nao_sou_mae', nome: 'Bronca', ic: '😤' },
+  { id: 'nao_dedo', nome: 'Não, não!', ic: '☝️' }, { id: 'dor_cabeca', nome: 'Dor de cabeça', ic: '🤕' }, { id: 'beber', nome: 'Beber', ic: '🥤' },
+  { id: 'exercicio', nome: 'Exercício', ic: '🏋️' }, { id: 'equilibrar', nome: 'Equilibrar', ic: '🤸' },
+];
+const ANIM_EXTRAS = new Set([...GESTOS_CONVERSA, 'celular', ...EMOTES.map((e) => e.id)]);
+let baseEmotes = null;
+function obterBaseEmotes() {
+  if (!baseEmotes) baseEmotes = carregarGLB('assets/personagens/animacoes_emotes.glb?v=1').then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { baseEmotes = null; return null; });
+  return baseEmotes;
+}
+// ninguém (jogador ou NPC) a menos de 14 m: falando na voz assim, o personagem fala ao celular
+function ninguemPerto(raio = 14) {
+  const p = jogador.pos;
+  for (const r of remotos.values()) if (r.av?.raiz.visible && r.av.raiz.position.distanceTo(p) < raio) return false;
+  for (const n of npcs) if (n.av?.raiz.visible && n.av.raiz.position.distanceTo(p) < raio) return false;
+  return true;
+}
+// gesto de conversa: sorteia um diferente do último, cada um até o fim da animação
+function gestoConversa(av, st) {
+  const agora = performance.now();
+  if (!st.fala || agora > st.fala.ate) {
+    const op = GESTOS_CONVERSA.filter((x) => x !== st.fala?.nome), nome = op[Math.floor(Math.random() * op.length)];
+    st.fala = { nome, ate: agora + (av.clipes[nome]?.duration || 4) * 1000 };
+  }
+  return st.fala.nome;
 }
 function obterRoboBase() {
   if (!roboBase) roboBase = carregarGLB('assets/robos/Rusty_Scout_Bot.glb').then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => null);
@@ -1032,7 +1077,7 @@ async function criarAvatar(pasta, id) {
     }
     if (!gltf.userData.clipes) gltf.userData.clipes = prepararClipes(anims);
   }
-  return new Avatar(modelo, gltf.userData.clipes);
+  const av = new Avatar(modelo, gltf.userData.clipes); av.gltf = gltf; return av;
 }
 
 // ================================================================= JOGADOR
@@ -5063,7 +5108,8 @@ function atualizarConversas(dt) {
 function conversando(n, dt) {   // parado, de frente para o outro
   const o = n.conversa.com.av.raiz.position, p = n.av.raiz.position;
   n.av.raiz.rotation.y = suavizarAngulo(n.av.raiz.rotation.y, Math.atan2(o.x - p.x, o.z - p.z), dt * 5);
-  if (n.animConversa !== true) { n.animConversa = true; n.av.tocar('idle'); }
+  const fala = n.conversa.vez ? gestoConversa(n.av, n) : 'idle';   // quem está falando gesticula (sorteado, sem repetir)
+  if (n.animConversa !== fala) { n.animConversa = fala; n.av.tocar(fala, { fade: 0.35 }); }
   n.av.mixer.update(dt);
 }
 
@@ -5078,6 +5124,13 @@ function iniciarChat() {
   const abrir = () => { if (seguranca.protegido()) { aviso('🛡️ Modo protegido: o chat está desligado.'); return; } caixa.classList.remove('oculto'); txt.focus(); };
   const fechar = () => { caixa.classList.add('oculto'); txt.blur(); };
   $('btChat').onclick = () => (caixa.classList.contains('oculto') ? abrir() : fechar());
+  $('btEmote').onclick = () => {
+    if (jogador.carro || jogador.morto || jogador.algemado) { aviso('Emote só a pé e livre.', 2); return; }
+    escolher('😀 Emotes', 'Escolha o que fazer. Os outros jogadores veem. Andar para o emote.', [
+      ...EMOTES.map((e) => ({ rotulo: `${e.ic} ${e.nome}`, fn: () => { if (jogador.armado) alternarArma(); jogador.emote = e.id; jogador.avatar.garantir(e.id); } })),
+      ...(jogador.emote ? [{ rotulo: '⏹️ Parar', fn: () => { jogador.emote = null; } }] : []),
+    ]);
+  };
   $('chatFechar').onclick = fechar;
   $('chatModo').onclick = () => { chatPrivado = !chatPrivado; $('chatModo').textContent = chatPrivado ? '🔒 Amigos' : '🌐 Todos'; $('chatModo').classList.toggle('privado', chatPrivado); txt.focus(); };
   const enviar = () => {
@@ -5091,6 +5144,7 @@ function iniciarChat() {
     ultimoChat = performance.now();
     const m = { de: jogador.perfil.id, nome: jogador.perfil.nome, texto: f.texto, privado: chatPrivado };
     conexao?.enviar('chat', m);
+    jogador.falaAte = performance.now() + 2500 + Math.min(6000, f.texto.length * 90);   // parado, gesticula enquanto "fala"
     mostrarChat(m, true); txt.value = '';
   };
   $('chatEnviar').onclick = enviar;
@@ -7692,6 +7746,7 @@ function atualizarJogador(dt) {
     // animação conforme o estado
     if (j.morto) { /* fica caído */ }
     else if (vel > 0) {
+      if (j.emote) { j.emote = null; }   // andou: o emote para
       if (j.algemado) av.tocar('algemado_andar', { velocidade: 1 });
       else if (j.carregando) av.tocar('carry_walk', { velocidade: 1 });
       else if (j.armado) av.tocar('walk_shoot', { velocidade: 1.25 });
@@ -7701,6 +7756,9 @@ function atualizarJogador(dt) {
       if (j.algemado) av.tocar('algemado');
       else if (j.carregando) av.tocar('carregar_parado');
       else if (j.armado) av.tocar('mirar');
+      else if (j.emote) av.tocar(j.emote);
+      else if (voz.estaFalando() && ninguemPerto()) av.tocar('celular');
+      else if (voz.estaFalando() || performance.now() < (j.falaAte || 0)) av.tocar(gestoConversa(av, j));
       else av.tocar('idle');
     }
   }
