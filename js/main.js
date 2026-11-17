@@ -401,7 +401,8 @@ const cacheGLTF = new Map();
 function carregarGLB(url) {
   if (!cacheGLTF.has(url)) {
     const p = loader.loadAsync(url); cacheGLTF.set(url, p);
-    p.then((g) => aquecer(g?.scene)).catch(() => {});
+    // (16aw) não sobe mais todas as texturas de uma vez: com ~200 modelos isso enchia a memória de vídeo e o
+    // celular fechava a aba. Cada textura vai para a placa só quando o modelo aparece na tela.
   }
   return cacheGLTF.get(url);
 }

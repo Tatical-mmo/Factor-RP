@@ -1602,3 +1602,6 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - Quem cede espera. Se estiver no caminho do outro, dá uma ré de ~2,5 m, só com espaço atrás (verifica quem está atrás), e depois segura 5 s para o outro passar.
   - Perto de quem joga, o "atravessar o outro" de emergência só acontece depois de 10 min (antes era 4).
   - Quem espera para entrar num cruzamento travado aguenta 60 s (antes entrava aos 25 s e fechava o cruzamento).
+- **Menos memória (16aw)**: o jogo passou a fechar sozinho no celular quando travava muito. Era a memória de vídeo cheia, e o Android matava a aba.
+  - Todas as texturas dos modelos (assets/modelos, personagens e robos, 198 arquivos) agora têm no máximo 512 px. Com tudo carregado, a memória de vídeo cai de ~1,9 GB para ~0,66 GB.
+  - Saiu o envio antecipado de todas as texturas para a placa (aquecer, da 16as): com ~200 modelos ele enchia a memória. As texturas voltam a subir só quando o modelo aparece. A compilação de shaders em segundo plano continua.
