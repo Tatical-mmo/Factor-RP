@@ -731,7 +731,7 @@ export const RODAS = {
   exercito_jipe: { estilo: 'militar', eixos: [[-1.08, 0.46], [1.34, 0.46]], cy: 0.45, xo: 0.97, xi: 0.59 },
   ambulancia: { estilo: 'suv', eixos: [[-1.34, 0.38], [1.88, 0.38]], cy: 0.38, xo: 0.96, xi: 0.7 },   // nova (16aj): van tipo Sprinter do SAMU
   caminhao_bombeiros: { estilo: 'pesado', eixos: [[-2.4, 0.58], [-1.3, 0.58], [2.45, 0.58]], cy: 0.58, xo: 1.33, xi: 0.86 },   // modelo novo (16r): eixo duplo atrás
-  caminhao: { estilo: 'pesado', eixos: [[-2.72, 0.48], [-1.71, 0.48], [3.41, 0.49]], cy: 0.49, xo: 1.18, xi: 0.8 },
+  caminhao: { estilo: 'pesado', eixos: [[-3.0, 0.5], [-1.75, 0.5], [2.8, 0.5]], cy: 0.5, xo: 1.09, xi: 0.74 },   // modelo novo (16bd): baú branco liso, eixo duplo atrás
   caminhao_lixo: { estilo: 'pesado', eixos: [[-1.6, 0.56], [-0.4, 0.56], [2.8, 0.56]], cy: 0.56, xo: 1.56, xi: 1.0 },   // modelo novo (16r): eixo duplo atrás
   exercito_caminhao: { estilo: 'militar', eixos: [[-2.15, 0.55], [-1.0, 0.55], [2.45, 0.55]], cy: 0.53, xo: 1.29, xi: 0.95 },
   onibus_grande: { estilo: 'pesado', eixos: [[-2.55, 0.53], [3.3, 0.53]], cy: 0.52, xo: 1.2, xi: 0.85 },
@@ -791,6 +791,13 @@ function montarRodas(g, nome) {
     if (tras && z < tras.position.z) { piv.userData.traseira = true; piv.userData.p0 = piv.position.clone(); }
     const rd = base.clone(true); rd.scale.set(sg * (xo - xi) / (2 * W), r, r); rd.userData.raio = r; piv.add(rd);
   }
+}
+// caminhões das empresas (vêm do clone do modelo, sem pintura): troca as rodas do modelo pelas que giram e viram
+export function veiculoComRodas(o, nome) {
+  o.userData.glb = nome;
+  try { montarRodas(o, nome); } catch (e) { console.warn('rodas:', nome, e); }
+  if (o.getObjectByName('rodas')) comRodas.add(o);
+  return o;
 }
 // gira as rodas pelo quanto cada veículo andou (serve para o seu, os NPCs e os outros jogadores) e vira as da frente
 // distância do centro do modelo até o eixo da frente (zf) e até o de trás (zr); com dois eixos juntos, o meio deles.

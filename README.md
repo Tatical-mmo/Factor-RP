@@ -1636,3 +1636,9 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - **Licitação:** exige 5 caminhões. A tela mostra os caminhões da empresa a serviço do Exército (x/5).
   - **Roubo e venda:** a carga de anti-ácido é sequestrável como as outras e vai para o estoque de anti-ácido do Seu Tonho (500 cada, só clã).
   - **Cofre do Exército:** exercito_cofre e exercito_recompensas. Coronel para cima (ou o admin) recompensa soldados pela central de rações (recompensar_militar).
+- **Caminhão baú novo (16bd)**:
+  - `assets/modelos/caminhao.glb` foi trocado pelo modelo novo do Meshy: cabine cara-chata e baú branco liso. Tem 8,4 m, 16 mil triângulos e textura de 512. Carrega com `?v=bau1`.
+  - Os caminhões das empresas (e o da autoescola) agora têm **rodas que giram e viram** (RODAS.caminhao, eixo duplo atrás), pelo `civico.veiculoComRodas`.
+  - O caminhão roubado usa o mesmo modelo, escurecido e sujo. O `caminhao_danificado.glb` deixou de ser carregado.
+  - A cabine do motorista (olho e capô) foi medida de novo para o modelo.
+  - O baú liso vai receber a lona com a logo de cada empresa na próxima etapa.

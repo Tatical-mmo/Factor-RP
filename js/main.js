@@ -2719,7 +2719,7 @@ function atualizarNPCs(dt) {
 
 let caminhaoMovel = null;
 function criarCaminhaoMovel() {
-  const obj = civico.luzesEm(clonar('caminhao'), 'caminhao', 'frota_caminhao_0'); scene.add(obj);
+  const obj = civico.luzesEm(caminhaoEmpresa(false), 'caminhao', 'frota_caminhao_0'); scene.add(obj);
   const cantos = [[ruaC(1), ruaC(1)], [ruaC(3), ruaC(1)], [ruaC(3), ruaC(3)], [ruaC(1), ruaC(3)]];
   const faixa = 2.5, rota = [];
   for (let i = 0; i < 4; i++) {
@@ -3106,7 +3106,7 @@ async function iniciarJogo(perfil) {
   $('carregando').classList.remove('oculto');
   montarChao();
   // um modelo faltando não pode travar o jogo: ele só fica de fora (veículos e prédios têm versão feita por código)
-  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_exercito' ? '?v=pas4' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
+  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_exercito' ? '?v=pas4' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau1' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
   const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
   const skin = perfil.policial ? SKIN_POLICIA : id;
   const avatarP = criarAvatar(ROBOS.includes(skin) ? 'robos' : pastaJogador, skin);
@@ -3909,7 +3909,13 @@ function criarVeiculoBase(tipo, danificado) {
     o.userData.rotor = o.children.find((k) => k.isGroup && k.position.y > 3); o.userData.rotorCauda = o.children.find((k) => k.isGroup && k.position.z < -5);
     return o;
   }
-  return clonar(danificado ? 'caminhao_danificado' : 'caminhao');
+  return caminhaoEmpresa(danificado);
+}
+// caminhão das empresas: rodas que giram e viram; o roubado volta sujo e amassado (o mesmo modelo, escurecido)
+function caminhaoEmpresa(sujo) {
+  const o = civico.veiculoComRodas(clonar('caminhao'), 'caminhao');
+  if (sujo) o.traverse((m) => { if (m.isMesh && !m.userData.vidro && m.parent?.name !== 'rodas' && m.name !== 'chassi') { m.material = m.material.clone(); m.material.color = new THREE.Color('#8f877b'); m.material.roughness = 1; } });
+  return o;
 }
 function sincronizarCaminhao(d) {
   let c = caminhoes.get(d.id);
@@ -3921,7 +3927,7 @@ function sincronizarCaminhao(d) {
   }
   // caminhão roubado volta amassado; a escolta (viatura) acompanha a viagem
   if (!!d.roubado !== c.roubadoVisual && (d.tipo || 'caminhao') === 'caminhao') {
-    const novo = clonar(d.roubado ? 'caminhao_danificado' : 'caminhao');
+    const novo = civico.luzesEm(caminhaoEmpresa(d.roubado), 'caminhao', `frota_caminhao_${d.roubado ? 1 : 0}`);
     novo.position.copy(c.obj.position); novo.rotation.copy(c.obj.rotation);
     scene.remove(c.obj); scene.add(novo); c.obj = novo; c.roubadoVisual = !!d.roubado;
   }
@@ -7899,7 +7905,7 @@ const CABINE = {
   carro_presidencial: { olho: [1.58, 0.6], capo: [1.28, 1.35], cor: '#2b2b36' , int: 'int_carro'},
   ambulancia: { olho: [2.2, 1.5], capo: [1.55, 2.25], x: 0.5, cor: '#e5e5e5' , int: 'int_van'},
   caminhao_bombeiros: { olho: [2.6, 2.9], capo: [1.9, 3.6], x: 0.75, cor: '#cc3333' , int: 'int_caminhao'},
-  caminhao: { olho: [1.82, 2.75], capo: [1.45, 3.45], x: 0.55, cor: '#f2b705', teto: 0.24 , int: 'int_caminhao'},
+  caminhao: { olho: [2.45, 3.3], capo: [1.95, 4.0], x: 0.55, cor: '#e8e8e8', teto: 0.24 , int: 'int_caminhao'},   // modelo novo (16bd): cabine alta (cara-chata)
   caminhao_lixo: { olho: [2.55, 3.15], capo: [1.85, 3.85], x: 0.6, cor: '#cfcfcf' , int: 'int_caminhao'},
   exercito_caminhao: { olho: [2.4, 2.2], x: 0.6, interior: 1 },
   tanque: { olho: [3.05, -0.6], nada: 1 },
