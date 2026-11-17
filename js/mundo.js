@@ -914,13 +914,17 @@ function montarMalhas() {
   const MAXA = window.matchMedia?.('(pointer: coarse)').matches ? 70 : 150, MAXA_ULTRA = 220;   // capacidade do ultra (o normal usa só MAXA)
   // modelos novos (prop_arvore / prop_pinheiro, altura 1 centrada) quando existem; senão os antigos
   const ESC = [0.68, 0.6, 0.78], ALVO = [4.4, 4.8];
-  const glbA = [['prop_arvore', 'arvore_comum'], ['prop_pinheiro', 'arvore_pinheiro'], ['arvore_palmeira']].map((nomes, k) => {
+  // árvore comum: o carvalho do Meshy (simplificado) quando existe; senão os modelos antigos
+  const glbA = [['arvore_carvalho', 'prop_arvore', 'arvore_comum'], ['prop_pinheiro', 'arvore_pinheiro'], ['arvore_palmeira']].map((nomes, k) => {
     const n = nomes.find((x) => ctx.modelo?.(x)); if (!n) return null;
     const base = ctx.modelo(n); let malha = null;
     base.updateMatrixWorld(true); base.traverse((o) => { if (o.isMesh && !malha) malha = o; }); if (!malha) return null;
     const geo = malha.geometry.clone().applyMatrix4(new THREE.Matrix4().copy(base.matrixWorld).invert().multiply(malha.matrixWorld));
-    if (n.startsWith('prop_')) { geo.computeBoundingBox(); const bb = geo.boundingBox; geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2); ESC[k] = ALVO[k] / ((bb.max.y - bb.min.y) || 1); }
-    const m = [].concat(malha.material)[0].clone(); m.vertexColors = true; m.flatShading = true; m.roughness = 0.9;
+    const carvalho = n === 'arvore_carvalho';
+    if (n.startsWith('prop_') || carvalho) { geo.computeBoundingBox(); const bb = geo.boundingBox; geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2); ESC[k] = (carvalho ? 5.6 : ALVO[k]) / ((bb.max.y - bb.min.y) || 1); }
+    const orig = [].concat(malha.material)[0];
+    const m = carvalho ? new THREE.MeshStandardMaterial({ map: orig.map, normalMap: orig.normalMap, roughness: 0.9, metalness: 0 }) : orig.clone();
+    if (!carvalho) { m.vertexColors = true; m.flatShading = true; m.roughness = 0.9; }
     const im = new THREE.InstancedMesh(geo, m, MAXA_ULTRA); im.count = 0; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; scene.add(im);
     return im;
   });
@@ -1217,7 +1221,7 @@ function montarMobiliario() {
     const a = vert ? z - d / 2 : x - w / 2, b = vert ? z + d / 2 : x + w / 2, c = vert ? x : z;
     const longe = (t, m) => cr.every((q) => Math.abs(q - t) > m);
     const ponto = (t, lat) => (vert ? [c + lat, t] : [t, c + lat]);
-    for (let t = a + 4; t < b - 2; t += 6) if (longe(t, RW / 2 + 2)) faixas.push([...ponto(t, 0), vert]);
+    for (let t = a + 4; t < b - 3; t += 6) if (longe(t, RW / 2 + 6.5)) faixas.push([...ponto(t, 0), vert]);   // para antes da faixa de pedestre
     let lado = 1;
     for (let t = a + 8; t < b - 6; t += 27) {
       if (!longe(t, RW / 2 + 3)) continue;
@@ -1236,8 +1240,11 @@ function montarMobiliario() {
     }
   }
   // faixas tracejadas
-  const fx = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#ece4c8', roughness: 0.8 }), faixas.length);
-  faixas.forEach(([x, z, vert], k) => { _m.compose(_v.set(x, 0.032, z), _q.identity(), _e.set(vert ? 0.22 : 3, 1, vert ? 3 : 0.22)); fx.setMatrixAt(k, _m); });
+  // faixa dupla amarela contínua (cada pedaço de 6 m vira dois traços de 10 cm)
+  const fx = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#d9a21f', roughness: 0.8 }), faixas.length * 2);
+  faixas.forEach(([x, z, vert], k) => {
+    for (const [i, d] of [[0, -0.13], [1, 0.13]]) { _m.compose(_v.set(x + (vert ? d : 0), 0.032, z + (vert ? 0 : d)), _q.identity(), _e.set(vert ? 0.1 : 6, 1, vert ? 6 : 0.1)); fx.setMatrixAt(k * 2 + i, _m); }
+  });
   fx.receiveShadow = true; scene.add(fx);
   // postes
   const matPoste = new THREE.MeshStandardMaterial({ color: '#33383f', roughness: 0.5, metalness: 0.5 });
@@ -1535,3 +1542,55 @@ export function caminhoRuas(a, b) {
   return [{ x: a.x, z: a.z }, { x: ea.x, z: ea.z }, ...meio, { x: eb.x, z: eb.z }];
 }
 export const listaRuas = () => ruas;
+
+// ---------------------------------------------------------------- grama em tufos (perto do jogador, só nos gramados)
+// Tufo feito por código (folhas finas e curvas, base escura e ponta clara): o tufo do Meshy tinha 684 mil triângulos
+// e as folhas finas se desfazem quando simplificadas. Cada tufo tem ~100 triângulos e todos saem num desenho só.
+let tufos = null;
+function geoTufo() {
+  const P = [], C = [], I = [], base = new THREE.Color('#3f6f2a'), meio = new THREE.Color('#5f9638'), ponta = new THREE.Color('#9cc95a');
+  let r = 7; const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
+  for (let f = 0; f < 18; f++) {
+    const a = rnd() * Math.PI * 2, d = rnd() * 0.18, h = 0.16 + rnd() * 0.2, w = 0.025 + rnd() * 0.015, curva = 0.05 + rnd() * 0.1, giro = a + (rnd() - 0.5);
+    const bx = Math.cos(a) * d, bz = Math.sin(a) * d, dx = Math.cos(a), dz = Math.sin(a), px = -Math.sin(giro), pz = Math.cos(giro);
+    const i0 = P.length / 3;
+    for (let k = 0; k <= 3; k++) {
+      const t = k / 3, larg = w * (1 - t * 0.85), y = h * t, off = curva * t * t;
+      for (const sx of [-1, 1]) { P.push(bx + dx * off + px * larg * sx, y, bz + dz * off + pz * larg * sx); const c = t < 0.5 ? base.clone().lerp(meio, t * 2) : meio.clone().lerp(ponta, (t - 0.5) * 2); C.push(c.r, c.g, c.b); }
+    }
+    for (let k = 0; k < 3; k++) { const q = i0 + k * 2; I.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setIndex(I); g.computeVertexNormals();
+  // normais para cima: a grama fica iluminada por igual (sem folha preta virada para o lado da sombra)
+  const n = g.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, n.getX(i) * 0.3, 1, n.getZ(i) * 0.3); n.needsUpdate = true;
+  return g;
+}
+export function gramaPerto(px, pz, dt) {
+  const q = ctx?.qualidade?.() || 'medio', max = { ultra: 1100, alto: 700, medio: 260 }[q] || 0, raio = { ultra: 46, alto: 38, medio: 24 }[q] || 0;
+  if (!tufos) {
+    if (!max || !gramados.length) return;
+    const im = new THREE.InstancedMesh(geoTufo(), new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.95 }), 1100);
+    im.count = 0; im.frustumCulled = false; im.receiveShadow = true; ctx.scene.add(im);
+    tufos = { im, x: 1e9, z: 1e9, t: 0, q: '' };
+  }
+  const T = tufos;
+  if ((T.t -= dt) > 0) return; T.t = 0.4;
+  if (Math.hypot(px - T.x, pz - T.z) < 3 && T.q === q) return;
+  T.x = px; T.z = pz; T.q = q;
+  const PASSO = 1.7, perto = gramados.filter(([x, z, w, d]) => Math.abs(x - px) < raio + w / 2 && Math.abs(z - pz) < raio + d / 2);
+  let n = 0;
+  for (const [gx, gz, w, d] of perto) {
+    const x0 = Math.max(gx - w / 2 + 0.4, px - raio), x1 = Math.min(gx + w / 2 - 0.4, px + raio), z0 = Math.max(gz - d / 2 + 0.4, pz - raio), z1 = Math.min(gz + d / 2 - 0.4, pz + raio);
+    for (let x = Math.ceil(x0 / PASSO) * PASSO; x <= x1 && n < max; x += PASSO) for (let z = Math.ceil(z0 / PASSO) * PASSO; z <= z1 && n < max; z += PASSO) {
+      const h = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1, h2 = Math.abs(Math.sin(x * 39.34 + z * 11.13) * 24634.63) % 1;
+      if (h < 0.35) continue;   // nem toda célula tem tufo (fica natural)
+      const tx = x + (h2 - 0.5) * PASSO * 0.8, tz = z + (h - 0.5) * PASSO * 0.8;
+      if (Math.hypot(tx - px, tz - pz) > raio) continue;
+      const e = 0.75 + h2 * 0.45;
+      _q.setFromAxisAngle(_e.set(0, 1, 0), h * 6.28); _m.compose(_v.set(tx, (altura(tx, tz) ?? 0) + 0.18, tz), _q, _e.set(e, e * (0.8 + h * 0.5), e));
+      T.im.setMatrixAt(n++, _m);
+    }
+  }
+  T.im.count = n; T.im.instanceMatrix.needsUpdate = true;
+}
+export const listaGramados = () => gramados;

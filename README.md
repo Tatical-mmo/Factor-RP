@@ -1580,3 +1580,16 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - sanitários.
 
   O guichê e o painel levam o jogador direto para a plataforma da linha (ou para o ponto das circulares).
+
+- **Árvores, grama e ruas (16at)**:
+  - **Árvore comum:** o carvalho do Meshy (assets/modelos/arvore_carvalho.glb) saiu de 4 milhões para 6 mil triângulos (agrupamento de vértices e depois QEM em modo livre, que pode passar pelas costuras de UV da folhagem). Ele entra no lugar de prop_arvore nas árvores 3D (mundo.js) com 5,6 m de altura.
+  - **Grama em tufos:** tufo feito por código (18 folhas curvas, ~100 triângulos), num InstancedMesh, só nos gramados perto do jogador. São 1.100 tufos no ultra, 700 no alto, 260 no médio e nenhum no baixo (mundo.gramaPerto). O tufo do Meshy tinha 684 mil triângulos e as folhas finas se desfaziam na simplificação.
+  - **Texturas de asfalto, calçada e grama:** tiradas dos modelos de rua e do tufo do Meshy, desenhados de cima e emendados sem costura (assets/texturas/). Elas trocam a imagem das texturas desenhadas por código (imagemReal), na metrópole e no centro.
+  - **Faixa dupla amarela contínua** no meio das ruas; para antes da faixa de pedestre.
+- **Ônibus no terminal (16at)**:
+  - Saída das plataformas é de um por vez (SAIDA_RODO): antes saíam juntos de plataformas vizinhas e se embolavam na esquina.
+  - Ônibus esperando fora não fica em cima de ônibus de outra linha (espera atrás).
+  - Encostado em outro ônibus, só anda se o passo afastar os dois (antes entrava de vez).
+  - O ônibus que sai do pátio espera a rua de baixo ficar livre, e quem vem pela rua deixa passar quem já saiu.
+  - A vaga da fila do vão recua para ônibus de 14 m e articulados.
+  - As circulares partem e chegam em x = 200 (antes 212, colado na esquina x = 216).

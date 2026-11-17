@@ -480,9 +480,10 @@ function montarChao() {
   });
   const calcTex = texturaCanvas(512, mundo.desenharCalcada);
   const gramaTex = texturaCanvas(512, (g, t) => mundo.desenharGrama(g, t));
+  imagemReal(asfaltoTex, 'assets/texturas/asfalto.jpg'); imagemReal(calcTex, 'assets/texturas/calcada.jpg'); imagemReal(gramaTex, 'assets/texturas/grama.jpg');
   const pateoTex = texturaCanvas(256, (g, t) => { g.fillStyle = '#ab9c82'; g.fillRect(0, 0, t, t); ruido(g, t, 9000, 0.08, 1.8, [70, 55, 35]); });
   const comp = TOTAL;
-  const matTex = (tex, rx, ry, rug = 0.92) => { const t = tex.clone(); t.needsUpdate = true; t.repeat.set(rx, ry); return new THREE.MeshStandardMaterial({ map: t, roughness: rug, metalness: 0 }); };
+  const matTex = (tex, rx, ry, rug = 0.92) => { const t = tex.clone(); t.needsUpdate = true; t.repeat.set(rx, ry); if (!clonesTex.has(tex)) clonesTex.set(tex, []); clonesTex.get(tex).push(t); return new THREE.MeshStandardMaterial({ map: t, roughness: rug, metalness: 0 }); };
   const asfH = matTex(asfaltoTex, comp / 7, RW / 7, 0.88), asfV = matTex(asfaltoTex, RW / 7, comp / 7, 0.88);
   for (let i = 0; i <= N; i++) {
     const h = new THREE.Mesh(new THREE.PlaneGeometry(comp, RW), asfH);
@@ -510,11 +511,14 @@ function montarChao() {
   for (let i = 0; i <= N; i++) {
     for (let t = -METADE + 1.5; t < METADE; t += 4.5) {
       let cruz = false;
-      for (let j = 0; j <= N; j++) if (Math.abs(t - ruaC(j)) < RW / 2 + 3.8) cruz = true;
+      for (let j = 0; j <= N; j++) if (Math.abs(t - ruaC(j)) < RW / 2 + 6.3) cruz = true;
       if (!cruz) tracos.push([t, ruaC(i), Math.PI / 2], [ruaC(i), t, 0]);
     }
   }
-  instancias(new THREE.PlaneGeometry(0.22, 2.2), tinta, tracos, 0.034);
+  // faixa dupla amarela contínua no meio (como nas ruas de mão dupla); para antes dos cruzamentos
+  const amarela = new THREE.MeshStandardMaterial({ color: '#d9a21f', roughness: 0.7 }), duplas = [];
+  for (const [x, z, r] of tracos) for (const d of [-0.13, 0.13]) duplas.push(r ? [x, z + d, r] : [x + d, z, r]);
+  instancias(new THREE.PlaneGeometry(0.1, 4.5), amarela, duplas, 0.034);
   // faixas de pedestre
   const zebra = [];
   for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
@@ -550,6 +554,13 @@ function montarChao() {
   meioFio.receiveShadow = true; meioFio.castShadow = true; scene.add(meioFio);
 }
 
+// troca o desenho de uma textura (e das cópias dela) por uma imagem de verdade quando ela chega
+// (asfalto, calçada e grama tirados dos modelos do Meshy, vistos de cima); até lá fica o desenho simples
+const clonesTex = new Map();
+function imagemReal(tex, url) {
+  if (!tex) return;
+  new THREE.ImageLoader().load(`${url}?v=1`, (img) => { for (const t of [tex, ...(clonesTex.get(tex) || [])]) { t.image = img; t.needsUpdate = true; } }, undefined, () => {});
+}
 function texturaCanvas(tam, desenhar) {
   const c = document.createElement('canvas'); c.width = c.height = tam;
   desenhar(c.getContext('2d'), tam);
@@ -3046,6 +3057,7 @@ async function iniciarJogo(perfil) {
   montarCargueiro(); montarBueiros(); montarEsconderijos();
   prepararTransporte();
   mundo.finalizar();
+  { const M = mundo.materiais(); imagemReal(M?.asfalto?.map, 'assets/texturas/asfalto.jpg'); imagemReal(M?.calcada?.map, 'assets/texturas/calcada.jpg'); imagemReal(M?.grama?.map, 'assets/texturas/grama.jpg'); }
   semaforos.iniciar(scene, mundo.CRUZAMENTOS, (x, z) => mundo.alturaCalcada(x, z), () => agoraServidor() / 1000);
   // objetos de rua em 3D (leves): bancos de praça, hidrantes e semáforos — carregam em segundo plano
   for (const n of ['banco', 'hidrante']) Promise.resolve(carregarGLB(`assets/modelos/prop_${n}.glb`)).then((g) => { if (g?.scene) mundo.montarProps(n, g.scene, scene); }).catch(() => {});
@@ -8230,7 +8242,7 @@ function quadroJogo() {
   diag('mundo (LOD)');
   mundo.atualizar(dt);
   mundo.carrosPerto(foco().x, foco().z, dt);
-  mundo.arvoresPerto(foco().x, foco().z, dt);
+  mundo.arvoresPerto(foco().x, foco().z, dt); mundo.gramaPerto(foco().x, foco().z, dt);
   mundo.propsPerto(foco().x, foco().z, dt); semaforos.atualizar(dt, foco().x, foco().z);
   mundo.predios3dPerto(foco().x, foco().z, dt);
   sedes.atualizar(dt);
@@ -11065,13 +11077,13 @@ const LINHAS = [
     paradas: [[162, -470, 'Av. do Aeroporto', 'n'], [270, -688, '✈️ Aeroporto · Terminal'], [162, -420, 'Av. do Aeroporto', 's']] },
   // circulares (sem plataforma): começam e terminam no ponto coberto da calçada da frente do terminal (não entram nele)
   { id: 4, nome: 'Linha 4 · Oeste e Serviços', curto: 'Serviços', cor: '#8e44ad', k: 4, fase: 5, modelos: URB, circular: true,
-    rua: [[212, -216], [108, -216], [108, -108], [-270, -108], [-270, 162], [-108, 162], [-108, 108], [108, 108], [108, -270], [216, -270], [216, -216], [212, -216]],
+    rua: [[200, -216], [108, -216], [108, -108], [-270, -108], [-270, 162], [-108, 162], [-108, 108], [108, 108], [108, -270], [216, -270], [216, -216], [200, -216]],
     paradas: [ROD, [-135, -108, 'Prefeitura', 'o'], [-270, -27, 'Autoescola', 's'], [-150, 162, 'Hospital', 'l'], [-81, 108, 'Bombeiros', 'l'], [0, 108, 'Estação Sul', 'l'], [108, -135, 'Banco', 'n']] },
   { id: 5, nome: 'Linha 5 · Estações e Trabalho', curto: 'Estações', cor: '#c0392b', k: 4, fase: 9, modelos: URB, circular: true,
-    rua: [[212, -216], [108, -216], [108, -108], [-108, -108], [-108, 108], [108, 108], [378, 108], [378, -54], [216, -54], [216, -216], [212, -216]],
+    rua: [[200, -216], [108, -216], [108, -108], [-108, -108], [-108, 108], [108, 108], [378, 108], [378, -54], [216, -54], [216, -216], [200, -216]],
     paradas: [ROD, [0, -108, 'Estação Norte', 'o'], [-108, 0, 'Mercado', 's'], [0, 108, 'Estação Sul', 'l'], [300, 108, 'Zona Leste', 'l'], [351, -54, '♻️ Central de Reciclagem', 'o'], [216, -150, 'Zona Nordeste', 'n']] },
   { id: 6, nome: 'Linha 6 · Territórios', curto: 'Territórios', cor: '#16a085', k: 4, fase: 2, modelos: URB, circular: true,
-    rua: [[212, -216], [108, -216], [108, -108], [-270, -108], [-270, -270], [-324, -270], [-324, 54], [-108, 54], [270, 54], [270, 324], [324, 324], [324, -216], [212, -216]],
+    rua: [[200, -216], [108, -216], [108, -108], [-270, -108], [-270, -270], [-324, -270], [-324, 54], [-108, 54], [270, 54], [270, 324], [324, 324], [324, -216], [200, -216]],
     paradas: [ROD, [-297, -270, 'Praça do Território (NO)', 'o'], [-324, -100, 'Zona Oeste', 's'], [-162, 54, 'Território Oeste', 'l'], [297, 324, 'Praça do Território (SE)', 'l'], [324, 0, 'Zona Leste', 'n']] },
   // favelas: circulares que saem do centro de cada cidade vizinha e sobem o morro
   // saem da mini rodoviária de cada cidade (onde o intermunicipal da Metrópole para), dão a volta no morro e
@@ -11204,8 +11216,10 @@ let paradasMontadas = false, minhaVolta = null, placasRodo = [];
 // comprimento de cada ônibus (o articulado tem 18,6 m): a fila e a espera nos pontos usam o tamanho de verdade
 const COMP_ONIBUS = (mod) => (mod === 'onibus_articulado' ? 18.6 : /^onibus_(executivo2|dois_andares|brasilsul|viacao)$/.test(mod) ? 14 : mod === 'onibus_amarelo' ? 12.5 : 12);
 const passoFila = (L) => (L.passoFila ??= Math.max(...L.modelos.map(COMP_ONIBUS)) + 2);
+const folgaFila = (L) => Math.max(0, passoFila(L) - 14);   // a vaga da fila fica a 13 m da plataforma: ônibus compridos recuam
 // cada vão da rodoviária cabe dois ônibus (plataforma + fila). O terceiro espera fora, na "fila imaginária": no
 // próprio caminho, antes de chegar perto da rodoviária (a 22 m dela), sem parar na rua por onde os outros entram
+const SAIDA_RODO = { dono: null, t: -1e9 };   // quem está saindo das plataformas agora
 function esperaFora(L) {
   if (L.sEspera !== undefined) return L.sEspera;
   let s2 = L.sFila - passoFila(L);
@@ -11667,7 +11681,11 @@ function andarPatio(L, m, chB, st, t, dt, eu) {
   }
   // saindo: até a boca da plataforma; aí volta para o horário da linha (o atraso acompanha o tempo que esperou)
   const q = pontoNoCaminho(P.pts, P.ac, P.d);
-  if (livre(q)) P.d += Math.min(7, 2 + P.d * 0.5) * dt;
+  // antes de pôr o bico na rua de baixo (x = 162), espera ela ficar livre: quem vem pela rua tem a vez
+  // (antes o ônibus do pátio e o da Linha 2 se encontravam na esquina e um ficava dentro do outro)
+  const naRua = P.d > P.ac[1] - 1.5;
+  const ruaOcupada = !naRua && P.d >= P.ac[1] - 3 && onibusNpc.some((o) => o.vivo && o.mesh !== eu && o.chB !== chB && !o.e?.patio && ((o.z < -265.5 && Math.hypot(o.x - 162, o.z + 271) < 20) || (o.z < -263 && o.z > -278 && o.x > 140 && o.x < 226)));   // só quem está na rua (não os do pátio)
+  if (!ruaOcupada && livre(q)) P.d += Math.min(7, 2 + P.d * 0.5) * dt;
   if (P.d >= P.ac[P.ac.length - 1]) {
     const alvo = sBocaPlataforma(L);
     let lo = 0, hi = st.atraso;   // menor atraso que ainda deixa o ônibus antes da boca
@@ -11741,14 +11759,24 @@ function atualizarOnibus(dt) {
           let nq = 0; for (const [k2, s2] of estadoBus) if (k2 !== chB && k2.startsWith(L.id + '.') && s2.filaAtiva) nq++;
           const jaDentro = st.mAnt === m && st.sAnt !== undefined && st.sAnt > esperaFora(L) + 0.5;   // já tinha passado do ponto de espera: não volta de ré
           if (nq >= 1 && !jaDentro && !st.patio && e.s >= esperaFora(L) - 0.5 && !saidasOcupadas.has(`${L.id}.${m}`) && entrarPatio(L, m, chB, st, pontoCaminho(L, esperaFora(L)))) st.atraso += dt;
-          const lim = nq >= 1 && !jaDentro ? Math.min(L.sFila - passoFila(L) * nq, esperaFora(L)) : L.sFila - passoFila(L) * nq;   // vão cheio (2): espera fora
-          if (e.s > lim) { st.atraso += dt; e = { ...e, s: Math.max(lim, 0), parado: true, chegando: true }; }
+          const lim = nq >= 1 && !jaDentro ? Math.min(L.sFila - folgaFila(L) - passoFila(L) * nq, esperaFora(L)) : L.sFila - folgaFila(L) - passoFila(L) * nq;   // vão cheio (2): espera fora
+          if (e.s > lim) {
+            st.atraso += dt; let sl = Math.max(lim, 0);
+            const cpb = COMP_ONIBUS(modeloSaida(L, m));
+            for (let i = 0; i < 6; i++) {   // vaga ocupada por ônibus de outra linha: espera atrás dele
+              const qq = pontoCaminho(L, sl);
+              if (!onibusNpc.some((o) => o.vivo && o.chB !== chB && o.L !== L && retangulosBatem(qq.x, qq.z, qq.ang, cpb / 2, o.x, o.z, o.ang, o.comp / 2))) break;
+              sl = Math.max(0, sl - passoFila(L));
+            }
+            if (st.sAnt !== undefined && st.mAnt === m && sl > st.sAnt) sl = Math.min(sl, st.sAnt + 7 * dt);   // avança andando (sem pular para a frente)
+            e = { ...e, s: sl, parado: true, chegando: true };
+          }
         }
         if (e.baia) { if (pl.baia) { e = { s: L.sFila, fila: true, parado: true }; st.atraso += dt; } else pl.baia = true; }   // segura na fila (o horário dele espera)
         if (e.fila) {
           st.filaDesde ??= t; let idx = 0;
           for (const [k2, s2] of estadoBus) if (k2 !== chB && k2.startsWith(L.id + '.') && s2.filaDesde !== undefined && s2.filaAtiva && (s2.filaDesde < st.filaDesde || (s2.filaDesde === st.filaDesde && k2 < chB))) idx++;
-          e = { ...e, s: L.sFila - passoFila(L) * idx }; st.filaAtiva = true; pl.fila++;
+          e = { ...e, s: L.sFila - folgaFila(L) - passoFila(L) * idx }; st.filaAtiva = true; pl.fila++;   // ônibus de 14 m ou articulado: a vaga da fila recua (não encosta no da plataforma)
         } else { st.filaDesde = undefined; st.filaAtiva = false; }
       }
       // fila e plataforma: anda até a posição nova devagar (sem pular de lugar)
@@ -11765,6 +11793,14 @@ function atualizarOnibus(dt) {
         if (e.s > lim + 0.005) { e = segurarAte(L, m, t, st, lim) || e; q = pontoCaminho(L, e.s); }
       }
       // saindo da rodoviária: espera a rua ficar livre antes de pôr o bico para fora (quem vem pela rua tem a vez)
+      // e a saída é de um por vez: enquanto um ônibus não terminou de sair (35 m), os outros esperam na plataforma
+      // (antes saíam juntos de plataformas vizinhas e se embolavam na esquina)
+      if (!L.circular && e.rota && !e.fila && !e.baia && e.s < 35) {
+        const sa = st.mAnt === m ? st.sAnt : undefined, d = SAIDA_RODO.dono;
+        const outro = d && d !== chB && t - SAIDA_RODO.t < 0.6;
+        if (outro && (sa === undefined || sa < 2)) { const alvo = sa !== undefined ? Math.max(0.3, sa) : 0.3; if (e.s > alvo) { e = segurarAte(L, m, t, st, alvo) || e; q = pontoCaminho(L, e.s); } }
+        else if (e.s > 0.35 && (!outro || d === chB)) { SAIDA_RODO.dono = chB; SAIDA_RODO.t = t; }
+      }
       if (!L.circular && e.rota && !e.fila && !e.baia && e.s < 9) {
         const sa = st.mAnt === m ? st.sAnt : undefined, X = pontoCaminho(L, 9);
         const vem = onibusNpc.some((o) => o.vivo && o.chB !== chB && Math.hypot(o.x - X.x, o.z - X.z) < 25 && o.e?.rota && !o.e.parado && (o.L.circular || (o.e.s >= 12 && o.e.s < o.L.sFila - 60)));   // só quem está andando na rua (não quem está na plataforma ou na fila)
@@ -11776,7 +11812,7 @@ function atualizarOnibus(dt) {
       const sAnt = st.mAnt === m ? st.sAnt : undefined;
       if (e.rota && !e.fila && !e.baia && sAnt !== undefined && e.s > sAnt) {
         const cp = COMP_ONIBUS(modeloSaida(L, m));
-        const encosta = (qq) => { const fx = Math.sin(qq.ang), fz = Math.cos(qq.ang); return onibusNpc.some((o) => {
+        const encosta = (qq) => { const fx = Math.sin(qq.ang), fz = Math.cos(qq.ang); return onibusNpc.filter((o) => {
           if (!o.vivo || o.chB === chB || Math.cos(o.ang - qq.ang) < 0.5) return false;
           const dx = o.x - qq.x, dz = o.z - qq.z, d = dx * fx + dz * fz;
           return Math.abs(dx * fz - dz * fx) < 2.2 && d < (cp + o.comp) / 2 + 1.5 && (d > 0.3 || (d > -0.3 && o.chB < chB));
@@ -11785,13 +11821,18 @@ function atualizarOnibus(dt) {
         // direção. Só não avança se o passo novo encostaria em alguém (se já estavam encostados, deixa separar).
         // Quem está saindo da plataforma também deixa passar quem está chegando (olha 12 m à frente de quem chega)
         const perto = naRodoviaria(q.x, q.z, 30), saindo = !L.circular && e.s < 30;
-        const cruza = (qq) => perto && onibusNpc.some((o) => {
+        const cruza = (qq) => !perto ? [] : onibusNpc.filter((o) => {
           if (!o.vivo || o.chB === chB || Math.abs(o.x - qq.x) + Math.abs(o.z - qq.z) > 40) return false;
           if (retangulosBatem(qq.x, qq.z, qq.ang, cp / 2, o.x, o.z, o.ang, o.comp / 2)) return true;
           const chega = o.e?.rota && !o.e.parado && !o.L.circular && o.e.s > o.L.sFila - 70;
+          if (o.e?.patio && !o.e.parado && retangulosBatem(qq.x, qq.z, qq.ang, cp / 2, o.x + Math.sin(o.ang) * 6, o.z + Math.cos(o.ang) * 6, o.ang, o.comp / 2 + 6)) return true;   // quem sai do pátio já está na rua: deixa passar
           return saindo && chega && retangulosBatem(qq.x, qq.z, qq.ang, cp / 2, o.x + Math.sin(o.ang) * 8, o.z + Math.cos(o.ang) * 8, o.ang, o.comp / 2 + 8);
         });
-        if ((encosta(q) && !encosta(pontoCaminho(L, sAnt))) || (cruza(q) && !cruza(pontoCaminho(L, sAnt)))) {
+        // encostaria em alguém: só anda se já estava encostado nele E o passo afasta os dois (antes, quem já estava
+        // encostado podia avançar à vontade e entrava de vez dentro do outro)
+        const qa = pontoCaminho(L, sAnt), novos = [...encosta(q), ...cruza(q)], antes = new Set([...encosta(qa), ...cruza(qa)]);
+        const afasta = (o) => antes.has(o) && Math.hypot(o.x - q.x, o.z - q.z) >= Math.hypot(o.x - qa.x, o.z - qa.z) - 0.01;
+        if (novos.length && !novos.every(afasta)) {
           if (e.chegando) e = { ...e, s: sAnt };
           else {   // procura o atraso que deixa o ônibus no mesmo lugar do quadro anterior
             let lo = st.atraso, hi = st.atraso + 8;
