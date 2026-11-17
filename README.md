@@ -1593,3 +1593,8 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - O ônibus que sai do pátio espera a rua de baixo ficar livre, e quem vem pela rua deixa passar quem já saiu.
   - A vaga da fila do vão recua para ônibus de 14 m e articulados.
   - As circulares partem e chegam em x = 200 (antes 212, colado na esquina x = 216).
+- **Tela de apagado e preso + Beta (16au)**:
+  - **Ao morrer:** câmera lenta, imagem cinza e escura nas bordas, **APAGADO** em vermelho e som próprio (whoosh, estrondo grave e zumbido). O resto do jogo abaixa enquanto toca.
+  - **Ao ser preso:** **EM CANA** em azul, com a sirene enviada pelo dono (Pixabay) metalizada e uma porta de ferro batendo. O jogador vai para a cela na pancada.
+  - Fonte Bangers (licença OFL, assets/fontes, com o texto da licença). Sons em assets/sons/apagado.mp3 e em_cana.mp3 (sons.tocarTela).
+  - **Selo BETA** na tela de entrada, na de personagem e na de abertura, mais no título da aba e na versão.

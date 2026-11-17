@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#1b1f2a">
-<title>Fator RP</title>
+<title>Fator RP (Beta)</title>
 <style>
   :root { --bg:#1b1f2a; --painel:rgba(20,24,34,.86); --borda:rgba(255,255,255,.12); --texto:#f1ede4; --suave:#a9b0bd; --destaque:#f2a33a; --verde:#5cc28a; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -260,6 +260,16 @@
   #chatLog div { background:rgba(10,13,19,.62); border-radius:8px; padding:3px 8px; font-size:12.5px; color:#e8edf5; transition:opacity 1s; word-wrap:break-word; }
   #chatLog div b { color:#9fd0ff; }
   #chatLog div.tocavel { pointer-events:auto; cursor:pointer; }
+  .seloBeta { display:block; width:max-content; margin:-6px auto 8px; padding:3px 12px; border-radius:999px; background:#f2c230; color:#1b1f27; font:800 12px/1.3 system-ui,sans-serif; letter-spacing:.12em; box-shadow:0 2px 8px rgba(0,0,0,.35); }
+  .seloBeta small { font-weight:600; letter-spacing:0; opacity:.8; }
+  .topoBeta { position:absolute; top:calc(env(safe-area-inset-top,0px) + 8px); right:10px; z-index:3; margin:0; }
+  @font-face { font-family:'Bangers'; src:url(assets/fontes/Bangers-Regular.ttf) format('truetype'); font-display:swap; }
+  #telaFim { position:fixed; inset:0; z-index:40; pointer-events:none; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .5s; background:radial-gradient(ellipse at center, rgba(0,0,0,0) 35%, rgba(0,0,0,.75) 100%); }
+  #telaFim.on { opacity:1; }
+  #telaFim b { font:400 clamp(64px,19vw,170px)/1 'Bangers',Impact,sans-serif; letter-spacing:.04em; -webkit-text-stroke:3px #000; paint-order:stroke fill; text-shadow:0 6px 0 #000, 0 0 30px rgba(0,0,0,.8); transform:scale(1.8); opacity:0; transition:transform .35s cubic-bezier(.2,1.6,.4,1), opacity .2s; }
+  #telaFim.texto b { transform:scale(1); opacity:1; }
+  #telaFim.apagado b { color:#d4232f; }
+  #telaFim.emcana b { color:#3d8bff; }
   .classif { display:flex; gap:10px; align-items:center; margin:14px 0 4px; text-align:left; font-size:13px; color:#dfe6ef; }
   .classif small { color:#9aa7b8; font-size:11.5px; }
   .selo16 { flex:none; width:38px; height:38px; border-radius:7px; background:#e8781c; color:#fff; font:800 19px/38px system-ui,sans-serif; text-align:center; }
@@ -305,33 +315,33 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261116at",
-  "./js/mundo.js": "./js/mundo.js?v=20261116at",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261116at",
-  "./js/cla.js": "./js/cla.js?v=20261116at",
-  "./js/config.js": "./js/config.js?v=20261116at",
-  "./js/empresa.js": "./js/empresa.js?v=20261116at",
-  "./js/loja.js": "./js/loja.js?v=20261116at",
-  "./js/painel.js": "./js/painel.js?v=20261116at",
-  "./js/rede.js": "./js/rede.js?v=20261116at",
-  "./js/sedes.js": "./js/sedes.js?v=20261116at",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261116at",
-  "./js/civico.js": "./js/civico.js?v=20261116at",
-  "./js/ovni.js": "./js/ovni.js?v=20261116at",
-  "./js/jato.js": "./js/jato.js?v=20261116at",
-  "./js/governo.js": "./js/governo.js?v=20261116at",
-  "./js/servicos.js": "./js/servicos.js?v=20261116at",
-  "./js/sons.js": "./js/sons.js?v=20261116at",
-  "./js/voz.js": "./js/voz.js?v=20261116at",
-  "./js/clima.js": "./js/clima.js?v=20261116at",
-  "./js/ceu.js": "./js/ceu.js?v=20261116at",
-  "./js/semaforos.js": "./js/semaforos.js?v=20261116at",
-  "./js/cabine.js": "./js/cabine.js?v=20261116at",
-  "./js/eixos.js": "./js/eixos.js?v=20261116at",
-  "./js/racoes.js": "./js/racoes.js?v=20261116at",
-  "./js/jornal.js": "./js/jornal.js?v=20261116at",
-  "./js/visual.js": "./js/visual.js?v=20261116at",
-  "./js/tutorial.js": "./js/tutorial.js?v=20261116at"
+  "./js/main.js": "./js/main.js?v=20261117au",
+  "./js/mundo.js": "./js/mundo.js?v=20261117au",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261117au",
+  "./js/cla.js": "./js/cla.js?v=20261117au",
+  "./js/config.js": "./js/config.js?v=20261117au",
+  "./js/empresa.js": "./js/empresa.js?v=20261117au",
+  "./js/loja.js": "./js/loja.js?v=20261117au",
+  "./js/painel.js": "./js/painel.js?v=20261117au",
+  "./js/rede.js": "./js/rede.js?v=20261117au",
+  "./js/sedes.js": "./js/sedes.js?v=20261117au",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261117au",
+  "./js/civico.js": "./js/civico.js?v=20261117au",
+  "./js/ovni.js": "./js/ovni.js?v=20261117au",
+  "./js/jato.js": "./js/jato.js?v=20261117au",
+  "./js/governo.js": "./js/governo.js?v=20261117au",
+  "./js/servicos.js": "./js/servicos.js?v=20261117au",
+  "./js/sons.js": "./js/sons.js?v=20261117au",
+  "./js/voz.js": "./js/voz.js?v=20261117au",
+  "./js/clima.js": "./js/clima.js?v=20261117au",
+  "./js/ceu.js": "./js/ceu.js?v=20261117au",
+  "./js/semaforos.js": "./js/semaforos.js?v=20261117au",
+  "./js/cabine.js": "./js/cabine.js?v=20261117au",
+  "./js/eixos.js": "./js/eixos.js?v=20261117au",
+  "./js/racoes.js": "./js/racoes.js?v=20261117au",
+  "./js/jornal.js": "./js/jornal.js?v=20261117au",
+  "./js/visual.js": "./js/visual.js?v=20261117au",
+  "./js/tutorial.js": "./js/tutorial.js?v=20261117au"
 } }
 </script>
 </head>
@@ -341,6 +351,7 @@
 <section id="login">
   <div class="cartao">
     <img class="logoJogo" src="assets/telas/logo.webp" alt="Fator RP">
+    <span class="seloBeta">BETA <small>· versão de testes</small></span>
     <p class="sub">Entre na sua conta ou crie uma nova.</p>
     <input id="email" type="email" placeholder="E-mail" autocomplete="email">
     <input id="senha" type="password" placeholder="Senha (mínimo 6 caracteres)" autocomplete="current-password">
@@ -364,6 +375,7 @@
 
 <section id="escolha" class="oculto">
   <img class="logoJogo" src="assets/telas/logo.webp" alt="Fator RP">
+  <span class="seloBeta">BETA</span>
   <p class="sub">Escolha seu personagem e o nome que a cidade vai conhecer. O nome não pode ser repetido.</p>
   <div class="grade" id="grade"></div>
 </section>
@@ -383,6 +395,7 @@
   <div class="cena" style="background-image:url(assets/telas/c5.webp)" data-txt="🌃 A cidade à noite"></div>
   <div class="veu"></div>
   <img class="topoLogo" src="assets/telas/logo.webp" alt="Fator RP">
+  <span class="seloBeta topoBeta">BETA</span>
   <div class="frente">
     <div class="legenda" id="legendaCena"></div>
     <div>Carregando a cidade…</div>
@@ -529,7 +542,8 @@
 </div>
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">versão 16/11 · árvores, grama e ruas (16at)</div>
+<div id="telaFim"><b></b></div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 17/11 · tela de apagado e preso (16au)</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

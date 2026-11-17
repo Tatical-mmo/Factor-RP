@@ -5967,6 +5967,7 @@ async function morrerLocal(pd = false) {
   if (j.carregando) { scene.remove(j.carregando); j.carregando = null; }
   j.avatar.tocar('death', { umaVez: true, velocidade: 1, fade: 0.1 });
   j.trava = 5;
+  telaFim('morte');
   const quem = remotos.get(j.ultimoAgressor)?.meta.nome;
   if (pd) {   // arma dourada: ninguém socorre; 7 s depois acorda no cemitério
     rede.combate.morrer(j.ultimoAgressor || null).catch(() => {});
@@ -7555,7 +7556,8 @@ function aplicarPerfil(novo) {
   if (novo.pena_seg > 0 && !(antigo.pena_seg > 0)) {
     jogador.pena = novo.pena_seg; jogador.sincPena = 10;
     if (jogador.armado) alternarArmaForcado(false);
-    if (cadeia) teleportar(cadeia.x, cadeia.z);
+    telaFim('preso');
+    if (cadeia) setTimeout(() => { if (jogador.pena > 0) teleportar(cadeia.x, cadeia.z); }, 1100);   // vai para a cela na pancada da porta
     aviso(`Você foi preso por ${formatarTempo(novo.pena_seg)}.`, 4);
   } else if (!(novo.pena_seg > 0) && jogador.pena > 0) solto();
   if (typeof novo.fome === 'number' && novo.fome > jogador.fome + 1) { jogador.fome = novo.fome; desenharFome(); }
@@ -8230,8 +8232,26 @@ function quadro() {
     if (performance.now() - ultimoErroQuadro > 20000) { ultimoErroQuadro = performance.now(); try { aviso(`⚠️ Erro no jogo (mande print): ${String(e?.message || e).slice(0, 120)}`, 6); } catch { /* sem aviso */ } }
   }
 }
+// Tela de APAGADO (morte) / EM CANA (prisão): câmera lenta, imagem cinza e escura nas bordas, texto grande e som próprio
+let telaFimT0 = 0;
+function telaFim(tipo) {
+  const el = $('telaFim'); if (!el) return;
+  const agora = performance.now(); if (agora - telaFimT0 < 4000) return;   // não repete se as duas coisas vierem juntas
+  telaFimT0 = agora;
+  el.className = tipo === 'preso' ? 'emcana' : 'apagado'; el.querySelector('b').textContent = tipo === 'preso' ? 'EM CANA' : 'APAGADO';
+  void el.offsetWidth; el.classList.add('on');
+  const cv = renderer.domElement; cv.style.transition = 'filter .6s'; cv.style.filter = 'grayscale(1) contrast(1.15) brightness(.75)';
+  sons.tocarTela(tipo === 'preso' ? 'em_cana' : 'apagado', 3.2);
+  setTimeout(() => el.classList.add('texto'), tipo === 'preso' ? 1000 : 700);   // o texto entra junto com a pancada do som
+  setTimeout(() => { el.classList.remove('on', 'texto'); cv.style.filter = ''; }, 3800);
+}
+// câmera lenta nos primeiros segundos da tela (só o andar das coisas; o resto do jogo segue o relógio do servidor)
+function camLenta() {
+  const t = (performance.now() - telaFimT0) / 1000;
+  return t < 1.6 ? 0.3 : t < 2.6 ? 0.3 + (t - 1.6) * 0.7 : 1;
+}
 function quadroJogo() {
-  const dt = Math.min(relogio.getDelta(), 0.05);
+  const dt = Math.min(relogio.getDelta(), 0.05) * camLenta();
   diag('céu/clima');
   eixos.restaurar();   // a lógica do quadro usa a posição de sempre; o desenho das curvas volta no fim
   ferrovia.atualizar(agoraServidor() / 1000);

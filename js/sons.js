@@ -6,7 +6,7 @@
 
 const ARQUIVOS = ['sirene_bombeiros', 'sirene_ambulancia', 'sirene_policia', 'helicoptero_baixo', 'helicoptero_alto',
   'buzina_trem', 'trem_andando', 'robo_conversando', 'tiro',
-  'carro_partida', 'passaros', 'explosao_carro', 'explosao_grande', 'explosao_longe', 'explosao_agua', 'corvo', 'corvos'];
+  'carro_partida', 'passaros', 'explosao_carro', 'explosao_grande', 'explosao_longe', 'explosao_agua', 'corvo', 'corvos', 'apagado', 'em_cana'];
 const SOB_DEMANDA = ['onibus_viagem', 'cidade_ambiente', 'chuva', 'tempestade', 'nevasca', 'aviao_fora', 'aviao_dentro', 'aviao_pequeno', 'aviao_medio', 'onibus_grande', 'onibus_pequeno',
   // motores novos (laços de marcha lenta e de rotação alta), baixados quando tocam pela primeira vez
   ...['classico', 'popular', 'esportivo', 'presidencial', 'suv', 'jipe', 'van', 'caminhao', 'onibus', 'aviaoG', 'aviaoM', 'aviaoP'].flatMap((p) => [`${p}_lenta`, `${p}_alto`])];
@@ -48,6 +48,15 @@ export function alternar() {
   iniciarAudio();
   if (mestre) mestre.gain.value = ligado ? 0.8 : 0;
   return ligado;
+}
+// som da tela de APAGADO / EM CANA: toca cheio e abaixa o resto do jogo por alguns segundos
+export function tocarTela(nome, seg = 3.5) {
+  if (!ac || !ligado) return;
+  if (!buffers[nome]) { carregar(nome); return; }
+  const src = ac.createBufferSource(), g = ac.createGain(), t = ac.currentTime;
+  src.buffer = buffers[nome]; g.gain.value = 1; src.connect(g); g.connect(ac.destination); src.start();
+  mestre.gain.cancelScheduledValues(t); mestre.gain.setValueAtTime(mestre.gain.value, t);
+  mestre.gain.linearRampToValueAtTime(0.18, t + 0.3); mestre.gain.setValueAtTime(0.18, t + seg); mestre.gain.linearRampToValueAtTime(ligado ? 0.8 : 0, t + seg + 1.2);
 }
 // efeito único; dist em metros (som some a partir de "raio")
 export function tocar(nome, { vol = 1, dist = 0, raio = 60, velocidade = 1 } = {}) {
