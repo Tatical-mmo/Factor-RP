@@ -1642,3 +1642,9 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - O caminhão roubado usa o mesmo modelo, escurecido e sujo. O `caminhao_danificado.glb` deixou de ser carregado.
   - A cabine do motorista (olho e capô) foi medida de novo para o modelo.
   - O baú liso vai receber a lona com a logo de cada empresa na próxima etapa.
+- **Refletores nas bases, estrelas e polícia humana (16be)**:
+  - **Refletores tipo estádio:** torres de 22 m no Quartel (4), na Base Aérea (6) e na Base Naval (6), em `montarRefletores`/`atualizarRefletores`. Ao escurecer, as lâmpadas acendem, aparece um facho leve e uma poça de luz no chão (aditiva, sem luz de verdade, para não pesar no celular). Longe (700 m+), as torres não são desenhadas.
+  - **Estrelas que não sumiam:** o perdão usava o relógio do jogo, limitado a 0,05 s por quadro. No celular a 12 FPS, os 30 s viravam 50 s reais e o servidor descartava o tique, então as estrelas nunca saíam. Agora usa o relógio real, com um tique a cada 25 s.
+  - **Fim dos robôs fardados:** polícia, PRF, BOPE, Exército (pátio, sentinelas, caçada, esquadra, recrutador) e Marinha viraram NPCs humanos, por `npcFardado(papel, i, arma)`. Usam rostos variados dos personagens, com colete e boné ou capacete da corporação e arma na mão. A polícia e a PRF sacam a arma só em ação (perseguindo ou revidando) e miram com a pose `mirar`.
+  - O jogador em serviço na polícia continua com o próprio personagem e a farda (antes virava o robô).
+  - O robô só ficou como fonte das animações e como boneco de luta.

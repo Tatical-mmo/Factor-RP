@@ -2702,6 +2702,7 @@ function atualizarNPCs(dt) {
       continue;
     }
     if (n.policia) {
+      if (n.av.armaNpc && !n.bope) n.av.armaNpc.visible = !!(n.hostil > 0 || n.perseguindo || n.cerco);   // saca a arma só em ação
       if (remotoAtivo(n) && !(n.caido > 0) && !n.cerco && !n.perseguindo && !(n.hostil > 0)) { mostrarRoboRemoto(n, dt); continue; }
       if (n.animRemota) { n.animRemota = null; n.av.tocar('walk', { velocidade: 0.85 }); }
       if (policiaNPCReage(n, dt)) { publicarRobo(n, dt, n.av.raiz); continue; }
@@ -3108,7 +3109,7 @@ async function iniciarJogo(perfil) {
   // um modelo faltando não pode travar o jogo: ele só fica de fora (veículos e prédios têm versão feita por código)
   const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_exercito' ? '?v=pas4' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau1' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
   const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
-  const skin = perfil.policial ? SKIN_POLICIA : id;
+  const skin = id;   // em serviço o policial continua com o próprio personagem (a farda mostra a corporação)
   const avatarP = criarAvatar(ROBOS.includes(skin) ? 'robos' : pastaJogador, skin);
   const roboP = criarAvatar('robos', 'Rusty_Scout_Bot');
   await Promise.all(carregamentos);
@@ -3281,6 +3282,7 @@ async function iniciarJogo(perfil) {
   carregarCidadeSocial().catch(() => {});
   criarPoliciaNPC();
   criarSoldadosNPC();
+  try { montarRefletores(); } catch (e) { console.warn('refletores:', e); }
   $('btFianca').onclick = async () => { try { await rede.policia.fianca(); aviso('Fiança paga. Você está livre.'); } catch (e) { aviso(e.message); } };
   iniciarPainel({
     perfil: () => jogador.perfil,
@@ -4132,8 +4134,18 @@ async function acaoCaixaPedido() {
 }
 
 // ================================================================= COMBATE (etapa 5)
-const SKIN_POLICIA = 'Rustbolt_Sentinel';
-const skinAtual = () => (jogador.perfil?.policial ? SKIN_POLICIA : jogador.perfil?.personagem);
+const skinAtual = () => jogador.perfil?.personagem;
+// NPCs fardados: gente de verdade com farda e arma na mão (os robôs não conseguiam segurar arma). O robô só
+// continua como fonte das animações e como boneco de treino.
+const ROSTOS_NPC = PERSONAGENS.map((p) => p.id).filter((id) => id !== 'Vovo');
+const NPC_FARDADOS = new Set();
+async function npcFardado(papel, i, arma) {
+  const av = await criarAvatar('personagens', ROSTOS_NPC[Math.abs(i | 0) % ROSTOS_NPC.length]);
+  carregarPecasFarda(); av.papelNpc = papel; NPC_FARDADOS.add(av);
+  try { vestir(av, papel); } catch { /* farda ainda carregando: veste depois */ }
+  if (arma) { try { av.armaNpc = novaArma(arma, av); av.armaNpc.visible = papel !== 'policia' && papel !== 'prf'; } catch { /* sem arma */ } }
+  return av;
+}
 function metaPresenca() {
   const p = jogador.perfil;
   return { mk: jogador.mascara || 0, rd: jogador.rendido ? 1 : 0, ceu: jogador.noCeu ? 1 : 0, bope: !!p.bope, invis: !!p.invisivel, som: somAtivo ? { url: somAtivo.url, txt: somAtivo.txt } : null, emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
@@ -4659,7 +4671,7 @@ function policiaNPCReage(n, dt) {
   n.av.raiz.rotation.y = suavizarAngulo(n.av.raiz.rotation.y, Math.atan2(dx, dz), dt * 8);
   // revida: corre atrás atirando (mais rápido e mais certeiro que antes)
   if (d > 9) { p.x += dx / d * 5 * dt; p.z += dz / d * 5 * dt; n.av.tocar('run', { velocidade: 1.1 }); }
-  else n.av.tocar('idle');
+  else n.av.tocar(n.av.armaNpc ? 'mirar' : 'idle');
   n.tiro -= dt;
   if (d < 26 && n.tiro <= 0) {
     n.tiro = 0.75 + Math.random() * 0.25;
@@ -5086,7 +5098,7 @@ function somAmbiente() {
 }
 
 // ---------------------------------------------------------------- NPCs se encontram e conversam
-const FALAS_ROBO = ['Bip! Tudo em ordem.', 'Ronda tranquila.', 'Algum procurado por aí?', 'Bateria em 87%.', 'Viu a viatura 3?', 'Bip bop.'];
+const FALAS_ROBO = ['Tudo em ordem por aqui.', 'Ronda tranquila.', 'Algum procurado por aí?', 'Café no fim do turno?', 'Viu a viatura 3?', 'Fica de olho na esquina.'];
 const FALAS_GENTE = ['Oi! Tudo bem?', 'Que calor hoje!', 'Viu o preço do chocolate?', 'Vou pegar o trem.', 'Ouvi uma sirene…', 'Bom dia!', 'Até mais!'];
 function atualizarConversas(dt) {
   const agora = performance.now();
@@ -5101,7 +5113,6 @@ function atualizarConversas(dt) {
           const falas = n.policia ? FALAS_ROBO : FALAS_GENTE;
           n.balao = textoSprite(falas[Math.floor(Math.random() * falas.length)], { escala: 0.5, fundo: 'rgba(255,255,255,.92)', cor: '#1a1a1a' });
           n.balao.position.y = 3.0; n.av.raiz.add(n.balao);
-          if (n.policia) sons.tocar('robo_conversando', { vol: 0.35, dist: Math.hypot(n.av.raiz.position.x - jogador.pos.x, n.av.raiz.position.z - jogador.pos.z), raio: 25 });
         }
       }
     }
@@ -6654,7 +6665,7 @@ async function criarSoldadosNPC() {
   const civis = PERSONAGENS.map((p) => p.id).sort(() => Math.random() - 0.5);
   for (const d of lista) {
     try {
-      const av = d.recruta ? await criarAvatar('personagens', civis[soldados.length % civis.length]) : await criarAvatar('robos', 'Rusty_Scout_Bot');
+      const av = d.recruta ? await criarAvatar('personagens', civis[soldados.length % civis.length]) : await npcFardado('exercito', soldados.length, 'exercito');
       const et = textoSprite(d.recruta ? 'Recruta' : 'Exército', { escala: 0.55, fundo: d.recruta ? 'rgba(90,90,90,.9)' : 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
       av.raiz.visible = false; scene.add(av.raiz);
       if (d.parado) { av.raiz.position.set(d.parado[0], 0.12, d.parado[1]); av.raiz.rotation.y = d.parado[2]; av.tocar('idle'); } else av.tocar(d.corre ? 'run' : 'walk', { velocidade: d.corre ? 1 : 0.8 });
@@ -6711,7 +6722,7 @@ async function montarEsquadra() {
   for (let k = 0; k < 2; k++) { const m = civico.modeloCarro('militar', '#ffffff'); m.visible = false; scene.add(m); esquadra.jipes.push({ obj: m }); }
   for (let k = 0; k < 4; k++) {
     try {
-      const av = await criarAvatar('robos', 'Rusty_Scout_Bot');
+      const av = await npcFardado('exercito', k + 3, 'exercito');
       const et = textoSprite('Exército', { escala: 0.55, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
       av.raiz.visible = false; scene.add(av.raiz); esquadra.soldados.push({ av });
     } catch { /* sem soldado */ }
@@ -6791,7 +6802,7 @@ async function esquadraRemota(r) {
   const e = { jipes: [], soldados: [] };
   for (let k = 0; k < 2; k++) { const m = civico.modeloCarro('militar', '#ffffff'); m.visible = false; scene.add(m); e.jipes.push(m); }
   for (let k = 0; k < 4; k++) {
-    try { const av = await criarAvatar('robos', 'Rusty_Scout_Bot'); const et = textoSprite('Exército', { escala: 0.55, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et); av.raiz.visible = false; scene.add(av.raiz); av.tocar('run', { velocidade: 1.1 }); e.soldados.push(av); } catch { /* sem soldado */ }
+    try { const av = await npcFardado('exercito', e.soldados.length + 1, 'exercito'); const et = textoSprite('Exército', { escala: 0.55, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et); av.raiz.visible = false; scene.add(av.raiz); av.tocar('run', { velocidade: 1.1 }); e.soldados.push(av); } catch { /* sem soldado */ }
   }
   r.esq = e;
 }
@@ -6817,7 +6828,7 @@ async function criarPoliciaNPC() {
     let rota = [[cx - d, cz + d], [cx + d, cz + d], [cx + d, cz - d], [cx - d, cz - d]];
     if (k % 2) rota = rota.reverse();
     try {
-      const av = await criarAvatar('robos', SKIN_POLICIA);
+      const av = await npcFardado('policia', k, 'policia');
       scene.add(av.raiz); av.tocar('walk', { velocidade: 0.85 });
       const et = textoSprite('Polícia', { escala: 0.6, fundo: 'rgba(30,70,160,.92)' }); et.position.y = 2.2; av.raiz.add(et);
       const n = { id: k < 12 ? k + 1 : 21 + (k - 12), policia: true, ordem: k, av, rota, laco: laco(rota), vel: 1.5, fase: k * 41, vida: 100, caido: 0, hostil: 0, tiro: 0 };
@@ -6831,7 +6842,7 @@ async function criarPoliciaNPC() {
     let rota = [[cx - d, cz - d], [cx + d, cz - d], [cx + d, cz + d], [cx - d, cz + d]];
     if (k % 2) rota = rota.reverse();
     try {
-      const av = await criarAvatar('robos', SKIN_POLICIA);
+      const av = await npcFardado('prf', k + 3, 'prf');
       scene.add(av.raiz); av.tocar('walk', { velocidade: 0.85 });
       const et = textoSprite('PRF', { escala: 0.6, fundo: 'rgba(20,40,90,.95)' }); et.position.y = 2.2; av.raiz.add(et);
       const n = { id: 101 + k, policia: true, prf: true, corTiro: '#3e8cff', av, rota, laco: laco(rota), vel: 1.5, fase: k * 37 + 11, vida: 100, caido: 0, hostil: 0, tiro: 0 };
@@ -7090,11 +7101,11 @@ function descerPoliciais(v) {
   const o = v.obj;
   v.perseguindo = false;
   v.pe = { t: 0, robos: [], volta: false, x: o.position.x, z: o.position.z, ang: o.rotation.y };
-  aviso('🚓 A viatura encostou: dois policiais robôs desceram e vêm atrás de você a pé!', 3.5);
+  aviso('🚓 A viatura encostou: dois policiais desceram e vêm atrás de você a pé!', 3.5);
   const rx = -Math.cos(o.rotation.y), rz = Math.sin(o.rotation.y);
   for (let k = 0; k < 2; k++) {
-    criarAvatar('robos', SKIN_POLICIA).then((av) => {
-      if (!v.pe) return;
+    npcFardado('policia', k + 7, 'policia').then((av) => {
+      if (!v.pe) return; if (av.armaNpc) av.armaNpc.visible = true;
       const lado = k ? -1 : 1, x = o.position.x + rx * 1.6 * lado, z = o.position.z + rz * 1.6 * lado;
       av.raiz.position.set(x, alturaChao(x, z), z); scene.add(av.raiz); av.tocar('run');
       const et = textoSprite('Polícia', { escala: 0.6, fundo: 'rgba(30,70,160,.92)' }); et.position.y = 2.2; av.raiz.add(et);
@@ -8467,7 +8478,7 @@ function quadroJogo() {
   atualizarMira();
   civico.atualizarQuartel(jogador.pos);
   atualizarArea51(dt); atualizarBases(dt); atualizarQuartelExtras(dt); atualizarBaseAerea(dt); atualizarMisseis(dt); avisarAlistamentos(dt); atualizarMarinha(dt);
-  atualizarPerdao(dt);
+  atualizarPerdao(dt); atualizarRefletores();
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   diag('remotos/voz');
@@ -10426,7 +10437,7 @@ function fugirDoVeiculo(x, z, ang, comp, n, robo = false) {
   for (let k = 0; k < n; k++) {
     setTimeout(async () => {
       try {
-        const av = robo ? await criarAvatar('robos', 'Rusty_Scout_Bot') : await criarAvatar('personagens', PERSONAGENS[(Math.random() * PERSONAGENS.length) | 0].id);
+        const av = robo ? await npcFardado('exercito', k, 'exercito') : await criarAvatar('personagens', PERSONAGENS[(Math.random() * PERSONAGENS.length) | 0].id);
         av.raiz.position.set(px, alturaChao(px, pz), pz); scene.add(av.raiz); av.tocar('run');
         // foge para o lado da calçada e para longe de quem está com a arma
         let ax = px - jogador.pos.x + rx * 6, az = pz - jogador.pos.z + rz * 6; const d = Math.hypot(ax, az) || 1; ax /= d; az /= d;
@@ -11218,6 +11229,11 @@ function vestiario(trabalho) {
 function atualizarUniformes() {
   seguirExpediente();
   if (jogador.avatar) { vestir(jogador.avatar, jogador.carro || jogador.passageiro ? null : jogador.farda || null); posicionarUniforme(jogador.avatar); vestirMascara(jogador.avatar, mascaraPrevia ?? jogador.mascara); }
+  for (const av of NPC_FARDADOS) {   // NPCs fardados: veste quando as peças chegam e põe a arma na mão
+    if (!av.raiz.parent) { NPC_FARDADOS.delete(av); continue; }
+    if (!av.raiz.visible || av.raiz.position.distanceTo(jogador.pos) > 70) continue;
+    vestir(av, av.papelNpc); posicionarUniforme(av); if (av.armaNpc?.visible) av.posicionarArma();
+  }
   for (const r of remotos.values()) {
     if (!r.av) continue; vestir(r.av, r.meta && 'farda' in r.meta ? r.meta.farda : fardaDe(r.meta)); posicionarUniforme(r.av);
     vestirMascara(r.av, r.meta?.mk || null);
@@ -14407,16 +14423,72 @@ function npcAbduzido(n, dt) {
   if (A.t > 180) { n.abduzido = null; r.visible = true; r.position.y = A.chao; n.av.tocar('walk', { velocidade: 0.85 }); }
 }
 
+// ================================================================= refletores das bases militares (tipo estádio)
+// Torres de 22 m nos cantos do Quartel, da Base Aérea e da Base Naval. À noite acendem: o painel de lâmpadas brilha,
+// o facho aparece de leve no ar e uma poça de luz clareia o chão (sem luz de verdade, que pesa no celular).
+const refletores = { grupos: [], mats: null };
+function texturaPocaLuz() {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,248,225,1)'); gr.addColorStop(0.45, 'rgba(255,244,215,.75)'); gr.addColorStop(0.8, 'rgba(255,240,205,.22)'); gr.addColorStop(1, 'rgba(255,240,205,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function montarRefletores() {
+  const aditivo = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false };
+  const M = refletores.mats = {
+    ferro: new THREE.MeshStandardMaterial({ color: '#8a9096', roughness: 0.6, metalness: 0.5 }),
+    caixa: new THREE.MeshStandardMaterial({ color: '#2f3338', roughness: 0.7, metalness: 0.4 }),
+    lampada: new THREE.MeshBasicMaterial({ color: '#4a4a44', toneMapped: false }),
+    facho: new THREE.MeshBasicMaterial({ color: '#fff3d6', opacity: 0, side: THREE.DoubleSide, ...aditivo }),
+    poca: new THREE.MeshBasicMaterial({ map: texturaPocaLuz(), opacity: 0, polygonOffset: true, polygonOffsetFactor: -4, ...aditivo }),
+  };
+  const H = 22, geoMastro = new THREE.CylinderGeometry(0.22, 0.38, H, 8), geoLamp = new THREE.BoxGeometry(0.85, 0.85, 0.12);
+  const geoFacho = new THREE.CylinderGeometry(0.12, 1, 1, 16, 1, true).translate(0, -0.5, 0), geoPoca = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2);
+  const torre = (g, x, z, cx, cz) => {
+    const y0 = alturaChao(x, z), m = new THREE.Mesh(geoMastro, M.ferro); m.position.set(x, y0 + H / 2, z); m.castShadow = true; g.add(m);
+    colisores.push({ tipo: 'caixa', x0: x - 0.5, x1: x + 0.5, z0: z - 0.5, z1: z + 0.5 });
+    // mira: um ponto entre a torre e o meio da base
+    const ax = x + (cx - x) * 0.42, az = z + (cz - z) * 0.42, ay = alturaChao(ax, az), ang = Math.atan2(ax - x, az - z);
+    const cab = new THREE.Group(); cab.position.set(x, y0 + H, z); cab.rotation.y = ang; g.add(cab);
+    const fundo = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.3, 0.4), M.caixa); fundo.rotation.x = 0.55; cab.add(fundo);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) {   // 8 lâmpadas viradas para o pátio
+      const l = new THREE.Mesh(geoLamp, M.lampada); l.position.set(-1.5 + i, 0.5 - j, 0.27); fundo.add(l);
+    }
+    const d = Math.hypot(ax - x, az - z, y0 + H - ay), r = Math.max(14, d * 0.55);
+    const f = new THREE.Mesh(geoFacho, M.facho); f.position.set(x, y0 + H - 0.5, z);   // cone do refletor até o chão
+    f.scale.set(r * 0.8, d, r * 0.8); f.lookAt(ax, ay, az); f.rotateX(-Math.PI / 2); g.add(f);
+    const p = new THREE.Mesh(geoPoca, M.poca); p.position.set(ax, ay + 0.06, az); p.scale.setScalar(r * 1.35); p.renderOrder = 2; g.add(p);
+  };
+  const base = (b, n) => {   // n torres de cada lado comprido (x), 6 m para dentro do muro
+    const g = new THREE.Group(); scene.add(g);
+    const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
+    for (const z of [b.z0 + 6, b.z1 - 6]) for (let k = 0; k < n; k++) torre(g, b.x0 + 6 + (b.x1 - b.x0 - 12) * (n > 1 ? k / (n - 1) : 0.5), z, cx, cz);
+    refletores.grupos.push({ g, cx, cz });
+  };
+  base(mundo.QUARTEL, 2); base(mundo.BASE_AEREA, 3); base(mundo.BASE_NAVAL, 3);
+}
+function atualizarRefletores() {
+  const M = refletores.mats; if (!M) return;
+  const n = THREE.MathUtils.clamp((noiteAtual - 0.25) / 0.45, 0, 1);   // acende ao escurecer
+  M.lampada.color.setRGB(0.29 + 0.71 * n, 0.29 + 0.71 * n, 0.27 + 0.6 * n);
+  M.facho.opacity = 0.028 * n; M.poca.opacity = 0.85 * n;
+  for (const R of refletores.grupos) R.g.visible = Math.hypot(jogador.pos.x - R.cx, jogador.pos.z - R.cz) < 700;
+}
+
 // ================================================================= estrelas e perdão automático
 // 1 crime = 1 estrela (no máximo 5). Online, sem perseguição e fora da cadeia: até 3 estrelas some 1 a cada
 // 5 min; acima de 3, 20 min por estrela. A conta é no servidor (perdao_tick, a cada 30 s).
 function estrelas(n, html = false) { const k = Math.max(0, Math.min(5, Number(n) || 0)); return !k ? '' : html ? '★'.repeat(k) + '<span style="opacity:.3">' + '★'.repeat(5 - k) + '</span>' : '★'.repeat(k); }
-let tPerdao = 5, perdaoInfo = null, tPerdaoTxt = 0;
+let tPerdao = 0, perdaoInfo = null, tPerdaoTxt = 0;
 function atualizarPerdao(dt) {
   const p = jogador.perfil; if (!p || !conectado) return;
   if ((p.crimes || 0) <= 0) { perdaoInfo = null; return; }
-  if ((tPerdao -= dt) <= 0) {
-    tPerdao = 30;
+  // relógio de verdade (não o dt do jogo, que é limitado a 0,05 s por quadro: no celular a 12 FPS os 30 s viravam
+  // 50 s reais e o servidor descartava o tique, então as estrelas nunca sumiam)
+  const agoraP = performance.now();
+  if (agoraP >= tPerdao) {
+    tPerdao = agoraP + 25000;
     const perseguido = !!(opBope && opBope.fase !== 'alerta') || npcs.some((n) => n.policia && (n.perseguindo || n.cerco)) || !!jogador.algemado || jogador.pena > 0;
     rede.crime.perdaoTick(perseguido).then((r) => {
       if (!r) return;
@@ -14482,7 +14554,7 @@ function gerarPostos(B, n) {
 }
 async function criarGuarda(B, d, idx) {
   try {
-    const av = await criarAvatar('robos', 'Rusty_Scout_Bot');
+    const av = await npcFardado('exercito', idx + 4, 'exercito');
     if (idx >= B.pedidos) return;   // o número diminuiu enquanto carregava
     const et = textoSprite(B.rotulo || 'Exército', { escala: 0.5, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
     try { av.arma = novaArma('militar', av); } catch { /* sem arma */ }
@@ -14631,7 +14703,7 @@ function montarQuartelExtras() {
   cx(new THREE.BoxGeometry(3, 0.9, 0.6), M('#4b5238')).position.set(G.x, 0.45, G.z - 0.6);
   colisores.push({ tipo: 'caixa', x0: G.x - 2.3, x1: G.x + 2.3, z0: G.z - 0.3, z1: G.z + 3.2 });
   const pl = textoSprite('🎖️ Alistamento do Exército', { escala: 0.6, fundo: 'rgba(52,62,34,.94)' }); pl.position.set(G.x, 4.2, G.z); g.add(pl);
-  criarAvatar('robos', 'Rusty_Scout_Bot').then((av) => { av.raiz.position.set(G.x, alturaChao(G.x, G.z), G.z + 0.6); av.raiz.rotation.y = Math.PI; scene.add(av.raiz); av.tocar('idle'); quartelExtras.recrutador = av; }).catch(() => {});
+  npcFardado('exercito', 9, null).then((av) => { av.raiz.position.set(G.x, alturaChao(G.x, G.z), G.z + 0.6); av.raiz.rotation.y = Math.PI; scene.add(av.raiz); av.tocar('idle'); quartelExtras.recrutador = av; }).catch(() => {});
   const baterias = [[243, 1003], [160, 1001]].map(([x, z]) => criarBateria(g, x, z));
   quartelExtras = { g, portao, braco, recrutador: null };
   registrarBase({ id: 'quartel', nome: 'Quartel do Exército', rect: Q, aviso: 22, tiro: 10, acesso: () => militar(), acessoAr: () => militar(),
@@ -15235,8 +15307,7 @@ function montarNavios() {
 async function criarGuardasNavio(n, k) {
   for (let i = 0; i < k; i++) {
     try {
-      const av = await criarAvatar('robos', 'Rusty_Scout_Bot'); const et = textoSprite('Marinha', { escala: 0.5, fundo: 'rgba(24,52,96,.95)' }); et.position.y = 2.2; av.raiz.add(et);
-      try { av.arma = novaArma('militar', av); } catch { /* sem arma */ }
+      const av = await npcFardado('exercito', i + 5, 'militar'); const et = textoSprite('Marinha', { escala: 0.5, fundo: 'rgba(24,52,96,.95)' }); et.position.y = 2.2; av.raiz.add(et);
       scene.add(av.raiz); av.tocar('idle'); n.guardas.push({ av, lx: (i % 2 ? 1 : -1) * (n.id === 'porta' ? 9 : 3), lz: (i < 2 ? -0.3 : 0.3) * n.comp });
     } catch { /* sem guarda */ }
   }
@@ -16022,7 +16093,7 @@ function criarBotBope(c, op, reforco) {
   const i = op.bots.length;
   const b = { bope: true, policia: true, papel: PAPEIS_BOPE[i % 6], c, op, i, vida: 140, caido: 0, morto: false, tiro: 0.5 + Math.random(), fora: false, av: null, reforco, hostil: 0 };
   op.bots.push(b);
-  criarAvatar('robos', SKIN_POLICIA).then((av) => {
+  npcFardado('bope', i + 2, 'fuzil').then((av) => {
     if (opBope !== op || b.removido) return;
     b.av = av; av.raiz.visible = false; scene.add(av.raiz);
     const et = textoSprite('💀 BOPE', { escala: 0.55, fundo: 'rgba(8,8,8,.95)' }); et.position.y = 2.2; av.raiz.add(et);
@@ -16214,7 +16285,7 @@ function receberBope(e) {
     vistos.add(i); let g = f.bots.get(i);
     if (!g) {
       g = { av: null, alvo: null, st: -1 }; f.bots.set(i, g);
-      criarAvatar('robos', SKIN_POLICIA).then((av) => {
+      npcFardado('bope', i + 2, 'fuzil').then((av) => {
         if (!fantasmasBope.has(e.op)) return;
         g.av = av; scene.add(av.raiz); av.raiz.position.set(x, alturaChao(x, z), z);
         const et = textoSprite('💀 BOPE', { escala: 0.55, fundo: 'rgba(8,8,8,.95)' }); et.position.y = 2.2; av.raiz.add(et);
