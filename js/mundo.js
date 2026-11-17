@@ -836,11 +836,13 @@ function matrizPredio(e, h = e.h) { _m.compose(_v.set(e.x, e.y, e.z), _q.identit
 function matrizTelha(e, visivel = true) {
   _q.setFromAxisAngle(_e.set(0, 1, 0), e.rot);
   const [a, b] = e.rot ? [e.d + 0.7, e.w + 0.7] : [e.w + 0.7, e.d + 0.7];
-  _m.compose(_v.set(e.x, e.y + e.h, e.z), _q, _e.set(a, visivel ? 2.6 : 0.01, b)); return _m;
+  if (!visivel) return _m.makeScale(0, 0, 0);   // escondido de verdade: achatado (0,01) ele virava uma placa voando em cima do prédio 3D
+  _m.compose(_v.set(e.x, e.y + e.h, e.z), _q, _e.set(a, 2.6, b)); return _m;
 }
 function matrizDet(dt, visivel = true) {
   const e = edificios[dt.ed];
-  _m.compose(_v.set(e.x + dt.dx, e.y + e.h, e.z + dt.dz), _q.identity(), _e.set(dt.w, visivel ? dt.h : 0.01, dt.d)); return _m;
+  if (!visivel) return _m.makeScale(0, 0, 0);
+  _m.compose(_v.set(e.x + dt.dx, e.y + e.h, e.z + dt.dz), _q.identity(), _e.set(dt.w, dt.h, dt.d)); return _m;
 }
 
 function montarMalhas() {
