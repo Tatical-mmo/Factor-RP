@@ -428,7 +428,11 @@ export function chamarAmbulancia(chave, alvo, aoChegar, atraso = 1.5) {
   if (ex && !ex.volta) return null;
   if (ex) { ctx.scene.remove(ex.obj); npcs.delete('amb' + chave); }
   const n = novoNpc('amb' + chave, 'ambulancia', civico.HOSPITAL.vaga, alvo, atraso, 24, 4);
-  n.aoChegar = () => setTimeout(() => { aoChegar?.(); setTimeout(() => voltarNpc('amb' + chave), 2500); }, 2500);
+  // ao chegar: o socorrista desce, vai até o ferido, faz o salvamento e volta (sem ele no jogo: o jeito antigo)
+  n.aoChegar = () => {
+    if (ctx.socorrista) ctx.socorrista(n.obj, alvo, () => aoChegar?.(), () => voltarNpc('amb' + chave));
+    else setTimeout(() => { aoChegar?.(); setTimeout(() => voltarNpc('amb' + chave), 2500); }, 2500);
+  };
   return (n.rota.total / 24) + atraso + 2.5;     // segundos até o atendimento
 }
 export function cancelarAmbulancia(chave) { voltarNpc('amb' + chave); }

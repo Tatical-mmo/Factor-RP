@@ -896,7 +896,7 @@ class Avatar {
     if (this.clipes[nome]) return Promise.resolve(true);
     const g = this.gltf; if (!g || !ANIM_EXTRAS.has(nome)) return Promise.resolve(false);
     g.userData.extras ||= {};
-    g.userData.extras[nome] ||= obterBaseEmotes().then((b) => { const c = b?.animations.find((a) => a.name === nome); return c ? adaptarClipe(c, b.scene, g.scene) : null; }).catch(() => null);
+    g.userData.extras[nome] ||= obterBaseExtra(ARQ_EXTRA(nome)).then((b) => { const c = b?.animations.find((a) => a.name === nome); return c ? adaptarClipe(c, b.scene, g.scene) : null; }).catch(() => null);
     return g.userData.extras[nome].then((c) => { if (c) this.clipes[nome] = c; return !!c; });
   }
   tocar(nome, { fade = 0.2, umaVez = false, velocidade = 1 } = {}) {
@@ -965,10 +965,14 @@ const EMOTES = [
 const EMOTE_UMA_VEZ = new Set(['flexao_desce', 'flexao_sobe']);
 function terminouAnim(av, n) { const a = av.acoes[n]; return av.nomeAtual === n && a && (!a.isRunning() || a.time >= a.getClip().duration - 0.03); }
 const ANIM_EXTRAS = new Set([...GESTOS_CONVERSA, 'celular', 'flexao', 'flexao_sobe', ...EMOTES.map((e) => e.id)]);
-let baseEmotes = null;
-function obterBaseEmotes() {
-  if (!baseEmotes) baseEmotes = carregarGLB('assets/personagens/animacoes_emotes.glb?v=2').then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { baseEmotes = null; return null; });
-  return baseEmotes;
+// corridas especiais, parada brusca e socorro: outro arquivo (outro esqueleto de origem, então outra base)
+const ANIM_CORRIDA = ['corrida_fome', 'corrida_carga', 'corrida_rapida', 'corrida_rifle', 'parada', 'coletar', 'levantar_socorro'];
+for (const n of ANIM_CORRIDA) ANIM_EXTRAS.add(n);
+const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : 'assets/personagens/animacoes_emotes.glb?v=2');
+const basesExtra = new Map();
+function obterBaseExtra(arq) {
+  if (!basesExtra.has(arq)) basesExtra.set(arq, carregarGLB(arq).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { basesExtra.delete(arq); return null; }));
+  return basesExtra.get(arq);
 }
 // ninguém (jogador ou NPC) a menos de 14 m: falando na voz assim, o personagem fala ao celular
 function ninguemPerto(raio = 14) {
@@ -3207,7 +3211,7 @@ async function iniciarJogo(perfil) {
     recarregar: () => { tempoLogistica = 0; },
   });
   iniciarLogistica();
-  servicos.iniciar({ ultra: () => visual.nivelAtual() === 'ultra',
+  servicos.iniciar({ ultra: () => visual.nivelAtual() === 'ultra', socorrista: socorristaNpc,
     scene, textoSprite, altura: alturaChao, jogador: () => jogador, perfil: () => jogador.perfil, aviso, agora: agoraServidor,
     rastrear: (a) => rastrear(a), rastreio: () => rastreio, meuCla: () => jogador.cla, alcanceJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? 30 : jogador.carro?.servico === 'bombeiros' ? 16 : 10), origemJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? jogador.carro.mesh.position.clone().setY(jogador.carro.mesh.position.y - 0.4) : null), obstaculo: (x, z, a, o) => obstaculoAFrente(x, z, a, o), sinal: (x, z, a) => semaforos.sinalAFrente(x, z, a, 9), rondaPerto, posRonda, clas: () => [...clasCache.values()],
     guerrasMudaram: () => {
@@ -3329,7 +3333,7 @@ function atualizarInfo() {
 const remotos = new Map();     // id -> { meta, av, arma, alvo, anim, caixa }
 let conexao = null, online = 1, conectado = false;
 let envioTimer = 0, ultimoEnvio = null, tempoKeepAlive = 0, tempoSalvar = 15;
-const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1, flexao_desce: 1, flexao_sobe: 1 };
+const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1, flexao_desce: 1, flexao_sobe: 1, parada: 1, coletar: 1.2, levantar_socorro: 1.6 };
 const ANIM_VEL = { walk_shoot: 1.25 };
 
 function conectarMultiplayer(perfil) {
@@ -4426,7 +4430,7 @@ function acaoNoVeiculo() {
   if (c.jujuba) { const cj = contextoComprador(); if (cj) return ['comprador', cj[0], cj[1]]; }
   if (c.servico === 'helicoptero_bombeiros' && Math.abs(c.vel) < 3 && c.alt > 3 && c.alt < 40 && (servicos.estaApagando() || servicos.fogoProximo(28))) return ['jato', servicos.estaApagando() ? 'jogando água (toque para parar)' : 'jogar água do alto no fogo (+400)', 'Água'];
   if (c.servico === 'bombeiros' && Math.abs(c.vel) < 2 && (servicos.estaApagando() || servicos.fogoProximo(15))) return ['jato', servicos.estaApagando() ? 'jogando água (toque para parar)' : 'jogar água no fogo (+400)', 'Jato'];
-  if (c.servico === 'ambulancia' && Math.abs(c.vel) < 2 && feridoProximo(7)) return ['socorrer', 'socorrer o ferido (+250)', 'Socorrer'];
+  if (c.servico === 'ambulancia' && Math.abs(c.vel) < 2 && feridoProximo(7)) return ['socorrer', 'salvar o ferido (+250)', '✚ Salvar'];
   if (ehOvni(c)) { const alvo = alvoAbducao(); if (alvo) return ['abduzir', alvo.npc ? (alvo.npc.policia ? 'abduzir o policial robô' : 'abduzir o morador') : `abduzir ${alvo.r.meta?.nome || 'o jogador'} (ele não vê nada e acorda em outro lugar)`, '👽 Abduzir']; }
   return null;
 }
@@ -6072,6 +6076,7 @@ async function morrerLocal(pd = false) {
   j.avatar.tocar('death', { umaVez: true, velocidade: 1, fade: 0.1 });
   j.trava = 5;
   telaFim('morte');
+  setTimeout(() => { if (j.morto) porPoca(j, j.pos.x, j.pos.z); }, 900);
   const quem = remotos.get(j.ultimoAgressor)?.meta.nome;
   if (pd) {   // arma dourada: ninguém socorre; 7 s depois acorda no cemitério
     rede.combate.morrer(j.ultimoAgressor || null).catch(() => {});
@@ -6117,14 +6122,19 @@ function acordarNoCemiterio() {
 function medicoOnline() { return [...remotos.values()].some((r) => r.meta?.profissao === 'medico'); }
 function atendidoPeloNpc() {
   if (!jogador.morto) return;
-  levantar(60);
+  levantar(60, true);
   rede.saude.alta().then((v) => aviso(`🚑 O paramédico te atendeu. Conta do hospital: ${v} moedas.`, 4)).catch(() => aviso('🚑 O paramédico te atendeu.'));
 }
-function levantar(vida) {
+function levantar(vida, socorrido = false) {
   const j = jogador; j.renasceEm = 0; contagemMorte('');
-  clearTimeout(j.timerHospital); j.ferido = false; servicos.cancelarAmbulancia('eu');
+  clearTimeout(j.timerHospital); j.ferido = false; if (!socorrido) servicos.cancelarAmbulancia('eu');
   j.vida = vida; j.morto = false; j.trava = 0; j.ultimoAgressor = null;
-  j.avatar.tocar('idle', { fade: 0.3 }); desenharFome();
+  tirarPoca(j);
+  if (socorrido) {   // socorrido: levanta devagar com a animação (Levante-se), e só depois anda
+    j.trava = 11.4 / 1.6; j.paradaAte = performance.now() + j.trava * 1000;
+    j.avatar.garantir('levantar_socorro').then(() => j.avatar.tocar('levantar_socorro', { umaVez: true, velocidade: 1.6, fade: 0.2 }));
+  } else j.avatar.tocar('idle', { fade: 0.3 });
+  desenharFome();
   conexao?.rastrear(metaPresenca());
   if (j.presoBope) {   // abatido pelo BOPE: voltou e vai preso
     const por = j.presoBope.por; j.presoBope = null;
@@ -6140,7 +6150,7 @@ function renascer() {
 }
 function socorrido(medico) {
   if (!jogador.morto) return;
-  levantar(60);
+  levantar(60, true);
   aviso(`✚ ${medico || 'Um médico'} te socorreu! Você levantou com 60 de vida.`, 4);
 }
 function feridoProximo(raio) {
@@ -6156,12 +6166,59 @@ async function socorrerFerido(alvo) {
   if (ocupado) return; ocupado = true;
   try {
     virarPara(alvo.r.av.raiz.position.x, alvo.r.av.raiz.position.z);
-    jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 1.5, fade: 0.1 }); jogador.trava = 1.2;
+    await jogador.avatar.garantir('coletar');
+    jogador.avatar.tocar('coletar', { umaVez: true, velocidade: 1.2, fade: 0.1 }); jogador.trava = 5;
+    await new Promise((ok) => setTimeout(ok, 4200));   // o atendimento (animação de salvar)
     const v = await rede.saude.socorrer(alvo.id);
     alvo.r.meta.ferido = false; etiquetaStatus(alvo.r);
     aviso(`✚ Você socorreu ${alvo.r.meta.nome}: +${v} moedas`, 4);
   } catch (e) { aviso(e.message); }
   finally { ocupado = false; }
+}
+
+// poça de tinta embaixo de quem caiu (as armas são de paintball: não tem sangue)
+function porPoca(dono, x, z) {
+  if (dono.poca || !modelos.poca_tinta) return;
+  const p = modelos.poca_tinta.clone(true), e = 1.5 + Math.random() * 0.5;
+  p.scale.set(e, 1, e); p.rotation.y = Math.random() * 6.28; p.position.set(x, alturaChao(x, z) + 0.025, z);
+  p.traverse((o) => { if (o.isMesh) { o.receiveShadow = true; o.castShadow = false; o.renderOrder = 1; } });
+  scene.add(p); dono.poca = p;
+}
+function tirarPoca(dono) { if (dono.poca) { scene.remove(dono.poca); dono.poca = null; } }
+// marcação em cima de quem precisa de socorro (só para médicos); o NPC socorrista desce da ambulância e salva
+function marcasSocorro() {
+  const souMed = jogador.perfil?.profissao === 'medico';
+  for (const r of remotos.values()) {
+    const precisa = !!r.meta.ferido && r.av?.raiz.visible;
+    if (precisa && !r.poca && r.av) porPoca(r, r.av.raiz.position.x, r.av.raiz.position.z); else if (!precisa) tirarPoca(r);
+    if (precisa && souMed && !r.marcaSos && r.av) { r.marcaSos = rotuloSimples('✚ SALVAR', 3.6); r.marcaSos.position.y = 2.9; r.av.raiz.add(r.marcaSos); }
+    else if ((!precisa || !souMed) && r.marcaSos) { r.marcaSos.parent?.remove(r.marcaSos); r.marcaSos = null; }
+  }
+}
+const socorristas = [];
+async function socorristaNpc(amb, alvo, atender, liberar) {
+  let av = null; try { av = await criarAvatar('personagens', Math.random() < 0.5 ? 'Enfermeiro' : 'Enfermeira'); } catch { /* sem modelo: atende sem descer */ }
+  if (!av) { setTimeout(() => { atender(); setTimeout(liberar, 2500); }, 2500); return; }
+  const a = amb.rotation.y, porta = { x: amb.position.x - Math.sin(a) * 4.2, z: amb.position.z - Math.cos(a) * 4.2 };
+  av.raiz.position.set(porta.x, alturaChao(porta.x, porta.z), porta.z); scene.add(av.raiz); avataresObra.add(av);
+  av.garantir('coletar');
+  socorristas.push({ av, porta, alvo, atender, liberar, fase: 'vai', t: 0 });
+}
+function atualizarSocorristas(dt) {
+  for (let i = socorristas.length - 1; i >= 0; i--) {
+    const s = socorristas[i]; s.t += dt;
+    const p = s.av.raiz.position, alvo = s.fase === 'volta' ? s.porta : { x: s.alvo.x + 0.95, z: s.alvo.z + 0.3 };
+    const dx = alvo.x - p.x, dz = alvo.z - p.z, d = Math.hypot(dx, dz);
+    if (s.fase === 'atende') {
+      if (s.t > 6 / 1.2) { s.fase = 'volta'; s.t = 0; try { s.atender(); } catch { /* nada */ } }
+    } else if (d > 0.35 && s.t < 25) {
+      const v = Math.min(d, 3.2 * dt); p.x += dx / d * v; p.z += dz / d * v; p.y = alturaChao(p.x, p.z);
+      s.av.raiz.rotation.y = Math.atan2(dx, dz); s.av.tocar('run', { velocidade: 0.85 });
+    } else if (s.fase === 'vai') {
+      s.fase = 'atende'; s.t = 0; s.av.raiz.rotation.y = Math.atan2(s.alvo.x - p.x, s.alvo.z - p.z);
+      s.av.tocar('coletar', { umaVez: true, velocidade: 1.2, fade: 0.15 });
+    } else { scene.remove(s.av.raiz); socorristas.splice(i, 1); try { s.liberar(); } catch { /* nada */ } }
+  }
 }
 
 // ---------------------------------------------------------------- base da PRF (modelo 3D): na saída norte para a rodovia
@@ -7741,7 +7798,7 @@ function atualizarJogador(dt) {
   } else {
     let vel = 0;
     if (forca > 0.15) {
-      vel = j.carregando ? VELOCIDADE.carregando : j.armado ? VELOCIDADE.armado : correr ? VELOCIDADE.correr : VELOCIDADE.andar;
+      vel = j.carregando ? VELOCIDADE.carregando : j.armado ? (correr && turbinado() ? VELOCIDADE.correr * 0.92 : VELOCIDADE.armado) : correr ? VELOCIDADE.correr : VELOCIDADE.andar;
       if (racaoAtiva()) vel *= 1.1;
       if (joy.ativo && !correr) vel *= THREE.MathUtils.clamp(forca * 1.3, 0.5, 1);
       vel *= fatorVelocidade();
@@ -7753,13 +7810,17 @@ function atualizarJogador(dt) {
     if (j.morto) { /* fica caído */ }
     else if (vel > 0) {
       if (j.emote) { j.emote = null; }   // andou: o emote para
+      j.paradaAte = 0; j.tCorre = correr && !j.armado && !j.carregando && !j.algemado ? (j.tCorre || 0) + dt : 0;
       if (j.algemado) av.tocar('algemado_andar', { velocidade: 1 });
       else if (j.carregando) av.tocar('carry_walk', { velocidade: 1 });
-      else if (j.armado) av.tocar('walk_shoot', { velocidade: 1.25 });
-      else if (correr) av.tocar('run', { velocidade: 1 });
+      else if (j.armado) { if (correr && turbinado()) av.tocar('corrida_rifle', { velocidade: 1 }); else av.tocar('walk_shoot', { velocidade: 1.25 }); }
+      else if (correr) av.tocar(animCorrida(), { velocidade: 1 });
       else av.tocar('walk', { velocidade: vel / VELOCIDADE.andar });
     } else {
-      if (j.algemado) av.tocar('algemado');
+      if ((j.tCorre || 0) > 1.2) { j.paradaAte = performance.now() + 1700; av.tocar('parada', { umaVez: true, fade: 0.1 }); }   // vinha correndo e parou de vez
+      j.tCorre = 0;
+      if (performance.now() < (j.paradaAte || 0)) { /* termina a parada brusca */ }
+      else if (j.algemado) av.tocar('algemado');
       else if (j.carregando) av.tocar('carregar_parado');
       else if (j.armado) av.tocar('mirar');
       else if (j.emote) {
@@ -8191,7 +8252,7 @@ function contexto() {
   if (pedraPerto()) return ['pegar a pedra preciosa e invocar o Bruxo', '💎 Pegar'];
   if (bruxoPerto()) return ['falar com o Bruxo: faça o seu pedido', '🧙 Falar'];
   if (jogador.perfil?.prf && eleitoralProximo(2.4)) return ['prender por crime eleitoral (PRF)', 'Prender'];
-  if (jogador.perfil?.profissao === 'medico' && feridoProximo(2.8)) return ['socorrer o ferido (+250)', 'Socorrer'];
+  if (jogador.perfil?.profissao === 'medico' && feridoProximo(2.8)) return ['salvar o ferido (+250)', '✚ Salvar'];
   if (obraNaFrente()) return ['obra da prefeitura em andamento', 'Obra'];
   if (pertoSaguao()) return ['entrar no saguão do Terminal Rodoviário (guichês e partidas)', 'Entrar'];
   { const po = obraNaPorta(); if (po) return contextoPortaObra(po); }
@@ -8375,7 +8436,7 @@ function quadroJogo() {
   diag('mundo (LOD)');
   mundo.atualizar(dt);
   mundo.carrosPerto(foco().x, foco().z, dt);
-  mundo.arvoresPerto(foco().x, foco().z, dt); mundo.gramaPerto(foco().x, foco().z, dt);
+  mundo.arvoresPerto(foco().x, foco().z, dt); mundo.gramaPerto(foco().x, foco().z, dt); marcasSocorro(); atualizarSocorristas(dt);
   mundo.propsPerto(foco().x, foco().z, dt); semaforos.atualizar(dt, foco().x, foco().z);
   mundo.predios3dPerto(foco().x, foco().z, dt);
   sedes.atualizar(dt);
@@ -10682,7 +10743,7 @@ async function materializar(tipo, id) {
 // Treino (Polícia, PRF e Exército): cada treino completo vale +0,1% na especialidade, até 0,6%:
 //   corrida → velocidade de movimento · luta (boneco) → velocidade de ataque e defesa · tiro no alvo → chance de crítico.
 // Os bônus só valem no expediente: saiu do serviço, perde tudo e precisa treinar de novo.
-const SACIADO = 80, FRACO = 20, BONUS_SACIADO = 0.002, TREINO_PASSO = 0.001, TREINO_MAX = 6;
+const SACIADO = 80, FRACO = 20, BONUS_SACIADO = 0.002, TREINO_PASSO = 0.001, TREINO_MAX = 8;
 const NOME_TREINO = { corrida: ['corrida', 'velocidade de movimento'], luta: ['luta', 'velocidade de ataque e defesa'], tiro: ['tiro', 'chance de acerto crítico'] };
 let treino = { corrida: 0, luta: 0, tiro: 0 }, treinoPapel, golpesBoneco = 0, acertosTiro = 0, volta = null, correTropa = null, boneco = null, treinoVolta = null, avisoFraco = false, sangriaFome = 0;
 const PISTA = [[-18, -3], [18, -3], [18, 13], [-18, 13]];   // cantos da pista (na ordem da volta), relativos à sala
@@ -10692,6 +10753,16 @@ function corporacao() {
   if (p.prf) return 'prf';
   if (p.profissao === 'exercito') return 'exercito';
   return souEquipe() ? 'equipe' : null;
+}
+// corrida conforme o estado: com fome (sem força) > treino no máximo + jujuba (correr rápido) > treino no máximo OU
+// jujuba (carga de cabeça baixa) > normal. Treino no máximo vale para Polícia, PRF, Exército e BOPE.
+const treinadoMax = () => !!corporacao() && (treino.corrida || 0) >= TREINO_MAX;
+const turbinado = () => treinadoMax() || racaoAtiva();
+function animCorrida() {
+  if (jogador.fome < FRACO) return 'corrida_fome';
+  if (treinadoMax() && racaoAtiva()) return 'corrida_rapida';
+  if (turbinado()) return 'corrida_carga';
+  return 'run';
 }
 function bonusTreino(tipo) { return corporacao() ? (treino[tipo] || 0) * TREINO_PASSO : 0; }
 function fatorVelocidade() {
@@ -10724,7 +10795,7 @@ function seguirTreino() {
 function ganharTreino(tipo) {
   const [nome, efeito] = NOME_TREINO[tipo];
   if (!corporacao()) { aviso('Treino só conta no expediente (Polícia, PRF ou Exército em serviço).', 3.5); return; }
-  if (treino[tipo] >= TREINO_MAX) { aviso(`💪 Treino de ${nome} no máximo: +0,6% de ${efeito}.`, 3); return; }
+  if (treino[tipo] >= TREINO_MAX) { aviso(`💪 Treino de ${nome} no máximo: +0,8% de ${efeito}.`, 3); return; }
   treino[tipo]++; salvarTreino();
   aviso(`💪 Treino de ${nome} completo! Agora +${(treino[tipo] * 0.1).toFixed(1).replace('.', ',')}% de ${efeito}.`, 3.5);
 }

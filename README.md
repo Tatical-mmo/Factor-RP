@@ -1619,3 +1619,13 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Flexão e mais danças (16ba)**: animacoes_emotes.glb agora junta os dois arquivos do dono (22 animações, 1,7 MB). Quadril no x/z da pose de descanso, então as 3 partes da flexão se encaixam.
   - **Flexão em 3 partes:** escolher 💪 desce (uma vez) e segue fazendo flexões em repetição. Tocar 😀 de novo levanta (uma vez) e volta ao normal. Andar cancela na hora.
   - **Danças novas:** Dança 5 (bolhas) e Dança 6. O burpee continua, com o nome "Burpee".
+- **Corridas, socorro e poça de tinta (16bb)**: assets/personagens/animacoes_corrida.glb tem 7 animações do Mixamo do dono, com outro esqueleto de origem (ARQ_EXTRA/obterBaseExtra) e carregadas sob demanda.
+  - **Corrida:** com fome (abaixo de 20) usa a corrida sem força. Treino de corrida no máximo + jujuba usa "correr rápido". Treino no máximo OU jujuba usa a carga de cabeça baixa. O normal continua igual.
+  - **Treino no máximo:** só Polícia, PRF, Exército e BOPE. O treino agora vai até 8 níveis (+0,8%).
+  - **Armado:** correndo com treino no máximo ou jujuba, corre com a arma (carga de rifle, 92% da corrida). Sem isso, continua andando armado.
+  - **Parada brusca:** quem vinha correndo há mais de 1,2 s e para de vez faz a parada (1,7 s).
+  - **Socorro:**
+    - A ambulância NPC agora traz um socorrista (Enfermeiro ou Enfermeira) que desce, vai até o ferido, faz o salvamento (coletar objeto) e volta para a ambulância, que só então vai embora.
+    - O socorrido levanta com a animação "Levante-se" (~7 s).
+    - O médico jogador vê "✚ SALVAR" em cima de cada ferido; o botão vira "✚ Salvar" e faz a mesma animação.
+  - **Poça de tinta** (assets/modelos/poca_tinta.glb, simplificada de 49 mil para 400 triângulos) embaixo de quem cai, jogador ou outros jogadores. Some quando ele levanta.
