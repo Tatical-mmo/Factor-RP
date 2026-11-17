@@ -956,14 +956,18 @@ function obterBasesAnimacoes() {
 const GESTOS_CONVERSA = ['conversa1', 'conversa2', 'conversa3', 'conversa4'];
 const EMOTES = [
   { id: 'danca1', nome: 'Dança 1', ic: '🕺' }, { id: 'danca2', nome: 'Dança 2', ic: '💃' }, { id: 'danca3', nome: 'Dança 3', ic: '🕺' }, { id: 'danca4', nome: 'Dança 4', ic: '💃' },
+  { id: 'danca5', nome: 'Dança 5', ic: '🫧' }, { id: 'danca6', nome: 'Dança 6', ic: '🐎' },
   { id: 'empolgado', nome: 'Empolgado', ic: '🤩' }, { id: 'contas', nome: 'Dança das contas', ic: '📿' }, { id: 'nao_sou_mae', nome: 'Bronca', ic: '😤' },
   { id: 'nao_dedo', nome: 'Não, não!', ic: '☝️' }, { id: 'dor_cabeca', nome: 'Dor de cabeça', ic: '🤕' }, { id: 'beber', nome: 'Beber', ic: '🥤' },
-  { id: 'exercicio', nome: 'Exercício', ic: '🏋️' }, { id: 'equilibrar', nome: 'Equilibrar', ic: '🤸' },
+  { id: 'flexao_desce', nome: 'Flexão (toque 😀 de novo para levantar)', ic: '💪' }, { id: 'exercicio', nome: 'Burpee', ic: '🏋️' }, { id: 'equilibrar', nome: 'Equilibrar', ic: '🤸' },
 ];
-const ANIM_EXTRAS = new Set([...GESTOS_CONVERSA, 'celular', ...EMOTES.map((e) => e.id)]);
+// flexão em 3 partes: desce (uma vez) → flexões (até tocar de novo) → levanta (uma vez) e volta ao normal
+const EMOTE_UMA_VEZ = new Set(['flexao_desce', 'flexao_sobe']);
+function terminouAnim(av, n) { const a = av.acoes[n]; return av.nomeAtual === n && a && (!a.isRunning() || a.time >= a.getClip().duration - 0.03); }
+const ANIM_EXTRAS = new Set([...GESTOS_CONVERSA, 'celular', 'flexao', 'flexao_sobe', ...EMOTES.map((e) => e.id)]);
 let baseEmotes = null;
 function obterBaseEmotes() {
-  if (!baseEmotes) baseEmotes = carregarGLB('assets/personagens/animacoes_emotes.glb?v=1').then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { baseEmotes = null; return null; });
+  if (!baseEmotes) baseEmotes = carregarGLB('assets/personagens/animacoes_emotes.glb?v=2').then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { baseEmotes = null; return null; });
   return baseEmotes;
 }
 // ninguém (jogador ou NPC) a menos de 14 m: falando na voz assim, o personagem fala ao celular
@@ -3325,7 +3329,7 @@ function atualizarInfo() {
 const remotos = new Map();     // id -> { meta, av, arma, alvo, anim, caixa }
 let conexao = null, online = 1, conectado = false;
 let envioTimer = 0, ultimoEnvio = null, tempoKeepAlive = 0, tempoSalvar = 15;
-const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1 };
+const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1, flexao_desce: 1, flexao_sobe: 1 };
 const ANIM_VEL = { walk_shoot: 1.25 };
 
 function conectarMultiplayer(perfil) {
@@ -5125,9 +5129,11 @@ function iniciarChat() {
   const fechar = () => { caixa.classList.add('oculto'); txt.blur(); };
   $('btChat').onclick = () => (caixa.classList.contains('oculto') ? abrir() : fechar());
   $('btEmote').onclick = () => {
+    if (jogador.emote === 'flexao') { jogador.emote = 'flexao_sobe'; return; }   // segundo toque: levanta da flexão
+    if (jogador.emote === 'flexao_desce' || jogador.emote === 'flexao_sobe') return;
     if (jogador.carro || jogador.morto || jogador.algemado) { aviso('Emote só a pé e livre.', 2); return; }
     escolher('😀 Emotes', 'Escolha o que fazer. Os outros jogadores veem. Andar para o emote.', [
-      ...EMOTES.map((e) => ({ rotulo: `${e.ic} ${e.nome}`, fn: () => { if (jogador.armado) alternarArma(); jogador.emote = e.id; jogador.avatar.garantir(e.id); } })),
+      ...EMOTES.map((e) => ({ rotulo: `${e.ic} ${e.nome}`, fn: () => { if (jogador.armado) alternarArma(); jogador.emote = e.id; jogador.avatar.garantir(e.id); if (e.id === 'flexao_desce') { jogador.avatar.garantir('flexao'); jogador.avatar.garantir('flexao_sobe'); } } })),
       ...(jogador.emote ? [{ rotulo: '⏹️ Parar', fn: () => { jogador.emote = null; } }] : []),
     ]);
   };
@@ -7756,7 +7762,12 @@ function atualizarJogador(dt) {
       if (j.algemado) av.tocar('algemado');
       else if (j.carregando) av.tocar('carregar_parado');
       else if (j.armado) av.tocar('mirar');
-      else if (j.emote) av.tocar(j.emote);
+      else if (j.emote) {
+        if (j.emote === 'flexao_desce' && terminouAnim(av, 'flexao_desce')) j.emote = 'flexao';
+        else if (j.emote === 'flexao_sobe' && terminouAnim(av, 'flexao_sobe')) j.emote = null;
+        if (j.emote && av.nomeAtual !== j.emote) av.tocar(j.emote, { umaVez: EMOTE_UMA_VEZ.has(j.emote), fade: 0.25 });
+        else if (!j.emote) av.tocar('idle', { fade: 0.3 });
+      }
       else if (voz.estaFalando() && ninguemPerto()) av.tocar('celular');
       else if (voz.estaFalando() || performance.now() < (j.falaAte || 0)) av.tocar(gestoConversa(av, j));
       else av.tocar('idle');
