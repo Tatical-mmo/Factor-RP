@@ -1100,7 +1100,7 @@ function rumo3d(e) {
 export function predios3dPerto(px, pz, dt) {
   if (!modelos3d || !malhaPredios) return;
   if ((tempo3d -= dt) > 0) return; tempo3d = 0.7;
-  const q = ctx.qualidade?.() || 'medio', max = q === 'ultra' || q === 'alto' ? 64 : q === 'medio' ? 16 : 6, raio = q === 'ultra' || q === 'alto' ? 240 : q === 'medio' ? 100 : 65;
+  const q = ctx.qualidade?.() || 'medio', max = q === 'ultra' ? 64 : q === 'alto' ? 40 : q === 'medio' ? 16 : 6, raio = q === 'ultra' ? 240 : q === 'alto' ? 190 : q === 'medio' ? 100 : 65;   // alto: um pouco menos de prédios 3D (o resto continua caixa, na mesma distância de visão)
   const perto = [];
   if (max) for (const k of chaves(px - raio - 20, pz - raio - 20, px + raio + 20, pz + raio + 20)) for (const i of gradeEd.get(k) || []) {
     const e = edificios[i]; if (cortados.has(i)) continue; const t = tipo3d(e); if (!t || !modelos3d[t]) continue;

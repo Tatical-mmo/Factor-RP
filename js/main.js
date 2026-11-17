@@ -399,8 +399,32 @@ const loader = new GLTFLoader(manager);
 loader.setMeshoptDecoder(MeshoptDecoder);
 const cacheGLTF = new Map();
 function carregarGLB(url) {
-  if (!cacheGLTF.has(url)) cacheGLTF.set(url, loader.loadAsync(url));
+  if (!cacheGLTF.has(url)) {
+    const p = loader.loadAsync(url); cacheGLTF.set(url, p);
+    p.then((g) => aquecer(g?.scene)).catch(() => {});
+  }
   return cacheGLTF.get(url);
+}
+// Sobe as texturas para a placa de vídeo aos poucos (uma por quadro), logo que o modelo chega.
+// Sem isso, o primeiro quadro em que um modelo aparece na tela trava 50–150 ms no celular (envio da textura grande).
+const filaAquecer = [];
+function aquecer(obj) {
+  obj?.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const m of [].concat(o.material)) for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'alphaMap']) {
+      const t = m?.[k]; if (t && !t.userData.aquecida) { t.userData.aquecida = true; filaAquecer.push(t); }
+    }
+  });
+}
+// shaders: compila em segundo plano (sem travar o quadro) o que já está na cena, algumas vezes no começo do jogo
+let compilando = false;
+function aquecerShaders() {
+  if (compilando || !renderer.compileAsync) return; compilando = true;
+  renderer.compileAsync(scene, camP).catch(() => {}).finally(() => { compilando = false; });
+}
+function aquecerQuadro() {
+  const t = filaAquecer.shift(); if (!t) return;
+  try { renderer.initTexture(t); } catch { /* textura ainda sem imagem: o desenho normal envia depois */ }
 }
 
 const modelos = {};   // nome -> Object3D original (para clonar)
@@ -1290,6 +1314,7 @@ function acaoContexto() {
   if (jogador.perfil.profissao === 'medico') { const fer = feridoProximo(2.8); if (fer) { socorrerFerido(fer); return; } }
   if (pertoPrateleira()) { pegarRemediosAlmox(); return; }
   if (obraNaFrente()) { abrirPrefeitura('obras'); return; }
+  if (pertoSaguao()) { entrarSaguao(); return; }
   { const po = obraNaPorta(); if (po) { acaoPortaObra(po); return; } }
   if (podeMedicar()) { const pac = pacienteProximo(2.2); if (pac) { medicarPaciente(pac); return; } }
   const fogo = servicos.fogoProximo(9);
@@ -3052,6 +3077,7 @@ async function iniciarJogo(perfil) {
   if (jogador.pos.x > 1500) jogador.pos.set(contratante.x + 6, 0, contratante.z + 6);
   jogador.pena = perfil.pena_seg || 0;
   jogador.fome = typeof perfil.fome === 'number' ? perfil.fome : 100;
+  for (const ms of [4000, 15000, 40000]) setTimeout(aquecerShaders, ms);
   if (jogador.pena > 0 && cadeia) { const c = posCela(); jogador.pos.set(c.x, 0, c.z); jogador.dentroCasa = 'carceragem'; jogador.saidaSala = { x: cadeia.x + 4.5, z: cadeia.z }; }
   resolverColisao(jogador.pos, jogador.raio);
   jogador.pos.y = alturaChao(jogador.pos.x, jogador.pos.z);
@@ -8040,6 +8066,7 @@ function contexto() {
   if (jogador.perfil?.prf && eleitoralProximo(2.4)) return ['prender por crime eleitoral (PRF)', 'Prender'];
   if (jogador.perfil?.profissao === 'medico' && feridoProximo(2.8)) return ['socorrer o ferido (+250)', 'Socorrer'];
   if (obraNaFrente()) return ['obra da prefeitura em andamento', 'Obra'];
+  if (pertoSaguao()) return ['entrar no saguão do Terminal Rodoviário (guichês e partidas)', 'Entrar'];
   { const po = obraNaPorta(); if (po) return contextoPortaObra(po); }
   if (pertoPrateleira()) return [`pegar remédios do almoxarifado (${jogador.perfil.remedios_hosp || 0}/20 na maleta)`, 'Pegar'];
   if (podeMedicar() && pacienteProximo(2.2)) return [`medicar de graça (+comissão) · ${jogador.perfil.remedios_hosp || 0} na maleta`, 'Medicar'];
@@ -8176,14 +8203,16 @@ function diagQuadro() {
     if (q > DIAG.maior) { DIAG.maior = q; DIAG.pior = new Map(DIAG.partes); }   // o que gastou no quadro anterior à pior pausa
   }
   DIAG.ult = n; DIAG.partes.clear();
+  // soma tudo o que foi desenhado no quadro (sombra + cena + pós-processo); antes só aparecia a última passada ("1 desenhos")
+  { const r = renderer.info.render; if (r.calls) { DIAG.calls = r.calls; DIAG.tris = r.triangles; } renderer.info.autoReset = false; renderer.info.reset(); }
   if (n - DIAG.mostra < 2000) return;
   if (!DIAG.el) { DIAG.el = document.createElement('pre'); DIAG.el.style.cssText = 'position:fixed;left:4px;bottom:64px;z-index:9999;margin:0;padding:6px 8px;background:rgba(0,0,0,.72);color:#9f9;font:11px/1.35 monospace;pointer-events:none;border-radius:6px;max-width:70vw;white-space:pre-wrap'; document.body.appendChild(DIAG.el); }
   const s = (n - DIAG.mostra) / 1000, top = [...DIAG.pior].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => `  ${k}: ${v.toFixed(1)} ms`).join('\n');
-  DIAG.el.textContent = `📊 ${(DIAG.quadros / s).toFixed(0)} qps · travadas ${DIAG.travadas} · pior ${DIAG.maior.toFixed(0)} ms\n${visual.nivelAtual()} · ${renderer.info.render.calls} desenhos · ${(renderer.info.render.triangles / 1000).toFixed(0)}k triâng. · ${renderer.info.programs?.length || 0} shaders\npior quadro:\n${top}`;
+  DIAG.el.textContent = `📊 ${(DIAG.quadros / s).toFixed(0)} qps · travadas ${DIAG.travadas} · pior ${DIAG.maior.toFixed(0)} ms\n${visual.nivelAtual()} · ${DIAG.calls || 0} desenhos · ${((DIAG.tris || 0) / 1000).toFixed(0)}k triâng. · ${filaAquecer.length} na fila · ${renderer.info.programs?.length || 0} shaders\npior quadro:\n${top}`;
   DIAG.mostra = n; DIAG.quadros = 0; DIAG.travadas = 0; DIAG.maior = 0;
 }
 function quadro() {
-  diagQuadro();
+  diagQuadro(); aquecerQuadro();
   try { quadroJogo(); } catch (e) {
     console.error(e);
     if (performance.now() - ultimoErroQuadro > 20000) { ultimoErroQuadro = performance.now(); try { aviso(`⚠️ Erro no jogo (mande print): ${String(e?.message || e).slice(0, 120)}`, 6); } catch { /* sem aviso */ } }
@@ -11318,7 +11347,132 @@ function montarTerminalLeste(R, y, plano, caixa, mat, branco) {
     caixa(S.x, y + 8.4, S.z + 1, S.w + 2, 0.5, S.d, mat('#f4f4f2', { roughness: 0.5 }));
   }
   mundo.addCol({ tipo: 'caixa', x0: S.x - S.w / 2 + 0.5, x1: S.x + S.w / 2 - 0.5, z0: S.z - S.d / 2 + 1.5, z1: S.z + S.d / 2 - 4 });
+  plano(PORTA_SAGUAO.x, PORTA_SAGUAO.z + 0.2, 3.2, 1.4, mat('#3b2a1a'), y + 0.02);   // tapete da porta
+  const re = rotuloSimples('🚪 Saguão · guichês e partidas', 5); re.position.set(PORTA_SAGUAO.x, 3.4, PORTA_SAGUAO.z + 0.4); scene.add(re);
 }
+// ---------------------------------------------------------------- saguão do terminal (por dentro)
+// Inspirado nos grandes terminais: guichês das viações, painel de partidas ao vivo, bancos de espera e lanchonete.
+// Pelo guichê ou pelo painel dá para ir direto para a plataforma da linha.
+const VIACOES = { 1: 'Viação Circular Fator', 7: 'Expresso Serrano', 8: 'Litorânea Porto Sul', 3: 'Rápido Leste', 2: 'Aero Express' };
+const PORTA_SAGUAO = { x: TERMINAL_RODO.saguao.x, z: TERMINAL_RODO.saguao.z + TERMINAL_RODO.saguao.d / 2 - 2.6 };
+let painelSaguao = null, lancheAte = 0;
+const pertoSaguao = () => !jogador.dentroCasa && !jogador.carro && Math.hypot(PORTA_SAGUAO.x - jogador.pos.x, PORTA_SAGUAO.z - jogador.pos.z) < 3.2;
+const linhasPlataforma = () => LINHAS.filter((L) => !L.circular);
+const numPlataforma = (L) => PLAT.indexOf(L.faixa) + 1;
+function salaSaguao() {
+  return montarSala('saguao', 3600, 2600, 36, 20, { piso: '#d9d5cd', parede: '#e9edf1', luz: '#fff4e2' }, (i) => {
+    const { caixa, placa } = i;
+    caixa(0.3, 3.6, 20, '#e9edf1', 18, 1.8, 0); caixa(36, 3.6, 0.3, '#e9edf1', 0, 1.8, 10);   // as outras duas paredes
+    for (let x = -16; x <= 16; x += 4) caixa(3.4, 2.4, 0.04, '#9fc7e6', x, 1.6, 9.82);        // vidraça da frente (dá para a rua)
+    caixa(36, 0.02, 1.2, '#f2c230', 0, 0.012, 7.6);                                            // faixa amarela de circulação
+    const l2 = new THREE.PointLight('#fff4e2', 8, 26, 1.5); l2.position.set(-9, 3.3, 0); i.g.add(l2);
+    const l3 = new THREE.PointLight('#fff4e2', 8, 26, 1.5); l3.position.set(9, 3.3, 0); i.g.add(l3);
+    // guichês das viações (um por linha com plataforma) e o de informações
+    const gs = [...linhasPlataforma().map((L) => ({ L, nome: VIACOES[L.id] || L.nome, cor: L.cor })), { L: null, nome: 'Informações', cor: '#3c4656' }];
+    i.guiches = [];
+    gs.forEach((g, k) => {
+      const x = -15 + k * 4.4;
+      caixa(3.6, 1.1, 0.9, '#f4f1ea', x, 0.55, -8.2); caixa(3.8, 0.07, 1.1, g.cor, x, 1.14, -8.2);
+      caixa(3.6, 0.9, 0.04, '#cfe6f7', x, 1.65, -8.62);                                        // vidro do atendimento
+      caixa(3.9, 0.75, 0.12, g.cor, x, 3.0, -9.8); caixa(0.12, 3.6, 0.6, '#c9ced6', x + 2.1, 1.8, -9.5);
+      placa(g.nome, x, -9.2, 3.0);
+      if (g.L) placa(`Plataforma ${numPlataforma(g.L)}`, x, -7.4, 1.6);
+      movel(i, `guiche${k}`, x, -8.2, 3.6, 0.9); i.guiches.push(g);
+      npcSala(i, ['Executiva', 'Rapaz_Bairro', 'Moradora', 'Executivo', 'Ruiva', 'Nipo'][k % 6], x, -9.1, 0, k === gs.length - 1 ? 'ℹ️ Informações' : '🎫 Atendente');
+    });
+    // painel de partidas (ao vivo), em pé no meio do saguão, virado para a entrada
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 448;
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    const tela = new THREE.Mesh(new THREE.PlaneGeometry(8, 3.5), new THREE.MeshBasicMaterial({ map: tex })); tela.position.set(11, 3.25, -3.9); i.g.add(tela);
+    caixa(8.4, 3.9, 0.25, '#1c2129', 11, 3.25, -4.06); for (const dx of [-3.4, 3.4]) caixa(0.22, 1.5, 0.22, '#59606a', 11 + dx, 0.75, -4.1, 0.5);
+    movel(i, 'painel', 11, -4.1, 8, 0.4); painelSaguao = { c, tex, txt: '' };
+    // bancos de espera (fileiras com encosto)
+    for (const [x0, len] of [[-15, 9], [-3.5, 9]]) for (const z of [-2.2, 0.8, 3.8]) {
+      const xm = x0 + len / 2;
+      caixa(len, 0.1, 0.55, '#2b6cb0', xm, 0.46, z); caixa(len, 0.55, 0.08, '#2b6cb0', xm, 0.78, z + 0.3);
+      for (const dx of [-len / 2 + 0.4, 0, len / 2 - 0.4]) caixa(0.08, 0.42, 0.45, '#59606a', xm + dx, 0.21, z, 0.5);
+      i.obst.push([x0, x0 + len, z - 0.35, z + 0.4]);
+    }
+    placa('💺 Sala de espera', -6, 0.8, 2.6);
+    // lanchonete
+    caixa(1, 1.1, 6, '#8a5a3a', 14.6, 0.55, 3.2); caixa(1.2, 0.07, 6.2, '#e9e4d8', 14.6, 1.14, 3.2);
+    caixa(0.4, 1.8, 5, '#3b2a1a', 17.6, 1.6, 3.2); for (let k = 0; k < 4; k++) caixa(0.3, 0.3, 0.3, ['#c0392b', '#f1c40f', '#27ae60', '#e67e22'][k], 17.3, 2.2, 1.4 + k * 1.2);
+    movel(i, 'lanche', 14.6, 3.2, 1, 6, [-1, 0]); placa('☕ Lanchonete', 14.6, 3.2, 2.6);
+    npcSala(i, 'Dona_Salao', 16.4, 3.2, -Math.PI / 2, '☕ Lanchonete');
+    // sanitários e decoração
+    for (const [z, t] of [[-4, '🚹'], [-1, '🚺']]) { caixa(0.08, 2.2, 1.1, '#5b6b7d', -17.8, 1.1, z); placa(t, -17.4, z, 2.6); }
+    placa('🚻 Sanitários', -17.2, -2.5, 3.1);
+    for (const [x, z] of [[-17, 8.6], [8, 8.6], [-17, -7], [12.8, 8.6]]) { caixa(0.6, 0.6, 0.6, '#8c6a4a', x, 0.3, z); const p2 = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), i.mat('#4f8a3a')); p2.position.set(x, 1.1, z); i.g.add(p2); i.obst.push([x - 0.35, x + 0.35, z - 0.35, z + 0.35]); }
+    placa('🚪 Saída para as plataformas', 15.5, 8.6, 2.4);
+  });
+}
+function desenharPainelSaguao(t) {
+  const P = painelSaguao; if (!P) return;
+  const ls = LINHAS.map((L) => { const m = proximaSaidaLinha(L, t); return { L, falta: Math.max(0, Math.round(horaSaida(L, m) - t)), at: L.circular ? 0 : estadoSaida(L, m - 1, t)?.atrasado || 0 }; }).sort((a, b) => a.falta - b.falta);
+  const txt = ls.map((x) => `${x.L.id}${x.falta}${x.at}`).join('|'); if (txt === P.txt) return; P.txt = txt;
+  const g = P.c.getContext('2d'); g.fillStyle = '#0d1117'; g.fillRect(0, 0, 1024, 448);
+  g.fillStyle = '#f2c230'; g.font = 'bold 40px system-ui'; g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillText('🚌  PARTIDAS', 24, 34);
+  g.font = 'bold 22px system-ui'; g.fillStyle = '#8b95a5';
+  g.fillText('LINHA', 24, 84); g.fillText('DESTINO', 170, 84); g.fillText('EMBARQUE', 470, 84); g.fillText('SAI EM', 700, 84); g.fillText('SITUAÇÃO', 850, 84);
+  ls.slice(0, 8).forEach((x, k) => {
+    const y = 124 + k * 40; if (k % 2) { g.fillStyle = '#161c25'; g.fillRect(0, y - 20, 1024, 40); }
+    g.fillStyle = x.L.cor; g.fillRect(24, y - 14, 18, 28);
+    g.font = 'bold 26px system-ui'; g.fillStyle = '#fff'; g.fillText(String(x.L.id), 52, y);
+    g.fillText(x.L.curto, 170, y);
+    g.fillStyle = '#cdd6e2'; g.fillText(x.L.circular ? 'Ponto em frente' : `Plataforma ${numPlataforma(x.L)}`, 470, y);
+    g.fillStyle = '#ffd23e'; g.fillText(x.falta >= 60 ? `${Math.floor(x.falta / 60)} min ${x.falta % 60}` : `${x.falta} s`, 700, y);
+    const [st, cor] = x.at ? [`ATRASADO`, '#ff5a4a'] : x.falta <= 20 ? ['EMBARQUE', '#4ade80'] : ['NO HORÁRIO', '#8b95a5'];
+    g.fillStyle = cor; g.font = 'bold 22px system-ui'; g.fillText(st, 850, y);
+  });
+  P.tex.needsUpdate = true;
+}
+function entrarSaguao() {
+  const i = salaSaguao();
+  entrarSala('saguao', { x: PORTA_SAGUAO.x, z: PORTA_SAGUAO.z + 1.6 }, i.pontos.porta.x - 1, i.pontos.porta.z - 1);
+  desenharPainelSaguao(agoraServidor() / 1000);
+  aviso('🚌 Saguão do Terminal Rodoviário: guichês das viações, painel de partidas, sala de espera e lanchonete.', 4);
+}
+// sai do saguão direto na plataforma (ou no ponto das circulares, na calçada da frente)
+function irPlataforma(L) {
+  jogador.dentroCasa = null;
+  if (L.circular) teleportar(ROD[0], ROD[1] - 3.5); else teleportar(L.faixa - 3.4, -238);
+  aviso(`🚏 ${L.nome}: ${L.circular ? 'ponto coberto em frente ao terminal' : `plataforma ${numPlataforma(L)}`}. Toque em Embarcar quando o ônibus parar (5 moedas).`, 4.5);
+}
+function opcoesPartidas() {
+  const t = agoraServidor() / 1000;
+  return LINHAS.map((L) => ({ L, f: Math.max(0, Math.round(horaSaida(L, proximaSaidaLinha(L, t)) - t)) })).sort((a, b) => a.f - b.f)
+    .map(({ L, f }) => ({ rotulo: `${L.nome} · ${L.circular ? 'ponto em frente' : `plat. ${numPlataforma(L)}`} · ${f} s`, fn: () => irPlataforma(L) }));
+}
+function falarGuiche(k) {
+  const g = interiores.get('saguao')?.guiches?.[k]; if (!g) return;
+  if (!g.L) {
+    escolher('ℹ️ Informações', 'As linhas com plataforma (1, 2, 3, 7 e 8) saem do terminal. As circulares (4, 5 e 6) param no ponto coberto da calçada em frente. A passagem custa 5 moedas e é paga ao embarcar. Para onde você quer ir?', [...opcoesPartidas(), { rotulo: 'Obrigado!', fn: () => {} }]);
+    return;
+  }
+  const t = agoraServidor() / 1000, L = g.L, f = Math.max(0, Math.round(horaSaida(L, proximaSaidaLinha(L, t)) - t));
+  escolher(`🎫 ${g.nome}`, `${L.nome}: a próxima saída é em <b>${f} s</b> na <b>plataforma ${numPlataforma(L)}</b>. A passagem (5 moedas) é paga ao embarcar no ônibus.`, [
+    { rotulo: `🚶 Ir para a plataforma ${numPlataforma(L)}`, fn: () => irPlataforma(L) }, { rotulo: 'Obrigado!', fn: () => {} }]);
+}
+SALAS.saguao = {
+  contexto: () => {
+    if (naPorta()) return ['sair do saguão (rua)', 'Sair'];
+    if (pontoInterior('painel', 3)) return ['painel de partidas: escolher a linha e ir para a plataforma', 'Partidas'];
+    if (pontoInterior('lanche', 2)) return ['lanchonete: café com pão de queijo (mata a fome)', 'Lanchar'];
+    const gs = interiores.get('saguao')?.guiches || [];
+    for (let k = 0; k < gs.length; k++) if (pontoInterior(`guiche${k}`, 1.8)) return [gs[k].L ? `guichê ${gs[k].nome}: horários da ${gs[k].L.curto}` : 'guichê de informações', gs[k].L ? 'Guichê' : 'Info'];
+    return ['', ''];
+  },
+  acao: () => {
+    if (naPorta()) { sairSala(); return; }
+    if (pontoInterior('painel', 3)) { escolher('🚌 Partidas', 'Escolha a linha para ir até a plataforma:', [...opcoesPartidas(), { rotulo: 'Fechar', fn: () => {} }]); return; }
+    if (pontoInterior('lanche', 2)) {
+      if (performance.now() < lancheAte) { aviso('☕ Você acabou de lanchar. Volte daqui a pouco.', 2.5); return; }
+      lancheAte = performance.now() + 300000; jogador.fome = Math.min(100, jogador.fome + 25); desenharFome(); aviso('☕ Café com pão de queijo: +25 de fome.'); return;
+    }
+    const gs = interiores.get('saguao')?.guiches || [];
+    for (let k = 0; k < gs.length; k++) if (pontoInterior(`guiche${k}`, 1.8)) { falarGuiche(k); return; }
+  },
+};
 // a Rodoviária: três faixas (uma por linha), ilhas de embarque cobertas, guichê do despacho e painéis com a próxima saída
 function montarRodoviaria() {
   const R = RODO, y = 0.18;
@@ -11529,7 +11683,7 @@ function atualizarOnibus(dt) {
   for (const f of PATIO.filas.values()) for (let k = f.length - 1; k >= 0; k--) if (!estadoBus.get(f[k])?.patio) f.splice(k, 1);   // quem saiu do pátio (ou sumiu) libera a vaga
   saidasOcupadas.clear(); for (const r of remotos.values()) if (r.meta?.on) saidasOcupadas.add(String(r.meta.on));
   const t = agoraServidor() / 1000;
-  if ((tempoPlacas -= dt) <= 0) { tempoPlacas = 1; atualizarPlacasRodo(t); }
+  if ((tempoPlacas -= dt) <= 0) { tempoPlacas = 1; atualizarPlacasRodo(t); if (jogador.dentroCasa === 'saguao') desenharPainelSaguao(t); }
   const usados = new Map(), porLinha = new Map(), feitos = new Set(); montadosQuadro = 0;
   juncaoAntes.length = 0; for (const k2 of juncaoAgora) juncaoAntes.push(k2); juncaoAgora.length = 0;
   // pontos ocupados: quem já estava parado no quadro anterior continua dono (os outros esperam atrás)
