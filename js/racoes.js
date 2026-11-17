@@ -2,7 +2,9 @@
 // O estado vem do banco a cada 15 s (e o "relógio" do sistema — chegadas, licitação — roda junto).
 import * as rede from './rede.js';
 
-const CORP_NOME = { policia: 'Polícia', prf: 'PRF', bombeiros: 'Bombeiros' };
+const CORP_NOME = { policia: 'Polícia', prf: 'PRF', bope: 'BOPE', bombeiros: 'Bombeiros' };
+const CORPS = ['policia', 'prf', 'bope', 'bombeiros'];
+const PROD = { jujuba: { nome: 'jujubas', ic: '🍬', col: 'estoque' }, antiacido: { nome: 'anti-ácidos', ic: '🥤', col: 'antiacido' } };
 let ctx = null, est = null, modo = null, tempo = 0, el = null;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -17,10 +19,10 @@ export function iniciarRacoes(c) {
 }
 export const estado = () => est;
 export const aberto = () => !!modo;
-export function corpDe(p) { return p?.prf ? 'prf' : p?.policial ? 'policia' : p?.profissao === 'bombeiro' ? 'bombeiros' : null; }
+export function corpDe(p) { return p?.bope ? 'bope' : p?.prf ? 'prf' : p?.policial ? 'policia' : p?.profissao === 'bombeiro' ? 'bombeiros' : null; }
 export async function recarregar() {
   try { await rede.jujuba.processar(); } catch (e) { /* o relógio é de todos: se falhar, outro roda */ }
-  try { est = await rede.jujuba.estado(); est.armas = await rede.jujuba.armamento(); ctx.mudou?.(est); } catch (e) { /* tenta de novo depois */ }
+  try { est = await rede.jujuba.estado(); est.armas = await rede.jujuba.armamento(); est.cofre = await rede.jujuba.cofre(); ctx.mudou?.(est); } catch (e) { /* tenta de novo depois */ }
   if (modo) desenhar();
 }
 export function atualizar(dt) { if ((tempo -= dt) <= 0) { tempo = 15; recarregar(); } }
@@ -36,40 +38,51 @@ const barra = (v) => `<div style="height:8px;background:#333;border-radius:4px;o
 async function desenhar() {
   const c = $('racoesConteudo'), p = ctx.perfil();
   if (!est) { c.innerHTML = '<p class="dica">Carregando…</p>'; return; }
-  const arm = (k) => est.armazens.find((a) => a.corp === k)?.estoque ?? 0;
-  const ped = (k) => est.pedidos.find((x) => x.corp === k);
+  const arm = (k, pr = 'jujuba') => est.armazens.find((a) => a.corp === k)?.[PROD[pr].col] ?? 0;
+  const ped = (k, pr = 'jujuba') => est.pedidos.find((x) => x.corp === k && (x.produto || 'jujuba') === pr);
   const viag = (k) => est.viagens.filter((v) => v.corp === k && v.status === 'em_rota');
+  const nomeCarga = (v) => `${v.qtd ? `${fmt(v.qtd)} ${PROD[v.produto || 'jujuba'].nome}` : ''}${v.kit ? `${v.qtd ? ' + ' : ''}🔫 kit de armas` : ''}`;
   if (modo === 'armazem') {
-    const k = corpDe(p); $('racoesTitulo').textContent = `🍬 Armazém de rações · ${CORP_NOME[k] || ''}`;
-    if (!k) { c.innerHTML = '<p class="dica">Só Polícia, PRF e Bombeiros em serviço.</p>'; return; }
-    const pd = ped(k), vs = viag(k);
-    c.innerHTML = `<p class="dica">Jujuba = ração militar: por 5 minutos você fica 10% mais rápido, bate mais forte no soco e recupera 20% da vida aos poucos.</p>
-      <p><b>${fmt(arm(k))}</b> de 10.000 jujubas</p>${barra(arm(k))}
-      <div class="botoes"><button id="rPegar">Pegar 5 jujubas</button>${!pd && arm(k) < 10000 ? '<button id="rPedir">Pedir reposição ao Exército</button>' : ''}</div>
-      ${pd ? `<p class="dica">📋 Pedido de reposição ${pd.status === 'aberto' ? 'aguardando o Exército' : 'despachado'}.</p>` : ''}
-      ${vs.map((v) => `<p class="dica">🚚 Caminhão com ${fmt(v.qtd)} jujubas chega em ~${Math.max(0, Math.ceil((Date.parse(v.chegada) - ctx.agora()) / 1000))} s.</p>`).join('')}`;
-    $('rPegar').onclick = () => executar(() => rede.jujuba.pegar(), (n) => `Você pegou ${n} jujubas. Use pela mochila.`);
-    if ($('rPedir')) $('rPedir').onclick = () => executar(() => rede.jujuba.pedir(), 'Pedido enviado ao Exército.');
+    const k = corpDe(p); $('racoesTitulo').textContent = `🍬 Depósito de rações · ${CORP_NOME[k] || ''}`;
+    if (!k) { c.innerHTML = '<p class="dica">Só Polícia, PRF, BOPE e Bombeiros em serviço.</p>'; return; }
+    const vs = viag(k);
+    const bloco = (pr) => { const pd = ped(k, pr), q = arm(k, pr), P = PROD[pr];
+      return `<p><b>${P.ic} ${fmt(q)}</b> de 10.000 ${P.nome}</p>${barra(q)}
+        <div class="botoes"><button data-pegar="${pr}">Pegar 5</button>${!pd && q < 10000 ? `<button data-pedir="${pr}">Pedir reposição ao Exército</button>` : ''}</div>
+        ${pd ? `<p class="dica">📋 Pedido de ${P.nome} ${pd.status === 'aberto' ? 'aguardando o Exército' : 'despachado'}.</p>` : ''}`; };
+    c.innerHTML = `<p class="dica">🍬 Jujuba = ração militar: por 5 minutos você fica 10% mais rápido, bate mais forte e recupera vida aos poucos.<br>🥤 Anti-ácido = suplemento: por 7 minutos a fome quase não cai (no máximo 3%). Não mata a fome, só segura.</p>
+      ${bloco('jujuba')}${bloco('antiacido')}
+      ${vs.map((v) => `<p class="dica">🚚 Caminhão com ${nomeCarga(v)} chega em ~${Math.max(0, Math.ceil((Date.parse(v.chegada) - ctx.agora()) / 1000))} s.</p>`).join('')}`;
+    c.querySelectorAll('[data-pegar]').forEach((b2) => { b2.onclick = () => executar(() => rede.jujuba.pegarRacao(b2.dataset.pegar), (n) => `Você pegou ${n} ${PROD[b2.dataset.pegar].nome}. Use pela mochila.`); });
+    c.querySelectorAll('[data-pedir]').forEach((b2) => { b2.onclick = () => executar(() => rede.jujuba.pedirRacao(b2.dataset.pedir), 'Pedido enviado ao Exército.'); });
   } else if (modo === 'central') {
     $('racoesTitulo').textContent = '🎖️ Central de rações do Exército';
     const l = est.licitacao;
-    c.innerHTML = `<p class="dica">Estoque das corporações em tempo real. Despache só o que falta ou um caminhão cheio (até 5.000 por caminhão). A transportadora do contrato recebe <b>${fmt(est.valor)}</b> por caminhão.</p>
-      ${['policia', 'prf', 'bombeiros'].map((k) => { const pd = ped(k), vs = viag(k);
-        return `<div class="linha" style="display:block;margin-bottom:8px"><b>${CORP_NOME[k]}</b>: ${fmt(arm(k))} / 10.000${barra(arm(k))}
-          ${pd && pd.status === 'aberto' ? `<span class="dica">📋 Pedido aberto</span> <div class="botoes"><button data-desp="${pd.id}" data-m="faltante">Mandar o que falta</button><button data-desp="${pd.id}" data-m="cheio">1 caminhão cheio</button></div>` : pd ? '<span class="dica">🚚 Despachado</span>' : '<span class="dica">Sem pedido</span>'}
-          ${vs.map((v) => `<br><small>🚚 ${v.qtd ? `${fmt(v.qtd)} jujubas` : ''}${v.kit ? `${v.qtd ? ' + ' : ''}🔫 kit de armas` : ''} a caminho (~${Math.max(0, Math.ceil((Date.parse(v.chegada) - ctx.agora()) / 1000))} s)</small>`).join('')}
-          ${k !== 'bombeiros' ? (() => { const a = (est.armas || []).find((x) => x.corp === k); return `<br><small>🔫 Armamento: ${a ? `${a.espingarda} espingardas · ${a.fuzil} fuzis · ${a.granada} granadas` : '—'}</small>
+    const linhaProd = (k, pr) => { const pd = ped(k, pr), P = PROD[pr];
+      return `<div style="margin:2px 0">${P.ic} ${fmt(arm(k, pr))} / 10.000${barra(arm(k, pr))}
+        ${pd && pd.status === 'aberto' ? `<span class="dica">📋 Pedido de ${P.nome}</span> <div class="botoes"><button data-desp="${pd.id}" data-m="faltante">Mandar o que falta</button><button data-desp="${pd.id}" data-m="cheio">1 caminhão cheio</button></div>` : pd ? `<span class="dica">🚚 ${P.nome} despachado</span>` : ''}</div>`; };
+    c.innerHTML = `<p class="dica">Estoque das corporações em tempo real. Ao despachar, o quartel chama um caminhão livre da transportadora do contrato (ela recebe <b>${fmt(est.valor)}</b> por caminhão). Sem caminhão livre, a empresa paga 20.000 de multa para o cofre e vai um caminhão do Exército.</p>
+      <p>💰 Cofre do Exército: <b>${est.cofre == null ? '—' : fmt(est.cofre)}</b></p>
+      ${CORPS.map((k) => { const pd = ped(k), vs = viag(k);
+        return `<div class="linha" style="display:block;margin-bottom:8px"><b>${CORP_NOME[k]}</b>${linhaProd(k, 'jujuba')}${linhaProd(k, 'antiacido')}
+          ${vs.map((v) => `<small>🚚 ${nomeCarga(v)} a caminho (~${Math.max(0, Math.ceil((Date.parse(v.chegada) - ctx.agora()) / 1000))} s)${v.caminhao ? ' · caminhão da transportadora' : ''}</small><br>`).join('')}
+          ${k === 'policia' || k === 'prf' ? (() => { const a2 = (est.armas || []).find((x) => x.corp === k); return `<small>🔫 Armamento: ${a2 ? `${a2.espingarda} espingardas · ${a2.fuzil} fuzis · ${a2.granada} granadas` : '—'}</small>
             <div class="botoes">${pd && pd.status === 'aberto' ? `<button data-kit="${k}" data-ped="${pd.id}">🚚 Caminhão cheio + kit de armas</button>` : ''}<button data-kit="${k}">🚚 Só o kit de armas</button></div>`; })() : ''}</div>`; }).join('')}
-      ${est.viagens.filter((v) => v.status === 'sequestrada').map((v) => `<p class="dica" style="color:#ff8a80">🚨 Caminhão de rações (${fmt(v.qtd)}) SEQUESTRADO a caminho de ${CORP_NOME[v.corp]}.</p>`).join('')}
-      <p class="dica">📄 Licitação do transporte: ${l ? (l.status === 'vigente' ? `contrato vigente (${l.entregas}/5 caminhões)` : `aberta até ${new Date(l.fecha_em).toLocaleTimeString('pt-BR').slice(0, 5)}`) : 'abrindo…'}</p>`;
-    c.querySelectorAll('[data-kit]').forEach((b) => { b.onclick = () => executar(() => rede.jujuba.despacharKit(b.dataset.kit, b.dataset.ped ? Number(b.dataset.ped) : null, ctx.duracaoViagem(b.dataset.kit)), '🚚 Kit de armas despachado (10 espingardas, 10 fuzis e 30 granadas).'); });
-    c.querySelectorAll('[data-desp]').forEach((b) => { b.onclick = () => executar(() => rede.jujuba.despachar(Number(b.dataset.desp), b.dataset.m, ctx.duracaoViagem(est.pedidos.find((x) => x.id === Number(b.dataset.desp))?.corp)), (n) => `🚚 ${n} caminhão(ões) despachado(s).`); });
+      ${est.viagens.filter((v) => v.status === 'sequestrada').map((v) => `<p class="dica" style="color:#ff8a80">🚨 Caminhão (${nomeCarga(v)}) SEQUESTRADO a caminho de ${CORP_NOME[v.corp]}.</p>`).join('')}
+      <p class="dica">📄 Licitação do transporte: ${l ? (l.status === 'vigente' ? `contrato vigente (${l.entregas}/5 caminhões)` : `aberta até ${new Date(l.fecha_em).toLocaleTimeString('pt-BR').slice(0, 5)}`) : 'abrindo…'}</p>
+      <hr><p class="dica">🎖️ Recompensar soldado exemplar com o cofre (Coronel para cima): prisões, missões, treinos, sem ferir inocentes.</p>
+      <div class="botoes"><input id="rRecNome" placeholder="nome do soldado" style="width:9em"><input id="rRecValor" type="number" min="100" max="1000000" step="100" value="5000" style="width:6em"></div>
+      <div class="botoes"><input id="rRecMotivo" placeholder="motivo" style="width:15em"><button id="rRec">🎖️ Recompensar</button></div>`;
+    $('rRec').onclick = () => executar(() => rede.jujuba.recompensar($('rRecNome').value.trim(), Math.floor(Number($('rRecValor').value)), $('rRecMotivo').value.trim()), (v) => `🎖️ ${fmt(v)} moedas enviadas do cofre.`);
+    c.querySelectorAll('[data-kit]').forEach((b2) => { b2.onclick = () => executar(() => rede.jujuba.despacharKit(b2.dataset.kit, b2.dataset.ped ? Number(b2.dataset.ped) : null, ctx.duracaoViagem(b2.dataset.kit)), '🚚 Kit de armas despachado (10 espingardas, 10 fuzis e 30 granadas).'); });
+    c.querySelectorAll('[data-desp]').forEach((b2) => { b2.onclick = () => executar(() => rede.jujuba.despachar(Number(b2.dataset.desp), b2.dataset.m, ctx.duracaoViagem(est.pedidos.find((x) => x.id === Number(b2.dataset.desp))?.corp)), (n) => `🚚 ${n} caminhão(ões) despachado(s).`); });
   } else if (modo === 'licitacao') {
     $('racoesTitulo').textContent = '📄 Licitação: transporte de rações do Exército';
     const l = est.licitacao; let lances = [];
     if (l) try { lances = await rede.jujuba.lances(l.id); } catch (e) { /* sem lista */ }
     const minhas = (await ctx.minhasTransportadoras()).filter((e) => e.nivel >= 5);
-    c.innerHTML = `<p class="dica">Transportadoras nível 5+ disputam o contrato: ganha o <b>menor</b> valor pedido, que é pago na hora ao fechar a licitação. O contrato vale 5 caminhões, e cada caminhão despachado paga mais <b>${fmt(est.valor)}</b>.</p>
+    c.innerHTML = `<p class="dica">Transportadoras nível 5+ <b>com 5 caminhões</b> disputam o contrato: ganha o <b>menor</b> valor pedido, que é pago na hora ao fechar a licitação. O contrato vale 5 caminhões, e cada caminhão chamado paga mais <b>${fmt(est.valor)}</b>. O quartel chama os caminhões sozinho: se nenhum estiver livre, a empresa paga <b>20.000</b> de multa por chamada.</p>
+      ${l && l.status === 'vigente' && minhas.some((e) => e.id === l.empresa) ? `<p>🚚 Seus caminhões a serviço do Exército: <b>${est.viagens.filter((v) => v.empresa === l.empresa && v.status === 'em_rota').length}/5</b></p>` : ''}
       <p>${!l ? 'A licitação está abrindo…' : l.status === 'vigente' ? `Contrato vigente: ${l.entregas}/5 caminhões. A próxima licitação abre quando ele acabar.` : `Aberta: fecha às <b>${new Date(l.fecha_em).toLocaleTimeString('pt-BR').slice(0, 5)}</b>. ${lances.length} lance(s); menor até agora: <b>${lances[0] ? fmt(lances[0].valor) : '—'}</b>.`}</p>
       ${!l || l.status === 'aberta' ? (minhas.length ? `<div class="botoes"><select id="rEmp">${minhas.map((e) => `<option value="${e.id}">${esc(e.nome)} (nv ${e.nivel})</option>`).join('')}</select>
         <input id="rValor" type="number" min="10000" max="5000000" step="1000" value="${lances[0] ? Math.max(10000, lances[0].valor - 10000) : 800000}" style="width:9em"><button id="rLance">Dar lance</button></div>` : '<p class="dica">Você não tem transportadora nível 5 ou mais.</p>') : ''}
@@ -78,9 +91,12 @@ async function desenhar() {
     if ($('rMudar')) $('rMudar').onclick = () => executar(() => rede.jujuba.valor(Number($('rVal').value)), 'Valor atualizado (a placa do quartel muda também).');
   } else if (modo === 'comprador') {
     $('racoesTitulo').textContent = '📦 Armazém do Seu Tonho';
-    c.innerHTML = `<p class="dica">"Tenho jujuba do Exército, sem nota. 500 cada, só para gente de clã."</p>
-      <p>Em estoque: <b>${fmt(est.mercado)}</b></p>
-      <div class="botoes">${[1, 5, 10].map((q) => `<button data-comp="${q}" ${est.mercado >= q ? '' : 'disabled'}>${q} (${fmt(q * 500)})</button>`).join('')}</div>`;
+    c.innerHTML = `<p class="dica">"Tenho jujuba e anti-ácido do Exército, sem nota. 500 cada, só para gente de clã."</p>
+      <p>🍬 Jujubas em estoque: <b>${fmt(est.mercado)}</b></p>
+      <div class="botoes">${[1, 5, 10].map((q) => `<button data-comp="${q}" ${est.mercado >= q ? '' : 'disabled'}>${q} (${fmt(q * 500)})</button>`).join('')}</div>
+      <p>🥤 Anti-ácido em estoque: <b>${fmt(est.mercadoAnti)}</b></p>
+      <div class="botoes">${[1, 5, 10].map((q) => `<button data-compa="${q}" ${est.mercadoAnti >= q ? '' : 'disabled'}>${q} (${fmt(q * 500)})</button>`).join('')}</div>`;
     c.querySelectorAll('[data-comp]').forEach((b) => { b.onclick = () => executar(() => rede.jujuba.comprar(Number(b.dataset.comp)), (n) => `Você comprou ${n} jujubas.`); });
+    c.querySelectorAll('[data-compa]').forEach((b) => { b.onclick = () => executar(() => rede.jujuba.comprarAntiacido(Number(b.dataset.compa)), (n) => `Você comprou ${n} anti-ácidos.`); });
   }
 }

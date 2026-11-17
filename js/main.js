@@ -3192,7 +3192,7 @@ async function iniciarJogo(perfil) {
   criarNPCs(id);
   conectarMultiplayer(perfil);
   rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando, inventario: recarregarInventario });
-  iniciarLoja({ usarMascara: (item) => usarMascara(item), mascaraAtual: () => jogador.mascara, equiparArma: (item) => equiparArma(item), colocarBarricada: () => colocarBarricadaAqui(), usarJujuba: () => usarJujuba(), perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, curar: usarRemedio, vida: () => jogador.vida,
+  iniciarLoja({ usarMascara: (item) => usarMascara(item), mascaraAtual: () => jogador.mascara, equiparArma: (item) => equiparArma(item), colocarBarricada: () => colocarBarricadaAqui(), usarJujuba: () => usarJujuba(), usarAntiacido: () => usarAntiacido(), perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, curar: usarRemedio, vida: () => jogador.vida,
     casaId: () => (typeof jogador.dentroCasa === 'number' ? jogador.dentroCasa : null),
     meuTerreno: () => { const d = casasMundo.get(portaAberta)?.d; return d?.tipo === 'terreno' && d.dono === jogador.perfil.id ? d : null; },
     portaAtual: () => { const d = casasMundo.get(portaAberta)?.d; return moraEm(d) ? d : null; },
@@ -8354,7 +8354,7 @@ function contexto() {
 // ---------------------------------------------------------------- fome
 let avisoFome = false;
 function atualizarFome(dt) {
-  jogador.fome = Math.max(0, jogador.fome - FOME_POR_SEGUNDO * dt);
+  jogador.fome = Math.max(0, jogador.fome - (antiacidoAtivo() ? Math.min(FOME_POR_SEGUNDO, 3 / 420) : FOME_POR_SEGUNDO) * dt);   // anti-ácido: no máximo 3% em 7 min
   if (jogador.fome <= 0 && !avisoFome) { avisoFome = true; aviso('Você está com fome e mais lento. Coma algo da mochila.', 4); }
   if (jogador.fome > 5) avisoFome = false;
   tempoInfo -= dt; if (tempoInfo <= 0) { tempoInfo = 1; desenharFome(); }
@@ -9923,12 +9923,12 @@ function dirigirVeiculoEmpresa(c, carga) {
 // pontos dos armazéns de rações (balcão de cada corporação) e da central do Exército
 function pontoRacoes() {
   const k = racoes.corpDe(jogador.perfil);
-  return k === 'policia' ? pontos.delegacia : k === 'prf' ? civico.PREFEITURA.prf : k === 'bombeiros' ? civico.BOMBEIROS.balcao : null;
+  return k === 'policia' ? pontos.delegacia : k === 'prf' ? civico.PREFEITURA.prf : k === 'bombeiros' ? civico.BOMBEIROS.balcao : k === 'bope' ? pontos.sedeBope : null;
 }
 function contextoRacoes() {
   if (jogador.carro || jogador.dentroCasa || jogador.morto) return null;
   const pr = pontoRacoes();
-  if (pr && perto(pr, 4)) return ['armazém de rações (jujubas)', '🍬 Rações', () => racoes.abrir('armazem')];
+  if (pr && perto(pr, 4)) return ['depósito de rações (jujubas e anti-ácido)', '🍬 Rações', () => racoes.abrir('armazem')];
   if (perto(civico.EXERCITO.balcao, 4)) return militar() ? ['central de rações: estoques e pedidos', '🍬 Rações', () => racoes.abrir('central')] : ['licitação do transporte de rações', '📄 Licitação', () => racoes.abrir('licitacao')];
   return null;
 }
@@ -10105,13 +10105,21 @@ const COMPRADOR = { x: 64, z: -972, porta: { x: 64, z: -964 } };
 const viagensJuj = new Map();   // id -> { d, rota, mesh }
 let placaRacoes = null, valorPlaca = 0, compradorMontado = null, tempoJujPos = 0, jujubaAvisou = 0;
 const racaoAtiva = () => Math.max(jogador.jujubaAte || 0, Date.parse(jogador.perfil?.jujuba_ate || 0) || 0) > agoraServidor();
+// anti-ácido (suplemento do Exército): por 7 min a fome cai no máximo 3% (não enche a barrinha)
+const antiacidoAtivo = () => Math.max(jogador.antiacidoAte || 0, Date.parse(jogador.perfil?.antiacido_ate || 0) || 0) > agoraServidor();
+async function usarAntiacido() {
+  const ate = await rede.jujuba.usarAntiacido();
+  jogador.antiacidoAte = Date.parse(ate);
+  aviso('🥤 Anti-ácido: por 7 minutos a fome quase não cai. Ele não mata a fome, só segura.', 4.5);
+  return true;
+}
 async function usarJujuba() {
   const ate = await rede.jujuba.usar();
   jogador.jujubaAte = Date.parse(ate); jujubaAvisou = 0;
   aviso('🍬 Ração militar: 5 minutos mais rápido, mais forte no soco e recuperando vida.', 4);
   return true;
 }
-const destinoJujuba = (corp) => (corp === 'policia' ? pontos.delegacia : corp === 'prf' ? civico.PREFEITURA.prf : civico.BOMBEIROS.balcao) || { x: 0, z: 0 };
+const destinoJujuba = (corp) => (corp === 'policia' ? pontos.delegacia : corp === 'prf' ? civico.PREFEITURA.prf : corp === 'bope' ? pontos.sedeBope : civico.BOMBEIROS.balcao) || { x: 0, z: 0 };
 // caminho do Quartel até a corporação: sai de Porto Sul pela rodovia e entra na cidade pelas ruas
 function rotaJujuba(corp) {
   const ini = [{ x: mundo.QUARTEL.portao.x - 6, z: mundo.QUARTEL.portao.z }, { x: mundo.QUARTEL.portao.x - 6, z: 945 }, { x: 216, z: 945 }, { x: 216, z: 641 }];

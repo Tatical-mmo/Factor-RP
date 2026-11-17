@@ -4,7 +4,7 @@ import { PERSONAGENS, PERSONAGENS_GRATIS, PERSONAGENS_EVENTO, PRECO_PERSONAGEM, 
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const ICONES = { mascara_camisa_cinza: '😷', mascara_camisa_vermelha: '😷', mascara_bandana: '😷', mascara_balaclava: '🥷', mascara_lenco: '🧕', mascara_estrela: '🎭', mascara_caveira: '💀', mascara_camuflada: '🎭', mascara_onca: '🐆', mascara_coroa: '👑', espingarda: '🔫', fuzil: '🔫', granada: '💣', barricada: '🚧', jujuba: '🍬', sucata: '⚙️', chocolate: '🍫', cereal: '🥣', remedio: '💊', desbloqueio: '🔓', parafuso: '🔩' };
+const ICONES = { mascara_camisa_cinza: '😷', mascara_camisa_vermelha: '😷', mascara_bandana: '😷', mascara_balaclava: '🥷', mascara_lenco: '🧕', mascara_estrela: '🎭', mascara_caveira: '💀', mascara_camuflada: '🎭', mascara_onca: '🐆', mascara_coroa: '👑', espingarda: '🔫', fuzil: '🔫', granada: '💣', barricada: '🚧', jujuba: '🍬', antiacido: '🥤', sucata: '⚙️', chocolate: '🍫', cereal: '🥣', remedio: '💊', desbloqueio: '🔓', parafuso: '🔩' };
 
 let ctx = null;
 let precos = [];
@@ -197,7 +197,7 @@ function desenhar() {
       <div class="lista">${itens.length ? itens.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${inv[p.item]} na mochila</small></span>
-          <span class="bts">${p.fome ? `<button data-comer="${p.item}">Comer</button>` : ''}${p.item === 'remedio' ? '<button data-curar="1">Usar (+50 vida)</button>' : ''}${p.item === 'jujuba' ? '<button data-jujuba="1">Usar ração (5 min)</button>' : ''}${p.item === 'espingarda' || p.item === 'fuzil' ? `<button data-equipar="${p.item}">Equipar</button>` : ''}${p.item === 'barricada' ? '<button data-barricada="1">Colocar aqui</button>' : ''}${p.item.startsWith('mascara_') ? `<button data-mascara="${p.item}">${ctx.mascaraAtual?.() === p.item ? 'Tirar' : 'Usar'}</button>` : ''}</span></div>`).join('') : '<span class="vazio">Mochila vazia. Colete sucata no ferro-velho ou compre na loja.</span>'}</div>`;
+          <span class="bts">${p.fome ? `<button data-comer="${p.item}">Comer</button>` : ''}${p.item === 'remedio' ? '<button data-curar="1">Usar (+50 vida)</button>' : ''}${p.item === 'antiacido' ? '<button data-antiacido="1">Beber (7 min)</button>' : ''}${p.item === 'jujuba' ? '<button data-jujuba="1">Usar ração (5 min)</button>' : ''}${p.item === 'espingarda' || p.item === 'fuzil' ? `<button data-equipar="${p.item}">Equipar</button>` : ''}${p.item === 'barricada' ? '<button data-barricada="1">Colocar aqui</button>' : ''}${p.item.startsWith('mascara_') ? `<button data-mascara="${p.item}">${ctx.mascaraAtual?.() === p.item ? 'Tirar' : 'Usar'}</button>` : ''}</span></div>`).join('') : '<span class="vazio">Mochila vazia. Colete sucata no ferro-velho ou compre na loja.</span>'}</div>`;
     $('mVisual').onclick = () => abrir('visual');
     $('mMercado').onclick = () => abrir('mercado');
     c.querySelectorAll('[data-curar]').forEach((b) => {
@@ -207,6 +207,7 @@ function desenhar() {
     c.querySelectorAll('[data-barricada]').forEach((b) => { b.onclick = () => { ctx.colocarBarricada?.(); fechar(); }; });
     c.querySelectorAll('[data-mascara]').forEach((b) => { b.onclick = () => { ctx.usarMascara?.(b.dataset.mascara); desenhar(); }; });
     c.querySelectorAll('[data-jujuba]').forEach((b) => { b.onclick = () => executar(() => ctx.usarJujuba(), 'Ração militar ativa por 5 minutos.'); });
+    c.querySelectorAll('[data-antiacido]').forEach((b) => { b.onclick = () => executar(() => ctx.usarAntiacido(), 'Anti-ácido ativo por 7 minutos.'); });
     c.querySelectorAll('[data-comer]').forEach((b) => {
       b.onclick = () => executar(async () => { const f = await rede.economia.consumir(b.dataset.comer); ctx.definirFome(Number(f)); return f; }, (f) => `Fome agora: ${Math.round(f)}%.`);
     });

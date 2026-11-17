@@ -1629,3 +1629,10 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
     - O socorrido levanta com a animação "Levante-se" (~7 s).
     - O médico jogador vê "✚ SALVAR" em cima de cada ferido; o botão vira "✚ Salvar" e faz a mesma animação.
   - **Poça de tinta** (assets/modelos/poca_tinta.glb, simplificada de 49 mil para 400 triângulos) embaixo de quem cai, jogador ou outros jogadores. Some quando ele levanta.
+- **Anti-ácido, depósitos e caminhões do contrato (16bc + SQL 105)**:
+  - **Anti-ácido** (item `antiacido`, bebida/suplemento): por 7 min a fome cai no máximo 3% (atualizarFome usa no máximo 3/420 por segundo). Não enche a barrinha; tomar de novo renova.
+  - **Depósitos:** Polícia, PRF, **BOPE** (novo, na sede) e Bombeiros, com até 10.000 jujubas e 10.000 anti-ácidos cada. Todos começam vazios (só na 1ª vez que o 105 roda). Pegar 5 de cada, com 5 min de espera por produto. Cada pedido é de um produto.
+  - **Despacho:** o quartel chama um caminhão livre da transportadora do contrato. Ele fica ocupado (status em_rota, sem rota) até voltar, e a empresa recebe o valor por caminhão. Sem caminhão livre, a empresa paga 20.000 de multa para o **cofre do Exército** e vai um caminhão do Exército.
+  - **Licitação:** exige 5 caminhões. A tela mostra os caminhões da empresa a serviço do Exército (x/5).
+  - **Roubo e venda:** a carga de anti-ácido é sequestrável como as outras e vai para o estoque de anti-ácido do Seu Tonho (500 cada, só clã).
+  - **Cofre do Exército:** exercito_cofre e exercito_recompensas. Coronel para cima (ou o admin) recompensa soldados pela central de rações (recompensar_militar).
