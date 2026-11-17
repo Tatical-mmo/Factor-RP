@@ -186,7 +186,8 @@ renderer.localClippingEnabled = true;   // corte do teto do trem quando você es
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#a9c8de');
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+const ambSala = pmrem.fromScene(new RoomEnvironment(), 0.04); let ambCeu = null, tAmbCeu = 0;
+scene.environment = ambSala.texture;
 scene.environmentIntensity = 0.55;
 
 const hemi = new THREE.HemisphereLight('#dfeeff', '#8a7457', 1.3);
@@ -237,6 +238,7 @@ const CEU = {
   sol: new THREE.Color('#fff2dc'), solTarde: new THREE.Color('#ffae6a'), lua: new THREE.Color('#9fb4ff'),
   hemiDia: new THREE.Color('#dfeeff'), hemiNoite: new THREE.Color('#4a5f92'), chaoDia: new THREE.Color('#8a7457'), chaoNoite: new THREE.Color('#2a2833'),
   lampada: new THREE.Color('#fff4e0'), chaoLampada: new THREE.Color('#8c7a66'),   // luz das lâmpadas (interiores)
+  hemiTarde: new THREE.Color('#ffc59a'), hemiManha: new THREE.Color('#ffd9d0'),
 };
 let horaAtual = 12, noiteAtual = 0, molhadoAtual = 0;
 const ajusteHora = { desloc: 0, fixa: null };   // ajuste do admin (config_jogo): adiantar o ciclo ou travar uma hora
@@ -251,7 +253,10 @@ function atualizarCeu(t) {
   const ang = (h - 6) / 12 * Math.PI, elev = Math.sin(ang);
   const S = THREE.MathUtils.smoothstep;
   const dia = S(elev, -0.12, 0.22), tarde = dia * (1 - S(elev, 0.05, 0.45));
-  if (dia > 0.02) SOL_DIR.set(Math.cos(ang) * 0.9, Math.max(0.2, elev), 0.35).normalize();
+  // alto/ultra: céu em degradê, sol mais baixo no fim do dia (sombras compridas) e luz bem dourada à tarde
+  const hq = /^(ultra|alto)$/.test(visual.nivelAtual()) && !jogador.dentroCasa && jogador.pos.x < 1900;
+  ceu.definirCeuBonito(hq);
+  if (dia > 0.02) SOL_DIR.set(Math.cos(ang) * 0.9, Math.max(hq ? 0.1 : 0.2, elev), 0.35).normalize();
   else SOL_DIR.set(-Math.cos(ang) * 0.9, Math.max(0.3, -elev), -0.35).normalize();   // luz da lua: vem de onde a lua está no céu
   sol.color.copy(CEU.lua).lerp(CEU.sol, dia).lerp(CEU.solTarde, tarde * 0.75);
   sol.intensity = 0.3 + 2.2 * dia;
@@ -260,6 +265,13 @@ function atualizarCeu(t) {
   hemi.groundColor.copy(CEU.chaoNoite).lerp(CEU.chaoDia, dia);
   scene.environmentIntensity = 0.12 + 0.33 * dia + 0.35 * molhadoAtual;   // chão molhado reflete mais
   scene.background.copy(CEU.noite).lerp(CEU.dia, dia).lerp(CEU.tarde, tarde * 0.5);
+  if (hq) {
+    scene.background.copy(ceu.corHorizonte());
+    if (h > 12) { sol.color.lerp(CEU.solTarde, tarde * 0.6); hemi.color.lerp(CEU.hemiTarde, tarde * 0.45); }   // fim de tarde dourado
+    else hemi.color.lerp(CEU.hemiManha, tarde * 0.3);
+    // reflexo do céu (poças, asfalto molhado, lataria): refeito a cada 6 s com as cores da hora
+    if ((tAmbCeu -= 1 / 60) <= 0) { tAmbCeu = 6; const novo = ceu.montarReflexoCeu(pmrem); scene.environment = novo.texture; ambCeu?.dispose(); ambCeu = novo; }
+  } else if (scene.environment !== ambSala.texture) { scene.environment = ambSala.texture; ambCeu?.dispose(); ambCeu = null; tAmbCeu = 0; }
   const noite = 1 - S(elev, -0.02, 0.3);
   mundo.definirNoite(noite);
   noiteAtual = noite;
@@ -3041,7 +3053,7 @@ async function iniciarJogo(perfil) {
   $('carregando').classList.remove('oculto');
   montarChao();
   // um modelo faltando não pode travar o jogo: ele só fica de fora (veículos e prédios têm versão feita por código)
-  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
+  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_exercito' ? '?v=pas4' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
   const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
   const skin = perfil.policial ? SKIN_POLICIA : id;
   const avatarP = criarAvatar(ROBOS.includes(skin) ? 'robos' : pastaJogador, skin);

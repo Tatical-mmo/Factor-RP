@@ -346,8 +346,12 @@ function separarRotor(base, R) {
   const cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2, raio = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) / 2, y = (bb.min.y + bb.max.y) / 2;
   for (const pa of rotor.children) { pa.geometry.translate(-cx, 0, -cz); pa.geometry.computeBoundingSphere(); }
   rotor.position.x += cx; rotor.position.z += cz;
-  // como no primeiro helicóptero: parado/devagar aparecem as pás do modelo; girando rápido elas somem e entra o
-  // "borrão" (disco translúcido + duas pás apagadas), que não pisca como pá de verdade girando na tela
+  montarBorrao(rotor, raio, y);
+  base.add(rotor);
+}
+// como no primeiro helicóptero: parado/devagar aparecem as pás do modelo; girando rápido elas somem e entra o
+// "borrão" (disco translúcido + duas pás apagadas), que não pisca como pá de verdade girando na tela
+function montarBorrao(rotor, raio, y) {
   const reais = new THREE.Group(); reais.name = 'pasReais'; reais.add(...rotor.children); rotor.add(reais);
   const borrao = new THREE.Group(); borrao.name = 'borrao'; borrao.position.y = y; borrao.visible = false;
   const disco = new THREE.Mesh(new THREE.CircleGeometry(raio, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#222', transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide }));
@@ -357,12 +361,25 @@ function separarRotor(base, R) {
   disco.onBeforeRender = function () { const b = this.parent; if (performance.now() - b.userData.t > 400) { b.visible = false; const r = b.parent?.getObjectByName('pasReais'); if (r) r.visible = true; } };
   for (const a of [0, Math.PI / 2]) { const pa = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, raio * 2), new THREE.MeshBasicMaterial({ color: '#333', transparent: true, opacity: 0.45, depthWrite: false })); pa.rotation.y = a; borrao.add(pa); }
   rotor.add(borrao);
-  base.add(rotor);
 }
 // troca pás do modelo <-> borrão pela velocidade do giro (cada clone tem os seus nós; vale para jogador, remotos e NPCs)
 const _giroRotor = new WeakMap();
 export function rotorRapido(ro, rapido) {
-  let n = _giroRotor.get(ro); if (!n) { n = { r: ro.getObjectByName('pasReais'), b: ro.getObjectByName('borrao') }; _giroRotor.set(ro, n); }
+  let n = _giroRotor.get(ro);
+  if (!n) {
+    // modelo que já veio com o nó "rotor" pronto (helicóptero do Exército): monta o borrão nele na primeira vez
+    if (!ro.getObjectByName('pasReais') && ro.isMesh && ro.geometry) {
+      // o nó do rotor é a própria malha: as pás viram uma cópia filha e o nó fica invisível (só leva os filhos)
+      const pas = new THREE.Mesh(ro.geometry, ro.material); pas.castShadow = true; ro.add(pas);
+      ro.material = new THREE.MeshBasicMaterial({ visible: false });
+    }
+    if (!ro.getObjectByName('pasReais') && ro.children.length) {
+      const bb = new THREE.Box3(); ro.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(ro.matrixWorld).invert();
+      ro.traverse((o) => { if (o.isMesh) { o.geometry.computeBoundingBox(); bb.union(o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld))); } });
+      if (!bb.isEmpty()) montarBorrao(ro, Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) / 2, (bb.min.y + bb.max.y) / 2);
+    }
+    n = { r: ro.getObjectByName('pasReais'), b: ro.getObjectByName('borrao') }; _giroRotor.set(ro, n);
+  }
   if (n.r) n.r.visible = !rapido; if (n.b) { n.b.visible = rapido; if (rapido) n.b.userData.t = performance.now(); }
 }
 // helicóptero dos bombeiros: a bolsa de água pendurada embaixo (abaixo dos esquis) vira um nó "balde" que some no

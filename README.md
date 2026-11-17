@@ -1605,3 +1605,10 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Menos memória (16aw)**: o jogo passou a fechar sozinho no celular quando travava muito. Era a memória de vídeo cheia, e o Android matava a aba.
   - Todas as texturas dos modelos (assets/modelos, personagens e robos, 198 arquivos) agora têm no máximo 512 px. Com tudo carregado, a memória de vídeo cai de ~1,9 GB para ~0,66 GB.
   - Saiu o envio antecipado de todas as texturas para a placa (aquecer, da 16as): com ~200 modelos ele enchia a memória. As texturas voltam a subir só quando o modelo aparece. A compilação de shaders em segundo plano continua.
+- **Fim de tarde, reflexo do céu e rotor do Exército (16ax)**:
+  - **Alto e ultra, fora dos interiores:** céu em degradê (cúpula com shader em ceu.js). O zênite vai para o horizonte e o sol tem brilho espalhado em volta. No fim de tarde o horizonte fica laranja e o alto do céu azul-escuro; de manhã, rosado; com chuva, cinza.
+    - A cor do horizonte vai para o fundo e para a neblina.
+    - O sol desce mais (sombras compridas) e a luz fica dourada à tarde.
+  - **Reflexo do céu:** o ambiente das reflexões (poças, asfalto molhado, lataria) vem da cúpula e é refeito a cada 6 s com as cores da hora, então as poças refletem o céu do momento. Nos interiores continua o ambiente de sala.
+  - **Helicóptero do Exército** (glbtool/heli_exercito.py): saíram do corpo a pá solta e o caco flutuante. O rotor virou o cubo mais 4 cópias da melhor pá, a cada 90°, centrado no cubo. Girando rápido aparece o borrão, como nos outros helicópteros (montado na primeira vez em rotorRapido).
+  - **Robô separador:** zip só com a pasta assets/ era "achatado" (o robô usa o conteúdo da pasta única de cima), e os modelos caíam em /modelos, /personagens e /robos na raiz. Agora todo pacote leva também o README.md na raiz. As pastas modelos/, personagens/ e robos/ e os main.js, mundo.js e config.js soltos na raiz são lixo e podem ser apagados.

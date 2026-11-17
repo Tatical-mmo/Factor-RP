@@ -8,6 +8,45 @@ const NUVENS = 34, BOLAS = 9, RAIO_N = 560, CEU = 600;   // a câmera enxerga at
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _cor = new THREE.Color();
 const nuv = [];   // { x, z, y, esc, bolas: [[dx, dy, dz, r]] }
 let rnd = 7;
+// céu em degradê (gráfico alto e ultra): zênite → horizonte, com o brilho do sol espalhado em volta dele. No fim de tarde
+// o horizonte fica laranja e o alto do céu, azul-escuro; de manhã, rosado. A cor do horizonte vai para a neblina e
+// para o reflexo das poças (o jogo pega com corHorizonte e com montarReflexoCeu).
+let cupula = null, bonito = false;
+const C = { zen: new THREE.Color(), hor: new THREE.Color(), sol: new THREE.Color() };
+const CC = {
+  zenDia: new THREE.Color('#3f7fc8'), zenNoite: new THREE.Color('#040a1a'), zenTarde: new THREE.Color('#2f3f78'), zenManha: new THREE.Color('#5a78b6'),
+  horDia: new THREE.Color('#b7d3e8'), horNoite: new THREE.Color('#101c38'), horTarde: new THREE.Color('#ff8a4a'), horManha: new THREE.Color('#f2b08c'),
+  solDia: new THREE.Color('#fff1d0'), solBaixo: new THREE.Color('#ffb060'), cinza: new THREE.Color('#8b949e'),
+};
+const SHADER_CEU = {
+  uniforms: { zen: { value: C.zen }, hor: { value: C.hor }, solCor: { value: C.sol }, solDir: { value: new THREE.Vector3(0, 1, 0) }, forca: { value: 1 } },
+  vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform vec3 zen, hor, solCor, solDir; uniform float forca; varying vec3 vD;
+    void main(){ vec3 d = normalize(vD); float h = d.y;
+      vec3 c = mix(hor, zen, smoothstep(-0.02, 0.6, h));
+      c = mix(c, hor * 0.55, smoothstep(0.0, -0.25, h));
+      float s = max(dot(d, normalize(solDir)), 0.0);
+      c += solCor * (pow(s, 6.0) * 0.45 + pow(s, 48.0) * 0.6) * forca;
+      gl_FragColor = vec4(c, 1.0); }`,
+};
+export function definirCeuBonito(v) { bonito = !!v; if (cupula) cupula.visible = bonito; }
+export const corHorizonte = () => C.hor;
+// cores do céu para a hora (chamado todo quadro pelo atualizar; vale também na câmera de cima, para a neblina)
+function coresDoCeu(hora, noite, fechado) {
+  const ang = (hora - 6) / 12 * Math.PI, el = Math.sin(ang), S = THREE.MathUtils.smoothstep;
+  const dia = S(el, -0.12, 0.22), baixo = dia * (1 - S(el, 0.02, 0.38)), tarde = hora >= 12;
+  C.zen.copy(CC.zenNoite).lerp(CC.zenDia, dia).lerp(tarde ? CC.zenTarde : CC.zenManha, baixo * 0.7);
+  C.hor.copy(CC.horNoite).lerp(CC.horDia, dia).lerp(tarde ? CC.horTarde : CC.horManha, baixo * 0.9);
+  C.sol.copy(CC.solDia).lerp(CC.solBaixo, baixo).multiplyScalar(dia * (1 - noite * 0.8));
+  if (fechado > 0) { const g = _cor.copy(CC.cinza).multiplyScalar(0.3 + 0.7 * dia); C.zen.lerp(g, fechado * 0.8); C.hor.lerp(g, fechado * 0.75); C.sol.multiplyScalar(1 - fechado * 0.9); }
+  SHADER_CEU.uniforms.solDir.value.set(Math.cos(ang) * 0.9, el, 0.35).normalize();
+}
+// reflexo do céu (poças, asfalto molhado, carros): um ambiente feito só com a cúpula, refeito de tempos em tempos
+let cenaReflexo = null;
+export function montarReflexoCeu(pmrem) {
+  if (!cenaReflexo) { cenaReflexo = new THREE.Scene(); cenaReflexo.add(new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), new THREE.ShaderMaterial({ ...SHADER_CEU, side: THREE.BackSide, depthWrite: false }))); }
+  return pmrem.fromScene(cenaReflexo, 0.02, 0.1, 200);
+}
 const aleat = () => { rnd = (rnd * 16807) % 2147483647; return (rnd - 1) / 2147483646; };
 
 // textura redonda: disco com crateras (lua) ou brilho que some na borda (halo do sol e da lua)
@@ -50,6 +89,8 @@ export function iniciar(scene) {
   matNuvem = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, metalness: 0, transparent: true, opacity: 0.9, fog: false, depthWrite: false });
   nuvens = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 7), matNuvem, NUVENS * BOLAS);
   nuvens.frustumCulled = false; nuvens.renderOrder = -1; longe.add(nuvens);
+  cupula = new THREE.Mesh(new THREE.SphereGeometry(CEU, 32, 16), new THREE.ShaderMaterial({ ...SHADER_CEU, side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false }));
+  cupula.renderOrder = -3; cupula.frustumCulled = false; cupula.visible = bonito; longe.add(cupula);
   for (let k = 0; k < NUVENS; k++) {
     const bolas = [];
     // nuvem fofa: base larga e quase reta, e "couve-flor" mais alta no meio (bolas menores nas pontas)
@@ -93,6 +134,7 @@ export function atualizar(dt, cam, noite, tempo, forca, ativo, _solDir, hora = 1
   if (!grupo) return;
   grupo.visible = ativo;
   for (let i = raios.length - 1; i >= 0; i--) { const r = raios[i]; r.t += dt; r.o.material.opacity = r.o.userData.op * (r.t < 0.1 ? 1 : r.t < 0.17 ? 0.15 : r.t < 0.3 ? 1 : Math.max(0, 1 - (r.t - 0.3) * 3.5)); if (r.t > 0.6) { grupo.remove(r.o); r.o.geometry.dispose(); r.o.material.dispose(); raios.splice(i, 1); } }
+  coresDoCeu(hora, noite, tempo === 'limpo' ? 0 : forca);
   if (!ativo) return;
   const c = cam.position, fechado = tempo === 'limpo' ? 0 : forca;
   longe.position.copy(c); longe.scale.setScalar(Math.min(1, ((cam.far || 700) * 0.9) / CEU)); longe.updateMatrixWorld(true);
