@@ -74,9 +74,11 @@ async function desenhar() {
             <div class="botoes">${pd && pd.status === 'aberto' ? `<button data-kit="${k}" data-ped="${pd.id}">🚚 Caminhão cheio + kit de armas</button>` : ''}<button data-kit="${k}">🚚 Só o kit de armas</button></div>`; })() : ''}</div>`; }).join('')}
       ${est.viagens.filter((v) => v.status === 'sequestrada').map((v) => `<p class="dica" style="color:#ff8a80">🚨 Caminhão (${nomeCarga(v)}) SEQUESTRADO a caminho de ${CORP_NOME[v.corp]}.</p>`).join('')}
       <p class="dica">📄 Licitação do transporte: ${l ? (l.status === 'vigente' ? `contrato vigente (${l.entregas}/5 caminhões)` : `aberta até ${new Date(l.fecha_em).toLocaleTimeString('pt-BR').slice(0, 5)}`) : 'abrindo…'}</p>
+      <div class="botoes"><button id="rVerLic">📄 Abrir a licitação (lances)</button></div>
       <hr><p class="dica">🎖️ Recompensar soldado exemplar com o cofre (Coronel para cima): prisões, missões, treinos, sem ferir inocentes.</p>
       <div class="botoes"><input id="rRecNome" placeholder="nome do soldado" style="width:9em"><input id="rRecValor" type="number" min="100" max="1000000" step="100" value="5000" style="width:6em"></div>
       <div class="botoes"><input id="rRecMotivo" placeholder="motivo" style="width:15em"><button id="rRec">🎖️ Recompensar</button></div>`;
+    $('rVerLic').onclick = () => abrir('licitacao');
     $('rRec').onclick = () => executar(() => rede.jujuba.recompensar($('rRecNome').value.trim(), Math.floor(Number($('rRecValor').value)), $('rRecMotivo').value.trim()), (v) => `🎖️ ${fmt(v)} moedas enviadas do cofre.`);
     c.querySelectorAll('[data-kit]').forEach((b2) => { b2.onclick = () => executar(() => rede.jujuba.despacharKit(b2.dataset.kit, b2.dataset.ped ? Number(b2.dataset.ped) : null, ctx.duracaoViagem(b2.dataset.kit)), '🚚 Kit de armas despachado (10 espingardas, 10 fuzis e 30 granadas).'); });
     // o Exército manda por conta própria, sem esperar o pedido da corporação (108)

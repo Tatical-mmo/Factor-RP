@@ -15241,7 +15241,7 @@ function menuGuarita() {
   const ops = [];
   if (!militar()) ops.push({ rotulo: '🎖️ Pedir alistamento no Exército', fn: () => rede.exercito.pedirAlistamento().then((r) => aviso(r === 'pendente' ? '⏳ Seu pedido já está esperando a aprovação de um oficial.' : '📨 Pedido enviado! Um oficial do Exército (Tenente para cima) precisa aprovar.', 4.5)).catch((e) => aviso(e.message, 4)) });
   if (oficialExercito()) ops.push({ rotulo: '📋 Pedidos de alistamento', fn: () => menuAlistamentos() });
-  if (!militar()) ops.push({ rotulo: '📄 Licitação do transporte de rações', fn: () => racoes.abrir('licitacao') });
+  if (!militar() || jogador.perfil?.cargo === 'admin') ops.push({ rotulo: '📄 Licitação do transporte de rações', fn: () => racoes.abrir('licitacao') });
   if (!ops.length) ops.push({ rotulo: 'Ok', fn: () => {} });
   escolher('🎖️ Guarita do Exército', militar() ? 'Guarita de alistamento. Oficiais aprovam aqui os novos recrutas.' : 'Quer servir? Peça o alistamento: um oficial do Exército analisa e aprova.', ops);
 }
