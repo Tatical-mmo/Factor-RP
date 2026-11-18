@@ -2852,6 +2852,8 @@ function alvosRastreio() {
     r.push({ icone: '🏭', nome: e.dono === eu ? `Minha empresa “${e.nome}”` : `Empresa onde trabalho “${e.nome}”`, x: l.portao.x, z: l.portao.z - 1.5, destaque: true });
   }
   for (const d of casasLista) if (moraEm(d)) r.push({ icone: '🏠', nome: d.dono === eu ? `Minha casa${d.rotulo ? ` · ${d.rotulo}` : ''}` : `Casa alugada${d.rotulo ? ` · ${d.rotulo}` : ''}`, x: d.x, z: d.z, destaque: true });
+  for (const o of OFICINAS) if (o.balcao) r.push({ icone: '🔧', nome: o.nome, x: o.balcao.x, z: o.balcao.z });
+  for (const t of TERRENOS_OFICINA) { if (t.oficina?.balcao) r.push({ icone: '🔧', nome: t.oficina.nome, x: t.oficina.balcao.x, z: t.oficina.balcao.z, destaque: t.d?.dono === eu }); else if (t.placa) r.push({ icone: '🏗️', nome: `Terreno para oficina · ${t.regiao}`, x: t.placa.x, z: t.placa.z }); }
   for (const f of Object.values(mundo.FAVELAS)) { r.push({ icone: '🏚️', nome: f.nome, x: f.entrada.x + 6, z: f.entrada.z }); r.push({ icone: '🏴', nome: `Base de clã · ${f.nome.replace('Favela do ', '')}`, x: f.base.x, z: f.base.z + (f.base.z < 0 ? 26 : -24) }); }
   if (jogador.cla) for (const v of territorios.values()) if (v.d.dono_cla === jogador.cla) r.push({ icone: '🚩', nome: v.d.nome, x: v.d.x, z: v.d.z });
   for (const l of ferrovia.linhas) for (const lado of ['centro', 'destino']) { const p = l.plataformas[lado]; r.push({ icone: '🚆', nome: p.nome, x: 0, z: p.zSaida }); }
@@ -3278,6 +3280,7 @@ async function iniciarJogo(perfil) {
   if ($('btCelular')) $('btCelular').onclick = () => abrirCelular();
   try { montarEstacionamentos(); } catch (e) { console.warn('estacionamentos:', e); }
   try { montarOficinas(); } catch (e) { console.warn('oficinas:', e); }
+  desenharFundoMapa(); try { montarLocais(); } catch { /* sem locais */ }   // as oficinas e os estacionamentos entram no mapa e no teleporte
   servicos.iniciar({ ultra: () => visual.nivelAtual() === 'ultra', socorrista: socorristaNpc,
     scene, textoSprite, altura: alturaChao, jogador: () => jogador, perfil: () => jogador.perfil, aviso, agora: agoraServidor,
     rastrear: (a) => rastrear(a), rastreio: () => rastreio, meuCla: () => jogador.cla, alcanceJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? 30 : jogador.carro?.servico === 'bombeiros' ? 16 : 10), origemJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? jogador.carro.mesh.position.clone().setY(jogador.carro.mesh.position.y - 0.4) : null), obstaculo: (x, z, a, o) => obstaculoAFrente(x, z, a, o), vista: (x, z) => { const f = foco(); return Math.abs(x - f.x) + Math.abs(z - f.z) < 160; }, sinal: (x, z, a) => semaforos.sinalAFrente(x, z, a, 9), rondaPerto, posRonda, clas: () => [...clasCache.values()],
@@ -7828,6 +7831,8 @@ function montarLocais() {
   LOCAIS.push({ nome: '🚌 Rodoviária', x: RODO.guiche.x - 2, z: RODO.guiche.z });
   LOCAIS.push({ nome: '♻️ Central de Reciclagem', x: CENTRAL.garagem.x, z: CENTRAL.garagem.z + 2 });
   LOCAIS.push({ nome: '🚗 Autoescola', x: AUTOESCOLA.balcao.x, z: AUTOESCOLA.balcao.z + 2 });
+  for (const o of OFICINAS) if (o.balcao) LOCAIS.push({ nome: `🔧 ${o.nome}`, x: o.balcao.x, z: o.balcao.z });
+  for (const t of TERRENOS_OFICINA) { const o = t.oficina; if (o?.balcao) LOCAIS.push({ nome: `🔧 ${o.nome}`, x: o.balcao.x, z: o.balcao.z }); else if (t.placa) LOCAIS.push({ nome: `🏗️ Terreno para oficina ${t.id} · ${t.regiao}`, x: t.placa.x, z: t.placa.z }); }
   if (pontos.lojas[0]) LOCAIS.push({ nome: 'Loja', x: pontos.lojas[0].x, z: pontos.lojas[0].z + 1.5 });
   if (pontos.sucata[0]) LOCAIS.push({ nome: 'Ferro-velho', x: pontos.sucata[0].x + 3.5, z: pontos.sucata[0].z + 3.5 });
   if (pontos.bancadas[0]) LOCAIS.push({ nome: 'Bancada (chocolate)', x: pontos.bancadas[0].x, z: pontos.bancadas[0].z + 2.5 });
@@ -10404,7 +10409,7 @@ function atualizarOficinasJog(dt) {
         t.g = montarGalpaoOficina(o, t.L, d.nivel); t.oficina = o;
       } else t.g = montarTerrenoVenda(t);
     }
-    desenharFundoMapa();
+    desenharFundoMapa(); try { montarLocais(); } catch { /* sem locais */ }
   }).catch(() => { tempoOficinasJog = 10; });
 }
 function nomeJogador(id) { if (id === jogador.perfil?.id) return jogador.perfil.nome; return remotos.get(id)?.meta?.nome || null; }
