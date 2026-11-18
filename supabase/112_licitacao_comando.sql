@@ -16,7 +16,7 @@ begin
   p := jogador_livre(); adm := p.cargo = 'admin';
   select * into e from empresas where id = p_empresa;
   if e.id is null or e.dono <> p.id then raise exception 'empresa invalida'; end if;
-  if e.tipo <> 'transportadora' then raise exception 'so transportadoras'; end if;
+  if e.tipo <> 'transportadora' and not coalesce(e.transporte, false) then raise exception 'so transportadoras'; end if;   -- grupo (fundida) também
   if not adm and e.nivel < 5 then raise exception 'precisa nivel 5'; end if;
   if not adm and (select count(*) from caminhoes where empresa = e.id and tipo = 'caminhao') < 5 then raise exception 'a licitacao exige 5 caminhoes'; end if;
   if p_valor not between 10000 and 5000000 then raise exception 'lance invalido'; end if;

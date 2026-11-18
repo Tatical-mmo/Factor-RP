@@ -3244,7 +3244,7 @@ async function iniciarJogo(perfil) {
     entrarMoradia: (d) => entrarEmCasa(d),
     casaVendida: () => { tempoSocial = 0; if (jogador.dentroCasa) sairDeCasa(); } });
   racoes.iniciarRacoes({ perfil: () => jogador.perfil, agora: () => agoraServidor(), mudou: (e) => racoesMudou(e), duracaoViagem: (corp) => duracaoViagemJujuba(corp),
-    minhasTransportadoras: async () => (await rede.listarEmpresas()).filter((e) => e.dono === jogador.perfil.id && e.tipo === 'transportadora') });
+    minhasTransportadoras: async () => (await rede.listarEmpresas()).filter((e) => e.dono === jogador.perfil.id && (e.tipo === 'transportadora' || e.transporte)) });
   iniciarEmpresa({
     perfil: () => jogador.perfil, agora: agoraServidor,
     definirEmprego: (id) => { emprego = id; },
@@ -14993,7 +14993,7 @@ function recarregarLogos() { logoEmp.t = 0; }
 // ================================================================= refletores das bases militares (tipo estádio)
 // Torres de 22 m nos cantos do Quartel, da Base Aérea e da Base Naval. À noite acendem: o painel de lâmpadas brilha,
 // o facho aparece de leve no ar e uma poça de luz clareia o chão (sem luz de verdade, que pesa no celular).
-const refletores = { grupos: [], mats: null };
+const refletores = { grupos: [], mats: null, torres: [], luz: null, alvo: null, tTorre: 0 };
 function texturaPocaLuz() {
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
   const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
@@ -15020,7 +15020,7 @@ function montarRefletores() {
     caixa: new THREE.MeshStandardMaterial({ color: '#2f3338', roughness: 0.7, metalness: 0.4 }),
     lampada: new THREE.MeshBasicMaterial({ color: '#4a4a44', toneMapped: false }),
     facho: new THREE.MeshBasicMaterial({ color: '#fff3d6', opacity: 0, side: THREE.DoubleSide, ...aditivo }),
-    poca: new THREE.MeshBasicMaterial({ map: texturaPocaLuz(), opacity: 0, polygonOffset: true, polygonOffsetFactor: -4, ...aditivo }),
+    poca: new THREE.MeshBasicMaterial({ map: texturaPocaLuz(), opacity: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2, ...aditivo }),
   };
   const H = 22, geoMastro = new THREE.CylinderGeometry(0.22, 0.38, H, 8), geoLamp = new THREE.BoxGeometry(0.85, 0.85, 0.12);
   const geoFacho = new THREE.CylinderGeometry(0.12, 1, 1, 16, 1, true).translate(0, -0.5, 0), geoPoca = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2);
@@ -15037,7 +15037,9 @@ function montarRefletores() {
     const d = Math.hypot(ax - x, az - z, y0 + H - ay), r = Math.max(14, d * 0.55);
     const f = new THREE.Mesh(geoFacho, M.facho); f.position.set(x, y0 + H - 0.5, z);   // cone do refletor até o chão
     f.scale.set(r * 0.8, d, r * 0.8); f.lookAt(ax, ay, az); f.rotateX(-Math.PI / 2); g.add(f);
-    const p = new THREE.Mesh(geoPoca, M.poca); p.position.set(ax, ay + 0.06, az); p.scale.setScalar(r * 1.35); p.renderOrder = 2; g.add(p);
+    // a mancha fica rente ao chão (antes, 6 cm acima e puxada para a frente, cobria pés e rodas: pareciam afundados)
+    const p = new THREE.Mesh(geoPoca, M.poca); p.position.set(ax, ay + 0.015, az); p.scale.setScalar(r * 1.35); p.renderOrder = 2; g.add(p);
+    refletores.torres.push({ x, y: y0 + H - 0.6, z, ax, ay, az, r: r * 1.35, d });
   };
   const base = (b, n) => {   // n torres de cada lado comprido (x), 6 m para dentro do muro
     const g = new THREE.Group(); scene.add(g);
@@ -15053,6 +15055,22 @@ function atualizarRefletores() {
   M.lampada.color.setRGB(0.29 + 0.71 * n, 0.29 + 0.71 * n, 0.27 + 0.6 * n);
   M.facho.opacity = 0.028 * n; M.poca.opacity = 0.85 * n;
   for (const R of refletores.grupos) R.g.visible = Math.hypot(jogador.pos.x - R.cx, jogador.pos.z - R.cz) < 700;
+  // luz de verdade: a mancha só clareia o chão; quem anda embaixo (gente, carros) é iluminado por uma luz que vai para
+  // o refletor mais perto de você. Fica sempre na cena (só apaga de dia): ligar e desligar recompila os materiais.
+  if (!refletores.luz) {
+    const L = refletores.luz = new THREE.SpotLight('#fff1d6', 0, 0, 0.6, 0.45, 1);
+    L.position.set(0, -100, 0); scene.add(L, L.target);
+  }
+  const L = refletores.luz, f = foco();
+  if (!(refletores.tTorre > 0)) {
+    refletores.tTorre = 0.5; let m = null, dm = Infinity;
+    for (const t of refletores.torres) { const dd = Math.hypot(t.ax - f.x, t.az - f.z) / t.r; if (dd < dm) { dm = dd; m = t; } }
+    refletores.alvo = m && dm < 1.15 ? m : null;
+    if (refletores.alvo) { const t = m; L.position.set(t.x, t.y, t.z); L.target.position.set(t.ax, t.ay, t.az); L.target.updateMatrixWorld(); L.angle = Math.min(1.2, Math.atan(t.r / t.d) * 1.1); }
+  }
+  refletores.tTorre -= 1 / 60;
+  const alvoI = refletores.alvo && !jogador.dentroCasa ? 9 * refletores.alvo.d * n : 0;
+  L.intensity += (alvoI - L.intensity) * 0.15;
 }
 
 // ================================================================= estrelas e perdão automático
