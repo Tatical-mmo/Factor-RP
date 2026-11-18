@@ -422,7 +422,7 @@ function montarHospitalGLB(glb) {
   const m = glb.clone(true); g.add(m); m.updateMatrixWorld(true);
   const bb = new THREE.Box3().setFromObject(m), tam = bb.getSize(new THREE.Vector3()), k = LARG / Math.max(tam.x, tam.z);
   m.scale.setScalar(k); m.position.set(-(bb.min.x + bb.max.x) / 2 * k, -bb.min.y * k, -(bb.min.z + bb.max.z) / 2 * k);
-  m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.semUltra = true; } });   // fora do "prédio ultra": neste modelo as janelas acesas viravam triângulos e o vidro-espelho escurecia a fachada
   ctx.scene.add(g); g.updateMatrixWorld(true);
   const prof = tam.z * k, alto = tam.y * k;
   ctx.colisores.push({ tipo: 'caixa', x0: X - LARG / 2 + 2, x1: X + LARG / 2 - 2, z0: Z - prof / 2 + 3.5, z1: Z + prof / 2 - 1 });

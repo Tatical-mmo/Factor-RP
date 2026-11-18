@@ -252,6 +252,7 @@ function traduzirRpc(m) {
     'a licitacao exige 5 caminhoes': 'A licitação exige 5 caminhões na transportadora.',
     'so coronel ou acima': 'Só Coronel para cima pode usar o cofre do Exército.',
     'cofre sem saldo': 'O cofre do Exército não tem esse valor.',
+    'voce ja tem essa mascara': 'Você já tem essa máscara (cada uma é única).',
     'so o dono da empresa': 'Só o dono da empresa pode mudar a logo.',
     'envio de logo bloqueado': 'O envio de logo desta empresa está bloqueado pela moderação.',
     'imagem invalida': 'Imagem inválida.',

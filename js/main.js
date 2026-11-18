@@ -311,7 +311,8 @@ function atualizarLuzPoste(dt) {
   if (!quer) { if (luzPoste) luzPoste.intensity = Math.max(0, luzPoste.intensity - dt * 80); return; }
   if (!luzPoste) {
     luzPoste = new THREE.SpotLight('#ffd7a0', 40, 26, 1.05, 0.55, 1.4); luzPoste.castShadow = true;
-    luzPoste.shadow.mapSize.set(1024, 1024); luzPoste.shadow.bias = -0.0008; luzPoste.shadow.camera.near = 0.5; luzPoste.shadow.camera.far = 28;
+    luzPoste.shadow.mapSize.set(1024, 1024); luzPoste.shadow.bias = -0.002; luzPoste.shadow.normalBias = 0.08;   // sem as listras de sombra nos prédios 3D (hospital)
+    luzPoste.shadow.camera.near = 0.5; luzPoste.shadow.camera.far = 28;
     scene.add(luzPoste); scene.add(luzPoste.target);
   }
   const alvoI = 40 * Math.min(1, (noiteAtual - 0.35) / 0.3);
@@ -1085,7 +1086,7 @@ async function criarAvatar(pasta, id) {
     }
     if (!gltf.userData.clipes) gltf.userData.clipes = prepararClipes(anims);
   }
-  const av = new Avatar(modelo, gltf.userData.clipes); av.gltf = gltf; return av;
+  const av = new Avatar(modelo, gltf.userData.clipes); av.gltf = gltf; av.personagemId = id; return av;
 }
 
 // ================================================================= JOGADOR
@@ -2569,7 +2570,7 @@ function atualizarPrediosUltra(dt) {
   if ((tPrediosUltra -= dt) > 0 && ultra === prediosEmUltra) return;
   tPrediosUltra = 8; prediosEmUltra = ultra;
   scene.traverse((o) => {
-    if (!o.isMesh || !o.userData.predio3d) return;
+    if (!o.isMesh || !o.userData.predio3d || o.userData.semUltra) return;
     if (ultra) { if (!matOrigPredio.has(o)) { const u = materialUltra(o.material); if (u) { matOrigPredio.set(o, o.material); o.material = u; } } }
     else if (matOrigPredio.has(o)) { o.material = matOrigPredio.get(o); matOrigPredio.delete(o); }
   });
@@ -3150,7 +3151,7 @@ async function iniciarJogo(perfil) {
 
   // jogador
   const av = await avatarP;
-  jogador.avatar = av; jogador.nome = nome;
+  jogador.avatar = av; jogador.nome = nome; av.nomePersonagem = skin;
   const arma = clonar('arma_paintball');
   av.encaixarArma(arma); arma.visible = false; jogador.arma = arma; jogador.armaTipo = 'basica';
   jogador.pos.set(perfil.pos_x ?? 0, 0, perfil.pos_z ?? quadC(2));
@@ -7730,7 +7731,8 @@ async function trocarAvatar(personagem) {
     const novo = await criarAvatar(ROBOS.includes(personagem) ? 'robos' : 'personagens', personagem);
     const arma = clonar('arma_paintball'); novo.encaixarArma(arma); arma.visible = jogador.armado;
     const velho = jogador.avatar;
-    scene.remove(velho.raiz); velho.raiz.remove(jogador.etiqueta); vestir(velho, null);
+    vestir(velho, null); velho.raiz.remove(jogador.etiqueta); velho.raiz.removeFromParent();   // de onde estiver (rua, banco do carro...)
+    novo.nomePersonagem = personagem;
     novo.raiz.add(jogador.etiqueta); jogador.etiqueta.position.y = alturaNome(novo);
     novo.raiz.position.copy(jogador.pos); novo.raiz.rotation.y = jogador.yaw;
     scene.add(novo.raiz); novo.tocar('idle');
@@ -7748,7 +7750,8 @@ function aplicarPerfil(novo) {
     setTimeout(async () => { await rede.sair(); location.reload(); }, 5000);
     return;
   }
-  if (novo.personagem !== antigo.personagem || novo.policial !== antigo.policial) trocarAvatar(skinAtual());
+  // o personagem não muda mais ao entrar em serviço (a farda é que mostra): recriar o boneco aqui deixava uma cópia parada
+  if (novo.personagem && novo.personagem !== antigo.personagem && novo.personagem !== jogador.avatar?.nomePersonagem) trocarAvatar(skinAtual());
   if (novo.policial !== antigo.policial) aviso(novo.policial ? 'Você está em serviço na polícia. Prenda os procurados (em vermelho)!' : 'Você saiu do serviço da polícia.', 4);
   if ((novo.crimes || 0) > (antigo.crimes || 0)) aviso('Você está PROCURADO pela polícia.', 4);
   if (novo.prf !== antigo.prf) aviso(novo.prf ? 'Você está em serviço na PRF. Investigue a prefeitura!' : 'Você saiu do serviço da PRF.', 4);
@@ -11115,7 +11118,8 @@ function encaixar(peca, osso, med, sx, sy, sz, centro) {
 // chapéu: tam (multiplica) e subir/frente (fração da altura da cabeça)
 let ajusteFarda = {}, versaoFarda = 0;
 const AJ_PADRAO = { colete: { larg: 1, alt: 1, fund: 1, subir: 0, frente: 0, giro: 0 }, chapeu: { tam: 1, subir: 0, frente: 0, giro: 0 } };
-function ajusteDe(papel, peca) { return { ...AJ_PADRAO[peca], ...(ajusteFarda?.[papel]?.[peca] || {}) }; }
+// ajuste geral da corporação (vale para todos) e, por cima, o ajuste só daquele personagem (pers.<id>.<peça>)
+function ajusteDe(papel, peca, pers) { return { ...AJ_PADRAO[peca], ...(ajusteFarda?.[papel]?.[peca] || {}), ...(pers ? ajusteFarda?.[papel]?.pers?.[pers]?.[peca] || {} : {}) }; }
 function definirAjusteFarda(novo) {
   const txt = JSON.stringify(novo || {}); if (txt === JSON.stringify(ajusteFarda)) return;
   ajusteFarda = JSON.parse(txt); versaoFarda++;   // muda a versão: todo mundo se veste de novo com o ajuste
@@ -11158,7 +11162,7 @@ function vestir(av, papel) {
       const C = PECAS_FARDA[corpoNome], quadril = achados.hips || av.modelo.getObjectByName('mixamorigHips');
       let topo = mt.alturaDe(ossos.pescoco), base = quadril ? mt.alturaDe(quadril) : null;
       if (topo === null || base === null || topo - base < 0.05) { topo = mt.topo; base = mt.baixo; } else base += (topo - base) * 0.12;
-      const H = topo - base, ac = ajusteDe(papel, 'colete'), ah = ajusteDe(papel, 'chapeu');
+      const H = topo - base, ac = ajusteDe(papel, 'colete', av.personagemId), ah = ajusteDe(papel, 'chapeu', av.personagemId);
       // tamanho padrão para todos (pela altura do personagem, em unidades do osso): a farda fica igual em qualquer
       // personagem e nos NPCs.
       av.raiz.updateMatrixWorld(true);
@@ -13865,7 +13869,18 @@ function abrirEditorFarda() {
   }
   const el = document.createElement('div'); el.id = 'editorFarda';
   el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(20,24,30,.9);color:#eee;padding:10px 12px 14px;font:14px system-ui;max-height:48vh;overflow:auto;border-top:2px solid #f2a33a;touch-action:pan-y';
-  let papel = jogador.farda || 'policia', peca = 'colete', aba = 'farda';
+  let papel = jogador.farda || 'policia', peca = 'colete', aba = 'farda', alvo = 'todos';
+  const persOriginal = jogador.avatar?.personagemId;
+  const persAtual = () => jogador.avatar?.personagemId || persOriginal;
+  const nomePers = (id) => PERSONAGENS.find((p) => p.id === id)?.nome || String(id || '').replace(/_/g, ' ');
+  // onde a mudança vai: no ajuste geral da corporação ou só no deste personagem
+  const destino = (criar) => {
+    if (alvo === 'todos') return criar ? ((rascunho[papel] ||= {})[peca] ||= {}) : rascunho[papel]?.[peca];
+    const pid = persAtual();
+    return criar ? ((((rascunho[papel] ||= {}).pers ||= {})[pid] ||= {})[peca] ||= {}) : rascunho[papel]?.pers?.[pid]?.[peca];
+  };
+  const listaPers = () => { const l = PERSONAGENS.map((p) => p.id); for (const id of [persOriginal, persAtual()]) if (id && !l.includes(id)) l.unshift(id); return l; };   // o seu entra na lista mesmo sendo de evento
+  const temProprio = (pid) => Object.values(rascunho).some((r) => r?.pers?.[pid] && Object.keys(r.pers[pid]).length);
   // abas separadas: na de máscaras o personagem fica SEM farda (colete e capacete não atrapalham a ver o rosto)
   const irAba = (nova) => {
     aba = nova;
@@ -13875,25 +13890,35 @@ function abrirEditorFarda() {
   };
   const desenhar = () => {
     camEditor.parte = peca === 'colete' ? 'tronco' : 'cabeca';   // a câmera mostra a parte que está sendo ajustada
-    const aj = { ...AJ_PADRAO[peca], ...(rascunho[papel]?.[peca] || {}) };
+    const pid = persAtual();
+    const aj = { ...AJ_PADRAO[peca], ...(rascunho[papel]?.[peca] || {}), ...(alvo === 'este' ? rascunho[papel]?.pers?.[pid]?.[peca] || {} : {}) };
     const sel = (on) => (on ? 'background:#f2a33a;color:#111' : '');
     el.innerHTML = `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b style="flex:1">${aba === 'farda' ? '👔 Ajuste da farda' : '😷 Ajuste das máscaras'}</b>
         <button data-a="girar">↻ Girar</button><button data-a="fechar">✕</button></div>
       <div style="display:flex;gap:6px;margin-bottom:8px"><button data-aba="farda" style="flex:1;${sel(aba === 'farda')}">👔 Fardas</button><button data-aba="mascara" style="flex:1;${sel(aba === 'mascara')}">😷 Máscaras (sem farda)</button></div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><button data-pp="-1">◀</button>
+        <select data-pers style="flex:1;background:#2c333d;color:#eee;border:1px solid #4a5361;border-radius:8px;padding:7px">${listaPers().map((id) => `<option value="${id}" ${id === pid ? 'selected' : ''}>${temProprio(id) ? '★ ' : ''}${nomePers(id)}</option>`).join('')}</select>
+        <button data-pp="1">▶</button></div>
+      <div style="display:flex;gap:6px;margin-bottom:8px"><button data-alvo="todos" style="flex:1;${sel(alvo === 'todos')}">👥 Todos os personagens</button><button data-alvo="este" style="flex:1;${sel(alvo === 'este')}">👤 Só ${nomePers(pid)}</button></div>
       ${aba === 'farda' ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${Object.keys(UNIFORMES).map((k) => `<button data-p="${k}" style="${sel(k === papel)}">${NOME_FARDA[k]}</button>`).join('')}</div>
       <div style="display:flex;gap:6px;margin-bottom:6px">${[['colete', '🦺 Colete / jaleco'], ['chapeu', '⛑️ Capacete / boné']].map(([k, t]) => `<button data-q="${k}" style="flex:1;${sel(k === peca)}">${t}</button>`).join('')}</div>`
       : `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${MASCARAS.map((m) => `<button data-mk="${m.id}" style="${sel(papel === 'mk:' + m.id)}">${m.nome}</button>`).join('')}</div>`}
       ${CAMPOS_FARDA[peca].map(([k, n, mi, ma, st]) => `<label style="display:flex;align-items:center;gap:8px;margin:4px 0"><span style="width:110px">${n}</span>
         <input type="range" data-c="${k}" min="${mi}" max="${ma}" step="${st}" value="${aj[k]}" style="flex:1"><b data-v="${k}" style="width:46px;text-align:right">${(+aj[k]).toFixed(2)}</b></label>`).join('')}
-      <div style="display:flex;gap:6px;margin-top:8px"><button data-a="zerar" style="flex:1">↺ Padrão desta peça</button><button data-a="salvar" style="flex:1;background:#2f8f4e;color:#fff">💾 Salvar para todos</button></div>
-      <small style="opacity:.75">${aba === 'farda' ? 'Mexa e veja no seu personagem. Cada corporação e cada peça têm o seu ajuste.' : 'Seu personagem fica sem farda para ver o rosto. Cada máscara tem o seu ajuste (vale para todos os personagens, que agora têm o mesmo tamanho).'} Só muda para todos depois de salvar.</small>`;
+      <div style="display:flex;gap:6px;margin-top:8px"><button data-a="zerar" style="flex:1">↺ ${alvo === 'todos' ? 'Padrão desta peça' : 'Tirar o ajuste só deste'}</button><button data-a="salvar" style="flex:1;background:#2f8f4e;color:#fff">💾 Salvar para todos</button></div>
+      <small style="opacity:.75">${alvo === 'este' ? `Ajuste só do ${nomePers(pid)} (★ na lista = tem ajuste próprio), por cima do ajuste geral. ` : ''}${aba === 'farda' ? 'Mexa e veja no personagem. Cada corporação e cada peça têm o seu ajuste.' : 'Seu personagem fica sem farda para ver o rosto. Cada máscara tem o seu ajuste (vale para todos os personagens, que agora têm o mesmo tamanho).'} Só muda para todos depois de salvar.</small>`;
     el.querySelectorAll('[data-aba]').forEach((b) => { b.onclick = () => irAba(b.dataset.aba); });
+    // trocar de personagem aqui dentro (só para ver: ao fechar volta o seu)
+    const irPers = (id) => { if (!id || id === persAtual()) return; aviso(`Trocando para ${nomePers(id)}…`, 2); trocarAvatar(id).then(() => { versaoFarda++; desenhar(); }); };
+    el.querySelector('[data-pers]').onchange = (ev) => irPers(ev.target.value);
+    el.querySelectorAll('[data-pp]').forEach((b) => { b.onclick = () => { const ids = listaPers(), k = ids.indexOf(persAtual()); irPers(ids[(k + Number(b.dataset.pp) + ids.length) % ids.length]); }; });
+    el.querySelectorAll('[data-alvo]').forEach((b) => { b.onclick = () => { alvo = b.dataset.alvo; desenhar(); }; });
     el.querySelectorAll('[data-p]').forEach((b) => { b.onclick = () => { papel = b.dataset.p; mascaraPrevia = null; definirFarda(papel, true); desenhar(); }; });
     el.querySelectorAll('[data-mk]').forEach((b) => { b.onclick = () => { papel = 'mk:' + b.dataset.mk; peca = 'chapeu'; mascaraPrevia = b.dataset.mk; definirFarda(null, true); desenhar(); }; });
     el.querySelectorAll('[data-q]').forEach((b) => { b.onclick = () => { peca = b.dataset.q; desenhar(); }; });
     el.querySelectorAll('[data-c]').forEach((r) => {
       r.oninput = () => {
-        ((rascunho[papel] ||= {})[peca] ||= {})[r.dataset.c] = +r.value;
+        destino(true)[r.dataset.c] = +r.value;
         el.querySelector(`[data-v="${r.dataset.c}"]`).textContent = (+r.value).toFixed(2);
         definirAjusteFarda(rascunho);   // pré-visualização na hora
       };
@@ -13902,15 +13927,20 @@ function abrirEditorFarda() {
       b.onclick = async () => {
         const a = b.dataset.a;
         if (a === 'girar') { jogador.yaw += Math.PI / 4; return; }
-        if (a === 'zerar') { if (rascunho[papel]) delete rascunho[papel][peca]; definirAjusteFarda(rascunho); desenhar(); return; }
+        if (a === 'zerar') {
+          if (alvo === 'todos') { if (rascunho[papel]) delete rascunho[papel][peca]; }
+          else { const pp = rascunho[papel]?.pers?.[persAtual()]; if (pp) { delete pp[peca]; if (!Object.keys(pp).length) delete rascunho[papel].pers[persAtual()]; } }
+          definirAjusteFarda(rascunho); desenhar(); return;
+        }
         if (a === 'salvar') {
           b.disabled = true;
           try { await rede.configJogo.salvarFarda(rascunho); aviso('✅ Ajuste da farda salvo: já vale para todos os jogadores.', 3.5); }
-          catch (e) { aviso(/admin_farda|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 53_farda_ajuste.sql no Supabase e tente de novo.' : 'Não salvou: ' + (e.message || e), 4.5); }
+          catch (e) { aviso(/ajuste invalido/i.test(e.message || '') ? 'O ajuste ficou grande demais: rode o 107 no Supabase e tente de novo.' : /admin_farda|schema cache|does not exist/i.test(e.message || '') ? 'Rode o 53_farda_ajuste.sql no Supabase e tente de novo.' : 'Não salvou: ' + (e.message || e), 4.5); }
           b.disabled = false; return;
         }
         if (a === 'fechar') {
           el.remove(); editorFarda = null; mascaraPrevia = null; definirFarda(antes, true);
+          if (persOriginal && jogador.avatar?.personagemId !== persOriginal) trocarAvatar(persOriginal);   // volta o seu personagem
           rede.configJogo.ler().then((c) => { if (c) definirAjusteFarda(c.farda); }).catch(() => {});   // volta ao que está salvo
         }
       };
@@ -16902,7 +16932,7 @@ function vestirMascara(av, id) {
     if (!cabeca) { av.mascara = null; return; }
     if (!av._medMascara) av._medMascara = medirRosto(av.modelo, cabeca, pescoco) || medirParte(av.modelo, cabeca, (b) => descendeDe(b, cabeca) || b === pescoco);
     const mc = av._medMascara; if (!mc) { av.mascara = null; return; }
-    const tipo = MASCARAS.find((m) => m.id === id).tipo, pd = PADRAO_MASCARA[tipo], aj = ajusteDe('mk:' + id, 'chapeu');
+    const tipo = MASCARAS.find((m) => m.id === id).tipo, pd = PADRAO_MASCARA[tipo], aj = ajusteDe('mk:' + id, 'chapeu', av.personagemId);
     const hc = mc.topo - mc.baixo, sc = Math.min(mc.largura, hc * 0.95) * 1.15 * pd.tam * aj.tam / p.larg;
     const obj = new THREE.Group(), g = p.cena.clone(true); g.rotation.y = -Math.PI / 2 + (aj.giro || 0) * Math.PI / 180; obj.add(g);
     g.traverse((o) => { if (o.isMesh) o.castShadow = false; });

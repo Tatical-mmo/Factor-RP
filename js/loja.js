@@ -181,7 +181,7 @@ function desenhar() {
       <div class="sub">Comprar</div><div class="lista">${venda.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${p.compra} moedas${p.fome ? ` · enche ${p.fome}% da fome` : ''}${p.item === 'remedio' ? ' · cura 50 de vida' : ''}${p.item === 'desbloqueio' ? ' · libera os níveis 5, 10 e 15 de empresas e clãs' : ''}</small></span>
-          <span class="bts"><button data-comprar="${p.item}" data-q="1">+1</button><button data-comprar="${p.item}" data-q="5">+5</button></span></div>`).join('')}</div>
+          <span class="bts">${p.item.startsWith('mascara_') ? (inv[p.item] > 0 ? '<button disabled>✔ Já é sua</button>' : `<button data-comprar="${p.item}" data-q="1">Comprar</button>`) : `<button data-comprar="${p.item}" data-q="1">+1</button><button data-comprar="${p.item}" data-q="5">+5</button>`}</span></div>`).join('')}</div>
       <div class="sub">Vender</div><div class="lista">${compra.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${p.venda} moedas cada · você tem ${inv[p.item] || 0}</small></span>
@@ -191,13 +191,18 @@ function desenhar() {
     c.querySelectorAll('[data-vender]').forEach((b) => { b.onclick = () => { const q = Number(b.dataset.q); if (q > 0) executar(() => rede.economia.vender(b.dataset.vender, q), (r) => `Vendido por ${r} moedas.`); }; });
   } else {
     $('janelaTitulo').textContent = 'Mochila';
-    const itens = precos.filter((p) => inv[p.item] > 0);
+    const todos = precos.filter((p) => inv[p.item] > 0);
+    const visuais = todos.filter((p) => p.item.startsWith('mascara_')), itens = todos.filter((p) => !p.item.startsWith('mascara_'));   // máscaras ficam no Visual (cada uma é única)
     c.innerHTML = `<p class="dica">Vida: <b>${Math.round(ctx.vida?.() ?? 100)}</b> · Fome: <b>${Math.round(ctx.fome())}%</b> · Moedas: <b>${moedas()}</b></p>
       <div class="botoes" style="margin-bottom:10px"><button id="mVisual">👕 Personagem e nome</button><button id="mMercado">🤝 Mercado</button></div>
       <div class="lista">${itens.length ? itens.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${inv[p.item]} na mochila</small></span>
-          <span class="bts">${p.fome ? `<button data-comer="${p.item}">Comer</button>` : ''}${p.item === 'remedio' ? '<button data-curar="1">Usar (+50 vida)</button>' : ''}${p.item === 'antiacido' ? '<button data-antiacido="1">Beber (7 min)</button>' : ''}${p.item === 'jujuba' ? '<button data-jujuba="1">Usar ração (5 min)</button>' : ''}${p.item === 'espingarda' || p.item === 'fuzil' ? `<button data-equipar="${p.item}">Equipar</button>` : ''}${p.item === 'barricada' ? '<button data-barricada="1">Colocar aqui</button>' : ''}${p.item.startsWith('mascara_') ? `<button data-mascara="${p.item}">${ctx.mascaraAtual?.() === p.item ? 'Tirar' : 'Usar'}</button>` : ''}</span></div>`).join('') : '<span class="vazio">Mochila vazia. Colete sucata no ferro-velho ou compre na loja.</span>'}</div>`;
+          <span class="bts">${p.fome ? `<button data-comer="${p.item}">Comer</button>` : ''}${p.item === 'remedio' ? '<button data-curar="1">Usar (+50 vida)</button>' : ''}${p.item === 'antiacido' ? '<button data-antiacido="1">Beber (7 min)</button>' : ''}${p.item === 'jujuba' ? '<button data-jujuba="1">Usar ração (5 min)</button>' : ''}${p.item === 'espingarda' || p.item === 'fuzil' ? `<button data-equipar="${p.item}">Equipar</button>` : ''}${p.item === 'barricada' ? '<button data-barricada="1">Colocar aqui</button>' : ''}</span></div>`).join('') : '<span class="vazio">Mochila vazia. Colete sucata no ferro-velho ou compre na loja.</span>'}</div>
+      <div class="sub" style="margin-top:12px">🎭 Visual</div><div class="lista">${visuais.length ? visuais.map((p) => `
+        <div class="linha item"><span class="ic">${ICONES[p.item] || '🎭'}</span>
+          <span class="nm"><b>${esc(p.nome.replace(/^Máscara:\s*/, 'Máscara '))}</b><small>${ctx.mascaraAtual?.() === p.item ? '✔ usando agora' : 'sua'}</small></span>
+          <span class="bts"><button data-mascara="${p.item}">${ctx.mascaraAtual?.() === p.item ? 'Tirar' : 'Usar'}</button></span></div>`).join('') : '<span class="vazio">Nenhuma máscara ainda. Compre na loja (cada uma é única).</span>'}</div>`;
     $('mVisual').onclick = () => abrir('visual');
     $('mMercado').onclick = () => abrir('mercado');
     c.querySelectorAll('[data-curar]').forEach((b) => {
