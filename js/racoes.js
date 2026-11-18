@@ -26,6 +26,28 @@ export async function recarregar() {
   if (modo) desenhar();
 }
 export function atualizar(dt) { if ((tempo -= dt) <= 0) { tempo = 15; recarregar(); } }
+// quadro da licitação na central: quem tem o contrato, quem está concorrendo e os botões de comando (admin e Coronel+)
+async function desenharLicitacao(p) {
+  const box = $('rLicBox'); if (!box) return;
+  let d; try { d = await rede.jujuba.licitacaoPainel(); } catch (e) { box.innerHTML = `<b>📄 Licitação do transporte</b><br><small>${esc(e.message)}</small>`; return; }
+  if (modo !== 'central' || !$('rLicBox')) return;
+  const l = d?.licitacao, lances = d?.lances || [], hora = (t) => new Date(t).toLocaleTimeString('pt-BR').slice(0, 5);
+  const situacao = !l ? 'Nenhuma licitação aberta.'
+    : l.status === 'vigente' ? `✅ Contrato com <b>${esc(d.empresa_nome || 'empresa removida')}</b> · ${l.entregas}/5 caminhões · ganhou com ${fmt(l.valor)}.`
+    : `🟡 Aberta, fecha às <b>${hora(l.fecha_em)}</b> (se ninguém der lance, renova por mais 10 min).`;
+  const lista = l?.status === 'aberta' ? (lances.length ? lances.map((x, i) => `<br><small>${i === 0 ? '🥇' : '·'} ${esc(x.nome || 'empresa')} — ${fmt(x.valor)}</small>`).join('') : '<br><small>Nenhum lance ainda.</small>') : '';
+  const comando = p?.cargo === 'admin' || p?.profissao === 'exercito';   // o banco confere a patente (Coronel+)
+  box.innerHTML = `<b>📄 Licitação do transporte</b><br><small>${situacao}</small>${lista}
+    <div class="botoes"><button id="rLicVer">📄 Abrir a licitação (dar lance)</button>
+    ${comando ? `${!l ? '<button id="rLicAbrir">🆕 Abrir nova licitação</button>' : ''}${l?.status === 'aberta' && lances.length ? '<button id="rLicFechar">⏩ Fechar agora</button>' : ''}${l?.status === 'vigente' ? '<button id="rLicQuebrar" style="background:#8b2c2c">💔 Quebrar contrato</button>' : ''}` : ''}</div>
+    ${comando ? '<small class="dica">Abrir, fechar e quebrar: admin e Coronel para cima. Quebrar encerra o contrato e já abre outra licitação.</small>' : ''}`;
+  $('rLicVer').onclick = () => abrir('licitacao');
+  const cmd = (id, acao, txt, confirma) => { const b = $(id); if (!b) return; b.onclick = () => {
+    if (confirma && b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Toque de novo para confirmar'; return; }
+    executar(() => rede.jujuba.licitacaoComando(acao), txt);
+  }; };
+  cmd('rLicAbrir', 'abrir', '📄 Licitação aberta.'); cmd('rLicFechar', 'fechar_agora', '⏩ Licitação fechada: o menor lance ganhou.'); cmd('rLicQuebrar', 'quebrar', '💔 Contrato quebrado. Nova licitação aberta.', true);
+}
 export function abrir(m) { modo = m; el.classList.remove('oculto'); desenhar(); }
 function fechar() { modo = null; el.classList.add('oculto'); }
 function msg(t, ok = true) { const m = $('racoesMsg'); m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'erro'); clearTimeout(msg.t); msg.t = setTimeout(() => { m.textContent = ''; }, 4500); }
@@ -73,12 +95,11 @@ async function desenhar() {
           ${k === 'policia' || k === 'prf' ? (() => { const a2 = (est.armas || []).find((x) => x.corp === k); return `<small>🔫 Armamento: ${a2 ? `${a2.espingarda} espingardas · ${a2.fuzil} fuzis · ${a2.granada} granadas` : '—'}</small>
             <div class="botoes">${pd && pd.status === 'aberto' ? `<button data-kit="${k}" data-ped="${pd.id}">🚚 Caminhão cheio + kit de armas</button>` : ''}<button data-kit="${k}">🚚 Só o kit de armas</button></div>`; })() : ''}</div>`; }).join('')}
       ${est.viagens.filter((v) => v.status === 'sequestrada').map((v) => `<p class="dica" style="color:#ff8a80">🚨 Caminhão (${nomeCarga(v)}) SEQUESTRADO a caminho de ${CORP_NOME[v.corp]}.</p>`).join('')}
-      <p class="dica">📄 Licitação do transporte: ${l ? (l.status === 'vigente' ? `contrato vigente (${l.entregas}/5 caminhões)` : `aberta até ${new Date(l.fecha_em).toLocaleTimeString('pt-BR').slice(0, 5)}`) : 'abrindo…'}</p>
-      <div class="botoes"><button id="rVerLic">📄 Abrir a licitação (lances)</button></div>
+      <div class="linha" style="display:block" id="rLicBox"><b>📄 Licitação do transporte</b><br><small>carregando…</small></div>
       <hr><p class="dica">🎖️ Recompensar soldado exemplar com o cofre (Coronel para cima): prisões, missões, treinos, sem ferir inocentes.</p>
       <div class="botoes"><input id="rRecNome" placeholder="nome do soldado" style="width:9em"><input id="rRecValor" type="number" min="100" max="1000000" step="100" value="5000" style="width:6em"></div>
       <div class="botoes"><input id="rRecMotivo" placeholder="motivo" style="width:15em"><button id="rRec">🎖️ Recompensar</button></div>`;
-    $('rVerLic').onclick = () => abrir('licitacao');
+    desenharLicitacao(p);
     $('rRec').onclick = () => executar(() => rede.jujuba.recompensar($('rRecNome').value.trim(), Math.floor(Number($('rRecValor').value)), $('rRecMotivo').value.trim()), (v) => `🎖️ ${fmt(v)} moedas enviadas do cofre.`);
     c.querySelectorAll('[data-kit]').forEach((b2) => { b2.onclick = () => executar(() => rede.jujuba.despacharKit(b2.dataset.kit, b2.dataset.ped ? Number(b2.dataset.ped) : null, ctx.duracaoViagem(b2.dataset.kit)), '🚚 Kit de armas despachado (10 espingardas, 10 fuzis e 30 granadas).'); });
     // o Exército manda por conta própria, sem esperar o pedido da corporação (108)
@@ -88,7 +109,7 @@ async function desenhar() {
     $('racoesTitulo').textContent = '📄 Licitação: transporte de rações do Exército';
     const l = est.licitacao; let lances = [];
     if (l) try { lances = await rede.jujuba.lances(l.id); } catch (e) { /* sem lista */ }
-    const minhas = (await ctx.minhasTransportadoras()).filter((e) => e.nivel >= 5);
+    const minhas = (await ctx.minhasTransportadoras()).filter((e) => e.nivel >= 5 || p?.cargo === 'admin');   // admin testa com qualquer uma
     c.innerHTML = `<p class="dica">Transportadoras nível 5+ <b>com 5 caminhões</b> disputam o contrato: ganha o <b>menor</b> valor pedido, que é pago na hora ao fechar a licitação. O contrato vale 5 caminhões, e cada caminhão chamado paga mais <b>${fmt(est.valor)}</b>. O quartel chama os caminhões sozinho: se nenhum estiver livre, a empresa paga <b>20.000</b> de multa por chamada.</p>
       ${l && l.status === 'vigente' && minhas.some((e) => e.id === l.empresa) ? `<p>🚚 Seus caminhões a serviço do Exército: <b>${est.viagens.filter((v) => v.empresa === l.empresa && v.status === 'em_rota').length}/5</b></p>` : ''}
       <p>${!l ? 'A licitação está abrindo…' : l.status === 'vigente' ? `Contrato vigente: ${l.entregas}/5 caminhões. A próxima licitação abre quando ele acabar.` : `Aberta: fecha às <b>${new Date(l.fecha_em).toLocaleTimeString('pt-BR').slice(0, 5)}</b>. ${lances.length} lance(s); menor até agora: <b>${lances[0] ? fmt(lances[0].valor) : '—'}</b>.`}</p>
