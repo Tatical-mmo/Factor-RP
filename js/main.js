@@ -2018,15 +2018,18 @@ function alturaNome(av) { return Math.max(2.45, (av?.altura || 1.8) + 0.65); }  
 
 // armas: a básica de todos e as das corporações (só em serviço), a militar dos clãs e a pesada do Exército
 const ARMAS = {
-  basica: { cod: 1, modelo: 'arma_paintball', dano: 20, recarga: 0.28, vel: 24, cor: null, pega: [0, 0.1, -0.11], boca: [0, 0.22, 0.3] },
-  policia: { cod: 2, modelo: 'arma_policia', dano: 27, recarga: 0.19, vel: 28, cor: '#ffd23e', pega: [0, 0.07, -0.1], boca: [0, 0.14, 0.3] },
-  prf: { cod: 3, modelo: 'arma_prf', dano: 27, recarga: 0.19, vel: 28, cor: '#3e8cff', pega: [0, 0.15, -0.2], boca: [0, 0.33, 0.3] },
-  exercito: { cod: 4, modelo: 'arma_exercito', dano: 32, recarga: 0.16, vel: 30, cor: '#2fbf5a', pega: [0, 0.15, -0.25], boca: [0, 0.3, 0.4] },
-  militar: { cod: 5, modelo: 'arma_militar', dano: 30, recarga: 0.16, vel: 30, cor: null, pega: [0, 0.12, -0.21], boca: [0, 0.22, 0.45] },
-  pesada: { cod: 6, modelo: 'arma_grande_porte', dano: 55, recarga: 0.45, vel: 34, cor: '#1f9e46', pega: [0, 0.15, -0.18], boca: [0, 0.25, 0.58], bola: 2.2 },
-  espingarda: { cod: 7, modelo: 'arma_espingarda', comp: 0.9, reserva: 'arma_grande_porte', dano: 11, recarga: 0.85, vel: 23, cor: '#ff7a1a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.58], chumbos: 7, espalha: 0.13, alcance: 0.6 },
-  fuzil: { cod: 8, modelo: 'arma_fuzil', comp: 0.95, reserva: 'arma_militar', dano: 26, recarga: 0.11, vel: 42, cor: '#d9dde3', pega: [0, 0.02, 0], boca: [0, 0.02, 0.62] },
+  basica: { cod: 1, alc: 40, grav: 1, modelo: 'arma_paintball', dano: 20, recarga: 0.28, vel: 24, cor: null, pega: [0, 0.1, -0.11], boca: [0, 0.22, 0.3] },
+  policia: { cod: 2, alc: 60, grav: 0.55, modelo: 'arma_policia', dano: 27, recarga: 0.19, vel: 28, cor: '#ffd23e', pega: [0, 0.07, -0.1], boca: [0, 0.14, 0.3] },
+  prf: { cod: 3, alc: 60, grav: 0.55, modelo: 'arma_prf', dano: 27, recarga: 0.19, vel: 28, cor: '#3e8cff', pega: [0, 0.15, -0.2], boca: [0, 0.33, 0.3] },
+  exercito: { cod: 4, alc: 80, grav: 0.4, modelo: 'arma_exercito', dano: 32, recarga: 0.16, vel: 30, cor: '#2fbf5a', pega: [0, 0.15, -0.25], boca: [0, 0.3, 0.4] },
+  militar: { cod: 5, alc: 75, grav: 0.4, modelo: 'arma_militar', dano: 30, recarga: 0.16, vel: 30, cor: null, pega: [0, 0.12, -0.21], boca: [0, 0.22, 0.45] },
+  pesada: { cod: 6, alc: 95, grav: 0.35, modelo: 'arma_grande_porte', dano: 55, recarga: 0.45, vel: 34, cor: '#1f9e46', pega: [0, 0.15, -0.18], boca: [0, 0.25, 0.58], bola: 2.2 },
+  espingarda: { cod: 7, grav: 1.2, modelo: 'arma_espingarda', comp: 0.9, reserva: 'arma_grande_porte', dano: 11, recarga: 0.85, vel: 23, cor: '#ff7a1a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.58], chumbos: 7, espalha: 0.13, alcance: 0.6 },
+  fuzil: { cod: 8, alc: 130, grav: 0.18, modelo: 'arma_fuzil', comp: 0.95, reserva: 'arma_militar', dano: 26, recarga: 0.11, vel: 42, cor: '#d9dde3', pega: [0, 0.02, 0], boca: [0, 0.02, 0.62] },
 };
+// alcance (alc, em metros) e queda da bala (grav, 1 = tinta de paintball): arma melhor vai mais longe e cai menos.
+// Antes todas caíam com a gravidade inteira e batiam no chão a uns 15–20 m, qualquer que fosse a arma.
+function balistica(b, A) { if (!b || !A) return; b.g = 9.8 * (A.grav ?? 1); if (A.alc) b.vida = A.alc / A.vel; }
 const ARMA_POR_COD = Object.fromEntries(Object.entries(ARMAS).map(([k, a]) => [a.cod, k]));
 function tipoArma() {
   const p = jogador.perfil; if (!p) return 'basica';
@@ -2087,10 +2090,10 @@ function atirar(alvo) {
   const dir = new THREE.Vector3(Math.sin(jogador.yaw), 0, Math.cos(jogador.yaw));
   const dourada = tenhoArmaPd();
   const cor = dourada ? '#ffd23e' : A.cor || CORES_TINTA[Math.floor(Math.random() * CORES_TINTA.length)];
-  const vyMira = dourada ? null : miraNoAlvo(boca, dir, A.vel);
-  const v = dir.multiplyScalar(dourada ? 34 : A.vel).add(new THREE.Vector3(0, vyMira ?? (dourada ? 0.6 : 1.2 * 24 / A.vel), 0));
+  const vyMira = dourada ? null : miraNoAlvo(boca, dir, A.vel, A.grav ?? 1);
+  const v = dir.multiplyScalar(dourada ? 34 : A.vel).add(new THREE.Vector3(0, vyMira ?? (dourada ? 0.6 : 1.2 * 24 / A.vel * (A.grav ?? 1)), 0));   // menos queda: mira mais reta
   if (modoCam === 'p1' && vyMira == null) v.y += Math.tan(THREE.MathUtils.clamp(olhar.pitch, -0.6, 0.6)) * (dourada ? 34 : A.vel);   // mira para cima / para baixo
-  criarBola(boca, v, cor, true, dourada ? 1 : A.bola || 1);
+  criarBola(boca, v, cor, true, dourada ? 1 : A.bola || 1); balistica(bolas[bolas.length - 1], A);
   const critico = Math.random() < bonusTreino('tiro');   // treino de tiro: chance de acerto crítico (dano dobrado)
   bolas[bolas.length - 1].dano = Math.round(A.dano * (critico ? 2 : 1) * fatorForca()); bolas[bolas.length - 1].critico = critico;
   if (dourada) {
@@ -2100,7 +2103,7 @@ function atirar(alvo) {
     jogador.recarga = 1.2;
   }
   const r2 = (n) => Math.round(n * 100) / 100;
-  conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: cor, s: A.bola || 1 });
+  conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: cor, s: A.bola || 1, g: A.grav ?? 1, vd: A.alc ? r2(A.alc / A.vel) : 0 });
   if (A.chumbos && !dourada) chumbos(A, boca, v, cor);
   if (!dourada && jogador.desviada && jogador.armaTipo === jogador.desviada.item) gastarBalaDesviada();
   if (!dourada) jogador.recarga = A.recarga / (1 + bonusTreino('luta'));
@@ -2676,7 +2679,7 @@ function manchar(p, normal, cor) {
 }
 function atualizarBolas(dt) {
   for (let i = bolas.length - 1; i >= 0; i--) {
-    const b = bolas[i]; b.vida -= dt; b.v.y -= 9.8 * dt;
+    const b = bolas[i]; b.vida -= dt; b.v.y -= (b.g ?? 9.8) * dt;
     const ant = b.m.position.clone(); b.m.position.addScaledVector(b.v, dt);
     let fim = false;
     if (b.minha) fim = acertoNoAlvo(b) || acertoDaBola(b);
@@ -3435,7 +3438,7 @@ function conectarMultiplayer(perfil) {
       atualizarInfo();
     },
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
-    tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1),
+    tiro: (t) => { criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1); const b = bolas[bolas.length - 1]; if (b && t.g != null) { b.g = 9.8 * Number(t.g); if (Number(t.vd) > 0) b.vida = Math.min(6, Number(t.vd)); } },
     explosao: (e) => receberExplosao(e),
     voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, dm: (m) => { if (m?.para === jogador.perfil?.id && amigosIds.has(m.de)) celular.mensagemChegou(m.de, remotos.get(m.de)?.meta?.nome); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
@@ -4347,7 +4350,7 @@ function atualizarMira() {
 }
 // no estande, a mira compensa a queda da tinta: se você está virado para um alvo, o tiro sai na curva certa até ele
 const podeAlvo = (a) => (a.quem === 'treino' ? daPolicia() || militar() : a.quem ? daPolicia() : militar());
-function miraNoAlvo(boca, dir, vel) {
+function miraNoAlvo(boca, dir, vel, grav = 1) {
   if (!militar() && !daPolicia()) return null;
   let melhor = null, mc = 0.985;
   for (const a of civico.EXERCITO.alvos || []) {
@@ -4356,7 +4359,7 @@ function miraNoAlvo(boca, dir, vel) {
     if (d > 2 && d < 60 && c > mc) { mc = c; melhor = { a, d }; }
   }
   if (!melhor) return null;
-  const t = melhor.d / vel; return (melhor.a.y - boca.y + 4.9 * t * t) / t;
+  const t = melhor.d / vel; return (melhor.a.y - boca.y + 4.9 * grav * t * t) / t;
 }
 // estande de tiro do quartel: pontos pelo anel acertado, mais pontos quanto mais longe
 let pontosEstande = 0, avisoEstande = 0;
@@ -8014,7 +8017,9 @@ function atualizarJogador(dt) {
     if (forca > 0.15 || j.morto || j.trava > 0) pararTropa('Você saiu da corrida da tropa.');
     else { correrComTropa(dt); av.tocar('run', { velocidade: 0.8 }); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw; av.mixer.update(dt); av.raiz.updateMatrixWorld(true); return; }
   }
-  const correr = !j.carregando && !j.armado && (teclas.has('shift') || (joy.ativo && forca > 0.92) || (j.alvo && j.pos.distanceTo(j.alvo) > 12));
+  // armado só corre turbinado (treino no máximo ou ração ativa): aí usa a corrida com o fuzil para baixo. Antes o
+  // "!j.armado" deixava correr sempre falso com arma e essa animação nunca aparecia.
+  const correr = !j.carregando && (!j.armado || turbinado()) && (teclas.has('shift') || (joy.ativo && forca > 0.92) || (j.alvo && j.pos.distanceTo(j.alvo) > 12));
 
   if (j.pulo) passoPulo(dt);
   if (j.rendido && performance.now() - j.rendidoEm > 900) { j.trava = Math.max(j.trava, 0.1); av.tocar('rendido'); }   // rendido: mãos para cima, parado
@@ -16383,8 +16388,8 @@ function atirarDoCaveirao(alvo) {
   const boca = new THREE.Vector3(o.x + Math.sin(yaw) * 1.4, o.y + 3.05, o.z + Math.cos(yaw) * 1.4);
   const cor = A.cor || CORES_TINTA[Math.floor(Math.random() * CORES_TINTA.length)];
   const v = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(A.vel).add(new THREE.Vector3(0, 0.3, 0));
-  criarBola(boca, v, cor, true, A.bola || 1); bolas[bolas.length - 1].dano = Math.round(A.dano * fatorForca());
-  conexao?.enviar('tiro', { x: r2t(boca.x), y: r2t(boca.y), z: r2t(boca.z), vx: r2t(v.x), vy: r2t(v.y), vz: r2t(v.z), c: cor, s: A.bola || 1 });
+  criarBola(boca, v, cor, true, A.bola || 1); bolas[bolas.length - 1].dano = Math.round(A.dano * fatorForca()); balistica(bolas[bolas.length - 1], A);
+  conexao?.enviar('tiro', { x: r2t(boca.x), y: r2t(boca.y), z: r2t(boca.z), vx: r2t(v.x), vy: r2t(v.y), vz: r2t(v.z), c: cor, s: A.bola || 1, g: A.grav ?? 1, vd: A.alc ? r2t(A.alc / A.vel) : 0 });
   if (A.chumbos) chumbos(A, boca, v, cor);
   jogador.recarga = A.recarga;
 }

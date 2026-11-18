@@ -248,6 +248,7 @@ function traduzirRpc(m) {
     'aguarde para assaltar': 'Espere uns minutos antes de assaltar outra pessoa.',
     'so policia prf e bombeiros': 'Só Polícia, PRF e Bombeiros em serviço usam esse armazém.',
     'so policia prf bope e bombeiros': 'Só Polícia, PRF, BOPE e Bombeiros em serviço.',
+    'so policia prf bope bombeiros e exercito': 'Só Polícia, PRF, BOPE, Bombeiros e Exército em serviço.',
     'aguarde para pegar anti-acido': 'Espere 5 minutos para pegar mais anti-ácido.',
     'deposito sem anti-acido': 'O depósito está sem anti-ácido. Peça reposição ao Exército.',
     'a licitacao exige 5 caminhoes': 'A licitação exige 5 caminhões na transportadora.',
