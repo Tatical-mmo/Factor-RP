@@ -28,6 +28,7 @@ import * as ceu from './ceu.js';
 import * as semaforos from './semaforos.js';
 import * as eixos from './eixos.js';
 import * as racoes from './racoes.js';
+import * as logos from './logos.js';
 import { pecasCabine } from './cabine.js';
 import * as ovni from './ovni.js';
 import * as jato from './jato.js';
@@ -3211,7 +3212,7 @@ async function iniciarJogo(perfil) {
     definirEmprego: (id) => { emprego = id; },
     lotesOcupados: () => unidades.size,
     lotesDe: (id) => [...unidades.entries()].filter(([, u]) => u.empresa === id).map(([l]) => l),
-    recarregar: () => { tempoLogistica = 0; },
+    recarregar: () => { tempoLogistica = 0; }, recarregarLogos: () => recarregarLogos(),
   });
   iniciarLogistica();
   servicos.iniciar({ ultra: () => visual.nivelAtual() === 'ultra', socorrista: socorristaNpc,
@@ -8528,7 +8529,7 @@ function quadroJogo() {
   atualizarMira();
   civico.atualizarQuartel(jogador.pos);
   atualizarArea51(dt); atualizarBases(dt); atualizarQuartelExtras(dt); atualizarBaseAerea(dt); atualizarMisseis(dt); avisarAlistamentos(dt); atualizarMarinha(dt);
-  atualizarPerdao(dt); atualizarRefletores();
+  atualizarPerdao(dt); atualizarRefletores(); atualizarLogos(dt);
   { const E = civico.EXERCITO.estande, p = jogador.pos;   // estande: só militares entram
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   diag('remotos/voz');
@@ -14508,6 +14509,24 @@ function npcAbduzido(n, dt) {
   r.visible = false;
   if (A.t > 180) { n.abduzido = null; r.visible = true; r.position.y = A.chao; n.av.tocar('walk', { velocidade: 0.85 }); }
 }
+
+// ================================================================= logo das empresas na lona do baú (106)
+// Aprovada: todos veem. Em avaliação: só o dono vê nos próprios caminhões. Sem logo (ou sem o SQL 106): baú branco.
+const logoEmp = { mapa: new Map(), t: 3, aplicar: 0 };
+function atualizarLogos(dt) {
+  if ((logoEmp.t -= dt) <= 0) {
+    logoEmp.t = 45;
+    rede.logos.lista().then((l) => { logoEmp.mapa = new Map((l || []).map((x) => [x.empresa, x])); logoEmp.aplicar = 0; }).catch(() => { logoEmp.t = 300; });
+  }
+  if ((logoEmp.aplicar -= dt) > 0) return; logoEmp.aplicar = 2;
+  for (const c of caminhoes.values()) {
+    if ((c.d.tipo || 'caminhao') !== 'caminhao') continue;
+    const l = logoEmp.mapa.get(c.d.empresa), e = empresas.get(c.d.empresa);
+    const ve = l && (l.status === 'aprovada' || (l.status === 'pendente' && e?.dono === jogador.perfil?.id));
+    logos.porLona(c.obj, ve ? l : null, e?.nome || '');
+  }
+}
+function recarregarLogos() { logoEmp.t = 0; }
 
 // ================================================================= refletores das bases militares (tipo estádio)
 // Torres de 22 m nos cantos do Quartel, da Base Aérea e da Base Naval. À noite acendem: o painel de lâmpadas brilha,

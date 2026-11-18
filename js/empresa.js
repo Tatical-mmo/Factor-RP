@@ -2,6 +2,7 @@
 // Todas as ações são conferidas no banco.
 import * as rede from './rede.js';
 import { LOTES_VENDA, DESTINOS, PRODUTOS } from './config.js';
+import * as logos from './logos.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -49,6 +50,7 @@ export async function iniciarEmpresa(contexto) {
 export function abrirEmpresa(id = null) { modo = 'empresa'; aba = 'resumo'; if (id) selecionada = id; mostrar(); }
 export function abrirCompra(lote) { modo = 'comprar'; loteCompra = lote; mostrar(); }
 export function abrirMissoes() { modo = 'missoes'; mostrar(); }
+export function abrirAvaliarLogos() { modo = 'logos'; mostrar(); }
 export function empresaAberta() { return !!modo; }
 const digitando = (id) => { const f = document.activeElement; return !!f && ['INPUT', 'SELECT', 'TEXTAREA'].includes(f.tagName) && !!$(id)?.contains(f); };
 let pendente = false;
@@ -59,7 +61,7 @@ function fechar() { modo = null; $('empresaJanela').classList.add('oculto'); }
 
 function msg(t, ok = true) { const m = $('empresaMsg'); m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'erro'); clearTimeout(msg.t); msg.t = setTimeout(() => { m.textContent = ''; }, 4000); }
 async function executar(fn, sucesso) {
-  try { const r = await fn(); msg(typeof sucesso === 'function' ? sucesso(r) : sucesso); ctx.recarregar?.(); await desenhar(); }
+  try { const r = await fn(); msg(typeof sucesso === 'function' ? sucesso(r) : sucesso); ctx.recarregar?.(); ctx.recarregarLogos?.(); await desenhar(); }
   catch (e) { msg(e.message, false); }
 }
 const inteiro = (id) => Math.floor(Number($(id)?.value) || 0);
@@ -86,16 +88,19 @@ async function desenhar(auto = false) {
     ctx.definirEmprego(emprego);
     const minhas = empresas.filter((e) => e.dono === meuId);
     if (modo === 'missoes') return await telaMissoes(c, minhas, empresas);
+    if (modo === 'logos') { $('empresaTitulo').textContent = '🗳️ Logos dos caminhões'; await telaAvaliarLogos(c); voltarRolagem(); return; }
+    const botaoLogos = '<div class="botoes" style="margin-bottom:6px"><button id="btAvLogos">🗳️ Avaliar logos dos caminhões</button></div>';
+    const ligarLogos = () => { const b = $('btAvLogos'); if (b) b.onclick = () => { modo = 'logos'; desenhar(); }; };
     const opcoes = [...minhas, ...empresas.filter((e) => e.id === emprego && e.dono !== meuId)];
     if (!opcoes.some((e) => e.id === selecionada)) selecionada = opcoes[0]?.id ?? null;
     const e = opcoes.find((x) => x.id === selecionada);
     let topo = opcoes.length > 1 ? `<div class="chips seletor">${opcoes.map((x) => `<button class="chip ${x.id === selecionada ? 'sel' : ''}" data-emp="${x.id}">${esc(x.nome)}${x.dono === meuId ? '' : ' (emprego)'}</button>`).join('')}</div>` : '';
-    if (!e) { $('empresaTitulo').textContent = 'Empresas'; return telaSemEmpresa(c, empresas); }
+    if (!e) { $('empresaTitulo').textContent = 'Empresas'; telaSemEmpresa(c, empresas); c.insertAdjacentHTML('afterbegin', botaoLogos); ligarLogos(); return; }
     $('empresaTitulo').textContent = `${e.nome} ${nivelTexto(e.nivel)}`;
-    if (e.dono !== meuId) { telaFuncionario(c, e); c.insertAdjacentHTML('afterbegin', topo); ligarSeletor(c); return; }
+    if (e.dono !== meuId) { telaFuncionario(c, e); c.insertAdjacentHTML('afterbegin', topo + botaoLogos); ligarSeletor(c); ligarLogos(); return; }
     const lista = [['resumo', 'Resumo'], ['equipe', 'Funcionários']];
     if (e.fabrica) lista.push(['vendas', 'Vendas'], ['missoes', 'Missões']);
-    if (temFrota(e)) lista.push(['pedidos', 'Pedidos'], ['caminhoes', 'Veículos']);
+    if (temFrota(e)) lista.push(['pedidos', 'Pedidos'], ['caminhoes', 'Veículos'], ['logo', '🎨 Logo']);
     lista.push(['robos', '👷 Funcionários NPC e nível']);
     if (minhas.length > 1) lista.push(['fundir', 'Fundir']);
     if (!lista.some(([k]) => k === aba)) aba = 'resumo';
@@ -107,13 +112,66 @@ async function desenhar(auto = false) {
     else if (aba === 'missoes') await telaMissoes(c, [e], empresas);
     else if (aba === 'pedidos') await telaPedidos(c, e);
     else if (aba === 'caminhoes') await telaCaminhoes(c, e);
+    else if (aba === 'logo') await telaLogo(c, e);
     else if (aba === 'robos') telaRobos(c, e);
     else if (aba === 'fundir') telaFundir(c, e, minhas);
-    c.insertAdjacentHTML('afterbegin', topo); ligarSeletor(c);
+    c.insertAdjacentHTML('afterbegin', topo + botaoLogos); ligarSeletor(c); ligarLogos();
     voltarRolagem();
   } catch (err) { c.textContent = err.message; }
 }
 function ligarSeletor(c) { c.querySelectorAll('[data-emp]').forEach((b) => { b.onclick = () => { selecionada = Number(b.dataset.emp); desenhar(); }; }); }
+
+// ------------------------------------------------------------ logo da empresa na lona do caminhão (106)
+let logoEscolha = { pronta: 'escudo', cor: logos.CORES[0] }, logoPrep = null;   // logoPrep: { empresa, blob, url }
+const STATUS_LOGO = { pendente: '⏳ Em avaliação: só você vê nos seus caminhões até aprovarem', aprovada: '✅ No ar: todos veem nos seus caminhões', recusada: '❌ Recusada' };
+async function telaLogo(c, e) {
+  let l = null, sem106 = false;
+  try { l = (await rede.logos.lista()).find((x) => x.empresa === e.id) || null; } catch { sem106 = true; }
+  if (sem106) { c.innerHTML = '<p class="dica">A logo dos caminhões precisa do SQL 106 no Supabase.</p>'; return; }
+  if (logoPrep && logoPrep.empresa !== e.id) logoPrep = null;
+  c.innerHTML = `<p class="dica">A logo vai numa lona nas duas laterais do baú de todos os seus caminhões. Use uma <b>logo pronta</b> (aparece na hora) ou <b>envie a sua imagem</b>: ela passa por avaliação do administrador, dos moderadores e dos moradores antes de aparecer para todos.</p>
+    <div class="sub">Logo atual</div>
+    ${l ? `<div id="logoAtual" style="margin:4px 0"></div><p class="dica">${l.tipo === 'pronta' ? '✅ Logo pronta: todos veem' : STATUS_LOGO[l.status] || ''}${l.motivo ? ` · ${esc(l.motivo)}` : ''}</p>
+      <div class="botoes"><button id="logoTirar">Tirar logo (baú branco)</button></div>` : '<p class="dica">Sem logo: o baú fica branco.</p>'}
+    <div class="sub">Logo pronta</div>
+    <div class="chips">${logos.PRONTAS.map((p) => `<button class="chip ${logoEscolha.pronta === p.id ? 'sel' : ''}" data-pronta="${p.id}">${p.nome}</button>`).join('')}</div>
+    <div class="chips">${logos.CORES.map((k) => `<button class="chip ${logoEscolha.cor === k ? 'sel' : ''}" data-cor="${k}" style="background:${k};min-width:34px">&nbsp;</button>`).join('')}</div>
+    <div id="logoPrevPronta" style="margin:4px 0"></div>
+    <div class="botoes"><button id="logoUsarPronta">Usar esta logo pronta</button></div>
+    <div class="sub">Sua imagem</div>
+    <p class="dica">Formato da lona: comprida (1024 × 384, umas 2,7 vezes mais larga que alta). A imagem é cortada para caber. Sem palavrão, ódio, nudez nem marca dos outros: a moderação remove e bloqueia novos envios por 7 dias.</p>
+    <div class="botoes"><input id="logoArq" type="file" accept="image/*"></div>
+    ${logoPrep ? `<img src="${logoPrep.url}" style="width:100%;border-radius:6px;margin:4px 0"><div class="botoes"><button id="logoEnviar">📤 Enviar para avaliação</button><button id="logoCancelar">Cancelar</button></div>` : ''}`;
+  const mostrar = (alvo, canvas) => { if (!alvo) return; canvas.style.cssText = 'width:100%;border-radius:6px;display:block'; alvo.innerHTML = ''; alvo.appendChild(canvas); };
+  if (l) { if (l.tipo === 'pronta') mostrar($('logoAtual'), logos.desenharPronta(l.pronta, l.cor, e.nome)); else $('logoAtual').innerHTML = `<img src="${esc(l.url)}" style="width:100%;border-radius:6px">`; }
+  mostrar($('logoPrevPronta'), logos.desenharPronta(logoEscolha.pronta, logoEscolha.cor, e.nome));
+  c.querySelectorAll('[data-pronta]').forEach((b) => { b.onclick = () => { logoEscolha.pronta = b.dataset.pronta; desenhar(); }; });
+  c.querySelectorAll('[data-cor]').forEach((b) => { b.onclick = () => { logoEscolha.cor = b.dataset.cor; desenhar(); }; });
+  $('logoUsarPronta').onclick = () => executar(() => rede.logos.pronta(e.id, logoEscolha.pronta, logoEscolha.cor), '🎨 Logo pronta aplicada nos seus caminhões.');
+  if ($('logoTirar')) $('logoTirar').onclick = () => executar(() => rede.logos.tirar(e.id), 'Logo tirada: baú branco.');
+  $('logoArq').onchange = async (ev) => {
+    try { const r = await logos.recortarImagem(ev.target.files?.[0]); logoPrep = { empresa: e.id, blob: r.blob, url: r.canvas.toDataURL('image/jpeg', 0.8) }; desenhar(); }
+    catch (err) { msg(err.message, false); }
+  };
+  if ($('logoCancelar')) $('logoCancelar').onclick = () => { logoPrep = null; desenhar(); };
+  if ($('logoEnviar')) $('logoEnviar').onclick = () => { const blob = logoPrep.blob; executar(async () => { const r = await rede.logos.enviarImagem(e.id, blob); logoPrep = null; return r; }, '📤 Logo enviada! Ela aparece para todos quando for aprovada (você já vê nos seus caminhões).'); };
+}
+async function telaAvaliarLogos(c) {
+  const eu = ctx.perfil(), equipe = eu.cargo === 'admin' || eu.cargo === 'moderador';
+  let rows = [];
+  try { rows = await rede.logos.painel(); } catch { c.innerHTML = '<p class="dica">A avaliação de logos precisa do SQL 106 no Supabase.</p>'; return; }
+  c.innerHTML = `<div class="botoes" style="margin-bottom:6px"><button id="logosVoltar">← Voltar</button></div>
+    <p class="dica">Logos enviadas pelos donos das transportadoras. Com <b>5 👍</b> (e o dobro de 👍 sobre 👎) a logo vai ao ar; com <b>5 👎</b> ela é recusada ou, se já estava no ar, volta para a avaliação.${equipe ? ' Você é da equipe: pode aprovar, recusar, remover e bloquear na hora.' : ''}</p>
+    <div class="lista">${rows.length ? rows.map((r) => `<div class="linha" style="display:block">
+      <img src="${esc(r.url)}" style="width:100%;border-radius:6px" loading="lazy">
+      <b>${esc(r.nome)}</b> · ${r.status === 'pendente' ? '⏳ em avaliação' : '✅ no ar'}${r.bloqueada ? ' · 🚫 bloqueada' : ''} · 👍 ${r.pos} 👎 ${r.neg}
+      <div class="botoes"><button data-voto="1" data-e="${r.empresa}" ${r.meu === 1 ? 'class="sel" style="background:#2f8f4e;color:#fff"' : ''}>👍 Boa</button><button data-voto="-1" data-e="${r.empresa}" ${r.meu === -1 ? 'style="background:#b23b3b;color:#fff"' : ''}>👎 Imprópria</button></div>
+      ${equipe ? `<div class="botoes">${r.status === 'pendente' ? `<button data-mod="aprovar" data-e="${r.empresa}">✅ Aprovar</button><button data-mod="recusar" data-e="${r.empresa}">❌ Recusar</button>` : ''}<button data-mod="remover" data-e="${r.empresa}">🗑️ Remover</button><button data-mod="bloquear" data-e="${r.empresa}">🚫 Remover e bloquear 7 dias</button></div>` : ''}
+    </div>`).join('') : '<span class="vazio">Nenhuma logo para avaliar agora.</span>'}</div>`;
+  $('logosVoltar').onclick = () => { modo = 'empresa'; desenhar(); };
+  c.querySelectorAll('[data-voto]').forEach((b) => { b.onclick = () => executar(() => rede.logos.votar(Number(b.dataset.e), Number(b.dataset.voto)), (r) => (r?.status === 'aprovada' ? '✅ Voto registrado: a logo foi aprovada!' : r?.status === 'recusada' ? 'Voto registrado: a logo foi recusada.' : 'Voto registrado.')); });
+  c.querySelectorAll('[data-mod]').forEach((b) => { b.onclick = () => { const a = b.dataset.mod; if ((a === 'remover' || a === 'bloquear') && !confirm(a === 'bloquear' ? 'Remover a logo e bloquear novos envios desta empresa por 7 dias?' : 'Remover esta logo?')) return; executar(() => rede.logos.moderar(Number(b.dataset.e), a), { aprovar: '✅ Logo aprovada.', recusar: 'Logo recusada.', remover: 'Logo removida.', bloquear: '🚫 Logo removida e envios bloqueados por 7 dias.' }[a]); }; });
+}
 
 // ------------------------------------------------------------ sem empresa / funcionário
 function telaSemEmpresa(c, empresas) {
