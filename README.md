@@ -1653,3 +1653,7 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - **NPC armado anima como o jogador armado:** com a arma à mostra, `walk` vira `walk_shoot`, `idle` vira `mirar` e `run` vira `corrida_rifle` (wrapper em `npcFardado`). A arma não fica mais "voando". A polícia e a PRF trocam a animação na hora em que sacam ou guardam a arma.
   - **Policial NPC derrubado:** a arma some, ele cai e fica a poça de tinta embaixo (`porPoca`). A poça sai quando ele levanta, depois de 20 s.
   - **Caminhão:** a textura passou para 1024, sem o mapa metálico (refletia o céu e ficava rosado). O baú agora é branco liso (`civico.bauLiso`). A traseira ganhou moldura, portas com trancas e dobradiças, para-choque e lanternas (`traseiraBau`), e a cabine ganhou para-brisa curvo e janelas de vidro novas. Carrega com `?v=bau2`.
+- **Farda no padrão do Jovem da Cidade e moradores que caem (16bg)**:
+  - **Farda:** colete e boné/capacete usam as proporções medidas no Jovem da Cidade (largura 0,176, fundura 0,158 e altura 0,235 da altura do corpo; cabeça 0,097). Ficam iguais em todos os personagens e NPCs. O colete só alarga em corpo mais largo ou fundo que isso, para não sumir dentro do corpo.
+  - **Moradores da rua:** levam tiro, soco e atropelo (`acertarCivil`). Ferido, o morador foge. Derrubado, cai na poça de tinta, conta como crime e levanta depois de 30 s (`civilCaido`).
+  - `rede.logos` e `supabase/106_logos_empresas.sql` já estão no código: são a base da próxima etapa (logo das empresas). O jogo ainda não usa.

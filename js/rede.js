@@ -252,6 +252,15 @@ function traduzirRpc(m) {
     'a licitacao exige 5 caminhoes': 'A licitação exige 5 caminhões na transportadora.',
     'so coronel ou acima': 'Só Coronel para cima pode usar o cofre do Exército.',
     'cofre sem saldo': 'O cofre do Exército não tem esse valor.',
+    'so o dono da empresa': 'Só o dono da empresa pode mudar a logo.',
+    'envio de logo bloqueado': 'O envio de logo desta empresa está bloqueado pela moderação.',
+    'imagem invalida': 'Imagem inválida.',
+    'aguarde para enviar outra logo': 'Espere 5 minutos para enviar outra logo.',
+    'logo invalida': 'Logo inválida.',
+    'cor invalida': 'Cor inválida.',
+    'logo nao esta em avaliacao': 'Essa logo não está mais em avaliação.',
+    'nao pode votar na propria logo': 'Você não pode avaliar a logo da sua empresa.',
+    'so administrador ou moderador': 'Só o administrador ou um moderador.',
     'jogador nao encontrado': 'Jogador não encontrado.',
     'so soldados do exercito': 'Só soldados do Exército recebem recompensa do cofre.',
     'nao pode se recompensar': 'Você não pode recompensar a si mesmo.',
@@ -1062,6 +1071,22 @@ export const aviacao = {
 };
 
 // ---------------------------------------------------------------- jujubas (ração militar), licitação e comprador ilegal
+// logo das empresas na lona do baú (106): imagem própria (passa por avaliação) ou logo pronta do jogo
+export const logos = {
+  lista: () => sel(sb.from('empresa_logos').select('empresa, tipo, url, pronta, cor, status, motivo')),
+  painel: () => rpc('logos_painel'),
+  enviarImagem: async (empresa, blob) => {
+    const caminho = `${empresa}/${Date.now()}.jpg`;
+    const { error } = await sb.storage.from('logos').upload(caminho, blob, { contentType: 'image/jpeg', upsert: false });
+    if (error) throw new Error(error.message?.includes('row-level security') ? 'Só o dono da empresa pode enviar a logo.' : traduzir(error));
+    const url = sb.storage.from('logos').getPublicUrl(caminho).data.publicUrl;
+    return rpc('enviar_logo', { p_empresa: empresa, p_url: url });
+  },
+  pronta: (empresa, pronta, cor) => rpc('escolher_logo_pronta', { p_empresa: empresa, p_pronta: pronta, p_cor: cor }),
+  tirar: (empresa) => rpc('tirar_logo', { p_empresa: empresa }),
+  votar: (empresa, voto) => rpc('votar_logo', { p_empresa: empresa, p_voto: voto }),
+  moderar: (empresa, acao, motivo = null) => rpc('moderar_logo', { p_empresa: empresa, p_acao: acao, p_motivo: motivo }),
+};
 export const jujuba = {
   estado: async () => {
     const [armazens, pedidos, viagens, lic, cfg, mer] = await Promise.all([

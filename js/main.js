@@ -2689,6 +2689,7 @@ function atualizarNPCs(dt) {
       if (fora) { if (n.av.raiz.visible) n.av.raiz.visible = false; const p2 = patrulha(n); q.set(p2.x, 0.18, p2.z); continue; }
       if (!n.av.raiz.visible) n.av.raiz.visible = true;
     }
+    if (n.civil && n.caido > 0) { civilCaido(n, dt); continue; }
     if (n.ordem !== undefined) { const off = n.ordem >= configJogo.policia_robo; if (off !== !!n.fora) { n.fora = off; n.av.raiz.visible = !off; if (off) { n.perseguindo = false; n.cerco = null; } } if (off) continue; }
     if (n.bandido && banditoAtivo(n)) { atualizarBandido(n, dt); continue; }
     if (n.algemado) { npcAlgemado(n, dt); continue; }
@@ -4192,6 +4193,12 @@ function golpeSoco() {
     const dist = d.length();
     if (dist < 1.7 && dist > 0.01 && d.normalize().dot(f) > 0.5) { acertarPoliciaNPC(n, forca); return; }
   }
+  for (const n of npcs) {
+    if (!n.civil || n.caido > 0 || !n.av.raiz.visible) continue;
+    const d = new THREE.Vector3().subVectors(n.av.raiz.position, jogador.pos); d.y = 0;
+    const dist = d.length();
+    if (dist < 1.7 && dist > 0.01 && d.normalize().dot(f) > 0.5) { acertarCivil(n, forca); return; }
+  }
   for (const [id, r] of remotos) {
     if (!r.av?.raiz.visible) continue;
     const d = new THREE.Vector3().subVectors(r.av.raiz.position, jogador.pos); d.y = 0;
@@ -4283,6 +4290,11 @@ function acertoDaBola(b) {
     if (!n.policia) continue;
     const q = n.av.raiz.position;
     if (n.caido <= 0 && Math.hypot(p.x - q.x, p.z - q.z) < 0.55 && p.y > q.y + 0.1 && p.y < q.y + 2) { acertarPoliciaNPC(n, b.pd ? 100 : b.dano || 20); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
+  }
+  for (const n of npcs) {   // moradores da rua
+    if (!n.civil || n.caido > 0 || !n.av.raiz.visible) continue;
+    const q = n.av.raiz.position;
+    if (Math.hypot(p.x - q.x, p.z - q.z) < 0.5 && p.y > q.y + 0.1 && p.y < q.y + 1.9) { acertarCivil(n, b.pd ? 100 : b.dano || 20); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
   }
   if (fantasmasBope.size && acertoFantasmaBope(p, b.pd ? 100 : b.dano || 20)) { manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
   for (const [id, r] of remotos) {
@@ -4625,13 +4637,13 @@ function colidirVeiculo(c, dt) {
     const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), min = raio + o.r;
     if (c.fantasmas.has(chaveDe(o))) { if (d > min + 0.5) c.fantasmas.delete(chaveDe(o)); continue; }
     if (d >= min || d < 1e-4) continue;
-    if ((o.pessoa || o.npc) && Math.abs(c.vel) > 5) {
-      const chave = o.pessoa || o.npc;
+    if ((o.pessoa || o.npc || (o.civilRef?.civil && !(o.civilRef.caido > 0))) && Math.abs(c.vel) > 5) {
+      const chave = o.pessoa || o.npc || o.civilRef;
       if (performance.now() - (atropelados.get(chave) || 0) > 1500) {
         atropelados.set(chave, performance.now());
         const dano = Math.abs(c.vel) >= 8 ? 100 : Math.round(Math.abs(c.vel) * 9);    // rápido mata na hora
         if (o.pessoa) { conexao?.enviar('atropelo', { alvo: o.pessoa, v: dano, de: jogador.perfil.id }); rede.combate.agressao(o.pessoa).catch(() => {}); }
-        else acertarPoliciaNPC(o.npc, dano);
+        else if (o.npc) acertarPoliciaNPC(o.npc, dano); else acertarCivil(o.civilRef, dano);
         aviso('💥 Atropelamento!', 1.2); tremor = 0.3;
       }
     }
@@ -4663,6 +4675,27 @@ function acertarPoliciaNPC(n, dano) {
     aviso('Você derrubou um policial! Está PROCURADO.', 3);
   }
   else { n.av.tocar('hit', { umaVez: true, velocidade: 1.4, fade: 0.08 }); if (n.vida <= dano) aviso('A polícia está atirando em você!', 2); }
+}
+// morador da rua: leva tiro, soco e atropelo; derrubado, fica caído na poça de tinta e levanta depois de 30 s.
+// Derrubar morador é crime (como na polícia).
+function acertarCivil(n, dano) {
+  if (n.caido > 0 || n.algemado) return;
+  n.vida = (n.vida ?? 100) - dano;
+  const q = n.av.raiz.position, dx = q.x - jogador.pos.x, dz = q.z - jogador.pos.z, d = Math.hypot(dx, dz) || 1;
+  if (n.vida <= 0) {
+    n.caido = 30; n.conversa = null; n.fugindoT = 0;
+    n.av.tocar('death', { umaVez: true, velocidade: 1, fade: 0.1 }); porPoca(n, q.x, q.z);
+    rede.crime.agredirNpc().catch(() => {});
+    aviso('Você derrubou um morador! Está PROCURADO.', 3);
+  } else {   // ferido: corre para longe
+    n.av.tocar('hit', { umaVez: true, velocidade: 1.4, fade: 0.08 });
+    n.fugir = { dx: dx / d, dz: dz / d }; n.fugindoT = 4; setTimeout(() => { if (n.fugindoT > 0 && !(n.caido > 0)) n.av.tocar('run'); }, 450);
+  }
+}
+function civilCaido(n, dt) {
+  n.caido -= dt;
+  if (n.caido <= 0) { n.vida = 100; tirarPoca(n); const a = patrulha(n); n.av.raiz.position.set(a.x, 0.18, a.z); n.av.tocar('walk', { velocidade: 0.85 }); }
+  n.av.mixer.update(dt);
 }
 function policiaNPCReage(n, dt) {
   const p = n.av.raiz.position;
@@ -11127,14 +11160,16 @@ function vestir(av, papel) {
       if (topo === null || base === null || topo - base < 0.05) { topo = mt.topo; base = mt.baixo; } else base += (topo - base) * 0.12;
       const H = topo - base, ac = ajusteDe(papel, 'colete'), ah = ajusteDe(papel, 'chapeu');
       // tamanho padrão para todos (pela altura do personagem, em unidades do osso): a farda fica igual em qualquer
-      // personagem e nos NPCs. Só cresce se o corpo for mais largo que o padrão (grandalhão), para não atravessar.
+      // personagem e nos NPCs.
       av.raiz.updateMatrixWorld(true);
       const kT = tronco.getWorldScale(_cz).x / (av.raiz.getWorldScale(_cw).x || 1) || 1, kC = cabeca.getWorldScale(_cz).x / (av.raiz.getWorldScale(_cw).x || 1) || 1;
       const hT = (av.altura || 1.75) / kT, hC = (av.altura || 1.75) / kC;
-      const largT = Math.max(0.2 * hT, mt.largura * 0.92), profT = Math.max(0.125 * hT, Math.min(mt.prof, mt.largura * 0.85) * 0.92);
-      encaixar(colete, tronco, mt, largT * 1.35 * ac.larg / C.largura, H * ac.alt * (C.alt || 1), profT * 1.5 * ac.fund / C.prof,
+      // medidas do Jovem da Cidade (proporção da altura): a mesma farda em todo mundo
+      // (só cresce se o corpo for mais largo ou mais fundo que o do Jovem, para o colete não sumir dentro do corpo)
+      const largT = Math.max(0.176 * hT, mt.largura * 1.04), profT = Math.max(0.158 * hT, mt.prof * 1.06), altT = 0.235 * hT;
+      encaixar(colete, tronco, mt, largT * 1.35 * ac.larg / C.largura, altT * ac.alt * (C.alt || 1), profT * 1.5 * ac.fund / C.prof,
         { f: mt.cf + ac.frente * H, c: (topo + base) / 2 + (ac.subir + (C.subir || 0)) * H });
-      const P = PECAS_FARDA[chapNome], hc = 0.13 * hC, cabecaL = Math.max(0.108 * hC, Math.min(mc.largura, (mc.topo - mc.baixo) * 0.95) * 0.9);
+      const P = PECAS_FARDA[chapNome], hc = 0.138 * hC, cabecaL = 0.0966 * hC;
       const sc = cabecaL * P.folga * 1.1 * ah.tam / P.copa;
       encaixar(chapeu, cabeca, mc, sc, sc, sc, { f: mc.cf - P.cx * sc + (ah.frente + (P.frente || 0)) * hc, c: mc.topo + hc * (0.03 + P.subir + ah.subir) - P.topo * sc });
       if (colete.children[0]) colete.children[0].rotation.y = -Math.PI / 2 + (ac.giro || 0) * Math.PI / 180;   // ajuste de giro (peça feita virada para outro lado)
