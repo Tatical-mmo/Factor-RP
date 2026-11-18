@@ -14051,8 +14051,9 @@ function menuRevisaoHeli(c) {
   const k = chaveHeli(c); if (!k) return;
   rede.aviacao.helis().then((l) => {
     const v = (l || []).find((x) => x.chave === k)?.voos ?? heliVoos[k] ?? 0; heliVoos[k] = v;
+    const gratisMil = k === 'exercito' && (jogador.perfil?.profissao === 'exercito' || jogador.perfil?.cargo === 'admin');   // 118: aeronave militar, militar: de graça
     escolher(naOficinaMilitar(c) ? '🔧 Mecânico do Exército' : '🔧 Mecânico do hangar', `Este helicóptero tem ${v} voo(s) desde a última revisão (a revisão é a cada 7 voos).`, v > 0 ? [
-      { rotulo: `🔧 Fazer a revisão (${num(PRECO_REVISAO_HELI)})`, fn: () => rede.aviacao.revisarHeli(k, false).then(() => { heliVoos[k] = 0; c.falhaEm = 0; aviso('🔧 Helicóptero revisado!', 3); }).catch((e) => aviso(e.message, 3)) },
+      { rotulo: `🔧 Fazer a revisão (${gratisMil ? 'grátis para militares' : num(PRECO_REVISAO_HELI)})`, fn: () => rede.aviacao.revisarHeli(k, false).then(() => { heliVoos[k] = 0; c.falhaEm = 0; aviso(gratisMil ? '🔧 Helicóptero revisado pelo mecânico do Exército (grátis)!' : '🔧 Helicóptero revisado!', 3); }).catch((e) => aviso(e.message, 3)) },
       ...(jogador.perfil?.profissao === 'mecanico' ? [{ rotulo: '🔧 Fazer a revisão eu mesmo (+300)', fn: () => rede.aviacao.revisarHeli(k, true).then(() => { heliVoos[k] = 0; c.falhaEm = 0; aviso('🔧 Revisão feita! +300', 3); }).catch((e) => aviso(e.message, 3)) }] : []),
     ] : [{ rotulo: '✅ Já está revisado', fn: () => {} }]);
   }).catch((e) => aviso(e.message, 3));
