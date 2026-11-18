@@ -435,8 +435,16 @@ function aquecer(obj) {
 // shaders: compila em segundo plano (sem travar o quadro) o que já está na cena, algumas vezes no começo do jogo
 let compilando = false;
 function aquecerShaders() {
-  if (compilando || !renderer.compileAsync) return; compilando = true;
-  renderer.compileAsync(scene, camP).catch(() => {}).finally(() => { compilando = false; });
+  if (compilando || !renderer.compile) return; compilando = true;
+  // igual ao compileAsync do three.js, mas sem quebrar quando um material some (ou troca de shader) no meio da espera:
+  // o original dava "Cannot read properties of undefined (reading 'isReady')" e o aviso vermelho na tela
+  let mats;
+  try { mats = renderer.compile(scene, camP); } catch { compilando = false; return; }
+  const espera = () => {
+    try { for (const m of mats) { const pr = renderer.properties.get(m)?.currentProgram; if (!pr || !pr.isReady || pr.isReady()) mats.delete(m); } } catch { mats.clear(); }
+    if (mats.size) setTimeout(espera, 30); else compilando = false;
+  };
+  espera();
 }
 function aquecerQuadro() {
   const t = filaAquecer.shift(); if (!t) return;

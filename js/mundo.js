@@ -195,6 +195,14 @@ export function limitar(p) {
   if (p.x >= 211 && p.x <= 221 && p.z >= 636 && p.z <= 950) return;     // rodovia para Porto Sul
   if (Math.abs(p.z) > 700) {
     const s = Math.sign(p.z);
+    // Porto Sul a leste (bases e Morro do Porto): para no limite mais perto da área permitida. Antes jogava o x para 300:
+    // quem saía da rua da favela (atrás das empresas) ia parar do lado da Base Aérea/Marinha.
+    if (s > 0 && p.x > CIDADE_Z.x) {
+      const areas = [{ x0: 250, x1: BASE_NAVAL.x1 + 10, z0: 938, z1: BASE_NAVAL.z1 + 2 }, { x0: 880, x1: 1096, z0: 912, z1: 1108 }, { x0: -CIDADE_Z.x, x1: CIDADE_Z.x, z0: CIDADE_Z.min, z1: CIDADE_Z.maxSul }];
+      let melhor = null, md = Infinity;
+      for (const r of areas) { const x = THREE.MathUtils.clamp(p.x, r.x0, r.x1), z = THREE.MathUtils.clamp(p.z, r.z0, r.z1), d = Math.hypot(x - p.x, z - p.z); if (d < md) { md = d; melhor = [x, z]; } }
+      p.x = melhor[0]; p.z = melhor[1]; return;
+    }
     p.x = THREE.MathUtils.clamp(p.x, -CIDADE_Z.x, CIDADE_Z.x);
     const a = Math.abs(THREE.MathUtils.clamp(Math.abs(p.z), CIDADE_Z.min, s > 0 ? CIDADE_Z.maxSul : CIDADE_Z.max));
     p.z = s * a; return;
