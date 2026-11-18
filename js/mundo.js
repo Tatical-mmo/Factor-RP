@@ -1186,7 +1186,8 @@ let matCabeca = null, matPoca = null, matLed = null, matLampFav = null, matHalo 
 // postes de concreto do Brasil: [x, z, ângulo do braço (para a rua), tipo de lâmpada 0 sódio / 1 LED, lado, trecho]
 const POSTES = [];
 export function posteCidade(x, z, rot, trecho = -1) { POSTES.push([x, z, rot, POSTES.length % 3 === 0 ? 1 : 0, 0, trecho >= 0 ? 100000 + trecho : -1]); }   // quarteirões do centro (antes era o GLB)
-const naRuaRet = (x, z, m = 0) => ruas.some(([rx, rz, w, d]) => Math.abs(x - rx) < w / 2 + m && Math.abs(z - rz) < d / 2 + m);
+const dentroRet = (x, z, m) => ([rx, rz, w, d]) => Math.abs(x - rx) < w / 2 + m && Math.abs(z - rz) < d / 2 + m;
+const naRuaRet = (x, z, m = 0) => ruas.some(dentroRet(x, z, m)) || ruasMorro.some(dentroRet(x, z, m));   // asfalto da cidade e dos morros
 const emPredio = (x, z) => edificios.some((e) => Math.abs(x - e.x) < e.w / 2 + 0.3 && Math.abs(z - e.z) < e.d / 2 + 0.3);
 
 function cruzamentos(r) {
@@ -1286,7 +1287,7 @@ function montarPostesFavela(fios, halos) {
     let lado = r() < 0.5 ? 1 : -1;
     for (let t = a + 5; t < b - 4; t += 11 + r() * 5) {
       const px = vert ? rx + lado * (meia + 0.45) : t, pz = vert ? t : rz + lado * (meia + 0.45);
-      if (!naFavela(px, pz)) continue;
+      if (!naFavela(px, pz) || naRuaRet(px, pz, 0.3)) { lado = -lado; continue; }   // nunca no asfalto (nos cruzamentos caía na outra rua)
       lista.push({ x: px, z: pz, y: altura(px, pz), rot: vert ? (lado > 0 ? -Math.PI / 2 : Math.PI / 2) : (lado > 0 ? Math.PI : 0),
         tx: (r() - 0.5) * 0.16, tz: (r() - 0.5) * 0.16, h: 6.2 + r() * 1.2 });
       lado = -lado;

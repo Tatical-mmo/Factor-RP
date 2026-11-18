@@ -962,13 +962,33 @@ const EMOTES = [
   { id: 'danca1', nome: 'Dança 1', ic: '🕺' }, { id: 'danca2', nome: 'Dança 2', ic: '💃' }, { id: 'danca3', nome: 'Dança 3', ic: '🕺' }, { id: 'danca4', nome: 'Dança 4', ic: '💃' },
   { id: 'danca5', nome: 'Dança 5', ic: '🫧' }, { id: 'danca6', nome: 'Dança 6', ic: '🐎' },
   { id: 'empolgado', nome: 'Empolgado', ic: '🤩' }, { id: 'contas', nome: 'Dança das contas', ic: '📿' }, { id: 'nao_sou_mae', nome: 'Bronca', ic: '😤' },
-  { id: 'nao_dedo', nome: 'Não, não!', ic: '☝️' }, { id: 'dor_cabeca', nome: 'Dor de cabeça', ic: '🤕' }, { id: 'beber', nome: 'Beber', ic: '🥤' },
+  { id: 'nao_dedo', nome: 'Não, não!', ic: '☝️' }, { id: 'dor_cabeca', nome: 'Dor de cabeça', ic: '🤕' },
   { id: 'flexao_desce', nome: 'Flexão (toque 😀 de novo para levantar)', ic: '💪' }, { id: 'exercicio', nome: 'Burpee', ic: '🏋️' }, { id: 'equilibrar', nome: 'Equilibrar', ic: '🤸' },
 ];
 // flexão em 3 partes: desce (uma vez) → flexões (até tocar de novo) → levanta (uma vez) e volta ao normal
-const EMOTE_UMA_VEZ = new Set(['flexao_desce', 'flexao_sobe']);
+const EMOTE_UMA_VEZ = new Set(['flexao_desce', 'flexao_sobe', 'beber']);
+// garrafa azul do anti-ácido na mão direita enquanto toca a animação de beber (no jogador e nos outros)
+function novaGarrafa() {
+  const g = new THREE.Group(), vidro = new THREE.MeshStandardMaterial({ color: '#1f6fe0', roughness: 0.2, metalness: 0.1, transparent: true, opacity: 0.92 });
+  const corpo = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.15, 12), vidro); corpo.position.y = 0.075; g.add(corpo);
+  const ombro = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.034, 0.04, 12), vidro); ombro.position.y = 0.17; g.add(ombro);
+  const tampa = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.025, 10), new THREE.MeshStandardMaterial({ color: '#f2f2f2', roughness: 0.5 })); tampa.position.y = 0.2; g.add(tampa);
+  const rotulo = new THREE.Mesh(new THREE.CylinderGeometry(0.0355, 0.0355, 0.06, 12, 1, true), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.6 })); rotulo.position.y = 0.075; g.add(rotulo);
+  return g;
+}
+const _escMao = new THREE.Vector3();
+function garrafaNaMao(av, on) {   // a animação de beber usa a mão esquerda
+  const mao = av?.maoE || av?.maoD; if (!mao) return;
+  if (!on) { if (av.garrafa) av.garrafa.visible = false; return; }
+  if (!av.garrafa) {
+    av.garrafa = novaGarrafa(); mao.add(av.garrafa);
+    av.raiz.updateMatrixWorld(true); const s = mao.getWorldScale(_escMao).x / (av.raiz.getWorldScale(_escMao).x || 1) || 1;
+    av.garrafa.scale.setScalar(1 / s); av.garrafa.position.set(0.1 / s, 0.085 / s, 0.035 / s); av.garrafa.rotation.set(0, 0, Math.PI / 2);   // atravessada na palma (os dedos fecham em volta)
+  }
+  av.garrafa.visible = true;
+}
 function terminouAnim(av, n) { const a = av.acoes[n]; return av.nomeAtual === n && a && (!a.isRunning() || a.time >= a.getClip().duration - 0.03); }
-const ANIM_EXTRAS = new Set([...GESTOS_CONVERSA, 'celular', 'flexao', 'flexao_sobe', ...EMOTES.map((e) => e.id)]);
+const ANIM_EXTRAS = new Set([...GESTOS_CONVERSA, 'celular', 'flexao', 'flexao_sobe', 'beber', ...EMOTES.map((e) => e.id)]);   // beber: ao tomar o anti-ácido
 // corridas especiais, parada brusca e socorro: outro arquivo (outro esqueleto de origem, então outra base)
 const ANIM_CORRIDA = ['corrida_fome', 'corrida_carga', 'corrida_rapida', 'corrida_rifle', 'parada', 'coletar', 'levantar_socorro'];
 for (const n of ANIM_CORRIDA) ANIM_EXTRAS.add(n);
@@ -3340,7 +3360,7 @@ function atualizarInfo() {
 const remotos = new Map();     // id -> { meta, av, arma, alvo, anim, caixa }
 let conexao = null, online = 1, conectado = false;
 let envioTimer = 0, ultimoEnvio = null, tempoKeepAlive = 0, tempoSalvar = 15;
-const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1, flexao_desce: 1, flexao_sobe: 1, parada: 1, coletar: 1.2, levantar_socorro: 1.6 };
+const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1, flexao_desce: 1, flexao_sobe: 1, parada: 1, coletar: 1.2, levantar_socorro: 1.6, beber: 1 };
 const ANIM_VEL = { walk_shoot: 1.25 };
 
 function conectarMultiplayer(perfil) {
@@ -3482,6 +3502,7 @@ function atualizarRemotos(dt) {
     if (r.caixa && codigoCaixa(r.caixa) !== (a.cx || 0)) { scene.remove(r.caixa); r.caixa = null; }
     if (a.cx && !r.caixa) r.caixa = criarCaixa(tipoDoCodigo(a.cx));
     r.av.mixer.update(dt);
+    garrafaNaMao(r.av, r.anim === 'beber');
     raiz.updateMatrixWorld(true);
     if (a.mh) posarAperto(r.av);
     if (r.caixa) posicionarCaixa(r.av, r.caixa, raiz.rotation.y);
@@ -7896,6 +7917,7 @@ function atualizarJogador(dt) {
       else if (j.emote) {
         if (j.emote === 'flexao_desce' && terminouAnim(av, 'flexao_desce')) j.emote = 'flexao';
         else if (j.emote === 'flexao_sobe' && terminouAnim(av, 'flexao_sobe')) j.emote = null;
+        else if (j.emote === 'beber' && terminouAnim(av, 'beber')) j.emote = null;
         if (j.emote && av.nomeAtual !== j.emote) av.tocar(j.emote, { umaVez: EMOTE_UMA_VEZ.has(j.emote), fade: 0.25 });
         else if (!j.emote) av.tocar('idle', { fade: 0.3 });
       }
@@ -7904,6 +7926,8 @@ function atualizarJogador(dt) {
       else av.tocar('idle');
     }
   }
+  if (j.emote === 'beber' && forca > 0.15) j.emote = null;   // andou: para de beber
+  garrafaNaMao(j.avatar, j.avatar?.nomeAtual === 'beber' && j.emote === 'beber');
   if (!j.pulo) resolverColisao(j.pos, j.raio);   // pulando por cima de um obstáculo: a colisão volta no fim do pulo
   if (j.dentroCasa) limitarInterior(j.pos);
   if (j.pena > 0 && cadeia) {
@@ -10180,6 +10204,8 @@ const antiacidoAtivo = () => Math.max(jogador.antiacidoAte || 0, Date.parse(joga
 async function usarAntiacido() {
   const ate = await rede.jujuba.usarAntiacido();
   jogador.antiacidoAte = Date.parse(ate);
+  if (jogador.armado) alternarArma();
+  if (!jogador.carro) { jogador.emote = 'beber'; jogador.avatar.garantir('beber'); }   // bebe a garrafa azul (a animação que era o emote Beber)
   aviso('🥤 Anti-ácido: por 7 minutos a fome quase não cai. Ele não mata a fome, só segura.', 4.5);
   return true;
 }
