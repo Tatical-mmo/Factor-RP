@@ -966,6 +966,7 @@ function modeloCarroBase(modelo, cor) {
     if (modelo === 'militar') removerTriangulos(g, VIDRO_JIPE, 'semVidro');
     if (modelo === 'viatura') { g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color('#1c2a52'), 0.55); } }); sirene(g, [2.05, -0.2]); }
     else if (SEM_TINTA.has(modelo)) { const sr = { ambulancia: [2.56, 0.85], bombeiros: [2.45, 3.1] }[modelo]; if (sr) sirene(g, sr); }
+    else if (REPINTA.has(modelo)) g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); repintar(o.material, cor); } });   // carro de jogador: troca a cor da lataria de verdade
     else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), modelo.startsWith('onibus') ? 0.38 : modelo === 'caminhao_lixo' ? 0.12 : modelo === 'helicoptero_bombeiros' ? 0.9 : 0.45); } });
     try { paraBrisaLimpo(g, GLB_CARRO[modelo]); } catch (e) { console.warn('para-brisa:', modelo, e); }
     if (VIDROS[GLB_CARRO[modelo]]) { g.updateMatrixWorld(true); vidrosEscuros(g, VIDROS[GLB_CARRO[modelo]]); }
@@ -1010,13 +1011,68 @@ const GLB_NOVOS = { caveirao: 6, viatura_pm: 4.6, viatura_civil: 4.6, viatura_pr
   onibus_amarelo: 12.5, onibus_branco: 12, onibus_laranja: 12, onibus_brasilsul: 14, onibus_viacao: 14 };
 const FRENTE_MENOS_X = new Set(['onibus_amarelo', 'onibus_branco', 'onibus_laranja', 'onibus_brasilsul', 'onibus_viacao']);
 const FRENTE_MENOS_Z = new Set(['viatura_pm']);
+// ---- pintura de verdade (18v): a textura do Meshy já vem colorida (ex.: o Popular é azul); multiplicar por uma cor só
+// escurecia. Aqui acha a cor da lataria (o tom mais comum entre os pixels coloridos), troca só esses pixels pela cor
+// escolhida mantendo a luz e a sombra da textura, e deixa vidro, pneu, cromado, faróis e detalhes como estão.
+const REPINTA = new Set(['popular', 'suv', 'esportivo', 'classico', 'saveiro', 'saveiro_som', 'van']);
+const _tomLataria = new Map(), _repintadas = new Map();
+function hsl(r, g, b) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (d < 1e-6) return [0, 0, l];
+  const sat = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  const h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h / 6, sat, l];
+}
+function repintar(m, cor) {
+  const tx = m.map, img = tx?.image;
+  if (!img || !img.width) { m.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), 0.45); return; }
+  const k = tx.uuid + cor;
+  if (_repintadas.has(k)) { m.map = _repintadas.get(k); m.color.set('#ffffff'); return; }
+  try {
+    const W = img.width, H = img.height, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+    const dados = g.getImageData(0, 0, W, H), px = dados.data;
+    let tom = _tomLataria.get(tx.uuid), calculou = false;
+    const hist = new Float32Array(36); let somaL = 0, nL = 0, nCor = 0, nTot = 0, somaN = 0, nN = 0;
+    if (!tom) {   // histograma de tons dos pixels bem coloridos (amostra)
+      calculou = true;
+      for (let i = 0; i < px.length; i += 4 * 7) { const [h, sa, l] = hsl(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255); nTot++; if (sa > 0.28 && l > 0.12 && l < 0.88) { hist[Math.floor(h * 36) % 36] += sa; nCor++; } if (sa < 0.18 && l > 0.5 && l < 0.98) { somaN += l; nN++; } }
+      if (nCor < nTot * 0.12) { tom = { neutro: true, l: nN ? somaN / nN : 0.8 }; _tomLataria.set(tx.uuid, tom); }   // carro branco/prata: a lataria é o cinza claro
+    }
+    if (!tom && calculou) {
+      let mi = 0; for (let i = 1; i < 36; i++) if (hist[i] + hist[(i + 35) % 36] + hist[(i + 1) % 36] > hist[mi] + hist[(mi + 35) % 36] + hist[(mi + 1) % 36]) mi = i;
+      const centro = (mi + 0.5) / 36;
+      for (let i = 0; i < px.length; i += 4 * 7) { const [h, sa, l] = hsl(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255); const dh = Math.min(Math.abs(h - centro), 1 - Math.abs(h - centro)); if (sa > 0.28 && dh < 0.07) { somaL += l; nL++; } }
+      tom = { h: centro, l: nL ? somaL / nL : 0.5 }; _tomLataria.set(tx.uuid, tom);
+    }
+    const alvo = new THREE.Color(cor), hslA = {}; alvo.getHSL(hslA, THREE.SRGBColorSpace);
+    const c = new THREE.Color();
+    for (let i = 0; i < px.length; i += 4) {
+      const [h, sa, l] = hsl(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255);
+      let peso;
+      if (tom.neutro) { if (sa > 0.18 || l < 0.5 || l > 0.985) continue; peso = Math.min(1, (0.18 - sa) / 0.06) * Math.min(1, (l - 0.5) / 0.08); }
+      else {
+        const dh = Math.min(Math.abs(h - tom.h), 1 - Math.abs(h - tom.h));
+        if (sa < 0.2 || dh > 0.09) continue;   // não é a lataria
+        peso = Math.min(1, (sa - 0.2) / 0.15) * Math.min(1, (0.09 - dh) / 0.03);
+      }
+      const nl = THREE.MathUtils.clamp(hslA.l * (l / Math.max(0.05, tom.l)), 0.03, 0.97);
+      c.setHSL(hslA.h, hslA.s, nl, THREE.SRGBColorSpace);
+      px[i] = px[i] + (c.r * 255 - px[i]) * peso; px[i + 1] = px[i + 1] + (c.g * 255 - px[i + 1]) * peso; px[i + 2] = px[i + 2] + (c.b * 255 - px[i + 2]) * peso;
+    }
+    g.putImageData(dados, 0, 0);
+    const nova = new THREE.CanvasTexture(cv); nova.colorSpace = tx.colorSpace; nova.flipY = tx.flipY; nova.wrapS = tx.wrapS; nova.wrapT = tx.wrapT; nova.channel = tx.channel;
+    nova.offset.copy(tx.offset); nova.repeat.copy(tx.repeat); nova.anisotropy = tx.anisotropy;
+    _repintadas.set(k, nova); m.map = nova; m.color.set('#ffffff');
+  } catch { m.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), 0.45); }   // imagem protegida ou sem canvas: pinta de leve como antes
+}
 function veiculoGLBNovo(modelo, cor) {
   const L = GLB_NOVOS[modelo], g = new THREE.Group(), piv = new THREE.Group(), c = ctx.modelo(modelo).clone(true);
   c.rotation.y = FRENTE_MENOS_Z.has(modelo) ? Math.PI : FRENTE_MENOS_X.has(modelo) ? Math.PI / 2 : -Math.PI / 2; piv.add(c); piv.updateMatrixWorld(true);
   const b = new THREE.Box3().setFromObject(piv), s = L / Math.max(0.01, b.max.z - b.min.z);
   c.position.set(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2); piv.scale.setScalar(s); g.add(piv);
-  const tinta = modelo === 'saveiro' ? 0.45 : modelo === 'saveiro_som' ? 0.3 : 0;
-  c.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (tinta) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor || '#ffffff'), tinta); } } });
+  const tinta = REPINTA.has(modelo) && cor;
+  c.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (tinta) { o.material = o.material.clone(); repintar(o.material, cor); } } });
   const h = (b.max.y - b.min.y) * s;
   if (VIDROS[modelo]) { g.updateMatrixWorld(true); vidrosEscuros(g, VIDROS[modelo]); }
   if (modelo === 'caveirao' || (modelo.startsWith('viatura') && modelo !== 'viatura_pm')) sirene(g, [h + 0.05, modelo === 'caveirao' ? 0.6 : -0.2]);   // a da PM já tem giroflex no modelo
