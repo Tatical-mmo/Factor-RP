@@ -1373,7 +1373,7 @@ function montarMobiliario() {
     }
     for (let t = a + 6; t < b - 6; t += 6.5) {
       if (rnd() > 0.3 || !longe(t, RW / 2 + 5)) continue;
-      const lat = (rnd() < 0.5 ? -1 : 1) * (RW / 2 - 1.15);
+      const lat = (rnd() < 0.5 ? -1 : 1) * (RW / 2 - 0.88);   // colado no meio-fio (antes invadia a faixa e os caminhões passavam por dentro)
       const [px, pz] = ponto(t, lat);
       if (pertoDeCorredor(px, pz) || naFavela(px, pz)) continue;   // faixa por onde passam os ônibus
       carros.push([px, pz, vert ? (lat > 0 ? 0 : Math.PI) : (lat > 0 ? Math.PI / 2 : -Math.PI / 2)]);

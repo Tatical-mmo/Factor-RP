@@ -3148,7 +3148,7 @@ async function iniciarJogo(perfil) {
   $('carregando').classList.remove('oculto');
   montarChao();
   // um modelo faltando não pode travar o jogo: ele só fica de fora (veículos e prédios têm versão feita por código)
-  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_exercito' ? '?v=pas4' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau2' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
+  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_exercito' ? '?v=pas4' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau2' : m === 'empresa_f3' ? '?v=sede18q' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
   const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
   const skin = id;   // em serviço o policial continua com o próprio personagem (a farda mostra a corporação)
   const avatarP = criarAvatar(ROBOS.includes(skin) ? 'robos' : pastaJogador, skin);
@@ -3841,12 +3841,12 @@ function pernas(c) {
   if (c.rotaCache?.id === c.d.partida) return c.rotaCache.pernas;
   if (r.jj) {   // rações do Exército (108): garagem → círculo do Quartel (carrega) → corporação (descarrega) → garagem
     const T = { x: r.t[0], z: r.t[1] }, P = { x: r.f[0], z: r.f[1] }, D = destinoJujuba(r.jj), Q = mundo.QUARTEL.portao;
-    const ruas = (a, b) => servicos.rotaRuas(a, b, 2.5)?.pts || rotaGrade(a, b);
+    const ruas = (a, b) => servicos.rotaRuas(a, b, 2.5, 2.0)?.pts || rotaGrade(a, b);   // caminhão um pouco mais para o meio (não raspa os carros estacionados)
     const patio = [{ x: Q.x - 6, z: Q.z }, { x: Q.x + 14, z: Q.z }, { x: Q.x + 14, z: P.z }, P];
     // rodovia (x 216) até a rua z 945, a rua x 81 e a rua do portão (z 1055): sempre pelo asfalto, na mão certa
-    const ida = [...ruas(T, { x: 216, z: 641 }), ...servicos.faixaDireita(ACESSO_QUARTEL.slice().reverse()).slice(1), ...patio];
+    const ida = [...ruas(T, { x: 216, z: 632 }), ...servicos.faixaDireita(ACESSO_QUARTEL.slice().reverse(), 2.0).slice(1), ...patio];
     const leva = [...patio.slice().reverse(), ...rotaJujuba(r.jj).pts.slice(1)];
-    const p = [{ pts: ida, dur: r.d1 }, { parado: true, dur: r.carga }, { pts: leva, dur: r.d2 }, { parado: true, dur: r.descarga }, { pts: servicos.faixaDireita(ruas(D, T)), dur: r.d3 }];
+    const p = [{ pts: ida, dur: r.d1 }, { parado: true, dur: r.carga }, { pts: leva, dur: r.d2 }, { parado: true, dur: r.descarga }, { pts: r.jj === 'bope' ? [D, ...servicos.faixaDireita([BOPE_RUA(D), { x: 216, z: 947 }, { x: 216, z: 632 }], 2.0), ...ruas({ x: 216, z: 632 }, T).slice(1)] : ruas(D, T), dur: r.d3 }];
     c.rotaCache = { id: c.d.partida, pernas: p };
     return p;
   }
@@ -4058,6 +4058,7 @@ function atualizarCaminhoes(dt) {
       else { const bloq = caminhaoAFrente(c); c.st.atraso = bloq ? Math.min(150, c.st.atraso + dt) : Math.max(0, c.st.atraso - dt * 0.4); c.atraso = c.st.atraso; }
     } else if (estacionado) { c.atraso = 0; if (c.st) c.st.atraso = 0; }
     if (!alvo) alvo = posicaoEstacionado(c);
+    else if (!alvo.parado && c.st?.desl > 0 && alvo.ang !== undefined) alvo = desvioUltra(c.st, alvo);   // ultrapassando
     if (!alvo) continue;
     if (alvo.garagem) { c.obj.visible = false; if (c.escolta) c.escolta.visible = false; c.posicionado = false; c.manobra = null; continue; }
     c.obj.visible = true; if (c.escolta) c.escolta.visible = true;
@@ -4686,11 +4687,46 @@ function frearAtras(st, o, dt, dist = 9, x = o.position.x, z = o.position.z, ang
   let bloq;
   if (longe && (st.prox = (st.prox || 0) - dt) > 0) bloq = st.ultimo;
   else { st.prox = 0.5; bloq = st.ultimo = st.fantasma <= 0 && obstaculoAFrente(x, z, ang, st.ignorar || o, dist, o); }
+  if (ultrapassar(st, o, dt, x, z, ang, bloq, dist)) { st.bloq = 0; st.atraso = Math.max(0, (st.atraso || 0) - dt * 0.6); return st.atraso; }   // passando pela esquerda: não espera o da frente
   if (bloq && cedeAVez(st, o, dt, dist, x, z, ang, bloq)) return st.atraso;
   if (bloq) { const teto = bloq.fogo ? 1800 : 120; if ((st.atraso || 0) < teto) st.atraso = Math.min(teto, (st.atraso || 0) + dt); if (!bloq.fogo && !veicJogador.has(bloq)) st.bloq = (st.bloq || 0) + dt; if (st.bloq > (Math.abs(x - f.x) + Math.abs(z - f.z) < 160 ? 600 : paciencia)) { st.fantasma = 2; st.bloq = 0; } }   // à vista de quem joga, ninguém atravessa ninguém (só destrava um nó de verdade, depois de 4 min)   // veículo em chamas ou de jogador: espera de verdade, nunca atravessa
   else { st.bloq = 0; st.atraso = Math.max(0, (st.atraso || 0) - dt * (longe ? 1 : 0.35)); }
   return st.atraso;
 }
+// ---- ultrapassagem (Código de Trânsito, art. 29 e 32): só em reta, longe de cruzamento, pela esquerda, e só com a
+// contramão livre por uns 50 m. Começa depois de 3 s atrás de um veículo parado ou lento, volta para a faixa quando já
+// passou dele. st.desl (0..1) é o quanto o veículo está deslocado para a outra faixa: quem o desenha soma com desvioUltra().
+const FAIXA_ULTRA = 4.8;
+function retaLivre(x, z, ang, ate) {
+  const fx = Math.sin(ang), fz = Math.cos(ang), ex = Math.cos(ang), ez = -Math.sin(ang);
+  for (let k = 0; k <= ate; k += 6) if (!mundo.naRua(x + fx * k + ex * FAIXA_ULTRA, z + fz * k + ez * FAIXA_ULTRA, 0.5)) return false;
+  return !semaforos.cruzamentoAFrente(x, z, ang, ate);
+}
+function ultrapassar(st, o, dt, x, z, ang, bloq, dist) {
+  const ex = Math.cos(ang), ez = -Math.sin(ang), u = st.ult;
+  if (u) {
+    const a = u.alvo.position, f = (a.x - x) * Math.sin(ang) + (a.z - z) * Math.cos(ang);
+    const lx = x + ex * FAIXA_ULTRA * (1 - st.desl), lz = z + ez * FAIXA_ULTRA * (1 - st.desl);   // ponto na outra faixa
+    const contramao = obstaculoAFrente(lx, lz, ang, new Set([o, u.alvo]), Math.max(dist, 30), o);
+    if (u.volta || f < -7 || !u.alvo.visible || (contramao && f > 2)) {   // passou (ou apareceu alguém vindo): volta para a faixa
+      u.volta = true; st.desl = Math.max(0, st.desl - dt / 1.6);
+      if (st.desl <= 0) { st.ult = null; st.esperaUlt = 8; }
+      return false;   // voltando: as regras normais valem (se desistiu, fica atrás do da frente)
+    }
+    st.desl = Math.min(1, st.desl + dt / 1.6);
+    return true;
+  }
+  st.esperaUlt = Math.max(0, (st.esperaUlt || 0) - dt);
+  if (!bloq || bloq === true || bloq.fogo || !bloq.position || st.sirene || veicJogador.has(bloq) || st.esperaUlt > 0) { st.travadoUlt = 0; return false; }
+  if (Math.cos((bloq.rotation?.y ?? ang) - ang) < 0.8) { st.travadoUlt = 0; return false; }   // o da frente vai para o mesmo lado
+  st.travadoUlt = (st.travadoUlt || 0) + dt;
+  if (st.travadoUlt < 3) return false;
+  if (!retaLivre(x, z, ang, 42)) return false;
+  if (obstaculoAFrente(x + ex * FAIXA_ULTRA, z + ez * FAIXA_ULTRA, ang, new Set([o, bloq]), 50, o)) return false;   // contramão ocupada: espera
+  st.ult = { alvo: bloq, volta: false }; st.desl = st.desl || 0; st.travadoUlt = 0;
+  return true;
+}
+const desvioUltra = (st, p) => (st?.desl > 0 ? { ...p, x: p.x + Math.cos(p.ang) * FAIXA_ULTRA * st.desl, z: p.z - Math.sin(p.ang) * FAIXA_ULTRA * st.desl } : p);
 // quem tem a vez quando dois estão um dentro do outro: regra fixa (o id), igual para todos os aparelhos
 const temAVez = (eu, outro) => !outro || (eu?.uuid || '') < (outro.uuid || '');
 function obstaculoAFrente(x, z, ang, ignorar, dist = 7.5, eu = null) {
@@ -4704,7 +4740,7 @@ function obstaculoAFrente(x, z, ang, ignorar, dist = 7.5, eu = null) {
       return o.o || true;
     }
     // em cima do outro (os dois no mesmo lugar): um deles para até abrir espaço, senão andam juntos "invisíveis"
-    if (eu && o.o && f > -1 && f <= 0.5 && lat < 1 && !temAVez(eu, o.o)) return o.o;
+    if (eu && o.o && f > -2.5 && f <= 0.5 && lat < 1.6 && !temAVez(eu, o.o)) return o.o;   // encostado de lado (curva, faixa estreita): um dos dois espera
   }
   return false;
 }
@@ -7181,7 +7217,7 @@ function atualizarVansNpc(dt) {
       continue;
     }
     frearAtras(v.st, o, dt, 7.5);
-    const p = pontoNoLaco(v.laco, arrancarLaco(v.st, (agoraServidor() / 1000 - v.st.atraso) * v.vel + v.fase, v.vel, 'van', dt));
+    let p = pontoNoLaco(v.laco, arrancarLaco(v.st, (agoraServidor() / 1000 - v.st.atraso) * v.vel + v.fase, v.vel, 'van', dt)); p = desvioUltra(v.st, p);
     if (Math.hypot(p.x - o.position.x, p.z - o.position.z) > 25) o.position.set(p.x, alturaChao(p.x, p.z), p.z);
     else { o.position.x += (p.x - o.position.x) * Math.min(1, dt * 4); o.position.z += (p.z - o.position.z) * Math.min(1, dt * 4); o.position.y = alturaChao(o.position.x, o.position.z); }
     o.rotation.y = suavizarAngulo(o.rotation.y, p.ang, dt * 5);
@@ -7199,7 +7235,7 @@ function atualizarRondasBombeiros(dt) {
     const o = v.obj; o.visible = !ocup.has(i); if (!o.visible) return;
     civico.atualizarSirenes(0, o);
     frearAtras(v.st, o, dt, 8);
-    const p = pontoNoLaco(v.laco, arrancarLaco(v.st, (agoraServidor() / 1000 - v.st.atraso) * v.vel + v.fase, v.vel, 'bombeiros', dt));
+    let p = pontoNoLaco(v.laco, arrancarLaco(v.st, (agoraServidor() / 1000 - v.st.atraso) * v.vel + v.fase, v.vel, 'bombeiros', dt)); p = desvioUltra(v.st, p);
     if (Math.hypot(p.x - o.position.x, p.z - o.position.z) > 25) o.position.set(p.x, alturaChao(p.x, p.z), p.z);
     else { o.position.x += (p.x - o.position.x) * Math.min(1, dt * 4); o.position.z += (p.z - o.position.z) * Math.min(1, dt * 4); o.position.y = alturaChao(o.position.x, o.position.z); }
     o.rotation.y = suavizarAngulo(o.rotation.y, p.ang, dt * 5);
@@ -7250,7 +7286,7 @@ function atualizarViaturas(dt) {
     } else if (v.perseguindo) v.perseguindo = false;
     if (v.estadoPub) publicarRobo(v, dt, o);
     v.st ||= { atraso: 0 }; frearAtras(v.st, o, dt, 8);
-    const p = pontoNoLaco(v.laco, arrancarLaco(v.st, (agoraServidor() / 1000 - v.st.atraso) * v.vel + v.fase, v.vel, 'viatura', dt));
+    let p = pontoNoLaco(v.laco, arrancarLaco(v.st, (agoraServidor() / 1000 - v.st.atraso) * v.vel + v.fase, v.vel, 'viatura', dt)); p = desvioUltra(v.st, p);
     if (Math.hypot(p.x - o.position.x, p.z - o.position.z) > 25) o.position.set(p.x, alturaChao(p.x, p.z), p.z);
     else { o.position.x += (p.x - o.position.x) * Math.min(1, dt * 4); o.position.z += (p.z - o.position.z) * Math.min(1, dt * 4); o.position.y = alturaChao(o.position.x, o.position.z); }
     o.rotation.y = suavizarAngulo(o.rotation.y, p.ang, dt * 5);
@@ -10674,10 +10710,18 @@ async function usarJujuba() {
 const destinoJujuba = (corp) => (corp === 'policia' ? pontos.delegacia : corp === 'prf' ? civico.PREFEITURA.prf : corp === 'bope' ? pontos.sedeBope : civico.BOMBEIROS.balcao) || { x: 0, z: 0 };
 // caminho do Quartel até a corporação: sai de Porto Sul pela rodovia e entra na cidade pelas ruas
 // do portão do Quartel até a rodovia de Porto Sul pelas ruas (antes cortava o gramado ao lado do muro)
-const ACESSO_QUARTEL = [{ x: 138, z: 1055 }, { x: 81, z: 1055 }, { x: 81, z: 947 }, { x: 216, z: 947 }, { x: 216, z: 641 }];
+const ACESSO_QUARTEL = [{ x: 138, z: 1055 }, { x: 81, z: 1055 }, { x: 81, z: 947 }, { x: 216, z: 947 }, { x: 216, z: 632 }];   // 632: ainda na rua da cidade (641 já era fora, a rota caía no gramado e cruzava a ferrovia)
+// BOPE fica no pé do Morro do Porto, a leste: vai direto pela rua z 947 (antes passava pela cidade e voltava pelo mato)
+const BOPE_RUA = (d) => ({ x: d.x - 2, z: 947 });
 function rotaJujuba(corp) {
-  const ini = [{ x: mundo.QUARTEL.portao.x - 6, z: mundo.QUARTEL.portao.z }, ...servicos.faixaDireita(ACESSO_QUARTEL)];
-  const cidade = servicos.rotaRuas({ x: 216, z: 641 }, destinoJujuba(corp), 2.5);
+  const G = { x: mundo.QUARTEL.portao.x - 6, z: mundo.QUARTEL.portao.z };
+  if (corp === 'bope') {
+    const d = destinoJujuba(corp), pts = [G, ...servicos.faixaDireita([ACESSO_QUARTEL[0], ACESSO_QUARTEL[1], ACESSO_QUARTEL[2], BOPE_RUA(d)], 2.0), d];
+    let total = 0; for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
+    return { pts, total };
+  }
+  const ini = [G, ...servicos.faixaDireita(ACESSO_QUARTEL, 2.0)];
+  const cidade = servicos.rotaRuas({ x: 216, z: 632 }, destinoJujuba(corp), 2.5, 2.0);
   const pts = [...ini, ...(cidade?.pts || [destinoJujuba(corp)]).slice(1)];
   let total = 0; for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
   return { pts, total };
@@ -15320,7 +15364,8 @@ function predioGLB(nome, x, z, maior, giro = 0, { cortaBase = 0, chaoBase = cort
   }
   const tam = bb.getSize(new THREE.Vector3()), k = maior / Math.max(tam.x, tam.z);
   m.scale.setScalar(k); m.position.set(-(bb.min.x + bb.max.x) / 2 * k, -bb.min.y * k, -(bb.min.z + bb.max.z) / 2 * k);
-  m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  // semUltra: nestes modelos (bases, Área 51) o "prédio ultra" acendia a textura inteira como janela (prédio brilhando à noite)
+  m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.semUltra = true; } });
   g.add(m); scene.add(g);
   const c = Math.cos(giro), sn = Math.sin(giro), hw = tam.x * k / 2 * nucleo, hd = tam.z * k / 2 * nucleo;
   const ex = Math.abs(hw * c) + Math.abs(hd * sn), ez = Math.abs(hw * sn) + Math.abs(hd * c);

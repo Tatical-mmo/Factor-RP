@@ -311,7 +311,7 @@ export function montarBanco() {
 // hospital: prédio branco, ala alta, cruz vermelha, heliponto no teto e ambulância (frente para -Z)
 // helicóptero de serviço parado numa laje (heliponto): fica no lugar e o modelo do GLB próprio entra quando existir
 // helicópteros do Meshy vêm numa peça só: as pás (acima de y, em volta do eixo) viram um nó "rotor" que gira
-const ROTOR = { helicoptero_resgate: { y: 3.97, x: 0, z: 1.82, r: 8 }, helicoptero_bombeiros: { y: 4.46, x: 0, z: 0.38, r: 8.5 } };
+const ROTOR = { helicoptero_resgate: { y: 3.97, x: 0, z: 1.82, r: 8 }, helicoptero_bombeiros: { y: 4.46, x: 0, z: 0.38, r: 8.5, queda: 0.12, lado: 1.6 } };   // queda: as pontas das pás caem (ficavam paradas no ar com o rotor girando)
 function separarRotor(base, R) {
   if (!R || base.getObjectByName('rotor')) return;
   base.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(base.matrixWorld).invert();
@@ -325,7 +325,11 @@ function separarRotor(base, R) {
     for (let t = 0; t < idx.count; t += 3) {
       const ids = [idx.getX(t), idx.getX(t + 1), idx.getX(t + 2)];
       const pa = ids.map((i) => w(i).clone());
-      if (pa.every((q) => q.y > R.y && Math.hypot(q.x - R.x, q.z - R.z) < R.r)) {
+      const naPa = (q) => { const d = Math.hypot(q.x - R.x, q.z - R.z);
+        if (q.y > R.y && d < R.r) return true;
+        // ponta caída da pá: longe do eixo (fora da fuselagem), um pouco abaixo da altura do rotor; a cauda (fina, atrás) fica
+        return !!R.queda && d > R.lado && d < R.r + 2 && q.y > R.y - R.queda * d && !(Math.abs(q.x - R.x) < 0.8 && q.z < R.z - 3); };
+      if (pa.every(naPa)) {
         for (let k = 0; k < 3; k++) {
           P.push(pa[k].x - R.x, pa[k].y, pa[k].z - R.z);
           if (uv) U.push(uv.getX(ids[k]), uv.getY(ids[k]));

@@ -270,12 +270,12 @@ function ruaMaisPerto(v) { let m = ruaC(0), d = Infinity; for (let i = -7; i <= 
 // caminho pelas ruas (em L): sai para a rua, anda na horizontal, depois na vertical e entra no destino
 // só pelas ruas de verdade (grafo do asfalto) e para no meio-fio mais perto do destino, sem entrar no terreno;
 // sem ligação pelas ruas (rodovias), usa o caminho em L antigo
-export function rotaRuas(a, b, parar = 0) {
+export function rotaRuas(a, b, parar = 0, faixa = 2.4) {
   const c = caminhoRuas(a, b);
   let base;
   if (c) base = c;
   else { const za = ruaMaisPerto(a.z), xb = ruaMaisPerto(b.x), zb = ruaMaisPerto(b.z); base = [{ x: a.x, z: a.z }, { x: a.x, z: za }, { x: xb, z: za }, { x: xb, z: zb }, { x: b.x, z: zb }, { x: b.x, z: b.z }]; }
-  const pts = faixaDireita(base.filter((p, i, l) => i === 0 || Math.hypot(p.x - l[i - 1].x, p.z - l[i - 1].z) > 0.5));
+  const pts = faixaDireita(base.filter((p, i, l) => i === 0 || Math.hypot(p.x - l[i - 1].x, p.z - l[i - 1].z) > 0.5), faixa);
   if (parar > 0 && pts.length > 1) {   // para um pouco antes do destino
     const u = pts[pts.length - 1], w = pts[pts.length - 2], d = Math.hypot(u.x - w.x, u.z - w.z);
     if (d > parar + 0.5) pts[pts.length - 1] = { x: u.x + (w.x - u.x) / d * parar, z: u.z + (w.z - u.z) / d * parar }; else pts.pop();

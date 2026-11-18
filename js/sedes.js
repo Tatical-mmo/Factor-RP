@@ -104,6 +104,13 @@ export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0, nom
   const anima = [];
   const tr = !fabrica && ctx.modelo?.(`transp_f${f}`), ab = fabrica && f === 1 && ctx.modelo?.('fabrica_aberta');   // fábrica 5–9: frente aberta com a produção à mostra
   const glb = f >= 1 && (tr || ab || ctx.modelo?.(`empresa_f${f}`));
+  // sede nível 15 (modelo novo, 18q): galpão com 3 portas de doca no fundo e a torre de vidro; mais fundo que os outros
+  // (proporção do modelo) e as docas são as portas do próprio modelo
+  if (glb && f === 3 && !tr && !ab) {
+    // 10,2 m de fundo (sobra o pátio para o caminhão de 8,4 m encostar de ré); largura na proporção do modelo
+    const D3 = 10.2, W3 = D3 / 0.831;
+    return construirGlb({ g, glb, f, n: 3, W: W3, D: D3, cx, zw: FRENTE - D3, x, z, cor, helis, anima, alt: 1.113, nome, portas: [-0.309, 0, 0.309] });
+  }
   if (glb) return construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, cor, helis, anima, alt: ab ? 0.585 : (tr ? ALT_TR : ALT_GLB)[f], nome });
   // galpão: chão, paredes de zinco, telhado e faixa da cor da empresa
   caixa(g, M.piso, W, 0.1, D, cx, 0.05, zw + D / 2);
@@ -190,14 +197,16 @@ function placaNome(nome, cor) {
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
   return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.25 });
 }
-function construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, cor, helis, anima, alt: altRel, nome }) {
+function construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, cor, helis, anima, alt: altRel, nome, portas = null }) {
   caixa(g, M.piso, W, 0.1, D, cx, 0.05, zw + D / 2);
   const m = glb.clone(true), alt = W * altRel;
   m.position.set(cx, 0, zw + D / 2); m.scale.set(W, alt, D); m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); g.add(m);
   caixa(g, placaNome(nome, cor), W * 0.62, 1.15, 0.12, cx, Math.min(alt - 1, 5.2), FRENTE + 0.1);   // placa com o nome e a cor da empresa
   // docas no fundo
   const docas = [];
-  for (let k = 0; k < n; k++) {
+  // o modelo já tem as portas de doca: o caminhão encosta de ré nelas (sem as docas feitas por código)
+  if (portas) for (const p of portas) docas.push({ x: x + cx + p * W, z: z + zw - 0.4 - 4.2 });
+  for (let k = 0; k < (portas ? 0 : n); k++) {
     const dx = XL + W * (k + 0.5) / n;
     caixa(g, M.concreto, 3.4, 1.1, 1.2, dx, 0.55, zw - 0.6);
     caixa(g, M.listra, 3.4, 0.14, 0.06, dx, 1.04, zw - 1.22);
