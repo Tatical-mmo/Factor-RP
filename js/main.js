@@ -3843,7 +3843,8 @@ function pernas(c) {
     const T = { x: r.t[0], z: r.t[1] }, P = { x: r.f[0], z: r.f[1] }, D = destinoJujuba(r.jj), Q = mundo.QUARTEL.portao;
     const ruas = (a, b) => servicos.rotaRuas(a, b, 2.5)?.pts || rotaGrade(a, b);
     const patio = [{ x: Q.x - 6, z: Q.z }, { x: Q.x + 14, z: Q.z }, { x: Q.x + 14, z: P.z }, P];
-    const ida = [...ruas(T, { x: 216, z: 641 }), { x: 216, z: 945 }, { x: Q.x - 6, z: 945 }, ...patio];
+    // rodovia (x 216) até a rua z 945, a rua x 81 e a rua do portão (z 1055): sempre pelo asfalto, na mão certa
+    const ida = [...ruas(T, { x: 216, z: 641 }), ...servicos.faixaDireita(ACESSO_QUARTEL.slice().reverse()).slice(1), ...patio];
     const leva = [...patio.slice().reverse(), ...rotaJujuba(r.jj).pts.slice(1)];
     const p = [{ pts: ida, dur: r.d1 }, { parado: true, dur: r.carga }, { pts: leva, dur: r.d2 }, { parado: true, dur: r.descarga }, { pts: servicos.faixaDireita(ruas(D, T)), dur: r.d3 }];
     c.rotaCache = { id: c.d.partida, pernas: p };
@@ -4007,6 +4008,19 @@ function sincronizarCaminhao(d) {
   if (!escolta && c.escolta) { scene.remove(c.escolta); c.escolta = null; }
 }
 let ultimoProcessar = 0;
+// outro caminhão de empresa logo à frente, indo para o mesmo lado: espera (não entra um dentro do outro).
+// Lado a lado ou no mesmo ponto: o de id maior espera.
+function caminhaoAFrente(c) {
+  const p = c.obj.position, a = c.obj.rotation.y, fx = Math.sin(a), fz = Math.cos(a);
+  for (const o of caminhoes.values()) {
+    if (o === c || !o.obj.visible || o.d.tipo === 'helicoptero') continue;
+    const dx = o.obj.position.x - p.x, dz = o.obj.position.z - p.z; if (Math.abs(dx) > 14 || Math.abs(dz) > 14) continue;
+    const f = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx), mesmo = Math.cos(o.obj.rotation.y - a) > 0.2;
+    if (f > 1.5 && f < 12 && lat < 2.8) return true;
+    if (Math.hypot(dx, dz) < 4 && mesmo && c.d.id > o.d.id) return true;
+  }
+  return false;
+}
 function atualizarCaminhoes(dt) {
   const agora = agoraServidor();
   let atrasado = false;
@@ -4037,8 +4051,8 @@ function atualizarCaminhoes(dt) {
     const estacionado = !alvo;
     if (!estacionado && !alvo.parado && c.d.tipo !== 'helicoptero' && c.obj.visible) {
       const Qb = mundo.QUARTEL, noQuartel = c.d.rota?.jj && c.obj.position.x > Qb.x0 - 12 && c.obj.position.x < Qb.x1 && c.obj.position.z > Qb.z0 && c.obj.position.z < Qb.z1;
-      const bloq = !noQuartel && obstaculoAFrente(c.obj.position.x, c.obj.position.z, c.obj.rotation.y, c.obj);   // no pátio do Quartel não espera (árvores e barreiras)
-      c.atraso = bloq ? Math.min(30, (c.atraso || 0) + dt) : Math.max(0, (c.atraso || 0) - dt * 0.4);
+      const bloq = (!noQuartel && obstaculoAFrente(c.obj.position.x, c.obj.position.z, c.obj.rotation.y, c.obj)) || caminhaoAFrente(c);   // no pátio do Quartel não espera árvores e barreiras, mas espera o outro caminhão
+      c.atraso = bloq ? Math.min(c.d.rota?.jj ? 150 : 30, (c.atraso || 0) + dt) : Math.max(0, (c.atraso || 0) - dt * 0.4);
     } else if (estacionado) c.atraso = 0;
     if (!alvo) alvo = posicaoEstacionado(c);
     if (!alvo) continue;
@@ -10648,8 +10662,10 @@ async function usarJujuba() {
 }
 const destinoJujuba = (corp) => (corp === 'policia' ? pontos.delegacia : corp === 'prf' ? civico.PREFEITURA.prf : corp === 'bope' ? pontos.sedeBope : civico.BOMBEIROS.balcao) || { x: 0, z: 0 };
 // caminho do Quartel até a corporação: sai de Porto Sul pela rodovia e entra na cidade pelas ruas
+// do portão do Quartel até a rodovia de Porto Sul pelas ruas (antes cortava o gramado ao lado do muro)
+const ACESSO_QUARTEL = [{ x: 138, z: 1055 }, { x: 81, z: 1055 }, { x: 81, z: 947 }, { x: 216, z: 947 }, { x: 216, z: 641 }];
 function rotaJujuba(corp) {
-  const ini = [{ x: mundo.QUARTEL.portao.x - 6, z: mundo.QUARTEL.portao.z }, { x: mundo.QUARTEL.portao.x - 6, z: 945 }, { x: 216, z: 945 }, { x: 216, z: 641 }];
+  const ini = [{ x: mundo.QUARTEL.portao.x - 6, z: mundo.QUARTEL.portao.z }, ...servicos.faixaDireita(ACESSO_QUARTEL)];
   const cidade = servicos.rotaRuas({ x: 216, z: 641 }, destinoJujuba(corp), 2.5);
   const pts = [...ini, ...(cidade?.pts || [destinoJujuba(corp)]).slice(1)];
   let total = 0; for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
@@ -15035,11 +15051,11 @@ function montarRefletores() {
       const l = new THREE.Mesh(geoLamp, M.lampada); l.position.set(-1.5 + i, 0.5 - j, 0.27); fundo.add(l);
     }
     const d = Math.hypot(ax - x, az - z, y0 + H - ay), r = Math.max(14, d * 0.55);
-    const f = new THREE.Mesh(geoFacho, M.facho); f.position.set(x, y0 + H - 0.5, z);   // cone do refletor até o chão
+    const f = new THREE.Mesh(geoFacho, M.facho.clone()); f.position.set(x, y0 + H - 0.5, z);   // cone do refletor até o chão (material próprio: some quando a câmera está dentro dele)
     f.scale.set(r * 0.8, d, r * 0.8); f.lookAt(ax, ay, az); f.rotateX(-Math.PI / 2); g.add(f);
     // a mancha fica rente ao chão (antes, 6 cm acima e puxada para a frente, cobria pés e rodas: pareciam afundados)
     const p = new THREE.Mesh(geoPoca, M.poca); p.position.set(ax, ay + 0.015, az); p.scale.setScalar(r * 1.35); p.renderOrder = 2; g.add(p);
-    refletores.torres.push({ x, y: y0 + H - 0.6, z, ax, ay, az, r: r * 1.35, d });
+    refletores.torres.push({ x, y: y0 + H - 0.6, z, ax, ay, az, r: r * 1.35, d, facho: f });
   };
   const base = (b, n) => {   // n torres de cada lado comprido (x), 6 m para dentro do muro
     const g = new THREE.Group(); scene.add(g);
@@ -15053,12 +15069,24 @@ function atualizarRefletores() {
   const M = refletores.mats; if (!M) return;
   const n = THREE.MathUtils.clamp((noiteAtual - 0.25) / 0.45, 0, 1);   // acende ao escurecer
   M.lampada.color.setRGB(0.29 + 0.71 * n, 0.29 + 0.71 * n, 0.27 + 0.6 * n);
-  M.facho.opacity = 0.028 * n; M.poca.opacity = 0.85 * n;
+  // a mancha só ajuda de leve (a luz de verdade clareia e faz sombra); forte demais, ela apagava as sombras
+  M.poca.opacity = 0.35 * n;
+  // o facho é um cone transparente: com a câmera dentro dele a tela inteira ficava branca (personagem sumia)
+  const cam = camAtiva.position;
+  for (const t of refletores.torres) {
+    const vx = t.ax - t.x, vy = t.ay - t.y, vz = t.az - t.z, L2 = vx * vx + vy * vy + vz * vz;
+    const k = THREE.MathUtils.clamp(((cam.x - t.x) * vx + (cam.y - t.y) * vy + (cam.z - t.z) * vz) / L2, 0, 1);
+    const dd = Math.hypot(t.x + vx * k - cam.x, t.y + vy * k - cam.y, t.z + vz * k - cam.z), raio = t.r * 0.75 * k + 1;
+    t.facho.material.opacity = 0.028 * n * THREE.MathUtils.clamp((dd - raio) / 8, 0, 1);
+    t.facho.visible = t.facho.material.opacity > 0.001;
+  }
   for (const R of refletores.grupos) R.g.visible = Math.hypot(jogador.pos.x - R.cx, jogador.pos.z - R.cz) < 700;
   // luz de verdade: a mancha só clareia o chão; quem anda embaixo (gente, carros) é iluminado por uma luz que vai para
   // o refletor mais perto de você. Fica sempre na cena (só apaga de dia): ligar e desligar recompila os materiais.
   if (!refletores.luz) {
     const L = refletores.luz = new THREE.SpotLight('#fff1d6', 0, 0, 0.6, 0.45, 1);
+    L.castShadow = true; L.shadow.mapSize.set(1024, 1024); L.shadow.bias = -0.0015; L.shadow.normalBias = 0.06;
+    L.shadow.camera.near = 4; L.shadow.camera.far = 80;
     L.position.set(0, -100, 0); scene.add(L, L.target);
   }
   const L = refletores.luz, f = foco();
@@ -15069,7 +15097,7 @@ function atualizarRefletores() {
     if (refletores.alvo) { const t = m; L.position.set(t.x, t.y, t.z); L.target.position.set(t.ax, t.ay, t.az); L.target.updateMatrixWorld(); L.angle = Math.min(1.2, Math.atan(t.r / t.d) * 1.1); }
   }
   refletores.tTorre -= 1 / 60;
-  const alvoI = refletores.alvo && !jogador.dentroCasa ? 9 * refletores.alvo.d * n : 0;
+  const alvoI = refletores.alvo && !jogador.dentroCasa ? 4.5 * refletores.alvo.d * n : 0;
   L.intensity += (alvoI - L.intensity) * 0.15;
 }
 
@@ -15315,7 +15343,10 @@ function atualizarQuartelExtras(dt) {
   if (!quartelExtras) return;
   const Q = mundo.QUARTEL, ok = militar();
   quartelExtras.portao.off = ok;
-  abrirCancela(quartelExtras.braco, ok && Math.hypot(jogador.pos.x - Q.x0, jogador.pos.z - Q.portao.z) < 16, dt);
+  // abre para o militar e para os caminhões das rações (da transportadora ou do Exército) chegando ou saindo
+  const perto = (o) => o?.visible && Math.hypot(o.position.x - Q.x0, o.position.z - Q.portao.z) < 22;
+  if ((quartelExtras.tVeic -= dt) <= 0) { quartelExtras.tVeic = 0.5; quartelExtras.veic = [...caminhoes.values()].some((c) => c.d.rota?.jj && perto(c.obj)) || [...viagensJuj.values()].some((v) => perto(v.mesh)); }
+  abrirCancela(quartelExtras.braco, (ok && Math.hypot(jogador.pos.x - Q.x0, jogador.pos.z - Q.portao.z) < 16) || quartelExtras.veic, dt);
   quartelExtras.recrutador?.mixer.update(dt);
 }
 // ---- Base Aérea (a leste do quartel): pista, hangares, torre, cancela, soldados e antiaéreo
