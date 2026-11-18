@@ -253,6 +253,11 @@ function traduzirRpc(m) {
     'so coronel ou acima': 'Só Coronel para cima pode usar o cofre do Exército.',
     'cofre sem saldo': 'O cofre do Exército não tem esse valor.',
     'voce ja tem essa mascara': 'Você já tem essa máscara (cada uma é única).',
+    'o carro ja esta na oficina': 'Esse carro já está na oficina.',
+    'oficina invalida': 'Oficina inválida.',
+    'servico invalido': 'Serviço inválido.',
+    'o motor ja esta no maximo': 'O motor já está no máximo (nível 3).',
+    'o carro ja e blindado': 'Esse carro já é blindado.',
     'so quem matou saqueia': 'Só quem matou pode saquear (e só por 90 s).',
     'aguarde para saquear': 'Espere um pouco para saquear de novo.',
     'caminhao ainda vazio': 'Esse caminhão ainda não carregou no Quartel: espere ele sair carregado.',
@@ -1095,6 +1100,8 @@ export const logos = {
   moderar: (empresa, acao, motivo = null) => rpc('moderar_logo', { p_empresa: empresa, p_acao: acao, p_motivo: motivo }),
 };
 // saque do morto (109): quem matou leva até 500 da carteira; NPC morto dá de 20 a 150
+// oficinas autorizadas (110): pintura, motor e blindagem
+export const oficina = { servico: (carro, oficina, servico, cor = null) => rpc('oficina_servico', { p_carro: carro, p_oficina: oficina, p_servico: servico, p_cor: cor }) };
 export const saque = {
   jogador: (id) => rpc('saquear_jogador', { p_vitima: id }),
   npc: () => rpc('saquear_npc'),
