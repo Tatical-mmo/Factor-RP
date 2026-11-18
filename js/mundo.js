@@ -1181,8 +1181,13 @@ export function montar(contexto) {
 // ---------------------------------------------------------------- mobiliário urbano: meio-fio, faixas, postes e carros
 const pocas = [];                 // luz dos postes no chão (aparece à noite)
 export const LUZES_POSTE = [];   // [x, z] da lâmpada de cada poste (gráfico ultra: luz que faz sombra de verdade)
-export function poca(x, z, r = 5) { pocas.push([x, z, r]); }
-let matCabeca = null, matPoca = null;
+export function poca(x, z, r = 5, cor, y) { pocas.push([x, z, r, cor, y]); }
+let matCabeca = null, matPoca = null, matLed = null, matLampFav = null, matHalo = null;
+// postes de concreto do Brasil: [x, z, ângulo do braço (para a rua), tipo de lâmpada 0 sódio / 1 LED, lado, trecho]
+const POSTES = [];
+export function posteCidade(x, z, rot, trecho = -1) { POSTES.push([x, z, rot, POSTES.length % 3 === 0 ? 1 : 0, 0, trecho >= 0 ? 100000 + trecho : -1]); }   // quarteirões do centro (antes era o GLB)
+const naRuaRet = (x, z, m = 0) => ruas.some(([rx, rz, w, d]) => Math.abs(x - rx) < w / 2 + m && Math.abs(z - rz) < d / 2 + m);
+const emPredio = (x, z) => edificios.some((e) => Math.abs(x - e.x) < e.w / 2 + 0.3 && Math.abs(z - e.z) < e.d / 2 + 0.3);
 
 function cruzamentos(r) {
   // centros das ruas que cruzam esta
@@ -1205,6 +1210,137 @@ function pertoDeCorredor(x, z) {
   }
   return false;
 }
+// ---------------------------------------------------------------- postes do Brasil
+// Cidade: poste de concreto de 9,6 m, braço curvo sobre a rua com luminária de sódio (laranja) ou LED (branca),
+// cruzeta com a rede de cima, rede baixa, transformador em alguns, e os fios de um poste ao outro (mesma calçada).
+// Favela: poste baixo e torto com lâmpada amarela fraca, fios embolados de um lado ao outro da rua, fios soltos
+// pendurados e o "padrão" de cada casa recebendo um fio do poste.
+const _p = new THREE.Vector3(), _d = new THREE.Vector3();
+function catenaria(lista, a, b, flecha, n = 7) {   // fio caído entre dois pontos (segmentos de linha)
+  for (let i = 0; i < n; i++) {
+    const t0 = i / n, t1 = (i + 1) / n;
+    for (const t of [t0, t1]) lista.push(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t - flecha * 4 * t * (1 - t), a.z + (b.z - a.z) * t);
+  }
+}
+function montarPostes(postes) {
+  const { scene } = ctx;
+  const H = 9.6, fios = [];
+  const matConc = new THREE.MeshStandardMaterial({ color: '#a3a29b', roughness: 0.92 });
+  const matFerro = new THREE.MeshStandardMaterial({ color: '#4b5056', roughness: 0.55, metalness: 0.5 });
+  matCabeca = new THREE.MeshStandardMaterial({ color: '#f0d9b0', emissive: '#ff9a3c', emissiveIntensity: 0, roughness: 0.4 });
+  matLed = new THREE.MeshStandardMaterial({ color: '#e9eef5', emissive: '#eaf2ff', emissiveIntensity: 0, roughness: 0.3 });
+  // haste afinando (quadrada, como o duplo T), cruzeta, braço curvo e as duas luminárias
+  const haste = new THREE.CylinderGeometry(0.1, 0.19, H, 4, 1).rotateY(Math.PI / 4).translate(0, H / 2, 0);
+  const cruzeta = new THREE.BoxGeometry(0.1, 0.1, 2.0).translate(0, H - 0.5, -0.1);
+  const curva = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, H - 1.4, 0.12), new THREE.Vector3(0, H + 0.1, 0.4), new THREE.Vector3(0, H - 0.15, 2.35));
+  const braco = new THREE.TubeGeometry(curva, 10, 0.045, 5, false);
+  const sodio = new THREE.SphereGeometry(0.26, 10, 6).scale(1, 0.42, 1.6).translate(0, H - 0.27, 2.45);
+  const led = new THREE.BoxGeometry(0.34, 0.08, 0.62).translate(0, H - 0.24, 2.48);
+  const trafo = new THREE.CylinderGeometry(0.32, 0.32, 1.0, 10).translate(0, H - 2.2, -0.48);
+  const nS = postes.filter((p) => !p[3]).length, nL = postes.length - nS, nT = postes.filter((_, k) => k % 6 === 3).length;
+  const iH = new THREE.InstancedMesh(haste, matConc, postes.length), iC = new THREE.InstancedMesh(cruzeta, matFerro, postes.length), iB = new THREE.InstancedMesh(braco, matFerro, postes.length);
+  const iS = new THREE.InstancedMesh(sodio, matCabeca, Math.max(1, nS)), iL = new THREE.InstancedMesh(led, matLed, Math.max(1, nL)), iT = new THREE.InstancedMesh(trafo, matFerro, Math.max(1, nT));
+  iS.count = nS; iL.count = nL; iT.count = nT;
+  const halos = []; let s0i = 0, l0i = 0, t0i = 0;
+  const local = (x, z, rot, lx, ly, lz) => _p.set(lx, ly, lz).applyAxisAngle(_d.set(0, 1, 0), rot).add(_v.set(x, 0.18, z)).clone();
+  const porTrecho = new Map();
+  postes.forEach(([x, z, rot, tipo, lado, trecho], k) => {
+    _q.setFromAxisAngle(_e.set(0, 1, 0), rot); _m.compose(_v.set(x, 0.18, z), _q, _e.set(1, 1, 1));
+    iH.setMatrixAt(k, _m); iC.setMatrixAt(k, _m); iB.setMatrixAt(k, _m);
+    if (tipo) iL.setMatrixAt(l0i++, _m); else iS.setMatrixAt(s0i++, _m);
+    if (k % 6 === 3) iT.setMatrixAt(t0i++, _m);
+    addCol({ tipo: 'circ', x, z, r: 0.25 });
+    const lamp = local(x, z, rot, 0, H - 0.3, 2.45);
+    LUZES_POSTE.push([lamp.x, lamp.z, lamp.y]); halos.push(lamp.x, lamp.y - 0.12, lamp.z, tipo);
+    const ch = local(x, z, rot, 0, 0, 2.45 + 1.2);
+    poca(ch.x, ch.z, 7.5, tipo ? '#dfe8ff' : '#ffb25e');
+    if (trecho >= 0) { const ch2 = `${trecho}:${lado}`; if (!porTrecho.has(ch2)) porTrecho.set(ch2, []); porTrecho.get(ch2).push([x, z, rot]); }
+  });
+  for (const m of [iH, iC, iB, iS, iL, iT]) { m.castShadow = m === iH; scene.add(m); }
+  // fios: 3 na cruzeta (rede de cima) e 2 mais baixos (rede de baixo), de um poste ao próximo da mesma calçada
+  for (const lista of porTrecho.values()) for (let i = 0; i < lista.length - 1; i++) {
+    const [ax, az, ar] = lista[i], [bx, bz, br] = lista[i + 1];
+    if (Math.hypot(bx - ax, bz - az) > 45) continue;
+    for (const [lz, ly, fl] of [[-1.0, H - 0.45, 0.55], [-0.1, H - 0.45, 0.6], [0.75, H - 0.45, 0.55], [-0.2, H - 2.9, 0.45], [0.2, H - 3.2, 0.5]]) {
+      catenaria(fios, local(ax, az, ar, 0, ly, lz), local(bx, bz, br, 0, ly, lz), fl);
+    }
+  }
+  montarPostesFavela(fios, halos);
+  const gf = new THREE.BufferGeometry(); gf.setAttribute('position', new THREE.Float32BufferAttribute(fios, 3));
+  const lf = new THREE.LineSegments(gf, new THREE.LineBasicMaterial({ color: '#16181b' })); lf.frustumCulled = false; scene.add(lf);
+  // brilho das lâmpadas à noite (um ponto que brilha, visto de longe)
+  const hp = [], hc = [];
+  for (let i = 0; i < halos.length; i += 4) { hp.push(halos[i], halos[i + 1], halos[i + 2]); const c = halos[i + 3] === 1 ? [0.85, 0.9, 1] : halos[i + 3] === 2 ? [0.75, 0.55, 0.22] : [1, 0.62, 0.25]; hc.push(...c); }
+  const gh = new THREE.BufferGeometry(); gh.setAttribute('position', new THREE.Float32BufferAttribute(hp, 3)); gh.setAttribute('color', new THREE.Float32BufferAttribute(hc, 3));
+  const th = ctx.texturaCanvas(64, (g, t) => { g.clearRect(0, 0, t, t); const gr = g.createRadialGradient(t / 2, t / 2, 0, t / 2, t / 2, t / 2); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, t, t); });
+  matHalo = new THREE.PointsMaterial({ map: th, size: 2.6, sizeAttenuation: true, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
+  const ph = new THREE.Points(gh, matHalo); ph.visible = false; ph.frustumCulled = false; scene.add(ph); matHalo.userData.malha = ph;
+}
+function montarPostesFavela(fios, halos) {
+  if (!favelasProntas) return;
+  const { scene } = ctx, lista = [];
+  let sf = 4242; const r = () => (sf = (sf * 16807) % 2147483647) / 2147483647;   // sorteio próprio (não mexe no resto do mapa)
+  for (const [rx, rz, w, d, vert] of ruasMorro) {
+    if (!naFavela(rx, rz)) continue;
+    const a = vert ? rz - d / 2 : rx - w / 2, b = vert ? rz + d / 2 : rx + w / 2, meia = (vert ? w : d) / 2;
+    let lado = r() < 0.5 ? 1 : -1;
+    for (let t = a + 5; t < b - 4; t += 11 + r() * 5) {
+      const px = vert ? rx + lado * (meia + 0.45) : t, pz = vert ? t : rz + lado * (meia + 0.45);
+      if (!naFavela(px, pz)) continue;
+      lista.push({ x: px, z: pz, y: altura(px, pz), rot: vert ? (lado > 0 ? -Math.PI / 2 : Math.PI / 2) : (lado > 0 ? Math.PI : 0),
+        tx: (r() - 0.5) * 0.16, tz: (r() - 0.5) * 0.16, h: 6.2 + r() * 1.2 });
+      lado = -lado;
+    }
+  }
+  if (!lista.length) return;
+  const matMad = new THREE.MeshStandardMaterial({ color: '#8d8a83', roughness: 0.95 });
+  matLampFav = new THREE.MeshStandardMaterial({ color: '#e8d6a0', emissive: '#ffc35a', emissiveIntensity: 0, roughness: 0.5 });
+  const iP = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.08, 0.13, 1, 6).translate(0, 0.5, 0), matMad, lista.length);
+  const iL = new THREE.InstancedMesh(new THREE.SphereGeometry(0.13, 8, 6), matLampFav, lista.length);
+  const topo = (p) => _p.set(0, p.h, 0).applyEuler(new THREE.Euler(p.tx, 0, p.tz)).add(_v.set(p.x, p.y, p.z)).clone();
+  lista.forEach((p, k) => {
+    _q.setFromEuler(new THREE.Euler(p.tx, 0, p.tz)); _m.compose(_v.set(p.x, p.y, p.z), _q, _e.set(1, p.h, 1)); iP.setMatrixAt(k, _m);
+    const tp = topo(p), lx = tp.x + Math.sin(p.rot) * 0.7, lz = tp.z + Math.cos(p.rot) * 0.7, ly = tp.y - 0.55;
+    _m.compose(_v.set(lx, ly, lz), _q.identity(), _e.set(1, 1, 1)); iL.setMatrixAt(k, _m);
+    fios.push(tp.x, tp.y - 0.4, tp.z, lx, ly + 0.12, lz);   // bracinho de fio até a lâmpada
+    halos.push(lx, ly, lz, 2); poca(lx, lz, 3.6, '#c98a3a', altura(lx, lz) + 0.25);
+    LUZES_POSTE.push([lx, lz, ly]);
+    addCol({ tipo: 'circ', x: p.x, z: p.z, r: 0.2 });
+    p.tp = tp;
+  });
+  iP.castShadow = true; scene.add(iP, iL);
+  // fios embolados: de cada poste aos 2 seguintes (cruzando a rua), 3 a 6 fios cada, com caídas diferentes
+  const desloca = (v, k) => v.clone().add(_d.set((r() - 0.5) * 0.3, -0.3 - k * 0.22 - r() * 0.2, (r() - 0.5) * 0.3));
+  for (let i = 0; i < lista.length; i++) for (const j of [i + 1, i + 2]) {
+    const a = lista[i], b = lista[j]; if (!b || Math.hypot(a.x - b.x, a.z - b.z) > 30) continue;
+    const n = 3 + Math.floor(r() * 4);
+    for (let k = 0; k < n; k++) catenaria(fios, desloca(a.tp, k), desloca(b.tp, k), 0.4 + r() * 1.3, 8);
+  }
+  // fio solto pendurado (um em cada 4 postes)
+  for (const p of lista) if (r() < 0.25) {
+    const a = p.tp.clone().add(_d.set(0, -0.6, 0)), m = a.clone().add(_d.set((r() - 0.5) * 1.6, -2.2 - r() * 1.5, (r() - 0.5) * 1.6));
+    catenaria(fios, a, m, -0.4, 5);
+  }
+  // padrão de energia de cada casa perto de um poste: caixinha do medidor na frente da casa e o fio vindo do poste
+  const casas = edificios.filter((e) => e.tipo === 'favela');
+  const padroes = [];
+  for (const e of casas) {
+    let best = null, dm = 22;
+    for (const p of lista) { const dd = Math.hypot(p.x - e.x, p.z - e.z); if (dd < dm) { dm = dd; best = p; } }
+    if (!best) continue;
+    const lad = Math.abs(Math.sin(e.rumo)) > 0.5, meia = (lad ? e.w : e.d) / 2 + 0.06, fx = Math.sin(e.rumo), fz = Math.cos(e.rumo), rx = Math.cos(e.rumo), rz = -Math.sin(e.rumo);
+    const off = ((e.x * 7 + e.z * 13) % 1.4) - 0.7, bx = e.x + fx * meia + rx * off, bz = e.z + fz * meia + rz * off;
+    const hTopo = e.y + Math.min(2.9 * (e.andares || 1), 5.6) - 0.2;
+    padroes.push([bx, e.y + 1.7, bz, e.rumo]);
+    catenaria(fios, best.tp.clone().add(_d.set(0, -0.5 - r() * 0.6, 0)), _p.set(bx, hTopo, bz).clone(), 0.25 + r() * 0.5, 6);
+    fios.push(bx, hTopo, bz, bx, e.y + 1.95, bz);   // desce pela parede até o medidor
+  }
+  if (padroes.length) {
+    const iM = new THREE.InstancedMesh(new THREE.BoxGeometry(0.32, 0.45, 0.16), new THREE.MeshStandardMaterial({ color: '#9aa1a6', roughness: 0.5, metalness: 0.4 }), padroes.length);
+    padroes.forEach(([x, y, z, rot], k) => { _q.setFromAxisAngle(_e.set(0, 1, 0), rot); _m.compose(_v.set(x, y, z), _q, _e.set(1, 1, 1)); iM.setMatrixAt(k, _m); });
+    scene.add(iM);
+  }
+}
 function montarMobiliario() {
   const { scene } = ctx;
   // meio-fio em volta das calçadas
@@ -1224,13 +1360,14 @@ function montarMobiliario() {
     const longe = (t, m) => cr.every((q) => Math.abs(q - t) > m);
     const ponto = (t, lat) => (vert ? [c + lat, t] : [t, c + lat]);
     for (let t = a + 4; t < b - 3; t += 6) if (longe(t, RW / 2 + 6.5)) faixas.push([...ponto(t, 0), vert]);   // para antes da faixa de pedestre
-    let lado = 1;
-    for (let t = a + 8; t < b - 6; t += 27) {
-      if (!longe(t, RW / 2 + 3)) continue;
-      const [px, pz] = ponto(t, lado * (RW / 2 + 0.9));
-      if (naFavela(px, pz)) { lado = -lado; continue; }   // nas favelas o poste da cidade caía no meio das ruas do morro
-      postes.push([px, pz, vert ? (lado > 0 ? -Math.PI / 2 : Math.PI / 2) : (lado > 0 ? Math.PI : 0)]);
-      const [qx, qz] = ponto(t, lado * (RW / 2 - 1.6)); poca(qx, qz, 5.5); LUZES_POSTE.push([qx, qz]);
+    // postes de concreto: a cada 16 m, alternando os lados (32 m em cada calçada), sempre na calçada (nunca no
+    // asfalto: a meia largura é a da própria rua, e o ponto tem que cair numa calçada e fora de outra rua)
+    let lado = 1; const meia = vert ? w / 2 : d / 2, trecho = postes.length;
+    for (let t = a + 8; t < b - 6; t += 16) {
+      if (!longe(t, meia + 4)) { lado = -lado; continue; }
+      const [px, pz] = ponto(t, lado * (meia + 0.75));
+      if (naFavela(px, pz) || naRuaRet(px, pz, 0.4) || emPredio(px, pz)) { lado = -lado; continue; }
+      postes.push([px, pz, vert ? (lado > 0 ? -Math.PI / 2 : Math.PI / 2) : (lado > 0 ? Math.PI : 0), rnd() < 0.4 ? 1 : 0, lado, trecho]);
       lado = -lado;
     }
     for (let t = a + 6; t < b - 6; t += 6.5) {
@@ -1248,18 +1385,10 @@ function montarMobiliario() {
     for (const [i, d] of [[0, -0.13], [1, 0.13]]) { _m.compose(_v.set(x + (vert ? d : 0), 0.032, z + (vert ? 0 : d)), _q.identity(), _e.set(vert ? 0.1 : 6, 1, vert ? 6 : 0.1)); fx.setMatrixAt(k * 2 + i, _m); }
   });
   fx.receiveShadow = true; scene.add(fx);
-  // postes
-  const matPoste = new THREE.MeshStandardMaterial({ color: '#33383f', roughness: 0.5, metalness: 0.5 });
-  matCabeca = new THREE.MeshStandardMaterial({ color: '#f4efe0', emissive: '#ffd89a', emissiveIntensity: 0, roughness: 0.4 });
-  const haste = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.08, 0.11, 5.2, 7).translate(0, 2.6, 0), matPoste, postes.length);
-  const braco = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 0.08, 1.7).translate(0, 5.1, 0.8), matPoste, postes.length);
-  const cabeca = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.16, 0.7).translate(0, 5.0, 1.55), matCabeca, postes.length);
-  postes.forEach(([x, z, rot], k) => {
-    _q.setFromAxisAngle(_e.set(0, 1, 0), rot); _m.compose(_v.set(x, 0.18, z), _q, _e.set(1, 1, 1));
-    haste.setMatrixAt(k, _m); braco.setMatrixAt(k, _m); cabeca.setMatrixAt(k, _m);
-    addCol({ tipo: 'circ', x, z, r: 0.2 });
-  });
-  haste.castShadow = true; scene.add(haste, braco, cabeca);
+  // postes de concreto (cidade) e os da favela
+  const dasRuas = postes.length;   // os dos quarteirões só entram onde não há poste de rua perto (sem duplicar)
+  for (const p of POSTES) if (!postes.slice(0, dasRuas).some((q) => Math.abs(q[0] - p[0]) < 6 && Math.abs(q[1] - p[1]) < 6)) postes.push(p);
+  montarPostes(postes);
   // luz dos postes no chão
   const tl = ctx.texturaCanvas(128, (g, t) => {
     g.clearRect(0, 0, t, t);
@@ -1270,7 +1399,7 @@ function montarMobiliario() {
   tl.wrapS = tl.wrapT = THREE.ClampToEdgeWrapping;
   matPoca = new THREE.MeshBasicMaterial({ map: tl, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
   const pc = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), matPoca, pocas.length);
-  pocas.forEach(([x, z, r], k) => { _m.compose(_v.set(x, 0.21, z), _q.identity(), _e.set(r * 2, 1, r * 2)); pc.setMatrixAt(k, _m); });
+  pocas.forEach(([x, z, r, cor, y], k) => { _m.compose(_v.set(x, y ?? 0.21, z), _q.identity(), _e.set(r * 2, 1, r * 2)); pc.setMatrixAt(k, _m); pc.setColorAt(k, _c.set(cor || '#ffffff')); });
   pc.renderOrder = 2; pc.visible = false; scene.add(pc); matPoca.userData.malha = pc;
   // carros estacionados: caixinhas leves para todos; os mais perto do jogador trocam pelo modelo 3D
   const coresCarro = ['#c0392b', '#2c3e50', '#ecf0f1', '#7f8c8d', '#2980b9', '#16a085', '#f1c40f', '#8e44ad', '#d35400', '#1f1f1f', '#bdc3c7'];
@@ -1389,6 +1518,9 @@ export function definirNoite(n) {
   UNI.uNoite.value = n;
   if (matJanelas) { matJanelas.opacity = Math.min(1, n * 1.3) * 0.95; malhaJanelas.visible = n > 0.05; }
   if (matCabeca) matCabeca.emissiveIntensity = n * 2.2;
+  if (matLed) matLed.emissiveIntensity = n * 2.4;
+  if (matLampFav) matLampFav.emissiveIntensity = n * 1.6;
+  if (matHalo) { matHalo.opacity = n * 0.85; matHalo.userData.malha.visible = n > 0.05; }
   if (matPoca) { matPoca.opacity = n * 0.6; matPoca.userData.malha.visible = n > 0.02; }
 }
 // chuva: asfalto e calçada escurecem e ficam lisos (refletem o céu e as luzes)

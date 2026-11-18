@@ -311,19 +311,19 @@ function atualizarLuzPoste(dt) {
   if (luzPoste) luzPoste.visible = true;
   if (!quer) { if (luzPoste) luzPoste.intensity = Math.max(0, luzPoste.intensity - dt * 80); return; }
   if (!luzPoste) {
-    luzPoste = new THREE.SpotLight('#ffd7a0', 40, 26, 1.05, 0.55, 1.4); luzPoste.castShadow = true;
+    luzPoste = new THREE.SpotLight('#ffc98a', 70, 34, 0.95, 0.6, 1.3); luzPoste.castShadow = true;
     luzPoste.shadow.mapSize.set(1024, 1024); luzPoste.shadow.bias = -0.002; luzPoste.shadow.normalBias = 0.08;   // sem as listras de sombra nos prédios 3D (hospital)
-    luzPoste.shadow.camera.near = 0.5; luzPoste.shadow.camera.far = 28;
+    luzPoste.shadow.camera.near = 0.5; luzPoste.shadow.camera.far = 36;
     scene.add(luzPoste); scene.add(luzPoste.target);
   }
-  const alvoI = 40 * Math.min(1, (noiteAtual - 0.35) / 0.3);
+  const alvoI = 70 * Math.min(1, (noiteAtual - 0.35) / 0.3);
   // troca de poste: apaga devagar, pula, acende devagar
-  if (luzPoste.userData.prox) { luzPoste.intensity = Math.max(0, luzPoste.intensity - dt * 120); if (luzPoste.intensity > 0) return; const [px, pz] = luzPoste.userData.prox; luzPoste.userData.prox = null;
-    const h = alturaChao(px, pz); luzPoste.position.set(px, h + 5.1, pz); luzPoste.target.position.set(px, h, pz); luzPoste.target.updateMatrixWorld(); luzPoste.userData.em = px + ',' + pz; }
+  if (luzPoste.userData.prox) { luzPoste.intensity = Math.max(0, luzPoste.intensity - dt * 120); if (luzPoste.intensity > 0) return; const [px, pz, py] = luzPoste.userData.prox; luzPoste.userData.prox = null;
+    const h = alturaChao(px, pz); luzPoste.position.set(px, py ?? h + 5.1, pz); luzPoste.target.position.set(px, h, pz); luzPoste.target.updateMatrixWorld(); luzPoste.userData.em = px + ',' + pz; }
   else if (luzPoste.userData.em) luzPoste.intensity = Math.min(alvoI, luzPoste.intensity + dt * 80);
   if ((tPoste -= dt) > 0) return; tPoste = 0.4;
   const f = fo; let m = null, dm = 22;
-  for (const [x, z] of mundo.LUZES_POSTE) { const d = Math.abs(x - f.x) + Math.abs(z - f.z); if (d < dm) { dm = d; m = [x, z]; } }
+  for (const L of mundo.LUZES_POSTE) { const d = Math.abs(L[0] - f.x) + Math.abs(L[1] - f.z); if (d < dm) { dm = d; m = L; } }
   if (!m) { luzPoste.userData.em = null; luzPoste.intensity = Math.max(0, luzPoste.intensity - 0.4 * 80); return; }
   if (luzPoste.userData.em !== m[0] + ',' + m[1]) luzPoste.userData.prox = m;
 }
@@ -655,11 +655,7 @@ function colocarArvore(x, z, s = 1) {
   const a = clonar('arvore'); a.position.set(x, 0.18, z); a.rotation.y = rng() * Math.PI * 2; a.scale.setScalar(s * (0.85 + rng() * 0.3));
   scene.add(a); colisores.push({ tipo: 'circ', x, z, r: 0.7 * s });
 }
-function colocarPoste(x, z, rot) {
-  const p = clonar('poste'); p.position.set(x, 0.18, z); p.rotation.y = rot; scene.add(p);
-  mundo.poca(x, z, 5);
-  colisores.push({ tipo: 'circ', x, z, r: 0.3 });
-}
+function colocarPoste(x, z, rot, trecho) { mundo.posteCidade(x, z, rot, trecho); }   // poste de concreto (montado com os outros em mundo.js)
 function colocarCaixa(x, z, rot = 0) {
   const c = clonar('caixa'); c.scale.setScalar(0.72); c.position.set(x, 0.18, z); c.rotation.y = rot; scene.add(c);
   caixasSoltas.push(c); return c;
@@ -734,7 +730,13 @@ function montarQuarteiroes() {
     const esp = QUARTEIROES_ESPECIAIS[`${cx},${cz}`];
     // postes nas esquinas da calçada
     const d = QB / 2 - 2.4;
-    colocarPoste(x - d, z + d, 0); colocarPoste(x + d, z - d, Math.PI / 2);
+    colocarPoste(x - d, z + d, -Math.PI / 4); colocarPoste(x + d, z - d, Math.PI * 3 / 4);   // braço virado para o cruzamento
+    // postes no meio de cada lado do quarteirão (na calçada, braço para a rua), com fio entre os dois do mesmo lado
+    { const b = QB / 2 - 0.8, lado = (cx * N + cz) * 4;
+      for (const t of [-10, 10]) {
+        colocarPoste(x + t, z - b, Math.PI, lado); colocarPoste(x + t, z + b, 0, lado + 1);
+        colocarPoste(x - b, z + t, -Math.PI / 2, lado + 2); colocarPoste(x + b, z + t, Math.PI / 2, lado + 3);
+      } }
 
     if (esp && esp.parque) {
       for (let k = 0; k < 7; k++) {
