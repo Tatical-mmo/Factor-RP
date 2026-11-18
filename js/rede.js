@@ -523,6 +523,8 @@ function traduzirRpc(m) {
     'jogador ja esta em um cla': 'Esse jogador já está em um clã.',
     'limite de membros': 'Limite de 15 membros.',
     'limite de 10 carros': 'Limite de 10 carros por jogador. Venda um para comprar outro.',
+    'helicoptero so na loja': 'Helicóptero só se compra na Concessionária.',
+    'local de entrega invalido': 'Estacionamento inválido para a entrega.',
     'o lider nao pode se expulsar': 'O líder não pode se expulsar.',
     'jogador nao e do seu cla': 'Esse jogador não é do seu clã.',
     'voce nao esta em um cla': 'Você não está em um clã.',
@@ -708,6 +710,7 @@ export const prf = {
 export const carros = {
   listar: () => sel(sb.from('carros').select('*').order('id')),
   comprar: (modelo, cor) => rpc('comprar_carro', { p_modelo: modelo, p_cor: cor }),
+  comprarOnline: (modelo, cor, x, z, ang) => rpc('comprar_carro_online', { p_modelo: modelo, p_cor: cor, p_x: x, p_z: z, p_ang: ang }),
   estacionar: (id, x, z, ang) => rpc('estacionar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),
   acidente: (id) => rpc('acidente_carro', { p_carro: id }),
   materializar: (id, x, z, ang) => rpc('materializar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),

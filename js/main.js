@@ -3256,6 +3256,8 @@ async function iniciarJogo(perfil) {
     hora: () => { const h = horaAtual || 0; return `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`; }, lugares: lugaresCelular, veiculos: veiculosCelular, marcar: (a) => rastrear(a),
     abrirJanela: (q) => $(q === 'empresa' ? 'btEmpresa' : 'btCla')?.click(), chamarMecanico, estacionamentoPerto: estacionamentoMaisPerto,
     saldoMudou: () => rede.carregarPerfil(jogador.perfil.id).then((p) => { if (p) { jogador.perfil.moedas = p.moedas; atualizarInfo(); } }).catch(() => {}), aoFechar: () => { if (jogador.emote === 'celular') jogador.emote = null; },
+    moedas: () => jogador.perfil?.moedas || 0, lojaOnline, comprarOnline,
+    minhasEmpresas: async () => { try { await carregarLogistica(); } catch { /* usa o que tem */ } return [...empresas.values()].filter((e) => e.dono === jogador.perfil?.id); },
   });
   if ($('btCelular')) $('btCelular').onclick = () => abrirCelular();
   try { montarEstacionamentos(); } catch (e) { console.warn('estacionamentos:', e); }
@@ -9755,6 +9757,10 @@ function salaEmpresa(e) {
     placa(`${e.nome} · nível ${e.nivel}`, 0, -d / 2 + 0.5, 3.4);
     // mesa do dono
     caixa(2.6, 0.85, 1.2, f >= 2 ? '#2b2f36' : '#6b4f35', x0 + 3, 0.42, -d / 2 + 2.2); movel(s, 'mesa', x0 + 3, -d / 2 + 2.2, 2.6, 1.2); placa('Mesa do dono', x0 + 3, -d / 2 + 2.2, 2);
+    // computador do dono (em cima da mesa, tela virada para a cadeira atrás dela)
+    caixa(0.9, 0.55, 0.06, '#111', x0 + 3, 1.15, -d / 2 + 1.9); caixa(0.12, 0.3, 0.12, '#333', x0 + 3, 0.95, -d / 2 + 1.95);
+    caixa(0.85, 0.48, 0.02, '#2f81f7', x0 + 3, 1.15, -d / 2 + 1.86);
+    s.pontos.pc = { x: s.base.x + x0 + 3, z: s.base.z - d / 2 + 0.95 };
     if (f >= 2) { caixa(0.08, 2.6, 4, '#9cc3dc', x0 + 5.2, 1.3, -d / 2 + 2, 0.3); caixa(5.2, 2.6, 0.08, '#9cc3dc', x0 + 2.6, 1.3, -d / 2 + 4, 0.3); s.obst.push([x0 + 5.1, x0 + 5.3, -d / 2, -d / 2 + 4]); }
     // relógio de ponto
     caixa(0.6, 0.9, 0.3, '#444', 2, 1.3, -d / 2 + 0.3); movel(s, 'ponto', 2, -d / 2 + 0.35, 0.6, 0.3); placa('Relógio de ponto', 2, -d / 2 + 0.6, 2.4);
@@ -9794,6 +9800,7 @@ SALAS.empresa = {
   contexto: () => {
     const e = empresaAtual(); if (!e) return ['', ''];
     if (naPorta()) return ['sair da empresa', 'Sair'];
+    if (pontoInterior('pc', 1.3)) return [e.dono === jogador.perfil.id ? 'computador: celular, concessionária online e caixa da empresa' : 'computador do dono (só o dono)', '💻 Computador'];
     if (pontoInterior('mesa', 1.8)) return [e.dono === jogador.perfil.id ? 'mesa do dono: painel da empresa' : 'mesa do dono (só o dono)', 'Painel'];
     if (pontoInterior('ponto', 1.6)) return ['bater o ponto (salário por minuto)', 'Ponto'];
     if (pontoInterior('estoque', 2.4)) return [`estoque: ${e.estoque || 0} caixas`, 'Estoque'];
@@ -9804,6 +9811,7 @@ SALAS.empresa = {
   acao: () => {
     const e = empresaAtual(); if (!e) { sairSala(); return; }
     if (naPorta()) { sairSala(); return; }
+    if (pontoInterior('pc', 1.3)) { if (e.dono === jogador.perfil.id) celular.abrir(true); else aviso('Só o dono usa o computador.'); return; }
     if (pontoInterior('mesa', 1.8)) { if (e.dono === jogador.perfil.id) $('btEmpresa').click(); else aviso('Só o dono usa a mesa.'); return; }
     if (pontoInterior('ponto', 1.6)) {
       const p = portaoDaEmpresa(e.id);
@@ -10127,9 +10135,10 @@ function montarEstacionamentos() {
   });
   cabine.castShadow = true; scene.add(cabine, placa);
 }
+const posFora = () => (jogador.dentroCasa && jogador.saidaSala ? jogador.saidaSala : jogador.pos);   // dentro de uma sala: onde fica a porta
 function estacionamentoMaisPerto() {
-  let m = null, dm = Infinity;
-  for (const e of ESTACIONAMENTOS) { const d = Math.hypot(e.x - jogador.pos.x, e.z - jogador.pos.z); if (d < dm) { dm = d; m = e; } }
+  let m = null, dm = Infinity; const P = posFora();
+  for (const e of ESTACIONAMENTOS) { const d = Math.hypot(e.x - P.x, e.z - P.z); if (d < dm) { dm = d; m = e; } }
   return m ? { ...m, dist: Math.round(dm) } : null;
 }
 function contextoEstacionamento() {
@@ -10152,32 +10161,100 @@ function menuEstacionamento(e) {
 }
 // ---------------------------------------------------------------- oficinas autorizadas (110)
 const OFICINAS = [
-  { id: 'ze', nome: 'Oficina do Zé', alvo: { x: 64, z: -972 }, mult: 1, texto: 'Mais barata. O carro fica 2 minutos na oficina.', cor: '#c0392b' },
-  { id: 'premium', nome: 'Garagem Premium', alvo: { x: 135, z: -135 }, mult: 1.3, texto: '30% mais cara, mas na hora.', cor: '#1d1d1d' },
+  { id: 'ze', nome: 'Oficina do Zé', alvo: { x: 64, z: -972 }, mult: 1, texto: 'Mais barata. O carro fica 2 minutos na oficina.', cor: '#c0392b', nivel: 1 },
+  { id: 'premium', nome: 'Garagem Premium', alvo: { x: 135, z: -135 }, mult: 1.3, texto: '30% mais cara, mas na hora.', cor: '#1d1d1d', nivel: 3 },
 ];
 const CORES_PINTURA = [['#c0392b', 'Vermelho'], ['#1f4e9c', 'Azul'], ['#1d1d1d', 'Preto'], ['#f2f2f2', 'Branco'], ['#9aa0a6', 'Prata'], ['#2e7d32', 'Verde'], ['#f1c40f', 'Amarelo'], ['#e67e22', 'Laranja'], ['#6a1b9a', 'Roxo'], ['#7b4a2a', 'Marrom']];
+// procura um canto livre do quarteirão (sem prédio, poste, árvore ou guichê) com a frente virada para a rua
+function lugarLivreQuadra(alvo, largura, fundo, usados = []) {
+  const quadras = mundo.listaQuadras().map((k) => [Math.hypot(k[0] - alvo.x, k[1] - alvo.z), k]).sort((a, b) => a[0] - b[0]).slice(0, 10);
+  const lados = [[0, -1, 0], [0, 1, Math.PI], [-1, 0, Math.PI / 2], [1, 0, -Math.PI / 2]];   // [nx, nz, rot]: rua do lado (nx,nz); o fundo aponta para dentro
+  for (const [, [qx, qz, meia, y]] of quadras) {
+    for (const [nx, nz, rot] of lados) for (const off of [0, -5, 5, -10, 10]) {
+      if (Math.abs(off) + largura / 2 > meia - 1) continue;
+      const fx = qx + nx * (meia - 0.6) + (nz ? off : 0), fz = qz + nz * (meia - 0.6) + (nx ? off : 0);   // meio da frente, já na calçada
+      const dx = -nx, dz = -nz, px = dz, pz = -dx;   // dentro e lado (eixo x local do grupo girado)
+      let livre = true;
+      for (let a = -largura / 2; a <= largura / 2 && livre; a += 1) for (let b = 0.2; b <= fundo && livre; b += 1) {
+        const x = fx + px * a + dx * b, z = fz + pz * a + dz * b;
+        if (bloqueado(x, z, true) || usados.some((u) => Math.hypot(u.x - x, u.z - z) < 14)) livre = false;
+      }
+      if (livre) return { x: fx, z: fz, y, rot, dx, dz, px, pz };
+    }
+  }
+  return null;
+}
+// oficina de verdade: galpão com paredes, telhado, porta de enrolar aberta, vaga do carro, elevador, ferramentas e balcão.
+// nivel 1 = de bairro (tijolo e telha de zinco), 2 = média, 3 = premium (vidro e alumínio). As oficinas dos jogadores
+// usam a mesma montagem.
+function montarGalpaoOficina(o, L, nivel) {
+  const W = 9.4, D = 10.6, H = nivel >= 3 ? 5.6 : 5.0;
+  const g = new THREE.Group(); g.position.set(L.x, L.y, L.z); g.rotation.y = L.rot; scene.add(g);
+  const mat = (c, r = 0.7, m = 0, extra = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m, ...extra });
+  const box = (w, h, d, m, x, y, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.castShadow = b.receiveShadow = true; g.add(b); return b; };
+  const parede = mat(['#a8553a', '#d9d2c3', '#eceff2'][nivel - 1], 0.85), detalhe = mat(o.cor, 0.5, nivel >= 3 ? 0.4 : 0);
+  // piso de concreto com a faixa amarela da vaga
+  box(W, 0.06, D, mat(nivel >= 3 ? '#8d939a' : '#7b776f', 0.95), 0, 0.03, D / 2);
+  for (const sx of [-3.6, 0.8]) box(0.12, 0.02, 5.6, mat('#f1c40f', 0.6), sx, 0.07, 5.2);
+  // paredes: fundo, laterais e a frente só em cima (vão de 8,2 m para o carro e a gente passar)
+  box(W, H, 0.25, parede, 0, H / 2, D - 0.12);
+  for (const sx of [-1, 1]) box(0.25, H, D, parede, sx * (W / 2 - 0.12), H / 2, D / 2);
+  box(W, H - 3.6, 0.3, detalhe, 0, 3.6 + (H - 3.6) / 2, 0.15);
+  for (const sx of [-1, 1]) box(0.5, 3.6, 0.3, parede, sx * (W / 2 - 0.25), 1.8, 0.15);
+  // porta de enrolar recolhida (rolo em cima do vão)
+  const rolo = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, W - 1.2, 14), mat('#8a9096', 0.5, 0.6)); rolo.rotation.z = Math.PI / 2; rolo.position.set(0, 3.35, 0.45); g.add(rolo);
+  // telhado: zinco inclinado no nível 1, laje com platibanda nos outros
+  if (nivel === 1) {
+    const tx = document.createElement('canvas'); tx.width = 64; tx.height = 8; const c = tx.getContext('2d');
+    for (let i = 0; i < 64; i++) { c.fillStyle = `hsl(200,4%,${48 + 14 * Math.sin(i / 2)}%)`; c.fillRect(i, 0, 1, 8); }
+    const t = new THREE.CanvasTexture(tx); t.wrapS = THREE.RepeatWrapping; t.repeat.set(10, 1); t.colorSpace = THREE.SRGBColorSpace;
+    const telha = new THREE.Mesh(new THREE.BoxGeometry(W + 0.6, 0.08, D + 0.8), mat('#fff', 0.55, 0.5, { map: t }));
+    telha.position.set(0, H + 0.35, D / 2); telha.rotation.x = -0.07; telha.castShadow = true; g.add(telha);
+  } else {
+    box(W, 0.3, D, mat('#9a9a9a', 0.9), 0, H + 0.15, D / 2);
+    box(W + 0.1, 0.5, 0.15, detalhe, 0, H + 0.5, 0.05);
+  }
+  // placa grande na fachada, virada para a rua
+  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 160; const c2 = cv.getContext('2d');
+  c2.fillStyle = o.cor; c2.fillRect(0, 0, 1024, 160);
+  c2.strokeStyle = o.corTexto || '#ffd23e'; c2.lineWidth = 8; c2.strokeRect(10, 10, 1004, 140);
+  c2.fillStyle = o.corTexto || '#ffd23e'; c2.textAlign = 'center'; c2.textBaseline = 'middle'; let fs = 92; const tt = `🔧 ${o.nome.toUpperCase()}`;
+  do { c2.font = `900 ${fs}px system-ui, sans-serif`; fs -= 2; } while (c2.measureText(tt).width > 940 && fs > 30); c2.fillText(tt, 512, 84);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
+  const placa = new THREE.Mesh(new THREE.PlaneGeometry(W - 1, (W - 1) * 160 / 1024), new THREE.MeshStandardMaterial({ map: tx, roughness: 0.6, emissive: '#ffffff', emissiveMap: tx, emissiveIntensity: 0.25 }));
+  placa.position.set(0, 3.6 + (H - 3.6) / 2, -0.02); placa.rotation.y = Math.PI; g.add(placa);
+  // dentro: balcão com computador, parede de ferramentas, pneus, tambores e o elevador (nível 2+)
+  box(1.0, 1.05, 2.6, mat(nivel >= 3 ? '#2b2f36' : '#8d6e4f', 0.6), 3.7, 0.53, 6.2);
+  box(0.5, 0.35, 0.06, mat('#111', 0.3), 3.75, 1.3, 6.2).rotation.y = -Math.PI / 2;
+  const pf = document.createElement('canvas'); pf.width = 256; pf.height = 96; const p2 = pf.getContext('2d');
+  p2.fillStyle = '#c8b48a'; p2.fillRect(0, 0, 256, 96); p2.fillStyle = '#5b4a33';
+  for (let y = 6; y < 96; y += 10) for (let x = 6; x < 256; x += 10) p2.fillRect(x, y, 2, 2);
+  p2.fillStyle = '#c0392b'; p2.fillRect(20, 20, 8, 50); p2.fillRect(14, 16, 20, 8); p2.fillStyle = '#2c3e50'; p2.fillRect(60, 18, 6, 56); p2.fillRect(80, 22, 30, 6); p2.fillRect(130, 30, 40, 10); p2.fillStyle = '#7f8c8d'; p2.fillRect(190, 14, 10, 60); p2.fillRect(214, 20, 24, 24);
+  const pt = new THREE.CanvasTexture(pf); pt.colorSpace = THREE.SRGBColorSpace;
+  const quadro = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 1.6), mat('#fff', 0.8, 0, { map: pt })); quadro.position.set(-1.6, 1.9, D - 0.27); quadro.rotation.y = Math.PI; g.add(quadro);
+  box(3.4, 0.9, 0.7, mat('#5d6266', 0.6, 0.3), -1.6, 0.45, D - 0.7);
+  const pneu = new THREE.TorusGeometry(0.34, 0.15, 8, 16);
+  for (let k = 0; k < 4; k++) { const m = new THREE.Mesh(pneu, mat('#1b1b1b', 0.9)); m.rotation.x = Math.PI / 2; m.position.set(-3.9, 0.17 + k * 0.3, 1.6); g.add(m); }
+  for (const [x, z, c] of [[3.9, 9.5, '#1f4e9c'], [3.2, 9.6, '#c0392b']]) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.9, 12), mat(c, 0.5, 0.3)); t.position.set(x, 0.45, z); t.castShadow = true; g.add(t); }
+  if (nivel >= 2) { for (const sx of [-3.9, 0.9]) { box(0.25, 2.4, 0.25, mat('#c0392b', 0.5, 0.3), sx, 1.2, 3.4); box(0.25, 2.4, 0.25, mat('#c0392b', 0.5, 0.3), sx, 1.2, 7); } }
+  if (nivel >= 3) { const vid = mat('#9cc3dc', 0.1, 0.2, { transparent: true, opacity: 0.35 }); box(0.06, 2.8, 3.2, vid, 2.9, 1.4, 8.4); }
+  // luz de oficina (barras acesas)
+  for (const z of [3, 7]) box(3, 0.08, 0.25, new THREE.MeshStandardMaterial({ color: '#fff', emissive: '#f5f7ff', emissiveIntensity: 1.2 }), -0.6, H - 0.15, z);
+  const luz = new THREE.PointLight('#f2f4ff', 22, 14, 1.6); luz.position.set(-0.6, H - 0.6, 5); g.add(luz);
+  // para o mundo: colisões, mapa, balcão e vaga
+  const W2 = (lx, lz) => ({ x: L.x + L.px * lx + L.dx * lz, z: L.z + L.pz * lx + L.dz * lz });
+  const ret = (x0, x1, z0, z1) => { const a = W2(x0, z0), b = W2(x1, z1); return { tipo: 'caixa', x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z) }; };
+  colisores.push(ret(-W / 2, W / 2, D - 0.25, D), ret(-W / 2, -W / 2 + 0.25, 0, D), ret(W / 2 - 0.25, W / 2, 0, D), ret(-W / 2, -W / 2 + 0.5, 0, 0.3), ret(W / 2 - 0.5, W / 2, 0, 0.3), ret(3.2, 4.2, 4.9, 7.5), ret(-3.3, 0.1, D - 1.05, D - 0.25));
+  const m = ret(-W / 2, W / 2, 0, D); itensMapa.push({ tipo: 'oficina', x0: m.x0, x1: m.x1, z0: m.z0, z1: m.z1 });
+  o.balcao = W2(2.5, 6.2); o.vaga = { ...W2(-1.4, 5.2), ang: L.rot }; o.centro = W2(0, D / 2);
+  return g;
+}
 function montarOficinas() {
-  const quadras = mundo.listaQuadras();
+  const usados = [];
   for (const o of OFICINAS) {
-    let q = null, dm = Infinity;
-    for (const k of quadras) { const d = Math.hypot(k[0] - o.alvo.x, k[1] - o.alvo.z); if (d < dm && d > 1) { dm = d; q = k; } }
-    if (!q) continue;
-    const [qx, qz, meia, y] = q, kx = qx - 8, kz = qz - meia + 1.6;
-    o.balcao = { x: kx + 3.2, z: kz + 0.6 }; o.vaga = { x: kx, z: qz - meia - 1.25, ang: Math.PI / 2 };
-    const g = new THREE.Group(); g.position.set(kx, y, kz); scene.add(g);
-    const mat = (c, r = 0.6) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
-    for (const [px, pz] of [[-3.4, 0.6], [3.4, 0.6], [-3.4, -4.4], [3.4, -4.4]]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.22, 3.6, 0.22).translate(0, 1.8, 0), mat('#5d6266', 0.5)); p.position.set(px, 0, pz); p.castShadow = true; g.add(p); }
-    const teto = new THREE.Mesh(new THREE.BoxGeometry(7.4, 0.18, 5.6), mat(o.cor)); teto.position.set(0, 3.65, -1.9); teto.castShadow = true; g.add(teto);
-    const balc = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.05, 0.7).translate(0, 0.52, 0), mat('#8d6e4f')); balc.position.set(3.2, 0, 1.1); g.add(balc);
-    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 96; const c2 = cv.getContext('2d');
-    c2.fillStyle = o.cor; c2.fillRect(0, 0, 512, 96); c2.fillStyle = '#ffd23e'; c2.textAlign = 'center'; c2.textBaseline = 'middle'; let fs = 52; const tt = `🔧 ${o.nome.toUpperCase()}`;
-    do { c2.font = `900 ${fs}px system-ui, sans-serif`; fs -= 2; } while (c2.measureText(tt).width > 480 && fs > 20); c2.fillText(tt, 256, 50);
-    const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
-    const placa = new THREE.Mesh(new THREE.PlaneGeometry(6.8, 1.28), new THREE.MeshStandardMaterial({ map: tx, roughness: 0.6 })); placa.position.set(0, 4.45, -4.7); placa.rotation.y = Math.PI; g.add(placa);
-    const placa2 = placa.clone(); placa2.position.set(0, 4.45, 0.9); placa2.rotation.y = 0; g.add(placa2);
-    for (const [px, pz] of [[-3.4, 0.6], [3.4, 0.6]]) colisores.push({ tipo: 'circ', x: kx + px, z: kz + pz, r: 0.25 });
-    colisores.push({ tipo: 'caixa', x0: kx + 2.3, x1: kx + 4.1, z0: kz + 0.75, z1: kz + 1.45 });
-    itensMapa.push({ tipo: 'oficina', x0: kx - 3.5, x1: kx + 3.5, z0: kz - 4.5, z1: kz + 1 });
+    const L = lugarLivreQuadra(o.alvo, 9.6, 11, usados);
+    if (!L) { console.warn('oficina sem lugar:', o.id); continue; }
+    usados.push(L); montarGalpaoOficina(o, L, o.nivel || 1);
   }
 }
 function contextoOficina() {
@@ -10188,7 +10265,7 @@ function contextoOficina() {
 function menuOficina(o) {
   const preco = (b) => Math.round(b * o.mult);
   const meus = [...carrosMundo.values()].filter((v) => v.d.dono === jogador.perfil.id && !v.d.ladrao && v.mesh.visible && Math.hypot(v.mesh.position.x - o.vaga.x, v.mesh.position.z - o.vaga.z) < 14);
-  if (!meus.length) { aviso(`Traga o seu carro até a vaga da ${o.nome} (embaixo da cobertura). ${o.texto}`, 4.5); return; }
+  if (!meus.length) { aviso(`Traga o seu carro até a vaga da ${o.nome} (dentro do galpão). ${o.texto}`, 4.5); return; }
   const servico = (v, nome, fn) => fn().then((r) => {
     v.d = { ...v.d, cor: r.cor, motor: r.motor, blindado: r.blindado, blind_hp: r.blindado ? 1 : v.d.blind_hp, oficina_ate: r.pronto };
     jogador.perfil.moedas = Math.max(0, (jogador.perfil.moedas || 0) - r.preco); atualizarInfo(); tempoCarros = 0;
@@ -10203,6 +10280,19 @@ function menuOficina(o) {
   };
   if (meus.length === 1) escolherServico(meus[0]);
   else escolher(`🔧 ${o.nome}`, 'Qual carro?', meus.map((v) => ({ rotulo: `🚗 ${civico.CARROS[v.d.modelo]?.nome || 'Carro'}`, fn: () => escolherServico(v) })));
+}
+// ---------------------------------------------------------------- concessionária online 🛒 (111): +15%, entrega no estacionamento
+const MODELOS_ONLINE = ['popular', 'saveiro', 'saveiro_som', 'suv', 'esportivo', 'classico'];
+function lojaOnline() {
+  return { cores: civico.CORES_CARRO, carros: MODELOS_ONLINE.filter((m) => civico.CARROS[m]).map((m) => ({ id: m, nome: civico.CARROS[m].nome, preco: Math.ceil(civico.CARROS[m].preco * 1.15), kmh: Math.round(civico.CARROS[m].vel * 3.6) })) };
+}
+async function comprarOnline(modelo, cor) {
+  const e = estacionamentoMaisPerto(); if (!e) throw new Error('Nenhum estacionamento por perto.');
+  const v = e.vaga, livre = (dx) => ![...carrosMundo.values()].some((c) => c.mesh.visible && Math.hypot(c.mesh.position.x - v.x - dx, c.mesh.position.z - v.z) < 3);
+  const dx = [0, -5.5, 5.5, -11].find(livre) ?? 0;
+  await rede.carros.comprarOnline(modelo, cor, v.x + dx, v.z, v.ang);
+  tempoCarros = 0; rastrear({ nome: `${civico.CARROS[modelo]?.nome || 'Carro'} novo (estacionamento)`, x: v.x + dx, z: v.z });
+  return `🚗 Comprado! Ele está no estacionamento a ${e.dist} m (marcado no mapa).`;
 }
 // ---------------------------------------------------------------- celular 📱
 function abrirCelular() {
