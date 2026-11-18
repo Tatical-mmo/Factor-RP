@@ -1323,7 +1323,9 @@ function adicionarLuzes(g, tipo, chave = null) {
 // para veículos que não saem de modeloCarro (frota das empresas, caminhão das ruas)
 export function luzesEm(o, tipo, chave) { adicionarLuzes(o, tipo, chave); if (o.getObjectByName('luzes')) comLuz.add(o); return o; }
 const _f = new THREE.Vector3();
+let luzAerea = null;
 export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
+  let melhor = null;
   if (!M) return;
   tLuz += dt;
   M.estrobo.opacity = (tLuz % 1.3) < 0.07 || ((tLuz % 1.3) > 0.18 && (tLuz % 1.3) < 0.24) ? 1 : 0;   // pisca-pisca duplo
@@ -1348,8 +1350,19 @@ export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
     if (!u.pocaLuz) { u.pocaLuz = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), M.poca); u.pocaLuz.renderOrder = 3; cena.add(u.pocaLuz); }
     const yaw = o.rotation.y, frente = L.userData.heli ? 2 : L.userData.comp * 0.5 + 8 + alt * 0.6;
     const px = _f.x + Math.sin(yaw) * frente, pz = _f.z + Math.cos(yaw) * frente, r = L.userData.heli ? 7 + alt * 0.08 : 10 + alt * 0.15;
-    u.pocaLuz.position.set(px, chao(px, pz) + 0.08, pz); u.pocaLuz.scale.set(r * 2, 1, L.userData.heli ? r * 2 : r * 3); u.pocaLuz.rotation.y = yaw;
+    u.pocaLuz.position.set(px, chao(px, pz) + 0.03, pz); u.pocaLuz.scale.set(r * 2, 1, L.userData.heli ? r * 2 : r * 3); u.pocaLuz.rotation.y = yaw;
     u.pocaLuz.material = M.poca; u.pocaLuz.visible = true;
     u.pocaLuz.userData.k = Math.max(0.25, 1 - alt / 90);
+    // candidato à luz de verdade: a aeronave acesa mais perto de quem joga
+    const f = ctx?.foco?.(), d = f ? Math.hypot(_f.x - f.x, _f.z - f.z) : 0;
+    if (d < 160 && (!melhor || d < melhor.d)) melhor = { d, x: _f.x, y: _f.y - 0.6, z: _f.z, px, py: chao(px, pz), pz, r, alt };
   }
+  // a mancha só clareia o chão: a luz de verdade (uma só, sempre na cena) ilumina trem, carros e gente embaixo
+  if (!luzAerea) { luzAerea = new THREE.SpotLight('#fff6e0', 0, 0, 0.5, 0.5, 1); luzAerea.position.set(0, -200, 0); cena.add(luzAerea, luzAerea.target); }
+  if (melhor) {
+    luzAerea.position.set(melhor.x, melhor.y, melhor.z); luzAerea.target.position.set(melhor.px, melhor.py, melhor.pz); luzAerea.target.updateMatrixWorld();
+    const dist = Math.hypot(melhor.px - melhor.x, melhor.py - melhor.y, melhor.pz - melhor.z);
+    luzAerea.angle = Math.min(1.1, Math.atan(melhor.r / Math.max(1, dist)) * 1.15);
+    luzAerea.intensity += (5 * dist * noite - luzAerea.intensity) * 0.2;
+  } else luzAerea.intensity *= 0.8;
 }

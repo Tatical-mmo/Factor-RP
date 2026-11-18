@@ -3185,7 +3185,7 @@ async function iniciarJogo(perfil) {
     Promise.all(nomes.map((n) => Promise.resolve(carregarGLB(`assets/modelos/${n}.glb`)).then((g) => [n, g?.scene]).catch(() => [n, null]))).then((l) => { const m = Object.fromEntries(l.filter(([, c]) => c)); if (Object.keys(m).length) mundo.ativarPredios3d(m); }); }
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
-  civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n], addPiso: mundo.addPiso });
+  civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n], addPiso: mundo.addPiso, foco: () => foco() });
   civico.montarPrefeitura(); montarBasePrf(); civico.montarConcessionaria();
   { // degraus da entrada da prefeitura: o personagem sobe neles em vez de afundar
     const P = civico.PREFEITURA;
