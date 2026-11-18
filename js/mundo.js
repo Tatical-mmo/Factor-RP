@@ -1304,7 +1304,7 @@ function montarPostesFavela(fios, halos) {
     const tp = topo(p), lx = tp.x + Math.sin(p.rot) * 0.7, lz = tp.z + Math.cos(p.rot) * 0.7, ly = tp.y - 0.55;
     _m.compose(_v.set(lx, ly, lz), _q.identity(), _e.set(1, 1, 1)); iL.setMatrixAt(k, _m);
     fios.push(tp.x, tp.y - 0.4, tp.z, lx, ly + 0.12, lz);   // bracinho de fio até a lâmpada
-    halos.push(lx, ly, lz, 2); poca(lx, lz, 3.6, '#c98a3a', altura(lx, lz) + 0.25);
+    halos.push(lx, ly, lz, 2); poca(lx, lz, 3.6, '#c98a3a', altura(lx, lz) + 0.12);
     LUZES_POSTE.push([lx, lz, ly]);
     addCol({ tipo: 'circ', x: p.x, z: p.z, r: 0.2 });
     p.tp = tp;
@@ -1398,9 +1398,12 @@ function montarMobiliario() {
     g.fillStyle = gr; g.fillRect(0, 0, t, t);
   });
   tl.wrapS = tl.wrapT = THREE.ClampToEdgeWrapping;
-  matPoca = new THREE.MeshBasicMaterial({ map: tl, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
+  matPoca = new THREE.MeshBasicMaterial({ map: tl, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
   const pc = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), matPoca, pocas.length);
-  pocas.forEach(([x, z, r, cor, y], k) => { _m.compose(_v.set(x, y ?? 0.21, z), _q.identity(), _e.set(r * 2, 1, r * 2)); pc.setMatrixAt(k, _m); pc.setColorAt(k, _c.set(cor || '#ffffff')); });
+  // a mancha fica rente ao asfalto (antes 21 cm acima: cobria as rodas e os pés, que pareciam afundados). Na calçada ela
+  // fica por baixo; quem clareia a calçada é a luz de verdade do poste (gráfico ultra)
+  const chaoPoca = (x, z) => { const h = altura(x, z); return h != null && h > 0.25 ? h + 0.03 : 0.035; };
+  pocas.forEach(([x, z, r, cor, y], k) => { _m.compose(_v.set(x, y ?? chaoPoca(x, z), z), _q.identity(), _e.set(r * 2, 1, r * 2)); pc.setMatrixAt(k, _m); pc.setColorAt(k, _c.set(cor || '#ffffff')); });
   pc.renderOrder = 2; pc.visible = false; scene.add(pc); matPoca.userData.malha = pc;
   // carros estacionados: caixinhas leves para todos; os mais perto do jogador trocam pelo modelo 3D
   const coresCarro = ['#c0392b', '#2c3e50', '#ecf0f1', '#7f8c8d', '#2980b9', '#16a085', '#f1c40f', '#8e44ad', '#d35400', '#1f1f1f', '#bdc3c7'];

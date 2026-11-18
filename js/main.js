@@ -3269,7 +3269,7 @@ async function iniciarJogo(perfil) {
   try { montarOficinas(); } catch (e) { console.warn('oficinas:', e); }
   servicos.iniciar({ ultra: () => visual.nivelAtual() === 'ultra', socorrista: socorristaNpc,
     scene, textoSprite, altura: alturaChao, jogador: () => jogador, perfil: () => jogador.perfil, aviso, agora: agoraServidor,
-    rastrear: (a) => rastrear(a), rastreio: () => rastreio, meuCla: () => jogador.cla, alcanceJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? 30 : jogador.carro?.servico === 'bombeiros' ? 16 : 10), origemJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? jogador.carro.mesh.position.clone().setY(jogador.carro.mesh.position.y - 0.4) : null), obstaculo: (x, z, a, o) => obstaculoAFrente(x, z, a, o), sinal: (x, z, a) => semaforos.sinalAFrente(x, z, a, 9), rondaPerto, posRonda, clas: () => [...clasCache.values()],
+    rastrear: (a) => rastrear(a), rastreio: () => rastreio, meuCla: () => jogador.cla, alcanceJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? 30 : jogador.carro?.servico === 'bombeiros' ? 16 : 10), origemJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? jogador.carro.mesh.position.clone().setY(jogador.carro.mesh.position.y - 0.4) : null), obstaculo: (x, z, a, o) => obstaculoAFrente(x, z, a, o), vista: (x, z) => { const f = foco(); return Math.abs(x - f.x) + Math.abs(z - f.z) < 160; }, sinal: (x, z, a) => semaforos.sinalAFrente(x, z, a, 9), rondaPerto, posRonda, clas: () => [...clasCache.values()],
     guerrasMudaram: () => {
       atualizarCla();
       const novo = servicos.clasInimigos(jogador.cla, [...clasCache.values()]);
@@ -4051,9 +4051,12 @@ function atualizarCaminhoes(dt) {
     const estacionado = !alvo;
     if (!estacionado && !alvo.parado && c.d.tipo !== 'helicoptero' && c.obj.visible) {
       const Qb = mundo.QUARTEL, noQuartel = c.d.rota?.jj && c.obj.position.x > Qb.x0 - 12 && c.obj.position.x < Qb.x1 && c.obj.position.z > Qb.z0 && c.obj.position.z < Qb.z1;
-      const bloq = (!noQuartel && obstaculoAFrente(c.obj.position.x, c.obj.position.z, c.obj.rotation.y, c.obj)) || caminhaoAFrente(c);   // no pátio do Quartel não espera árvores e barreiras, mas espera o outro caminhão
-      c.atraso = bloq ? Math.min(c.d.rota?.jj ? 150 : 30, (c.atraso || 0) + dt) : Math.max(0, (c.atraso || 0) - dt * 0.4);
-    } else if (estacionado) c.atraso = 0;
+      // fora do Quartel: as mesmas regras dos outros veículos (sinal, cruzamento, quem tem a vez, ninguém atravessa ninguém
+      // à vista). No pátio do Quartel não espera soldados e barreiras, só o outro caminhão.
+      c.st ||= { atraso: c.atraso || 0 };
+      if (!noQuartel) c.atraso = frearAtras(c.st, c.obj, dt, c.d.tipo === 'caminhao' ? 10 : 8);
+      else { const bloq = caminhaoAFrente(c); c.st.atraso = bloq ? Math.min(150, c.st.atraso + dt) : Math.max(0, c.st.atraso - dt * 0.4); c.atraso = c.st.atraso; }
+    } else if (estacionado) { c.atraso = 0; if (c.st) c.st.atraso = 0; }
     if (!alvo) alvo = posicaoEstacionado(c);
     if (!alvo) continue;
     if (alvo.garagem) { c.obj.visible = false; if (c.escolta) c.escolta.visible = false; c.posicionado = false; c.manobra = null; continue; }
@@ -4613,17 +4616,17 @@ function corposNaRua() {
   if (corposCache && performance.now() - corposT < 40) return corposCache;
   const r = [];
   const chao = (o) => o.position.y < alturaChao(o.position.x, o.position.z) + 1.5;
-  for (const c of caminhoes.values()) if (c.obj.visible && chao(c.obj)) r.push({ o: c.obj, x: c.obj.position.x, z: c.obj.position.z, r: c.d.tipo === 'caminhao' ? 2 : 1.6 });
+  for (const c of caminhoes.values()) if (c.obj.visible && chao(c.obj)) pontosDoVeiculo(r, c.obj, c.obj.position.x, c.obj.position.z, c.obj.rotation.y, c.d.tipo === 'caminhao' ? 1.4 : 1.6);   // caminhão comprido: vários círculos ao longo dele
   for (const v of carrosMundo.values()) if (v.mesh.visible) r.push({ o: v.mesh, x: v.mesh.position.x, z: v.mesh.position.z, r: 1.4 });
   for (const [id, x] of remotos) {
     if (x.carro) { pontosDoVeiculo(r, x.carro, x.carro.position.x, x.carro.position.z, x.carro.rotation.y, 1.5); veicJogador.add(x.carro); }
     else if (x.av?.raiz.visible) r.push({ x: x.av.raiz.position.x, z: x.av.raiz.position.z, r: 0.45, pessoa: id, faixa: naFaixaPedestre(x.av.raiz.position.x, x.av.raiz.position.z) });
   }
-  for (const o of servicos.veiculosNpc()) r.push({ o, x: o.position.x, z: o.position.z, r: 1.9 });
+  for (const o of servicos.veiculosNpc()) pontosDoVeiculo(r, o, o.position.x, o.position.z, o.rotation.y, 1.6);
   if (caminhaoMovel) r.push({ o: caminhaoMovel.obj, x: caminhaoMovel.obj.position.x, z: caminhaoMovel.obj.position.z, r: 2 });
   for (const n of npcs) r.push({ x: n.av.raiz.position.x, z: n.av.raiz.position.z, r: 0.45, npc: n.policia ? n : null, civilRef: n, faixa: naFaixaPedestre(n.av.raiz.position.x, n.av.raiz.position.z) });
-  for (const v of viaturas) r.push({ o: v.obj, x: v.obj.position.x, z: v.obj.position.z, r: 1.8 });
-  for (const v of rondasBombeiros) if (v.obj.visible) r.push({ o: v.obj, x: v.obj.position.x, z: v.obj.position.z, r: 1.9 });
+  for (const v of viaturas) pontosDoVeiculo(r, v.obj, v.obj.position.x, v.obj.position.z, v.obj.rotation.y, 1.5);
+  for (const v of rondasBombeiros) if (v.obj.visible) pontosDoVeiculo(r, v.obj, v.obj.position.x, v.obj.position.z, v.obj.rotation.y, 1.6);
   for (const k of obstrucoes) r.push({ o: k.marca, x: k.x, z: k.z, r: k.r });   // veículo em chamas ou carcaça: ninguém passa
   for (const v of vansNpc) if (v.obj.visible && jogador.carro?.vanNpc !== v) r.push({ o: v.obj, x: v.obj.position.x, z: v.obj.position.z, r: 1.7 });
   for (const b of onibusNpc) if (b.vivo) { const fx = Math.sin(b.ang), fz = Math.cos(b.ang), h = (b.comp || 12) / 2 - 2; for (let k = -h; k <= h + 0.01; k += h / Math.ceil(h / 4)) r.push({ o: b.mesh, x: b.x + fx * k, z: b.z + fz * k, r: 1.3 }); }
@@ -4720,15 +4723,23 @@ function colidirVeiculo(c, dt) {
     const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), min = raio + o.r;
     if (c.fantasmas.has(chaveDe(o))) { if (d > min + 0.5) c.fantasmas.delete(chaveDe(o)); continue; }
     if (d >= min || d < 1e-4) continue;
-    if ((o.pessoa || o.npc || (o.civilRef?.civil && !(o.civilRef.caido > 0))) && Math.abs(c.vel) > 5) {
+    const gente = o.pessoa || o.npc || o.civilRef;
+    if ((o.pessoa || o.npc || (o.civilRef?.civil && !(o.civilRef.caido > 0))) && Math.abs(c.vel) > 2.5) {
       const chave = o.pessoa || o.npc || o.civilRef;
       if (performance.now() - (atropelados.get(chave) || 0) > 1500) {
         atropelados.set(chave, performance.now());
-        const dano = Math.abs(c.vel) >= 8 ? 100 : Math.round(Math.abs(c.vel) * 9);    // rápido mata na hora
+        // em cheio (bem na frente do carro, ou atrás na ré): rápido mata; de raspão: só machuca
+        const a = jogador.carro?.mesh?.rotation.y ?? jogador.yaw, frente = (-dx * Math.sin(a) - dz * Math.cos(a)) / d * Math.sign(c.vel || 1);
+        const v = Math.abs(c.vel), dano = frente > 0.75 ? (v >= 8 ? 100 : Math.round(v * 11)) : Math.max(8, Math.round(v * 3));
         if (o.pessoa) { conexao?.enviar('atropelo', { alvo: o.pessoa, v: dano, de: jogador.perfil.id }); rede.combate.agressao(o.pessoa).catch(() => {}); }
         else if (o.npc) acertarPoliciaNPC(o.npc, dano); else acertarCivil(o.civilRef, dano);
         aviso('💥 Atropelamento!', 1.2); tremor = 0.3;
       }
+    }
+    // gente não empurra o carro (o carro é mais firme): o NPC é que sai do caminho; jogador a pé fica onde está
+    if (gente) {
+      if ((o.npc || o.civilRef)?.av?.raiz) { const n = (o.npc || o.civilRef).av.raiz.position, k = min - d; n.x -= dx / d * k; n.z -= dz / d * k; }
+      continue;
     }
     // empurrão limitado: no máximo o quanto o veículo andou neste quadro (nunca dispara)
     const empurra = Math.min(min - d, Math.abs(c.vel) * dt + 0.03);
@@ -4921,7 +4932,7 @@ function posTaxi(tx, dt) {
   }
   const o = tx.c.obj;
   const bloq = obstaculoAFrente(o.position.x, o.position.z, o.rotation.y, o);
-  tx.atraso = bloq ? Math.min(30, tx.atraso + dt) : Math.max(0, tx.atraso - dt * 0.4);
+  tx.atraso = bloq ? Math.min(90, tx.atraso + dt) : Math.max(0, tx.atraso - dt * 0.4);
   const p = servicos.pontoNaRota(tx.rota, ((performance.now() - tx.t0) / 1000 - tx.atraso) * VEL_CARONA);
   return { ...p, y: alturaChao(p.x, p.z) };
 }
@@ -15085,7 +15096,7 @@ function atualizarRefletores() {
   // o refletor mais perto de você. Fica sempre na cena (só apaga de dia): ligar e desligar recompila os materiais.
   if (!refletores.luz) {
     const L = refletores.luz = new THREE.SpotLight('#fff1d6', 0, 0, 0.6, 0.45, 1);
-    L.castShadow = true; L.shadow.mapSize.set(1024, 1024); L.shadow.bias = -0.0015; L.shadow.normalBias = 0.06;
+    L.castShadow = true; L.shadow.mapSize.set(2048, 2048); L.shadow.bias = -0.0008; L.shadow.normalBias = 0.04; L.shadow.radius = 1;
     L.shadow.camera.near = 4; L.shadow.camera.far = 80;
     L.position.set(0, -100, 0); scene.add(L, L.target);
   }
