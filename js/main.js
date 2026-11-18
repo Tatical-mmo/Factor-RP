@@ -29,6 +29,7 @@ import * as semaforos from './semaforos.js';
 import * as eixos from './eixos.js';
 import * as racoes from './racoes.js';
 import * as logos from './logos.js';
+import * as celular from './celular.js';
 import { pecasCabine } from './cabine.js';
 import * as ovni from './ovni.js';
 import * as jato from './jato.js';
@@ -636,7 +637,7 @@ function addColisorCaixa(obj, encolher = 0.6) {
   return b;
 }
 
-const CORES_MAPA = { ferro_velho: '#7a4a2a', delegacia: '#4f7bd8', loja: '#e05a4f', empresa: '#9aa0a8', transportadora: '#e39b3a', casa: '#8c5a3c', base_cla: '#c43b3b', sede_bope: '#111111' };
+const CORES_MAPA = { estacionamento: '#1f6feb', ferro_velho: '#7a4a2a', delegacia: '#4f7bd8', loja: '#e05a4f', empresa: '#9aa0a8', transportadora: '#e39b3a', casa: '#8c5a3c', base_cla: '#c43b3b', sede_bope: '#111111' };
 
 function colocarPredio(nome, x, z, rotY) {
   const obj = clonar(nome);
@@ -977,6 +978,17 @@ function novaGarrafa() {
   return g;
 }
 const _escMao = new THREE.Vector3();
+function celularNaMao(av, on) {   // celular na mão direita enquanto a animação de falar no celular toca
+  if (!av?.maoD) return;
+  if (!on) { if (av.fone) av.fone.visible = false; return; }
+  if (!av.fone) {
+    av.fone = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.15, 0.011), new THREE.MeshStandardMaterial({ color: '#15171a', roughness: 0.35, metalness: 0.4 }));
+    av.maoD.add(av.fone); av.raiz.updateMatrixWorld(true);
+    const s = av.maoD.getWorldScale(_escMao).x / (av.raiz.getWorldScale(_escMao).x || 1) || 1;
+    av.fone.scale.setScalar(1 / s); av.fone.position.set(0, 0.09 / s, 0.03 / s);
+  }
+  av.fone.visible = true;
+}
 function garrafaNaMao(av, on) {   // a animação de beber usa a mão esquerda
   const mao = av?.maoE || av?.maoD; if (!mao) return;
   if (!on) { if (av.garrafa) av.garrafa.visible = false; return; }
@@ -3238,6 +3250,13 @@ async function iniciarJogo(perfil) {
     recarregar: () => { tempoLogistica = 0; }, recarregarLogos: () => recarregarLogos(),
   });
   iniciarLogistica();
+  celular.iniciarCelular({
+    hora: () => { const h = horaAtual || 0; return `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`; }, lugares: lugaresCelular, veiculos: veiculosCelular, marcar: (a) => rastrear(a),
+    abrirJanela: (q) => $(q === 'empresa' ? 'btEmpresa' : 'btCla')?.click(), chamarMecanico, estacionamentoPerto: estacionamentoMaisPerto,
+    saldoMudou: () => rede.carregarPerfil(jogador.perfil.id).then((p) => { if (p) { jogador.perfil.moedas = p.moedas; atualizarInfo(); } }).catch(() => {}), aoFechar: () => { if (jogador.emote === 'celular') jogador.emote = null; },
+  });
+  if ($('btCelular')) $('btCelular').onclick = () => abrirCelular();
+  try { montarEstacionamentos(); } catch (e) { console.warn('estacionamentos:', e); }
   servicos.iniciar({ ultra: () => visual.nivelAtual() === 'ultra', socorrista: socorristaNpc,
     scene, textoSprite, altura: alturaChao, jogador: () => jogador, perfil: () => jogador.perfil, aviso, agora: agoraServidor,
     rastrear: (a) => rastrear(a), rastreio: () => rastreio, meuCla: () => jogador.cla, alcanceJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? 30 : jogador.carro?.servico === 'bombeiros' ? 16 : 10), origemJato: () => (jogador.carro?.servico === 'helicoptero_bombeiros' ? jogador.carro.mesh.position.clone().setY(jogador.carro.mesh.position.y - 0.4) : null), obstaculo: (x, z, a, o) => obstaculoAFrente(x, z, a, o), sinal: (x, z, a) => semaforos.sinalAFrente(x, z, a, 9), rondaPerto, posRonda, clas: () => [...clasCache.values()],
@@ -3504,7 +3523,7 @@ function atualizarRemotos(dt) {
     if (r.caixa && codigoCaixa(r.caixa) !== (a.cx || 0)) { scene.remove(r.caixa); r.caixa = null; }
     if (a.cx && !r.caixa) r.caixa = criarCaixa(tipoDoCodigo(a.cx));
     r.av.mixer.update(dt);
-    garrafaNaMao(r.av, r.anim === 'beber');
+    garrafaNaMao(r.av, r.anim === 'beber'); celularNaMao(r.av, r.anim === 'celular');
     raiz.updateMatrixWorld(true);
     if (a.mh) posarAperto(r.av);
     if (r.caixa) posicionarCaixa(r.av, r.caixa, raiz.rotation.y);
@@ -4772,7 +4791,8 @@ function policiaNPCReage(n, dt) {
 function andarChamada(alvo, obj, fim) {
   const ch = alvo.chamada, s = (performance.now() - ch.t0) / 1000 * ch.vel, p = servicos.pontoNaRota(ch.rota, s);
   obj.visible = true;
-  obj.position.set(p.x, alturaChao(p.x, p.z), p.z); obj.rotation.y = suavizarAngulo(obj.rotation.y, p.ang, 0.2);
+  const h = alturaChao(p.x, p.z) + (ch.voa ? 24 * Math.max(0, Math.min(1, s / 40, (ch.rota.total - s) / 40)) : 0);   // helicóptero: sobe, cruza e pousa
+  obj.position.set(p.x, h, p.z); obj.rotation.y = suavizarAngulo(obj.rotation.y, p.ang, 0.2);
   if (p.fim) fim(p);
 }
 function pertoDeMim() { return { x: jogador.pos.x + Math.cos(jogador.yaw) * 4, z: jogador.pos.z - Math.sin(jogador.yaw) * 4 }; }
@@ -4784,6 +4804,7 @@ function atualizarChamadas() {
       v.d = { ...v.d, x: p.x, z: p.z, ang: v.mesh.rotation.y };
       rede.carros.estacionar(v.d.id, p.x, p.z, v.mesh.rotation.y).catch(() => {});
       if (msg) aviso(msg, 3);
+      if (v.mecanico) { v.mecanico = false; rastrear({ nome: `🚗 ${civico.CARROS[v.d.modelo]?.nome || 'Seu carro'}`, x: p.x, z: p.z }); }
     });
   }
 }
@@ -4793,6 +4814,20 @@ function chamarCarro(v, recolher) {
   v.chamada = { rota: servicos.rotaRuas({ x: v.mesh.position.x, z: v.mesh.position.z }, destino), t0: performance.now(), vel: 15,
     msg: recolher ? '' : `🚗 Seu ${civico.CARROS[v.d.modelo]?.nome || 'carro'} chegou. Toque em Dirigir.` };
   aviso(recolher ? 'O robô está levando o carro para a Concessionária.' : `🚗 O robô motorista está trazendo o carro (~${Math.ceil(v.chamada.rota.total / 15)} s).`, 3);
+}
+// mecânico (109): cobra 100 + 1 moeda a cada 10 m e deixa o veículo na rua mais perto do jogador; helicóptero vem voando
+async function chamarMecanico(id) {
+  const v = carrosMundo.get(id); if (!v) throw new Error('Veículo não encontrado.');
+  if (jogador.carro?.id === id) throw new Error('Você já está nesse veículo.');
+  const voa = !!civico.CARROS[v.d.modelo]?.voa, de = { x: v.mesh.position.x, z: v.mesh.position.z };
+  const destino = voa ? pertoDeMim() : mundo.pontoRuaPerto(jogador.pos.x, jogador.pos.z) || pertoDeMim();
+  const preco = await rede.carros.mecanico(id, destino.x, destino.z);
+  jogador.perfil.moedas = Math.max(0, (jogador.perfil.moedas || 0) - preco); atualizarInfo();
+  const rota = voa ? (() => { const d = Math.hypot(destino.x - de.x, destino.z - de.z) || 1; return { pts: [de, destino], total: d }; })() : servicos.rotaRuas(de, destino);
+  const nome = civico.CARROS[v.d.modelo]?.nome || 'carro';
+  v.chamada = { rota, t0: performance.now(), vel: voa ? 22 : 15, voa, msg: `🔧 O mecânico deixou o seu ${nome} ${voa ? 'aqui' : 'na rua'}. Ele está marcado no mapa.` };
+  v.mecanico = true;
+  return `🔧 O mecânico está trazendo o ${nome} (~${Math.ceil(rota.total / (voa ? 22 : 15))} s). Cobrou ${preco.toLocaleString('pt-BR')} moedas.`;
 }
 function portaoDaEmpresa(empresa) {
   for (const [lote, u] of unidades) if (u.empresa === empresa) { const l = LOTES_VENDA.find((x) => x.id === lote); if (l) return l.portao; }
@@ -4822,7 +4857,7 @@ function meusVeiculos() {
   const eu = jogador.perfil?.id;
   const carros = [...carrosMundo.values()].filter((v) => v.d.dono === eu).map((v) => ({ id: v.d.id, nome: civico.CARROS[v.d.modelo]?.nome || 'Carro',
     info: v.d.ladrao ? `🚨 ROUBADO${v.d.bloqueio_em ? ' · bloqueio acionado' : ''}` : `a ${Math.round(Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z))} m${v.chamada ? ' · a caminho' : ''}`,
-    acoes: v.d.ladrao ? ['bloquear'] : v.d.modelo === 'presidencial' ? ['chamar', 'materializar'] : ['chamar', 'materializar', 'recolher'] }));
+    acoes: v.d.ladrao ? ['bloquear'] : v.d.modelo === 'presidencial' ? ['chamar'] : ['chamar', 'recolher'] }));   // chamar = mecânico (pago); grátis no estacionamento
   const frota = [...caminhoes.values()].filter((c) => donoDoVeiculo(c)).map((c) => {
     const d = c.d, heli = d.tipo === 'helicoptero', acoes = [];
     let info = d.status === 'parado' ? 'na garagem' : d.status === 'em_rota' ? 'em entrega' : d.status === 'voltando' ? 'voltando' : 'na rua';
@@ -4838,7 +4873,7 @@ function meusVeiculos() {
 }
 function acaoVeiculo(acao, tipo, id) {
   if (acao === 'materializar') { materializar(tipo, id); return; }
-  if (tipo === 'carro') { if (acao === 'bloquear') { bloquearCarro(id); return; } const v = carrosMundo.get(id); if (v) chamarCarro(v, acao === 'recolher'); return; }
+  if (tipo === 'carro') { if (acao === 'bloquear') { bloquearCarro(id); return; } if (acao === 'chamar') { chamarMecanico(id).then((m) => aviso(m, 3.5)).catch((e) => aviso(e.message, 3)); return; } const v = carrosMundo.get(id); if (v) chamarCarro(v, true); return; }
   const c = caminhoes.get(id); if (!c) return;
   if (acao === 'chamar') chamarVeiculo(c);
   else if (acao === 'recolher') recolherVeiculo(c);
@@ -7940,6 +7975,8 @@ function atualizarJogador(dt) {
     }
   }
   if (j.emote === 'beber' && forca > 0.15) j.emote = null;   // andou: para de beber
+  if (j.emote === 'celular' && forca > 0.15) celular.fechar();   // andou: guarda o celular
+  celularNaMao(j.avatar, j.avatar?.nomeAtual === 'celular');
   garrafaNaMao(j.avatar, j.avatar?.nomeAtual === 'beber' && j.emote === 'beber');
   if (!j.pulo) resolverColisao(j.pos, j.raio);   // pulando por cima de um obstáculo: a colisão volta no fim do pulo
   if (j.dentroCasa) limitarInterior(j.pos);
@@ -9899,6 +9936,8 @@ function contextoCrime() {
   { const ap = contextoAvePresente(); if (ap) return ap; }
   if (jogador.carregando) return null;
   { const r = contextoRacoes(); if (r) return r; }
+  { const sq = contextoSaque(); if (sq) return sq; }
+  { const ep = contextoEstacionamento(); if (ep) return ep; }
   { const jj = jujubaParaSequestrar(); if (jj) return ['sequestrar o caminhão de rações (crime de clã)', '🔫 Sequestrar', () => sequestrarJujuba(jj)]; }
   const vi = veiculoParaIncendiar(); if (vi) return ['pôr fogo no veículo (crime de clã)', '🔥 Incendiar', () => incendiarVeiculo(vi)];
   const ob = onibusParaSequestrar(); if (ob) return ['sequestrar o ônibus (crime de clã)', '🔫 Sequestrar', () => sequestrarOnibus(ob)];
@@ -10039,6 +10078,101 @@ function dirigirVeiculoEmpresa(c, carga) {
 function pontoRacoes() {
   const k = racoes.corpDe(jogador.perfil);
   return k === 'policia' ? pontos.delegacia : k === 'prf' ? civico.PREFEITURA.prf : k === 'bombeiros' ? civico.BOMBEIROS.balcao : k === 'bope' ? pontos.sedeBope : null;
+}
+// ---------------------------------------------------------------- saque do morto (109)
+function contextoSaque() {
+  if (jogador.carro || jogador.morto || jogador.dentroCasa || sequestrando) return null;
+  const perto2 = (o) => Math.hypot(o.x - jogador.pos.x, o.z - jogador.pos.z) < 1.9;
+  for (const [id, r] of remotos) if (r.meta?.ferido && r.av?.raiz.visible && !r.saqueado && perto2(r.av.raiz.position)) return ['saquear o corpo (só quem matou, até 500)', '💰 Saquear', () => saquear(() => rede.saque.jogador(id), r)];
+  for (const n of npcs) if ((n.civil || n.policia) && n.caido > 0 && !n.saqueado && n.av?.raiz.visible && perto2(n.av.raiz.position)) return ['saquear o corpo', '💰 Saquear', () => saquear(() => rede.saque.npc(), n)];
+  return null;
+}
+async function saquear(fn, alvo) {
+  if (sequestrando) return; sequestrando = true;
+  if (jogador.armado) alternarArma();
+  jogador.trava = 2.2; jogador.avatar.tocar('coletar', { umaVez: true, velocidade: 1.2, fade: 0.1 });   // a mesma animação do médico
+  try {
+    await new Promise((ok) => setTimeout(ok, 1800));
+    const v = await fn(); alvo.saqueado = true;
+    jogador.perfil.moedas = (jogador.perfil.moedas || 0) + (v || 0); atualizarInfo();
+    aviso(v ? `💰 Você saqueou ${v.toLocaleString('pt-BR')} moedas.` : 'O bolso estava vazio.', 3);
+  } catch (e) { aviso(e.message, 3); }
+  finally { sequestrando = false; }
+}
+// ---------------------------------------------------------------- estacionamentos grátis (um guichê por quarteirão)
+const ESTACIONAMENTOS = [];
+function montarEstacionamentos() {
+  const lista = mundo.listaQuadras();
+  if (!lista.length) return;
+  const cabine = new THREE.InstancedMesh(new THREE.BoxGeometry(1.4, 2.3, 1.1).translate(0, 1.15, 0), new THREE.MeshStandardMaterial({ color: '#1f5fbf', roughness: 0.6 }), lista.length);
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
+  g.fillStyle = '#1f6feb'; g.fillRect(0, 0, 128, 128); g.fillStyle = '#fff'; g.font = '900 100px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('P', 64, 70);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
+  const placa = new THREE.InstancedMesh(new THREE.BoxGeometry(0.9, 0.9, 0.08).translate(0, 2.85, 0), new THREE.MeshStandardMaterial({ map: tx, roughness: 0.5 }), lista.length);
+  lista.forEach(([x, z, meia, y], k) => {
+    const gx = x + 4, gz = z + meia - 1.6, vz = z + meia + 1.25;   // guichê na calçada do lado sul; vaga na faixa junto ao meio-fio
+    const mt = new THREE.Matrix4().makeTranslation(gx, y, gz); cabine.setMatrixAt(k, mt); placa.setMatrixAt(k, mt);
+    colisores.push({ tipo: 'caixa', x0: gx - 0.75, x1: gx + 0.75, z0: gz - 0.6, z1: gz + 0.6 });
+    ESTACIONAMENTOS.push({ x: gx, z: gz, vaga: { x: x - 2, z: vz, ang: Math.PI / 2 } });
+    itensMapa.push({ tipo: 'estacionamento', x0: gx - 1.5, x1: gx + 1.5, z0: gz - 1.5, z1: gz + 1.5 });
+  });
+  cabine.castShadow = true; scene.add(cabine, placa);
+}
+function estacionamentoMaisPerto() {
+  let m = null, dm = Infinity;
+  for (const e of ESTACIONAMENTOS) { const d = Math.hypot(e.x - jogador.pos.x, e.z - jogador.pos.z); if (d < dm) { dm = d; m = e; } }
+  return m ? { ...m, dist: Math.round(dm) } : null;
+}
+function contextoEstacionamento() {
+  if (jogador.carro || jogador.dentroCasa || jogador.morto) return null;
+  const e = estacionamentoMaisPerto(); if (!e || e.dist > 2.8) return null;
+  return ['estacionamento grátis: pegar o seu veículo', '🅿️ Estacionamento', () => menuEstacionamento(e)];
+}
+function menuEstacionamento(e) {
+  const meus = [...carrosMundo.values()].filter((v) => v.d.dono === jogador.perfil.id && !v.d.ladrao);
+  if (!meus.length) { aviso('Você não tem veículo comprado. Compre na Concessionária.', 3); return; }
+  escolher('🅿️ Estacionamento', 'Escolha o veículo: ele aparece na vaga em frente ao guichê. Grátis.', meus.map((v) => ({ rotulo: `🚗 ${civico.CARROS[v.d.modelo]?.nome || 'Carro'}`, fn: async () => {
+    const g = e.vaga;
+    try {
+      await rede.carros.estacionar(v.d.id, g.x, g.z, g.ang);
+      v.chamada = null; v.d = { ...v.d, x: g.x, z: g.z, ang: g.ang };
+      v.mesh.position.set(g.x, alturaChao(g.x, g.z), g.z); v.mesh.rotation.y = g.ang; v.mesh.visible = true;
+      aviso(`🅿️ Seu ${civico.CARROS[v.d.modelo]?.nome || 'carro'} está na vaga em frente ao guichê.`, 3);
+    } catch (err) { aviso(err.message, 3); }
+  } })));
+}
+// ---------------------------------------------------------------- celular 📱
+function abrirCelular() {
+  if (celular.celularAberto()) { celular.fechar(); return; }
+  if (jogador.morto || jogador.algemado) return;
+  if (!jogador.carro && !jogador.dentroCasa) {
+    if (jogador.armado) alternarArma();
+    jogador.emote = 'celular'; jogador.avatar.garantir('celular');
+    setTimeout(() => { if (jogador.emote === 'celular') celular.abrir(); }, 650);   // põe no ouvido e a tela abre
+  } else celular.abrir();
+}
+function lugaresCelular() {
+  const eu = jogador.perfil?.id, emp = [], casas = [];
+  for (const [lote, u] of unidades) {
+    const e = empresas.get(u.empresa); if (!e || (e.dono !== eu && e.id !== emprego)) continue;
+    const l = LOTES_VENDA.find((x) => x.id === lote); if (!l) continue;
+    emp.push({ icone: '🏭', nome: e.nome, info: e.dono === eu ? 'sua empresa' : 'onde você trabalha', x: l.portao.x, z: l.portao.z - 1.5 });
+  }
+  for (const d of casasLista) if (moraEm(d)) casas.push({ icone: '🏠', nome: d.rotulo || 'Minha casa', info: d.dono === eu ? 'sua' : 'alugada', x: d.x, z: d.z });
+  let cla = null;
+  if (jogador.cla) {
+    const c = clasCache.get(jogador.cla);
+    const lugares = [...territorios.values()].filter((v) => v.d.dono_cla === jogador.cla).map((v) => ({ icone: '🚩', nome: v.d.nome, info: 'território do clã', x: v.d.x, z: v.d.z }));
+    cla = { nome: c?.nome || jogador.claInfo?.nome || 'Meu clã', info: c?.nivel ? `nível ${c.nivel}` : '', lugares };
+  }
+  return { empresas: emp, casas, cla };
+}
+function veiculosCelular() {
+  return [...carrosMundo.values()].filter((v) => v.d.dono === jogador.perfil?.id).map((v) => {
+    const d = Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z);
+    return { id: v.d.id, nome: civico.CARROS[v.d.modelo]?.nome || 'Carro', info: v.d.ladrao ? '🚨 roubado' : `a ${Math.round(d)} m${v.chamada ? ' · a caminho' : ''}`,
+      longe: !v.d.ladrao && d > 12 && !v.chamada, preco: 100 + Math.floor(d / 10), x: v.mesh.position.x, z: v.mesh.position.z };
+  });
 }
 function contextoRacoes() {
   if (jogador.carro || jogador.dentroCasa || jogador.morto) return null;

@@ -253,6 +253,8 @@ function traduzirRpc(m) {
     'so coronel ou acima': 'Só Coronel para cima pode usar o cofre do Exército.',
     'cofre sem saldo': 'O cofre do Exército não tem esse valor.',
     'voce ja tem essa mascara': 'Você já tem essa máscara (cada uma é única).',
+    'so quem matou saqueia': 'Só quem matou pode saquear (e só por 90 s).',
+    'aguarde para saquear': 'Espere um pouco para saquear de novo.',
     'caminhao ainda vazio': 'Esse caminhão ainda não carregou no Quartel: espere ele sair carregado.',
     'ja tem caminhao a caminho': 'Já tem um caminhão desse produto indo para lá.',
     'corporacao invalida': 'Corporação inválida.',
@@ -704,6 +706,7 @@ export const carros = {
   estacionar: (id, x, z, ang) => rpc('estacionar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),
   acidente: (id) => rpc('acidente_carro', { p_carro: id }),
   materializar: (id, x, z, ang) => rpc('materializar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),
+  mecanico: (id, x, z) => rpc('chamar_mecanico', { p_carro: id, p_x: x, p_z: z }),
   vender: (id) => rpc('vender_carro', { p_carro: id }),
   roubar: (id) => rpc('roubar_carro', { p_carro: id }),
   bloquear: (id) => rpc('bloquear_carro', { p_carro: id }),
@@ -1090,6 +1093,11 @@ export const logos = {
   tirar: (empresa) => rpc('tirar_logo', { p_empresa: empresa }),
   votar: (empresa, voto) => rpc('votar_logo', { p_empresa: empresa, p_voto: voto }),
   moderar: (empresa, acao, motivo = null) => rpc('moderar_logo', { p_empresa: empresa, p_acao: acao, p_motivo: motivo }),
+};
+// saque do morto (109): quem matou leva até 500 da carteira; NPC morto dá de 20 a 150
+export const saque = {
+  jogador: (id) => rpc('saquear_jogador', { p_vitima: id }),
+  npc: () => rpc('saquear_npc'),
 };
 export const jujuba = {
   estado: async () => {

@@ -1590,6 +1590,25 @@ export function propsPerto(px, pz, dt) {
 }
 const alturaChaoMundo = (x, z) => { for (const [cx, cz, w, d, y] of calcadas) if (Math.abs(x - cx) <= w / 2 && Math.abs(z - cz) <= d / 2) return y; return 0.18; };
 export const alturaCalcada = (x, z) => alturaChaoMundo(x, z);
+// quarteirões (calçada inteira de QB x QB): onde ficam os guichês de estacionamento. [x, z, meia, altura da calçada]
+export function listaQuadras() {
+  const vistos = new Set(), r = [];
+  for (const [x, z, w, d, y] of calcadas) {
+    if (Math.abs(w - QB) > 0.5 || Math.abs(d - QB) > 0.5 || naFavela(x, z)) continue;
+    const k = `${Math.round(x)},${Math.round(z)}`; if (vistos.has(k)) continue; vistos.add(k);
+    r.push([x, z, QB / 2, y]);
+  }
+  return r;
+}
+// ponto na rua mais perto (na faixa junto ao meio-fio, do lado de quem está pedindo): onde o mecânico deixa o carro
+export function pontoRuaPerto(x, z) {
+  let m = null, dm = Infinity;
+  for (const [rx, rz, w, d, vert] of ruas) {
+    const cx = Math.max(rx - w / 2, Math.min(rx + w / 2, x)), cz = Math.max(rz - d / 2, Math.min(rz + d / 2, z)), dd = Math.hypot(cx - x, cz - z);
+    if (dd < dm) { dm = dd; m = vert ? { x: rx + Math.sign(x - rx || 1) * (w / 2 - 1.3), z: cz } : { x: cx, z: rz + Math.sign(z - rz || 1) * (d / 2 - 1.3) }; }
+  }
+  return dm < 120 ? m : null;
+}
 export function finalizar() { planejarProps(); montarMobiliario(); montarMalhas(); }
 
 // ---------------------------------------------------------------- ruas de verdade: "é rua?" e caminho só pelas ruas
