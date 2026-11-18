@@ -792,9 +792,74 @@ function montarRodas(g, nome) {
     const rd = base.clone(true); rd.scale.set(sg * (xo - xi) / (2 * W), r, r); rd.userData.raio = r; piv.add(rd);
   }
 }
+// baú do caminhão novo: a textura gerada fica manchada de perto; as faces do baú viram um branco liso (e é nelas
+// que vai a lona com a logo da empresa). A separação é feita uma vez e reaproveitada nos clones.
+const geoBau = new WeakMap();
+let matBau = null;
+export function bauLiso(g) {
+  matBau ||= new THREE.MeshStandardMaterial({ color: '#f1f1ee', roughness: 0.55, metalness: 0, side: THREE.DoubleSide });
+  const dentro = (v) => Math.abs(v.x) < 1.2 && v.y > 1.13 && v.y < 3.5 && v.z < 1.79;
+  g.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), m = new THREE.Matrix4(), a = new THREE.Vector3();
+  const lista = []; g.traverse((o) => { if (o.isMesh && o.geometry?.index && !o.userData.bau && !o.geometry.userData.bauFeito) lista.push(o); });
+  for (const o of lista) {
+    let par = geoBau.get(o.geometry);
+    if (!par) {
+      const orig = o.geometry, pos = orig.attributes.position, idx = orig.index, fica = [], bau = [];
+      m.multiplyMatrices(inv, o.matrixWorld);
+      const ok = new Uint8Array(pos.count); for (let i = 0; i < pos.count; i++) ok[i] = dentro(a.fromBufferAttribute(pos, i).applyMatrix4(m)) ? 1 : 0;
+      for (let t = 0; t < idx.count; t += 3) { const i0 = idx.getX(t), i1 = idx.getX(t + 1), i2 = idx.getX(t + 2); (ok[i0] && ok[i1] && ok[i2] ? bau : fica).push(i0, i1, i2); }
+      const gf = orig.clone(); gf.setIndex(fica); gf.userData = { ...orig.userData, bauFeito: true };
+      const gb = new THREE.BufferGeometry(); for (const k of ['position', 'normal']) if (orig.attributes[k]) gb.setAttribute(k, orig.attributes[k]); gb.setIndex(bau);
+      par = { gf, gb: bau.length ? gb : null }; geoBau.set(orig, par);
+    }
+    o.geometry = par.gf;
+    if (par.gb) { const mb = new THREE.Mesh(par.gb, matBau); mb.userData.bau = true; mb.castShadow = true; mb.receiveShadow = true; mb.name = 'bau'; o.add(mb); }
+  }
+}
+// traseira do baú: moldura, as duas portas com as trancas e as dobradiças, para-choque e lanternas
+let trasBau = null;
+function traseiraBau() {
+  if (trasBau) return trasBau.clone();
+  const g = new THREE.Group(); g.name = 'traseiraBau';
+  const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.3, ...o });
+  const escuro = M('#3a3d42'), metal = M('#9aa0a6', { metalness: 0.7, roughness: 0.35 }), preto = M('#141518', { roughness: 0.8 });
+  const verm = new THREE.MeshStandardMaterial({ color: '#b3121b', emissive: '#ff1a1a', emissiveIntensity: 0.35, roughness: 0.3 });
+  const ambar = new THREE.MeshStandardMaterial({ color: '#d98a12', emissive: '#ff9a1a', emissiveIntensity: 0.25, roughness: 0.3 });
+  const branca = new THREE.MeshStandardMaterial({ color: '#e8e8e8', emissive: '#ffffff', emissiveIntensity: 0.1, roughness: 0.3 });
+  const zb = -4.19, y0 = 1.15, y1 = 3.42, xb = 1.13;
+  const box = (m, w, h, d, x, y, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); g.add(b); return b; };
+  box(escuro, 2 * xb + 0.04, 0.09, 0.06, 0, y1 - 0.04, zb);          // moldura: em cima, embaixo e dos lados
+  box(escuro, 2 * xb + 0.04, 0.12, 0.08, 0, y0 + 0.05, zb);
+  for (const sx of [-1, 1]) box(escuro, 0.08, y1 - y0, 0.07, sx * (xb - 0.02), (y0 + y1) / 2, zb);
+  box(preto, 0.025, y1 - y0 - 0.2, 0.02, 0, (y0 + y1) / 2, zb - 0.02);   // fresta entre as portas
+  for (const x of [-0.82, -0.32, 0.32, 0.82]) {                        // trancas (barras verticais) com a alavanca
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, y1 - y0 - 0.25, 8), metal); b.position.set(x, (y0 + y1) / 2, zb - 0.05); g.add(b);
+    for (const y of [y0 + 0.14, y1 - 0.14]) box(metal, 0.09, 0.06, 0.05, x, y, zb - 0.04);
+    box(metal, 0.05, 0.04, 0.22, x + (x < 0 ? 0.07 : -0.07), (y0 + y1) / 2 - 0.25, zb - 0.1).rotation.y = x < 0 ? 0.5 : -0.5;
+  }
+  for (const sx of [-1, 1]) for (const y of [y0 + 0.4, (y0 + y1) / 2, y1 - 0.4]) box(metal, 0.16, 0.12, 0.05, sx * (xb - 0.1), y, zb - 0.04);   // dobradiças
+  // para-choque (barra de proteção) e lanternas
+  box(preto, 2.15, 0.14, 0.12, 0, 0.62, -4.12);
+  for (const sx of [-1, 1]) box(preto, 0.08, 0.5, 0.08, sx * 0.7, 0.85, -4.08);
+  for (const sx of [-1, 1]) {
+    box(preto, 0.62, 0.22, 0.08, sx * 0.86, 0.98, -4.1);
+    box(verm, 0.26, 0.15, 0.04, sx * 0.97, 0.98, -4.15);
+    box(ambar, 0.13, 0.15, 0.04, sx * 0.76, 0.98, -4.15);
+    box(branca, 0.1, 0.15, 0.04, sx * 0.63, 0.98, -4.15);
+  }
+  // para-brisa e janelas da cabine: vidro novo, com borda limpa, por cima da textura manchada (o para-brisa é curvo:
+  // um arco de cilindro com o raio medido na frente da cabine)
+  const vidro = new THREE.MeshStandardMaterial({ color: '#0d1620', roughness: 0.08, metalness: 0.75, side: THREE.DoubleSide });
+  const R = 2.62, ab = Math.asin(1.0 / R);
+  const pb = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.62, 24, 1, true, -ab, 2 * ab), vidro); pb.position.set(0, 2.43, 4.115 - R); pb.rotation.x = -0.06; g.add(pb);
+  for (const sx of [-1, 1]) { const j = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.58), vidro); j.position.set(sx * 1.078, 2.38, 3.42); j.rotation.y = sx * Math.PI / 2; g.add(j); }
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  trasBau = g; return g.clone();
+}
 // caminhões das empresas (vêm do clone do modelo, sem pintura): troca as rodas do modelo pelas que giram e viram
 export function veiculoComRodas(o, nome) {
   o.userData.glb = nome;
+  if (nome === 'caminhao') { bauLiso(o); o.add(traseiraBau()); }
   try { montarRodas(o, nome); } catch (e) { console.warn('rodas:', nome, e); }
   if (o.getObjectByName('rodas')) comRodas.add(o);
   return o;
@@ -893,6 +958,7 @@ function modeloCarroBase(modelo, cor) {
     else g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), modelo.startsWith('onibus') ? 0.38 : modelo === 'caminhao_lixo' ? 0.12 : modelo === 'helicoptero_bombeiros' ? 0.9 : 0.45); } });
     try { paraBrisaLimpo(g, GLB_CARRO[modelo]); } catch (e) { console.warn('para-brisa:', modelo, e); }
     if (VIDROS[GLB_CARRO[modelo]]) { g.updateMatrixWorld(true); vidrosEscuros(g, VIDROS[GLB_CARRO[modelo]]); }
+    if (GLB_CARRO[modelo] === 'caminhao') { bauLiso(g); g.add(traseiraBau()); }
     try { montarRodas(g, GLB_CARRO[modelo]); } catch (e) { console.warn('rodas:', modelo, e); }   // depois da pintura: as rodas e o chassi têm cor própria
     adicionarLuzes(g, modelo);
     cacheCarro.set(chave, g);

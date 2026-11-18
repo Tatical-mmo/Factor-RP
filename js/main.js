@@ -2702,7 +2702,7 @@ function atualizarNPCs(dt) {
       continue;
     }
     if (n.policia) {
-      if (n.av.armaNpc && !n.bope) n.av.armaNpc.visible = !!(n.hostil > 0 || n.perseguindo || n.cerco);   // saca a arma só em ação
+      if (n.av.armaNpc && !n.bope && !(n.caido > 0)) { const v = !!(n.hostil > 0 || n.perseguindo || n.cerco); if (v !== n.av.armaNpc.visible) { n.av.armaNpc.visible = v; if (!v) n.av.tocar('walk', { velocidade: 0.85 }); } }   // saca a arma só em ação
       if (remotoAtivo(n) && !(n.caido > 0) && !n.cerco && !n.perseguindo && !(n.hostil > 0)) { mostrarRoboRemoto(n, dt); continue; }
       if (n.animRemota) { n.animRemota = null; n.av.tocar('walk', { velocidade: 0.85 }); }
       if (policiaNPCReage(n, dt)) { publicarRobo(n, dt, n.av.raiz); continue; }
@@ -3107,7 +3107,7 @@ async function iniciarJogo(perfil) {
   $('carregando').classList.remove('oculto');
   montarChao();
   // um modelo faltando não pode travar o jogo: ele só fica de fora (veículos e prédios têm versão feita por código)
-  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_exercito' ? '?v=pas4' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau1' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
+  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_exercito' ? '?v=pas4' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau2' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
   const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
   const skin = id;   // em serviço o policial continua com o próprio personagem (a farda mostra a corporação)
   const avatarP = criarAvatar(ROBOS.includes(skin) ? 'robos' : pastaJogador, skin);
@@ -4144,6 +4144,16 @@ async function npcFardado(papel, i, arma) {
   carregarPecasFarda(); av.papelNpc = papel; NPC_FARDADOS.add(av);
   try { vestir(av, papel); } catch { /* farda ainda carregando: veste depois */ }
   if (arma) { try { av.armaNpc = novaArma(arma, av); av.armaNpc.visible = papel !== 'policia' && papel !== 'prf'; } catch { /* sem arma */ } }
+  // com a arma na mão usa as mesmas animações do jogador armado: andar mirando, parado mirando e correr com o fuzil
+  const tocarBase = av.tocar.bind(av);
+  av.tocar = (nome, op = {}) => {
+    if (av.armaNpc?.visible) {
+      if (nome === 'walk') { nome = 'walk_shoot'; op = { ...op, velocidade: 1.1 }; }
+      else if (nome === 'idle' || nome === 'idle_long') nome = 'mirar';
+      else if (nome === 'run') nome = 'corrida_rifle';
+    }
+    return tocarBase(nome, op);
+  };
   return av;
 }
 function metaPresenca() {
@@ -4647,14 +4657,18 @@ function acertarPoliciaNPC(n, dano) {
   jogador.atacouPolicia = performance.now();
   for (const m of npcs) if (m.policia && m !== n && m.caido <= 0 && m.av.raiz.position.distanceTo(n.av.raiz.position) < 70) { if (!(m.hostil > 0)) m.av.tocar('run', { velocidade: 1 }); m.hostil = Math.max(m.hostil || 0, 60); }
   rede.crime.agredirNpc().catch(() => {});
-  if (n.vida <= 0) { n.caido = 20; n.av.tocar('death', { umaVez: true, velocidade: 1, fade: 0.1 }); aviso('Você derrubou um policial! Está PROCURADO.', 3); }
+  if (n.vida <= 0) {
+    n.caido = 20; if (n.av.armaNpc) n.av.armaNpc.visible = false;
+    n.av.tocar('death', { umaVez: true, velocidade: 1, fade: 0.1 }); porPoca(n, n.av.raiz.position.x, n.av.raiz.position.z);
+    aviso('Você derrubou um policial! Está PROCURADO.', 3);
+  }
   else { n.av.tocar('hit', { umaVez: true, velocidade: 1.4, fade: 0.08 }); if (n.vida <= dano) aviso('A polícia está atirando em você!', 2); }
 }
 function policiaNPCReage(n, dt) {
   const p = n.av.raiz.position;
   if (n.caido > 0) {
     n.caido -= dt;
-    if (n.caido <= 0) { n.vida = 100; n.hostil = 0; const a = patrulha(n); p.set(a.x, 0.18, a.z); n.av.tocar('walk', { velocidade: 0.85 }); }
+    if (n.caido <= 0) { n.vida = 100; n.hostil = 0; tirarPoca(n); const a = patrulha(n); p.set(a.x, 0.18, a.z); n.av.tocar('walk', { velocidade: 0.85 }); }
     n.av.mixer.update(dt); return true;
   }
   if (policiaPersegue(n, dt)) { n.av.mixer.update(dt); return true; }
@@ -11112,9 +11126,16 @@ function vestir(av, papel) {
       let topo = mt.alturaDe(ossos.pescoco), base = quadril ? mt.alturaDe(quadril) : null;
       if (topo === null || base === null || topo - base < 0.05) { topo = mt.topo; base = mt.baixo; } else base += (topo - base) * 0.12;
       const H = topo - base, ac = ajusteDe(papel, 'colete'), ah = ajusteDe(papel, 'chapeu');
-      encaixar(colete, tronco, mt, mt.largura * 1.35 * ac.larg / C.largura, H * ac.alt * (C.alt || 1), Math.min(mt.prof, mt.largura * 0.85) * 1.5 * ac.fund / C.prof,
+      // tamanho padrão para todos (pela altura do personagem, em unidades do osso): a farda fica igual em qualquer
+      // personagem e nos NPCs. Só cresce se o corpo for mais largo que o padrão (grandalhão), para não atravessar.
+      av.raiz.updateMatrixWorld(true);
+      const kT = tronco.getWorldScale(_cz).x / (av.raiz.getWorldScale(_cw).x || 1) || 1, kC = cabeca.getWorldScale(_cz).x / (av.raiz.getWorldScale(_cw).x || 1) || 1;
+      const hT = (av.altura || 1.75) / kT, hC = (av.altura || 1.75) / kC;
+      const largT = Math.max(0.2 * hT, mt.largura * 0.92), profT = Math.max(0.125 * hT, Math.min(mt.prof, mt.largura * 0.85) * 0.92);
+      encaixar(colete, tronco, mt, largT * 1.35 * ac.larg / C.largura, H * ac.alt * (C.alt || 1), profT * 1.5 * ac.fund / C.prof,
         { f: mt.cf + ac.frente * H, c: (topo + base) / 2 + (ac.subir + (C.subir || 0)) * H });
-      const P = PECAS_FARDA[chapNome], hc = mc.topo - mc.baixo, sc = Math.min(mc.largura, hc * 0.95) * P.folga * 1.1 * ah.tam / P.copa;
+      const P = PECAS_FARDA[chapNome], hc = 0.13 * hC, cabecaL = Math.max(0.108 * hC, Math.min(mc.largura, (mc.topo - mc.baixo) * 0.95) * 0.9);
+      const sc = cabecaL * P.folga * 1.1 * ah.tam / P.copa;
       encaixar(chapeu, cabeca, mc, sc, sc, sc, { f: mc.cf - P.cx * sc + (ah.frente + (P.frente || 0)) * hc, c: mc.topo + hc * (0.03 + P.subir + ah.subir) - P.topo * sc });
       if (colete.children[0]) colete.children[0].rotation.y = -Math.PI / 2 + (ac.giro || 0) * Math.PI / 180;   // ajuste de giro (peça feita virada para outro lado)
       if (chapeu.children[0]) chapeu.children[0].rotation.y = -Math.PI / 2 + (ah.giro || 0) * Math.PI / 180;

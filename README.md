@@ -1648,3 +1648,8 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - **Fim dos robôs fardados:** polícia, PRF, BOPE, Exército (pátio, sentinelas, caçada, esquadra, recrutador) e Marinha viraram NPCs humanos, por `npcFardado(papel, i, arma)`. Usam rostos variados dos personagens, com colete e boné ou capacete da corporação e arma na mão. A polícia e a PRF sacam a arma só em ação (perseguindo ou revidando) e miram com a pose `mirar`.
   - O jogador em serviço na polícia continua com o próprio personagem e a farda (antes virava o robô).
   - O robô só ficou como fonte das animações e como boneco de luta.
+- **Farda padrão, NPCs armados e caminhão acabado (16bf)**:
+  - **Farda igual em todos:** colete e boné/capacete têm tamanho padrão pela altura do personagem, em unidades do osso. Antes eram medidos na malha de cada um, e por isso mudavam de personagem para personagem. Só crescem se o corpo for mais largo que o padrão (grandalhão), para não atravessar. Vale para jogadores e NPCs.
+  - **NPC armado anima como o jogador armado:** com a arma à mostra, `walk` vira `walk_shoot`, `idle` vira `mirar` e `run` vira `corrida_rifle` (wrapper em `npcFardado`). A arma não fica mais "voando". A polícia e a PRF trocam a animação na hora em que sacam ou guardam a arma.
+  - **Policial NPC derrubado:** a arma some, ele cai e fica a poça de tinta embaixo (`porPoca`). A poça sai quando ele levanta, depois de 20 s.
+  - **Caminhão:** a textura passou para 1024, sem o mapa metálico (refletia o céu e ficava rosado). O baú agora é branco liso (`civico.bauLiso`). A traseira ganhou moldura, portas com trancas e dobradiças, para-choque e lanternas (`traseiraBau`), e a cabine ganhou para-brisa curvo e janelas de vidro novas. Carrega com `?v=bau2`.
