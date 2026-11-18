@@ -20,6 +20,7 @@ const CSS = `
 #celular.pc .apps{grid-template-columns:repeat(auto-fill,minmax(92px,1fr))}
 #celular .carro{display:flex;align-items:center;justify-content:space-between;gap:8px}
 #celular .carro .bt{flex:none;margin:0;align-self:center}
+#celular img.mini{display:block;width:100%;aspect-ratio:12/7;object-fit:cover;border-radius:8px;background:#e9edf2;margin-bottom:6px}
 #celular .cores{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
 #celular .cores button{width:30px;height:30px;border-radius:50%;border:2px solid #30363d}
 #celular .cores button.sel{border-color:#fff;box-shadow:0 0 0 2px #2f81f7}
@@ -190,8 +191,11 @@ async function desenhar(manterMsg = false) {
     const est = ctx.estacionamentoPerto?.(), L2 = ctx.lojaOnline();
     c.innerHTML = `${voltar}<h3>🛒 Concessionária online</h3><p><small>Os mesmos carros da loja, <b>15% mais caros</b>. O carro novo já aparece no estacionamento mais perto${est ? ` (${fmt(est.dist)} m daqui)` : ''}. Pago da carteira (${fmt(ctx.moedas())}). Helicóptero só na loja.</small></p>
       <div class="cores">${L2.cores.map((k) => `<button data-cor="${k}" class="${k === corOnline ? 'sel' : ''}" style="background:${k}"></button>`).join('')}</div>
-      ${L2.carros.map((k) => `<div class="card carro"><span><b>${esc(k.nome)}</b><small>${fmt(k.preco)} · até ${k.kmh} km/h</small></span><button class="bt" data-online="${k.id}">Comprar</button></div>`).join('')}`;
-    c.querySelectorAll('[data-cor]').forEach((b) => { b.onclick = () => { corOnline = b.dataset.cor; c.querySelectorAll('[data-cor]').forEach((x) => x.classList.toggle('sel', x === b)); }; });
+      ${L2.carros.map((k) => `<div class="card"><img class="mini" data-mini="${k.id}" alt="${esc(k.nome)}"><div class="carro"><span><b>${esc(k.nome)}</b><small>${fmt(k.preco)} · até ${k.kmh} km/h</small></span><button class="bt" data-online="${k.id}">Comprar</button></div></div>`).join('')}`;
+    // fotos dos carros na cor escolhida (uma por quadro, para não travar o jogo)
+    const fotos = () => { const l = [...c.querySelectorAll('[data-mini]')]; let i = 0; const um = () => { if (i >= l.length || !aberto || tela !== 'loja') return; const im = l[i++]; im.src = ctx.miniaturaCarro?.(im.dataset.mini, corOnline) || ''; requestAnimationFrame(um); }; um(); };
+    fotos();
+    c.querySelectorAll('[data-cor]').forEach((b) => { b.onclick = () => { corOnline = b.dataset.cor; c.querySelectorAll('[data-cor]').forEach((x) => x.classList.toggle('sel', x === b)); fotos(); }; });
     c.querySelectorAll('[data-online]').forEach((b) => { b.onclick = () => {
       if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confirmar?'; setTimeout(() => { b.dataset.ok = ''; b.textContent = 'Comprar'; }, 3000); return; }
       executar(() => ctx.comprarOnline(b.dataset.online, corOnline), (r) => { ctx.saldoMudou?.(); return r; });

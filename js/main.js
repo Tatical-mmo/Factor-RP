@@ -3257,7 +3257,7 @@ async function iniciarJogo(perfil) {
     hora: () => { const h = horaAtual || 0; return `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`; }, lugares: lugaresCelular, veiculos: veiculosCelular, marcar: (a) => rastrear(a),
     abrirJanela: (q) => $(q === 'empresa' ? 'btEmpresa' : 'btCla')?.click(), chamarMecanico, estacionamentoPerto: estacionamentoMaisPerto,
     saldoMudou: () => rede.carregarPerfil(jogador.perfil.id).then((p) => { if (p) { jogador.perfil.moedas = p.moedas; atualizarInfo(); } }).catch(() => {}), aoFechar: () => { if (jogador.emote === 'celular') jogador.emote = null; },
-    moedas: () => jogador.perfil?.moedas || 0, lojaOnline, comprarOnline,
+    moedas: () => jogador.perfil?.moedas || 0, lojaOnline, comprarOnline, miniaturaCarro,
     online: (id) => remotos.has(id), euId: () => jogador.perfil?.id, aviso,
     avisarMensagem: (id) => conexao?.enviar('dm', { de: jogador.perfil.id, para: id }),
     abrirParaLigacao: () => { if (!jogador.carro && !jogador.dentroCasa && !jogador.morto) { if (jogador.armado) alternarArma(); jogador.emote = 'celular'; jogador.avatar.garantir('celular'); } },
@@ -10469,6 +10469,35 @@ const MODELOS_ONLINE = ['popular', 'saveiro', 'saveiro_som', 'suv', 'esportivo',
 function lojaOnline() {
   return { cores: civico.CORES_CARRO, carros: MODELOS_ONLINE.filter((m) => civico.CARROS[m]).map((m) => ({ id: m, nome: civico.CARROS[m].nome, preco: Math.ceil(civico.CARROS[m].preco * 1.15), kmh: Math.round(civico.CARROS[m].vel * 3.6) })) };
 }
+// miniatura (foto) do carro para a loja online: desenha o modelo de verdade numa cena à parte, na cor escolhida
+const _miniaturas = new Map(); let _cenaMini = null;
+function miniaturaCarro(modelo, cor) {
+  const k = modelo + cor; if (_miniaturas.has(k)) return _miniaturas.get(k);
+  if (!civico.CARROS[modelo]) return '';
+  const Wd = 240, Hd = 140;
+  if (!_cenaMini) {
+    const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight('#ffffff', '#8a8f99', 2.2)); const sol = new THREE.DirectionalLight('#ffffff', 2.4); sol.position.set(4, 6, 5); sc.add(sol);
+    _cenaMini = { sc, cam: new THREE.PerspectiveCamera(30, Wd / Hd, 0.1, 100), rt: new THREE.WebGLRenderTarget(Wd, Hd, { samples: 4 }), px: new Uint8Array(Wd * Hd * 4) };
+    _cenaMini.rt.texture.colorSpace = THREE.SRGBColorSpace;
+  }
+  const { sc, cam, rt, px } = _cenaMini;
+  let url = '';
+  try {
+    const m = civico.modeloCarro(modelo, cor); sc.add(m); m.updateMatrixWorld(true);
+    const b = caixaDoVeiculo(m), c = new THREE.Vector3((b.x0 + b.x1) / 2, b.y1 * 0.42, (b.z0 + b.z1) / 2);   // só a lataria (sem luzes e efeitos)
+    const r = Math.hypot(b.x1 - b.x0, b.z1 - b.z0, b.y1) / 2, d = r / Math.sin(THREE.MathUtils.degToRad(15)) * 0.78;
+    cam.position.set(c.x + d * 0.62, c.y + d * 0.3, c.z + d * 0.72); cam.lookAt(c);
+    const antes = renderer.getRenderTarget(), corFundo = new THREE.Color(); renderer.getClearColor(corFundo); const alfa = renderer.getClearAlpha();
+    renderer.setRenderTarget(rt); renderer.setClearColor('#e9edf2', 1); renderer.clear(); renderer.render(sc, cam);
+    renderer.readRenderTargetPixels(rt, 0, 0, Wd, Hd, px);
+    renderer.setRenderTarget(antes); renderer.setClearColor(corFundo, alfa);
+    sc.remove(m);
+    const cv = document.createElement('canvas'); cv.width = Wd; cv.height = Hd; const g = cv.getContext('2d'), img = g.createImageData(Wd, Hd);
+    for (let y = 0; y < Hd; y++) img.data.set(px.subarray((Hd - 1 - y) * Wd * 4, (Hd - y) * Wd * 4), y * Wd * 4);   // a leitura vem de baixo para cima
+    g.putImageData(img, 0, 0); url = cv.toDataURL('image/jpeg', 0.82);
+  } catch { url = ''; }
+  _miniaturas.set(k, url); return url;
+}
 async function comprarOnline(modelo, cor) {
   const e = estacionamentoMaisPerto(); if (!e) throw new Error('Nenhum estacionamento por perto.');
   const v = e.vaga, livre = (dx) => ![...carrosMundo.values()].some((c) => c.mesh.visible && Math.hypot(c.mesh.position.x - v.x - dx, c.mesh.position.z - v.z) < 3);
@@ -11594,20 +11623,52 @@ function carregarPecasFarda() {
   }).catch(() => { faltaPeca.add(k); versaoFarda++; /* fica a farda simples (ou o colete e o boné, no médico) */ });
 }
 const _rotulos = new Map();
-function rotuloFarda(u) {   // plaquinha com o nome da corporação, no peito e nas costas do colete
+// nome da corporação estampado no colete: o texto é projetado na própria malha do colete (acompanha a curva dele, não
+// fica mais uma plaquinha voando na frente). Borda transparente: o que passa da área do texto não aparece.
+function rotuloFarda(u) {
   if (_rotulos.has(u.texto)) return _rotulos.get(u.texto);
-  const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d');
-  g.fillStyle = u.cor; g.fillRect(0, 0, 256, 64); if (u.faixa) { g.fillStyle = u.faixa; g.fillRect(0, 52, 256, 8); }
-  g.fillStyle = u.letra; g.font = '800 30px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(u.texto, 128, 28);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -2 }); _rotulos.set(u.texto, m); return m;
+  const c = document.createElement('canvas'); c.width = 512; c.height = 160; const g = c.getContext('2d');
+  g.clearRect(0, 0, 512, 160);
+  g.fillStyle = u.cor; g.fillRect(6, 6, 500, 148); if (u.faixa) { g.fillStyle = u.faixa; g.fillRect(6, 130, 500, 16); }
+  g.fillStyle = u.letra; g.textAlign = 'center'; g.textBaseline = 'middle';
+  let fs = 104; do { g.font = `900 ${fs}px system-ui, sans-serif`; fs -= 4; } while (g.measureText(u.texto).width > 470 && fs > 30);
+  g.fillText(u.texto, 256, 76);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.75, transparent: true, alphaTest: 0.5, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  _rotulos.set(u.texto, m); return m;
+}
+const _decalColete = new Map();   // nome da peça + lado -> geometria projetada (no espaço do modelo do colete)
+function decalColete(nome, g, lado) {
+  const k = nome + lado; if (_decalColete.has(k)) return _decalColete.get(k);
+  const W = 0.62, H = 0.2, CY = 0.06, pos = [], uv = [], a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+  g.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), M = new THREE.Matrix4();
+  g.traverse((o) => {
+    if (!o.isMesh || !o.geometry?.attributes?.position) return;
+    M.multiplyMatrices(inv, o.matrixWorld);   // no espaço do próprio colete (onde a plaquinha ficava)
+    const P = o.geometry.attributes.position, I = o.geometry.index, nt = I ? I.count : P.count;
+    for (let t = 0; t < nt; t += 3) {
+      const ia = I ? I.getX(t) : t, ib = I ? I.getX(t + 1) : t + 1, ic = I ? I.getX(t + 2) : t + 2;
+      a.fromBufferAttribute(P, ia).applyMatrix4(M); b.fromBufferAttribute(P, ib).applyMatrix4(M); c.fromBufferAttribute(P, ic).applyMatrix4(M);
+      n.crossVectors(e1.subVectors(b, a), e2.subVectors(c, a)).normalize();
+      if (n.x * lado < 0.3) continue;   // só o lado de fora, virado para a frente (ou para as costas)
+      const dentro = (p) => p.x * lado > 0 && Math.abs(p.z) < W / 2 + 0.02 && Math.abs(p.y - CY) < H / 2 + 0.02;
+      if (!dentro(a) && !dentro(b) && !dentro(c)) continue;
+      for (const p of [a, b, c]) { pos.push(p.x + n.x * 0.004, p.y + n.y * 0.004, p.z + n.z * 0.004); uv.push(0.5 - lado * p.z / W, 0.5 + (p.y - CY) / H); }
+    }
+  });
+  let geo = null;
+  if (pos.length) { geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.computeVertexNormals(); }
+  _decalColete.set(k, geo); return geo;
 }
 function pecaGlb(nome, cor, u) {
   const base = pecasFarda[nome]; if (!base) return null;
   const g = base.clone(true);
   g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(cor).lerp(new THREE.Color('#ffffff'), 0.22); o.castShadow = true; } });
   if (u) for (const lado of [1, -1]) {   // frente (+X) e costas (-X)
-    const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.15), rotuloFarda(u)); pl.position.set(lado * 0.405, 0.06, 0); pl.rotation.y = lado * Math.PI / 2; g.add(pl);
+    const geo = decalColete(nome, g, lado);
+    if (geo) g.add(new THREE.Mesh(geo, rotuloFarda(u)));
+    else { const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.15), rotuloFarda(u)); pl.position.set(lado * 0.405, 0.06, 0); pl.rotation.y = lado * Math.PI / 2; g.add(pl); }
   }
   g.rotation.y = -Math.PI / 2;   // a frente do modelo (+X) vira a frente do personagem (+Z)
   const h = new THREE.Group(); h.add(g); return h;
@@ -13953,11 +14014,15 @@ function pilotarHeli(c, dt, max) {
   { const bd = c.mesh.getObjectByName('balde'); if (bd) bd.visible = c.alt > 2.5; }   // bolsa de água: só voando (some para pousar)
   const ro = c.mesh.userData.rotor || rotorDe(c.mesh); if (ro) { ro.visible = true; ro.rotation.y += dt * (c.motorParado ? 8 : c.alt > 0.3 || sobe ? 28 : 12); civico.rotorRapido(ro, !c.motorParado); }
   jogador.avatar.raiz.position.copy(jogador.pos);
-  const bp = $('vPairar'), revisa = c.alt <= 0 && !!chaveHeli(c) && Math.hypot(MECANICO_HANGAR.x - jogador.pos.x, MECANICO_HANGAR.z - jogador.pos.z) < 35;
+  const bp = $('vPairar'), revisa = c.alt <= 0 && !!chaveHeli(c) && (Math.hypot(MECANICO_HANGAR.x - jogador.pos.x, MECANICO_HANGAR.z - jogador.pos.z) < 35 || naOficinaMilitar(c));
   if (bp) { bp.style.display = revisa ? 'block' : 'none'; if (revisa && bp.dataset.rev !== '1') { bp.dataset.rev = '1'; bp.innerHTML = '🔧<br>REVISÃO'; } }
   if (!document.body.classList.contains('heli')) modoHeli(true);
   void altAntes;
 }
+// mecânicos do Exército: o helicóptero do Exército faz a revisão pousado dentro do Quartel ou da Base Aérea
+// (não precisa ir até o aeroporto, que fica longe para um helicóptero com o motor falhando)
+const dentroRet = (R, x, z) => x > R.x0 && x < R.x1 && z > R.z0 && z < R.z1;
+const naOficinaMilitar = (c) => chaveHeli(c) === 'exercito' && (dentroRet(mundo.QUARTEL, jogador.pos.x, jogador.pos.z) || dentroRet(mundo.BASE_AEREA, jogador.pos.x, jogador.pos.z));
 // ---- revisão do helicóptero (a cada 7 voos): cada um tem o seu contador no servidor
 const heliVoos = {}; const PRECO_REVISAO_HELI = 5000;
 function chaveHeli(c) { if (!c?.voa || c.aviao || c.teste || c.caminhao) return null; if (c.servico === 'helicoptero_exercito') return 'exercito'; return carrosMundo.has(c.id) ? `carro:${c.id}` : null; }
@@ -13966,14 +14031,14 @@ function contarVooHeli(c) {
   rede.aviacao.vooHeli(k).then((v) => {
     heliVoos[k] = v;
     if (v > 7 && Math.random() < Math.min(0.9, 0.15 * (v - 7))) c.falhaEm = 12 + Math.random() * 30;
-    aviso(v > 7 ? `⚠️ Helicóptero com a revisão vencida (${v} voos): o motor pode falhar. Revise com o mecânico do hangar do aeroporto.` : `🚁 Voo ${v}/7 desde a última revisão.`, v > 7 ? 5 : 2.5);
+    aviso(v > 7 ? `⚠️ Helicóptero com a revisão vencida (${v} voos): o motor pode falhar. Revise com o mecânico ${k === 'exercito' ? 'do Exército (pouse no Quartel ou na Base Aérea)' : 'do hangar do aeroporto'}.` : `🚁 Voo ${v}/7 desde a última revisão.`, v > 7 ? 5 : 2.5);
   }).catch(() => {});
 }
 function menuRevisaoHeli(c) {
   const k = chaveHeli(c); if (!k) return;
   rede.aviacao.helis().then((l) => {
     const v = (l || []).find((x) => x.chave === k)?.voos ?? heliVoos[k] ?? 0; heliVoos[k] = v;
-    escolher('🔧 Mecânico do hangar', `Este helicóptero tem ${v} voo(s) desde a última revisão (a revisão é a cada 7 voos).`, v > 0 ? [
+    escolher(naOficinaMilitar(c) ? '🔧 Mecânico do Exército' : '🔧 Mecânico do hangar', `Este helicóptero tem ${v} voo(s) desde a última revisão (a revisão é a cada 7 voos).`, v > 0 ? [
       { rotulo: `🔧 Fazer a revisão (${num(PRECO_REVISAO_HELI)})`, fn: () => rede.aviacao.revisarHeli(k, false).then(() => { heliVoos[k] = 0; c.falhaEm = 0; aviso('🔧 Helicóptero revisado!', 3); }).catch((e) => aviso(e.message, 3)) },
       ...(jogador.perfil?.profissao === 'mecanico' ? [{ rotulo: '🔧 Fazer a revisão eu mesmo (+300)', fn: () => rede.aviacao.revisarHeli(k, true).then(() => { heliVoos[k] = 0; c.falhaEm = 0; aviso('🔧 Revisão feita! +300', 3); }).catch((e) => aviso(e.message, 3)) }] : []),
     ] : [{ rotulo: '✅ Já está revisado', fn: () => {} }]);
@@ -15234,10 +15299,11 @@ function gerarPostos(B, n) {
 }
 async function criarGuarda(B, d, idx) {
   try {
-    const av = await npcFardado('exercito', idx + 4, 'exercito');
+    // uma arma só (antes vinha a do fardado e mais esta: ficavam duas, uma solta ao lado)
+    const av = await npcFardado('exercito', idx + 4, 'militar');
     if (idx >= B.pedidos) return;   // o número diminuiu enquanto carregava
     const et = textoSprite(B.rotulo || 'Exército', { escala: 0.5, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
-    try { av.arma = novaArma('militar', av); } catch { /* sem arma */ }
+    av.arma = av.armaNpc || null;
     av.raiz.visible = false; scene.add(av.raiz);
     const s = { av, ...d };
     if (d.parado) { av.raiz.position.set(d.parado[0], d.alto || alturaChao(d.parado[0], d.parado[1]), d.parado[1]); av.raiz.rotation.y = d.parado[2]; s.rumo = d.parado[2]; av.tocar('idle'); } else av.tocar('walk', { velocidade: 0.8 });
