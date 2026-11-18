@@ -1687,6 +1687,7 @@ function sairCarro() {
     return;
   }
   if (c.caminhao) {
+    if (c.jujuba) { rede.jujuba.mover(c.jujuba, jogador.pos.x, jogador.pos.z, jogador.yaw, true).catch(() => {}); if (rastreio?.comprador) rastrear(null); }   // rações: a carga fica largada no caminhão
     rede.veiculos.sair(c.caminhao, jogador.pos.x, jogador.pos.z, jogador.yaw).then(() => { tempoLogistica = Math.min(tempoLogistica, 0.5); }).catch(() => {});
     const v = caminhoes.get(c.caminhao);
     if (v) v.d = { ...v.d, motorista: null, pos_x: jogador.pos.x, pos_z: jogador.pos.z, ang: jogador.yaw, ...(v.d.sequestrado ? {} : { status: 'parado' }) };
@@ -3308,6 +3309,7 @@ async function iniciarJogo(perfil) {
   criarPoliciaNPC();
   criarSoldadosNPC();
   try { montarRefletores(); } catch (e) { console.warn('refletores:', e); }
+  try { montarCirculoCarga(); } catch (e) { console.warn('círculo de carga:', e); }
   $('btFianca').onclick = async () => { try { await rede.policia.fianca(); aviso('Fiança paga. Você está livre.'); } catch (e) { aviso(e.message); } };
   iniciarPainel({
     perfil: () => jogador.perfil,
@@ -3806,6 +3808,16 @@ function ponto(pts, f) {
 function pernas(c) {
   const r = c.d.rota; if (!r) return null;
   if (c.rotaCache?.id === c.d.partida) return c.rotaCache.pernas;
+  if (r.jj) {   // rações do Exército (108): garagem → círculo do Quartel (carrega) → corporação (descarrega) → garagem
+    const T = { x: r.t[0], z: r.t[1] }, P = { x: r.f[0], z: r.f[1] }, D = destinoJujuba(r.jj), Q = mundo.QUARTEL.portao;
+    const ruas = (a, b) => servicos.rotaRuas(a, b, 2.5)?.pts || rotaGrade(a, b);
+    const patio = [{ x: Q.x - 6, z: Q.z }, { x: Q.x + 14, z: Q.z }, { x: Q.x + 14, z: P.z }, P];
+    const ida = [...ruas(T, { x: 216, z: 641 }), { x: 216, z: 945 }, { x: Q.x - 6, z: 945 }, ...patio];
+    const leva = [...patio.slice().reverse(), ...rotaJujuba(r.jj).pts.slice(1)];
+    const p = [{ pts: ida, dur: r.d1 }, { parado: true, dur: r.carga }, { pts: leva, dur: r.d2 }, { parado: true, dur: r.descarga }, { pts: servicos.faixaDireita(ruas(D, T)), dur: r.d3 }];
+    c.rotaCache = { id: c.d.partida, pernas: p };
+    return p;
+  }
   const T = { x: r.t[0], z: r.t[1] }, F = { x: r.f[0], z: r.f[1] }, D = { x: r.d[0], z: r.d[1] };
   if (r.voa) {
     // helicóptero: linha reta, decola e pousa no heliporto
@@ -3993,7 +4005,8 @@ function atualizarCaminhoes(dt) {
     }
     const estacionado = !alvo;
     if (!estacionado && !alvo.parado && c.d.tipo !== 'helicoptero' && c.obj.visible) {
-      const bloq = obstaculoAFrente(c.obj.position.x, c.obj.position.z, c.obj.rotation.y, c.obj);
+      const Qb = mundo.QUARTEL, noQuartel = c.d.rota?.jj && c.obj.position.x > Qb.x0 - 12 && c.obj.position.x < Qb.x1 && c.obj.position.z > Qb.z0 && c.obj.position.z < Qb.z1;
+      const bloq = !noQuartel && obstaculoAFrente(c.obj.position.x, c.obj.position.z, c.obj.rotation.y, c.obj);   // no pátio do Quartel não espera (árvores e barreiras)
       c.atraso = bloq ? Math.min(30, (c.atraso || 0) + dt) : Math.max(0, (c.atraso || 0) - dt * 0.4);
     } else if (estacionado) c.atraso = 0;
     if (!alvo) alvo = posicaoEstacionado(c);
@@ -10012,6 +10025,14 @@ function dirigirVeiculoEmpresa(c, carga) {
   jogador.carro = { caminhao: c.d.id, tipo, modelo: tipo, cor: '#ffffff', vel: 0, mesh: c.obj, salvar: 1.5, desde: performance.now(), sequestrado: true, carga, max: tipo === 'van' ? 12 : 10 };
   jogador.pos.set(c.obj.position.x, alturaChao(c.obj.position.x, c.obj.position.z), c.obj.position.z); jogador.yaw = c.obj.rotation.y; jogador.alvo = null;
   jogador.avatar.raiz.visible = false;
+  const vj = [...viagensJuj.values()].find((v) => v.d.caminhao === c.d.id && (v.d.status === 'em_rota' || v.d.motorista === jogador.perfil.id));
+  if (vj) {   // caminhão das rações do Exército: a carga vai junto e só o Seu Tonho compra
+    vj.d = { ...vj.d, status: 'sequestrada', motorista: jogador.perfil.id, largado: false };
+    jogador.carro.jujuba = vj.d.id; jogador.carro.cargaJuj = vj.d.qtd; jogador.carro.kitJuj = vj.d.kit || 0; jogador.carro.salvar = 1e9;
+    rastrear({ nome: '📦 Comprador (Seu Tonho)', x: COMPRADOR.porta.x, z: COMPRADOR.porta.z + 6, comprador: true });
+    aviso(`🚚 Caminhão com ${vj.d.qtd.toLocaleString('pt-BR')} ${vj.d.produto === 'antiacido' ? 'anti-ácidos' : 'jujubas'} do Exército! Só o comprador do armazém de Vila Serra (ao lado da loja) compra.`, 5);
+    return;
+  }
   aviso(carga > 0 ? `🚚 Agora é você no volante, com ${carga} caixas. Leve até o território do clã ou a sua casa e toque em Descarregar.` : '🚚 Agora é você no volante. O veículo está vazio.', 5);
 }
 // pontos dos armazéns de rações (balcão de cada corporação) e da central do Exército
@@ -10240,7 +10261,7 @@ function racoesMudou(e) {
     let v = viagensJuj.get(d.id);
     if (!v) { v = { d, rota: rotaJujuba(d.corp), mesh: null }; viagensJuj.set(d.id, v); }
     v.d = d;
-    if (!v.mesh && jogador.carro?.jujuba !== d.id) { v.mesh = civico.modeloCarro('exercito_caminhao', '#556b2f'); scene.add(v.mesh); }
+    if (!v.mesh && jogador.carro?.jujuba !== d.id && !d.caminhao) { v.mesh = civico.modeloCarro('exercito_caminhao', '#556b2f'); scene.add(v.mesh); }   // com caminhão da empresa, é ele que aparece
   }
   for (const [id, v] of viagensJuj) if (!vivos.has(id) && jogador.carro?.jujuba !== id) { if (v.mesh) scene.remove(v.mesh); viagensJuj.delete(id); }
 }
@@ -10395,7 +10416,10 @@ async function venderJujuba() {
   const c = jogador.carro; if (!c?.jujuba || ocupado) return; ocupado = true;
   try {
     const valor = await rede.jujuba.vender(c.jujuba, jogador.pos.x, jogador.pos.z);
-    sairCarroLocal(); if (c.mesh) scene.remove(c.mesh); viagensJuj.delete(c.jujuba);
+    sairCarroLocal();
+    if (c.caminhao) rede.veiculos.sair(c.caminhao, jogador.pos.x, jogador.pos.z, jogador.yaw).catch(() => {});   // o caminhão da empresa fica (e volta para ela)
+    else if (c.mesh) scene.remove(c.mesh);
+    viagensJuj.delete(c.jujuba);
     if (rastreio?.comprador) rastrear(null);
     aviso(`💰 O Seu Tonho comprou a carga: +${valor.toLocaleString('pt-BR')} moedas.`, 4);
   } catch (e) { aviso(e.message, 3); }
@@ -14566,6 +14590,18 @@ function texturaPocaLuz() {
   gr.addColorStop(0, 'rgba(255,248,225,1)'); gr.addColorStop(0.45, 'rgba(255,244,215,.75)'); gr.addColorStop(0.8, 'rgba(255,240,205,.22)'); gr.addColorStop(1, 'rgba(255,240,205,0)');
   g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+// círculo amarelo de carga no pátio do Quartel (perto do depósito): o caminhão das rações para aqui para carregar (108)
+function montarCirculoCarga() {
+  const x = 178, z = 1018, y = alturaChao(x, z) + 0.04, g = new THREE.Group();
+  const anel = new THREE.Mesh(new THREE.RingGeometry(4.6, 5.1, 40).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#f2c21b', roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -2 }));
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128; const c2 = cv.getContext('2d');
+  c2.fillStyle = '#f2c21b'; c2.font = '900 74px system-ui, sans-serif'; c2.textAlign = 'center'; c2.textBaseline = 'middle'; c2.fillText('CARGA', 128, 64);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
+  const txt = new THREE.Mesh(new THREE.PlaneGeometry(5, 2.5).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: tx, transparent: true, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -2 }));
+  txt.rotation.y = Math.PI / 2;
+  g.add(anel, txt); g.position.set(x, y, z); scene.add(g);
+  const pl = textoSprite('🍬 Carga das rações', { escala: 0.6, fundo: 'rgba(62,78,40,.95)' }); pl.position.set(x, y + 3.2, z); scene.add(pl);
 }
 function montarRefletores() {
   const aditivo = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false };

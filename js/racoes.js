@@ -60,8 +60,10 @@ async function desenhar() {
     const l = est.licitacao;
     const linhaProd = (k, pr) => { const pd = ped(k, pr), P = PROD[pr];
       return `<div style="margin:2px 0">${P.ic} ${fmt(arm(k, pr))} / 10.000${barra(arm(k, pr))}
-        ${pd && pd.status === 'aberto' ? `<span class="dica">📋 Pedido de ${P.nome}</span> <div class="botoes"><button data-desp="${pd.id}" data-m="faltante">Mandar o que falta</button><button data-desp="${pd.id}" data-m="cheio">1 caminhão cheio</button></div>` : pd ? `<span class="dica">🚚 ${P.nome} despachado</span>` : ''}</div>`; };
-    c.innerHTML = `<p class="dica">Estoque das corporações em tempo real. Ao despachar, o quartel chama um caminhão livre da transportadora do contrato (ela recebe <b>${fmt(est.valor)}</b> por caminhão). Sem caminhão livre, a empresa paga 20.000 de multa para o cofre e vai um caminhão do Exército.</p>
+        ${pd && pd.status === 'aberto' ? `<span class="dica">📋 Pedido de ${P.nome}</span> <div class="botoes"><button data-desp="${pd.id}" data-m="faltante">Mandar o que falta</button><button data-desp="${pd.id}" data-m="cheio">1 caminhão cheio</button></div>`
+          : pd ? `<span class="dica">🚚 ${P.nome} despachado</span>`
+          : arm(k, pr) < 10000 ? `<div class="botoes"><button data-env="${k}" data-pr="${pr}" data-m="cheio">🚚 Mandar ${P.nome} (1 caminhão)</button>${arm(k, pr) < 5000 ? `<button data-env="${k}" data-pr="${pr}" data-m="faltante">Completar</button>` : ''}</div>` : ''}</div>`; };
+    c.innerHTML = `<p class="dica">Estoque das corporações em tempo real. Ao despachar, o quartel chama um caminhão livre da transportadora do contrato (ela recebe <b>${fmt(est.valor)}</b> por caminhão): ele vem da garagem, carrega no círculo amarelo do pátio e leva até a corporação. Dá para mandar mesmo sem pedido. Sem caminhão livre, a empresa paga 20.000 de multa para o cofre e vai um caminhão do Exército.</p>
       <p>💰 Cofre do Exército: <b>${est.cofre == null ? '—' : fmt(est.cofre)}</b></p>
       ${CORPS.map((k) => { const pd = ped(k), vs = viag(k);
         return `<div class="linha" style="display:block;margin-bottom:8px"><b>${CORP_NOME[k]}</b>${linhaProd(k, 'jujuba')}${linhaProd(k, 'antiacido')}
@@ -75,6 +77,8 @@ async function desenhar() {
       <div class="botoes"><input id="rRecMotivo" placeholder="motivo" style="width:15em"><button id="rRec">🎖️ Recompensar</button></div>`;
     $('rRec').onclick = () => executar(() => rede.jujuba.recompensar($('rRecNome').value.trim(), Math.floor(Number($('rRecValor').value)), $('rRecMotivo').value.trim()), (v) => `🎖️ ${fmt(v)} moedas enviadas do cofre.`);
     c.querySelectorAll('[data-kit]').forEach((b2) => { b2.onclick = () => executar(() => rede.jujuba.despacharKit(b2.dataset.kit, b2.dataset.ped ? Number(b2.dataset.ped) : null, ctx.duracaoViagem(b2.dataset.kit)), '🚚 Kit de armas despachado (10 espingardas, 10 fuzis e 30 granadas).'); });
+    // o Exército manda por conta própria, sem esperar o pedido da corporação (108)
+    c.querySelectorAll('[data-env]').forEach((b2) => { b2.onclick = () => executar(() => rede.jujuba.enviarRacao(b2.dataset.env, b2.dataset.pr, b2.dataset.m, ctx.duracaoViagem(b2.dataset.env)), (n) => (n ? `🚚 ${n} caminhão(ões) a caminho do Quartel para carregar.` : 'O depósito já está cheio.')); });
     c.querySelectorAll('[data-desp]').forEach((b2) => { b2.onclick = () => executar(() => rede.jujuba.despachar(Number(b2.dataset.desp), b2.dataset.m, ctx.duracaoViagem(est.pedidos.find((x) => x.id === Number(b2.dataset.desp))?.corp)), (n) => `🚚 ${n} caminhão(ões) despachado(s).`); });
   } else if (modo === 'licitacao') {
     $('racoesTitulo').textContent = '📄 Licitação: transporte de rações do Exército';
