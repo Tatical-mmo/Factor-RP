@@ -93,6 +93,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'chat' }, ({ payload }) => eventos.chat?.(payload));
   canal.on('broadcast', { event: 'explosao' }, ({ payload }) => eventos.explosao?.(payload));
   canal.on('broadcast', { event: 'voz' }, ({ payload }) => eventos.voz?.(payload));
+  canal.on('broadcast', { event: 'dm' }, ({ payload }) => eventos.dm?.(payload));
   canal.on('broadcast', { event: 'gesto' }, ({ payload }) => eventos.gesto?.(payload));
   canal.on('broadcast', { event: 'clima' }, ({ payload }) => eventos.clima?.(payload));
   canal.on('broadcast', { event: 'assalto' }, ({ payload }) => eventos.assalto?.(payload));
@@ -523,6 +524,17 @@ function traduzirRpc(m) {
     'jogador ja esta em um cla': 'Esse jogador já está em um clã.',
     'limite de membros': 'Limite de 15 membros.',
     'limite de 10 carros': 'Limite de 10 carros por jogador. Venda um para comprar outro.',
+    'terreno ja vendido': 'Esse terreno já foi vendido.',
+    'voce ja tem uma oficina': 'Você já tem uma oficina (uma por jogador).',
+    'nome de oficina em uso': 'Já existe uma oficina com esse nome.',
+    'voce nao tem oficina': 'Você não tem oficina.',
+    'oficina no nivel maximo': 'A oficina já está no nível máximo.',
+    'precos de 70 a 200 por cento': 'Os preços vão de 70% a 200% da tabela.',
+    'servico exige oficina nivel 2': 'Essa oficina ainda não faz blindagem (precisa ser nível 2).',
+    'esse motor exige oficina de nivel maior': 'Essa oficina ainda não faz esse motor (precisa de nível maior).',
+    'so para amigos': 'Mensagem só para amigos. Adicione pelo menu 👥 Amigos.',
+    'esse jogador nao recebe suas mensagens': 'Esse jogador não recebe suas mensagens.',
+    'mensagem vazia': 'Escreva a mensagem.',
     'ja tem licitacao aberta': 'Já existe uma licitação aberta.',
     'nenhuma licitacao aberta': 'Não há licitação aberta.',
     'licitacao sem lances': 'Ninguém deu lance ainda: não dá para fechar.',
@@ -716,6 +728,7 @@ export const carros = {
   comprar: (modelo, cor) => rpc('comprar_carro', { p_modelo: modelo, p_cor: cor }),
   comprarOnline: (modelo, cor, x, z, ang) => rpc('comprar_carro_online', { p_modelo: modelo, p_cor: cor, p_x: x, p_z: z, p_ang: ang }),
   estacionar: (id, x, z, ang) => rpc('estacionar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),
+  rebocar: (id, x, z, ang) => rpc('rebocar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),
   acidente: (id) => rpc('acidente_carro', { p_carro: id }),
   materializar: (id, x, z, ang) => rpc('materializar_carro', { p_carro: id, p_x: x, p_z: z, p_ang: ang }),
   mecanico: (id, x, z) => rpc('chamar_mecanico', { p_carro: id, p_x: x, p_z: z }),
@@ -841,6 +854,11 @@ export const bruxo = {
   esconder: (x, z) => rpc('esconder_pedra_bruxo', { p_x: x, p_z: z }),
   pegar: (x, z, bx, bz) => rpc('pegar_pedra_bruxo', { p_x: x, p_z: z, p_bx: bx, p_bz: bz }),
   desejo: (escolha) => rpc('bruxo_desejo', { p_escolha: escolha }),
+};
+export const contatos = {
+  enviar: (para, texto) => rpc('enviar_mensagem', { p_para: para, p_texto: texto }),
+  conversa: (outro) => rpc('conversa', { p_outro: outro }),
+  naoLidas: () => rpc('nao_lidas'),
 };
 export const amigos = {
   listar: () => rpc('meus_amigos'),
@@ -1108,6 +1126,14 @@ export const logos = {
 };
 // saque do morto (109): quem matou leva até 500 da carteira; NPC morto dá de 20 a 150
 // oficinas autorizadas (110): pintura, motor e blindagem
+export const oficinasJog = {
+  listar: () => sel(sb.from('oficinas_jogadores').select('*').order('terreno')),
+  comprar: (terreno, nome) => rpc('comprar_oficina', { p_terreno: terreno, p_nome: nome }),
+  evoluir: () => rpc('evoluir_oficina'),
+  precos: (pintura, motor, blindagem) => rpc('precos_oficina', { p_pintura: pintura, p_motor: motor, p_blindagem: blindagem }),
+  sacar: (valor) => rpc('sacar_oficina', { p_valor: valor }),
+  vender: () => rpc('vender_oficina'),
+};
 export const oficina = { servico: (carro, oficina, servico, cor = null) => rpc('oficina_servico', { p_carro: carro, p_oficina: oficina, p_servico: servico, p_cor: cor }) };
 export const saque = {
   jogador: (id) => rpc('saquear_jogador', { p_vitima: id }),

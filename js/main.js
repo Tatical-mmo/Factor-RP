@@ -637,7 +637,7 @@ function addColisorCaixa(obj, encolher = 0.6) {
   return b;
 }
 
-const CORES_MAPA = { estacionamento: '#1f6feb', oficina: '#e0a020', ferro_velho: '#7a4a2a', delegacia: '#4f7bd8', loja: '#e05a4f', empresa: '#9aa0a8', transportadora: '#e39b3a', casa: '#8c5a3c', base_cla: '#c43b3b', sede_bope: '#111111' };
+const CORES_MAPA = { estacionamento: '#1f6feb', oficina: '#e0a020', terrenoOficina: '#f1c40f', ferro_velho: '#7a4a2a', delegacia: '#4f7bd8', loja: '#e05a4f', empresa: '#9aa0a8', transportadora: '#e39b3a', casa: '#8c5a3c', base_cla: '#c43b3b', sede_bope: '#111111' };
 
 function colocarPredio(nome, x, z, rotY) {
   const obj = clonar(nome);
@@ -1599,6 +1599,7 @@ function atualizarPrefeitura(dt) {
     if (prefeitoAtual === jogador.perfil.id) rede.prefeitura.salario().then((v) => { if (v > 0) aviso(`Salário de prefeito: +${v.toLocaleString('pt-BR')} moedas`, 4); }).catch(() => {});
   }
   if (tempoCarros <= 0) { tempoCarros = 10; rede.carros.listar().then(sincronizarCarros).catch(() => {}); }
+  if ((tempoReboque -= dt) <= 0) { tempoReboque = 50 + Math.random() * 20; rebocarAbandonados(); }
   // enquanto dirige, a vaga do carro acompanha (se fechar o jogo, ele fica perto)
   if (jogador.carro) {
     jogador.carro.salvar -= dt;
@@ -3257,6 +3258,10 @@ async function iniciarJogo(perfil) {
     abrirJanela: (q) => $(q === 'empresa' ? 'btEmpresa' : 'btCla')?.click(), chamarMecanico, estacionamentoPerto: estacionamentoMaisPerto,
     saldoMudou: () => rede.carregarPerfil(jogador.perfil.id).then((p) => { if (p) { jogador.perfil.moedas = p.moedas; atualizarInfo(); } }).catch(() => {}), aoFechar: () => { if (jogador.emote === 'celular') jogador.emote = null; },
     moedas: () => jogador.perfil?.moedas || 0, lojaOnline, comprarOnline,
+    online: (id) => remotos.has(id), euId: () => jogador.perfil?.id, aviso,
+    avisarMensagem: (id) => conexao?.enviar('dm', { de: jogador.perfil.id, para: id }),
+    abrirParaLigacao: () => { if (!jogador.carro && !jogador.dentroCasa && !jogador.morto) { if (jogador.armado) alternarArma(); jogador.emote = 'celular'; jogador.avatar.garantir('celular'); } },
+    aoFimLigacao: () => { if (jogador.emote === 'celular' && !celular.celularAberto()) jogador.emote = null; },
     minhasEmpresas: async () => { try { await carregarLogistica(); } catch { /* usa o que tem */ } return [...empresas.values()].filter((e) => e.dono === jogador.perfil?.id); },
   });
   if ($('btCelular')) $('btCelular').onclick = () => abrirCelular();
@@ -3424,7 +3429,7 @@ function conectarMultiplayer(perfil) {
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
     tiro: (t) => criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1),
     explosao: (e) => receberExplosao(e),
-    voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
+    voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, dm: (m) => { if (m?.para === jogador.perfil?.id && amigosIds.has(m.de)) celular.mensagemChegou(m.de, remotos.get(m.de)?.meta?.nome); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
     abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), cruzeiro: (e) => receberCruzeiro(e), navio: (e) => receberNavio(e),
     meta: () => metaPresenca(),
@@ -3435,6 +3440,8 @@ function conectarMultiplayer(perfil) {
     eu: () => (jogador.perfil ? { id: jogador.perfil.id, x: jogador.pos.x, z: jogador.pos.z, cla: jogador.claInfo?.nome || null } : null),
     outros: () => [...remotos.entries()].map(([id, r]) => ({ id, x: r.alvo?.x ?? 0, z: r.alvo?.z ?? 0, cla: r.meta?.cla || null })).filter((o) => remotos.get(o.id)?.alvo && !bloqueados.has(o.id)),
     enviar: (ev, m) => conexao?.enviar(ev, m), aviso, bloqueado: (id) => bloqueados.has(id),
+    online: (id) => remotos.has(id), amigo: (id) => amigosIds.has(id), meuNome: () => jogador.perfil?.nome || '', nomeDe: (id) => remotos.get(id)?.meta?.nome,
+    aoChamada: (c, motivo) => celular.chamadaMudou(c, motivo),
   });
   desenharBotaoVoz();
 }
@@ -5336,7 +5343,7 @@ function mostrarChat(m, meu) {
 }
 function atualizarChat(dt) {
   tempoAmigos -= dt;
-  if (tempoAmigos <= 0) { tempoAmigos = 45; carregarAmigos(); }
+  if (tempoAmigos <= 0) { tempoAmigos = 45; carregarAmigos(); celular.recarregarNaoLidas(); }
 }
 
 // ---------------------------------------------------------------- ARMA DOURADA (evento): 2 balas, quem morre por ela acorda no cemitério
@@ -8620,7 +8627,7 @@ function quadroJogo() {
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   diag('remotos/voz');
   atualizarRemotos(dt); atualizarTatica(dt);
-  voz.atualizar(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
+  voz.atualizar(dt); atualizarOficinasJog(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   diag('ônibus/aviação/rodas');
   atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
@@ -10244,9 +10251,12 @@ function montarGalpaoOficina(o, L, nivel) {
   // para o mundo: colisões, mapa, balcão e vaga
   const W2 = (lx, lz) => ({ x: L.x + L.px * lx + L.dx * lz, z: L.z + L.pz * lx + L.dz * lz });
   const ret = (x0, x1, z0, z1) => { const a = W2(x0, z0), b = W2(x1, z1); return { tipo: 'caixa', x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z) }; };
-  colisores.push(ret(-W / 2, W / 2, D - 0.25, D), ret(-W / 2, -W / 2 + 0.25, 0, D), ret(W / 2 - 0.25, W / 2, 0, D), ret(-W / 2, -W / 2 + 0.5, 0, 0.3), ret(W / 2 - 0.5, W / 2, 0, 0.3), ret(3.2, 4.2, 4.9, 7.5), ret(-3.3, 0.1, D - 1.05, D - 0.25));
-  const m = ret(-W / 2, W / 2, 0, D); itensMapa.push({ tipo: 'oficina', x0: m.x0, x1: m.x1, z0: m.z0, z1: m.z1 });
+  const cols = [ret(-W / 2, W / 2, D - 0.25, D), ret(-W / 2, -W / 2 + 0.25, 0, D), ret(W / 2 - 0.25, W / 2, 0, D), ret(-W / 2, -W / 2 + 0.5, 0, 0.3), ret(W / 2 - 0.5, W / 2, 0, 0.3), ret(3.2, 4.2, 4.9, 7.5), ret(-3.3, 0.1, D - 1.05, D - 0.25)];
+  colisores.push(...cols);
+  const m = ret(-W / 2, W / 2, 0, D), mapa = { tipo: 'oficina', x0: m.x0, x1: m.x1, z0: m.z0, z1: m.z1 }; itensMapa.push(mapa);
   o.balcao = W2(2.5, 6.2); o.vaga = { ...W2(-1.4, 5.2), ang: L.rot }; o.centro = W2(0, D / 2);
+  // para desmontar (oficina de jogador que mudou de nível ou foi vendida)
+  g.userData.desmontar = () => { scene.remove(g); for (const c of cols) { const k = colisores.indexOf(c); if (k >= 0) colisores.splice(k, 1); } const k = itensMapa.indexOf(mapa); if (k >= 0) itensMapa.splice(k, 1); };
   return g;
 }
 function montarOficinas() {
@@ -10260,26 +10270,138 @@ function montarOficinas() {
 function contextoOficina() {
   if (jogador.carro || jogador.dentroCasa || jogador.morto) return null;
   for (const o of OFICINAS) if (o.balcao && Math.hypot(o.balcao.x - jogador.pos.x, o.balcao.z - jogador.pos.z) < 2.6) return [`${o.nome}: pintura, motor e blindagem`, '🔧 Oficina', () => menuOficina(o)];
+  for (const t of TERRENOS_OFICINA) {
+    const o = t.oficina;
+    if (o?.balcao && Math.hypot(o.balcao.x - jogador.pos.x, o.balcao.z - jogador.pos.z) < 2.6) return [`${o.nome} (oficina de ${o.donoNome || 'jogador'}, nível ${o.nivel})`, '🔧 Oficina', () => menuOficina(o)];
+    if (!t.d && t.placa && Math.hypot(t.placa.x - jogador.pos.x, t.placa.z - jogador.pos.z) < 3) return ['terreno para oficina: 150.000', '🏗️ Terreno', () => menuTerreno(t)];
+  }
   return null;
 }
 function menuOficina(o) {
-  const preco = (b) => Math.round(b * o.mult);
+  const pct = (serv) => (o.jog ? o.jog[`pct_${serv}`] / 100 : o.mult), nivel = o.jog ? o.nivel : 3;
+  const preco = (b, serv) => Math.round(b * pct(serv));
+  if (o.jog && o.jog.dono === jogador.perfil.id) {   // dono: gerenciar ou atender
+    const temCarro = [...carrosMundo.values()].some((v) => v.d.dono === jogador.perfil.id && v.mesh.visible && Math.hypot(v.mesh.position.x - o.vaga.x, v.mesh.position.z - o.vaga.z) < 14);
+    if (!o.atender) { escolher(`🔧 ${o.nome}`, `Sua oficina, nível ${o.nivel}. Caixa: <b>${o.jog.caixa.toLocaleString('pt-BR')}</b> · ${o.jog.servicos} serviço(s).`, [
+      { rotulo: '⚙️ Gerenciar (preços, caixa, evoluir)', fn: () => gerenciarOficina(o) },
+      ...(temCarro ? [{ rotulo: '🚗 Serviço no meu carro', fn: () => { o.atender = true; menuOficina(o); o.atender = false; } }] : []),
+    ]); return; }
+  }
   const meus = [...carrosMundo.values()].filter((v) => v.d.dono === jogador.perfil.id && !v.d.ladrao && v.mesh.visible && Math.hypot(v.mesh.position.x - o.vaga.x, v.mesh.position.z - o.vaga.z) < 14);
   if (!meus.length) { aviso(`Traga o seu carro até a vaga da ${o.nome} (dentro do galpão). ${o.texto}`, 4.5); return; }
   const servico = (v, nome, fn) => fn().then((r) => {
     v.d = { ...v.d, cor: r.cor, motor: r.motor, blindado: r.blindado, blind_hp: r.blindado ? 1 : v.d.blind_hp, oficina_ate: r.pronto };
     jogador.perfil.moedas = Math.max(0, (jogador.perfil.moedas || 0) - r.preco); atualizarInfo(); tempoCarros = 0;
-    aviso(`🔧 ${nome} feito por ${r.preco.toLocaleString('pt-BR')} moedas.${r.pronto ? ' O carro fica 2 minutos na oficina.' : ''}`, 4);
+    aviso(`🔧 ${nome} feito por ${r.preco.toLocaleString('pt-BR')} moedas.${r.pronto ? ` O carro fica ${Math.max(1, Math.round((Date.parse(r.pronto) - agoraServidor()) / 60000))} min na oficina.` : ''}`, 4); if (o.jog) tempoOficinasJog = 0;
   }).catch((e) => aviso(e.message, 3));
   const escolherServico = (v) => {
     const nome = civico.CARROS[v.d.modelo]?.nome || 'carro', m = v.d.motor || 0, ops = [];
-    ops.push({ rotulo: `🎨 Pintura (${preco(2000).toLocaleString('pt-BR')})`, fn: () => escolher('🎨 Pintura', `Escolha a cor do ${nome}.`, CORES_PINTURA.map(([c, n]) => ({ rotulo: `${n}`, fn: () => servico(v, `Pintura ${n.toLowerCase()}`, () => rede.oficina.servico(v.d.id, o.id, 'pintura', c)) }))) });
-    if (m < 3) ops.push({ rotulo: `⚙️ Motor ${m + 1}: +${(m + 1) * 10}% de velocidade (${preco([8000, 20000, 45000][m]).toLocaleString('pt-BR')})`, fn: () => servico(v, `Motor ${m + 1}`, () => rede.oficina.servico(v.d.id, o.id, 'motor')) });
-    if (!(v.d.blindado && v.d.blind_hp > 0)) ops.push({ rotulo: `🛡️ ${v.d.blindado ? 'Refazer a blindagem' : 'Blindagem leve'} (${preco(v.d.blindado ? 15000 : 30000).toLocaleString('pt-BR')})`, fn: () => servico(v, 'Blindagem', () => rede.oficina.servico(v.d.id, o.id, 'blindagem')) });
+    ops.push({ rotulo: `🎨 Pintura (${preco(2000, 'pintura').toLocaleString('pt-BR')})`, fn: () => escolher('🎨 Pintura', `Escolha a cor do ${nome}.`, CORES_PINTURA.map(([c, n]) => ({ rotulo: `${n}`, fn: () => servico(v, `Pintura ${n.toLowerCase()}`, () => rede.oficina.servico(v.d.id, o.id, 'pintura', c)) }))) });
+    if (m < 3 && m < nivel) ops.push({ rotulo: `⚙️ Motor ${m + 1}: +${(m + 1) * 10}% de velocidade (${preco([8000, 20000, 45000][m], 'motor').toLocaleString('pt-BR')})`, fn: () => servico(v, `Motor ${m + 1}`, () => rede.oficina.servico(v.d.id, o.id, 'motor')) });
+    if (nivel >= 2 && !(v.d.blindado && v.d.blind_hp > 0)) ops.push({ rotulo: `🛡️ ${v.d.blindado ? 'Refazer a blindagem' : 'Blindagem leve'} (${preco(v.d.blindado ? 15000 : 30000, 'blindagem').toLocaleString('pt-BR')})`, fn: () => servico(v, 'Blindagem', () => rede.oficina.servico(v.d.id, o.id, 'blindagem')) });
     escolher(`🔧 ${o.nome}`, `${nome}${m ? ` · motor ${m}` : ''}${v.d.blindado ? ' · blindado' : ''}. ${o.texto} Pago da carteira.`, ops);
   };
   if (meus.length === 1) escolherServico(meus[0]);
   else escolher(`🔧 ${o.nome}`, 'Qual carro?', meus.map((v) => ({ rotulo: `🚗 ${civico.CARROS[v.d.modelo]?.nome || 'Carro'}`, fn: () => escolherServico(v) })));
+}
+// ---------------------------------------------------------------- oficinas dos jogadores (114): 8 terrenos fixos
+// Sem dono: terreno cercado com placa "à venda" (150.000). Com dono: galpão do nível dele (1 tijolo e zinco, 2 média,
+// 3 premium), preços do dono (70% a 200% da tabela) e lucro no caixa da oficina.
+const TERRENOS_OFICINA = [
+  [1, 'Metrópole Oeste', -243, -264.4, 0], [2, 'Metrópole Leste', 210.4, 189, -Math.PI / 2], [3, 'Metrópole Sudoeste', -221.6, 189, -Math.PI / 2],
+  [4, 'Metrópole Nordeste', 156.4, -297, -Math.PI / 2], [5, 'Metrópole Noroeste', -356, -318.4, 0], [6, 'Metrópole Leste (Avenida)', 243, -48.4, 0],
+  [7, 'Vila Serra', 0, -1047.4, 0], [8, 'Porto Sul', 10, 1004.6, 0],
+].map(([id, regiao, x, z, rot]) => { const dx = Math.round(Math.sin(rot)), dz = Math.round(Math.cos(rot)); return { id, regiao, L: { x, z, y: 0.18, rot, dx, dz, px: dz, pz: -dx }, d: null, g: null, oficina: null, assinatura: '' }; });
+const COR_NIVEL = ['#2e7d32', '#1f4e9c', '#1d1d1d'];
+let tempoOficinasJog = 3;
+function atualizarOficinasJog(dt) {
+  if ((tempoOficinasJog -= dt) > 0) return;
+  tempoOficinasJog = 30;
+  rede.oficinasJog.listar().then((lista) => {
+    const por = new Map((lista || []).map((d) => [d.terreno, d]));
+    for (const t of TERRENOS_OFICINA) {
+      const d = por.get(t.id) || null, ass = d ? `${d.nome}|${d.nivel}` : 'venda';
+      t.d = d; if (t.oficina && d) Object.assign(t.oficina, { jog: d, nivel: d.nivel, nome: d.nome, donoNome: nomeJogador(d.dono) });
+      if (ass === t.assinatura) continue;
+      t.assinatura = ass; t.g?.userData.desmontar?.(); t.g = null; t.oficina = null;
+      if (d) {
+        const o = { id: 'j' + t.id, nome: d.nome, cor: COR_NIVEL[d.nivel - 1], corTexto: '#ffffff', nivel: d.nivel, jog: d, donoNome: nomeJogador(d.dono),
+          texto: ['Nível 1: pintura e motor 1, o carro fica 2 min.', 'Nível 2: até motor 2 e blindagem, o carro fica 1 min.', 'Nível 3: tudo e na hora.'][d.nivel - 1] };
+        t.g = montarGalpaoOficina(o, t.L, d.nivel); t.oficina = o;
+      } else t.g = montarTerrenoVenda(t);
+    }
+    desenharFundoMapa();
+  }).catch(() => { tempoOficinasJog = 10; });
+}
+function nomeJogador(id) { if (id === jogador.perfil?.id) return jogador.perfil.nome; return remotos.get(id)?.meta?.nome || null; }
+function montarTerrenoVenda(t) {
+  const L = t.L, g = new THREE.Group(); g.position.set(L.x, L.y, L.z); g.rotation.y = L.rot; scene.add(g);
+  const terra = new THREE.Mesh(new THREE.BoxGeometry(9.4, 0.05, 10.6), new THREE.MeshStandardMaterial({ color: '#8a7a5c', roughness: 1 })); terra.position.set(0, 0.03, 5.3); terra.receiveShadow = true; g.add(terra);
+  const tela = new THREE.MeshStandardMaterial({ color: '#2e7d32', roughness: 0.7, transparent: true, opacity: 0.8 });
+  for (const [w, x, z, ry] of [[10.6, -4.7, 5.3, Math.PI / 2], [10.6, 4.7, 5.3, Math.PI / 2], [9.4, 0, 10.6, 0]]) { const c = new THREE.Mesh(new THREE.PlaneGeometry(w, 1.6), tela); c.position.set(x, 0.8, z); c.rotation.y = ry; tela.side = THREE.DoubleSide; g.add(c); }
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256; const c2 = cv.getContext('2d');
+  c2.fillStyle = '#f1c40f'; c2.fillRect(0, 0, 512, 256); c2.fillStyle = '#1d1d1d'; c2.textAlign = 'center';
+  c2.font = '900 54px system-ui, sans-serif'; c2.fillText('🔧 VENDE-SE', 256, 78); c2.font = '700 38px system-ui, sans-serif'; c2.fillText('Terreno para oficina', 256, 140); c2.font = '900 50px system-ui, sans-serif'; c2.fillText('150.000', 256, 212);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
+  const placa = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.3), new THREE.MeshStandardMaterial({ map: tx, roughness: 0.6, side: THREE.DoubleSide })); placa.position.set(2.4, 2.1, 0.6); placa.rotation.y = Math.PI; g.add(placa);
+  for (const sx of [1.3, 3.5]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.1, 0.1).translate(0, 1.05, 0), new THREE.MeshStandardMaterial({ color: '#5d6266' })); p.position.set(sx, 0, 0.62); g.add(p); }
+  t.placa = { x: L.x + L.px * 2.4 - L.dx * 0.6, z: L.z + L.pz * 2.4 - L.dz * 0.6 };
+  const mapa = {};
+   const a = { x: L.x + L.px * -4.7, z: L.z + L.pz * -4.7 }, b = { x: L.x + L.px * 4.7 + L.dx * 10.6, z: L.z + L.pz * 4.7 + L.dz * 10.6 };
+  Object.assign(mapa, { tipo: 'terrenoOficina', x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z) }); itensMapa.push(mapa);
+  g.userData.desmontar = () => { scene.remove(g); const k = itensMapa.indexOf(mapa); if (k >= 0) itensMapa.splice(k, 1); };
+  return g;
+}
+// janelinha com campos (reaproveita a janela de escolha)
+function formulario(titulo, texto, campos, botoes) {
+  escolher(titulo, texto, []);
+  const c = $('escolhaConteudo');
+  c.insertAdjacentHTML('beforeend', campos.map((f) => `<label style="display:block;margin:6px 0">${f.rotulo}<br><input id="form_${f.id}" ${f.tipo === 'num' ? `type="number" inputmode="numeric" min="${f.min}" max="${f.max}"` : 'maxlength="24"'} value="${f.valor ?? ''}" style="width:100%;box-sizing:border-box"></label>`).join('')
+    + `<p class="dica" id="formMsg"></p>` + botoes.map((b, k) => `<div class="botoes"><button data-fb="${k}" style="flex:1">${b.rotulo}</button></div>`).join(''));
+  for (const f of campos) $('form_' + f.id).addEventListener('keydown', (e) => e.stopPropagation());
+  const val = () => Object.fromEntries(campos.map((f) => [f.id, f.tipo === 'num' ? Math.floor(Number($('form_' + f.id).value) || 0) : $('form_' + f.id).value.trim()]));
+  c.querySelectorAll('[data-fb]').forEach((b) => { b.onclick = async () => {
+    const bt = botoes[Number(b.dataset.fb)];
+    if (bt.confirmar && b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Toque de novo para confirmar'; return; }
+    try { const r = await bt.fn(val()); $('escolhaJanela').classList.add('oculto'); if (r) aviso(r, 4); }
+    catch (e) { $('formMsg').textContent = e.message; $('formMsg').style.color = '#ff7b72'; }
+  }; });
+}
+function menuTerreno(t) {
+  if (TERRENOS_OFICINA.some((x) => x.d?.dono === jogador.perfil.id)) { aviso('Você já tem uma oficina. Cada jogador pode ter uma.', 3.5); return; }
+  formulario(`🏗️ Terreno para oficina · ${t.regiao}`, 'Compre por <b>150.000</b> (da carteira) e abra a sua oficina: você define os preços (70% a 200% da tabela) e fica com o lucro de cada serviço (as peças custam metade da tabela). Começa no nível 1 e evolui no balcão.',
+    [{ id: 'nome', rotulo: 'Nome da oficina (3 a 24 letras)', valor: `Oficina do ${jogador.perfil.nome}`.slice(0, 24) }],
+    [{ rotulo: '🔧 Comprar por 150.000', confirmar: true, fn: async (v) => { await rede.oficinasJog.comprar(t.id, v.nome); jogador.perfil.moedas -= 150000; atualizarInfo(); tempoOficinasJog = 0; return `🔧 ${v.nome} é sua! O galpão aparece no terreno em instantes. No balcão: ⚙️ Gerenciar.`; } }]);
+}
+function gerenciarOficina(o) {
+  const d = o.jog, prox = d.nivel < 3 ? [100000, 250000][d.nivel - 1] : 0;
+  const tab = (pc) => `pintura ${Math.round(2000 * pc / 100).toLocaleString('pt-BR')}`;
+  formulario(`⚙️ ${o.nome}`, `Nível <b>${d.nivel}</b> · caixa <b>${d.caixa.toLocaleString('pt-BR')}</b> · ${d.servicos} serviço(s).<br>Preços em % da tabela (70 a 200). Tabela: pintura 2.000; motor 8.000 / 20.000 / 45.000; blindagem 30.000. Agora: ${tab(d.pct_pintura)}.<br>${d.nivel < 3 ? `Evoluir para o nível ${d.nivel + 1}: <b>${prox.toLocaleString('pt-BR')}</b> (${d.nivel === 1 ? 'motor 2, blindagem e o carro fica só 1 min' : 'motor 3, serviço na hora e galpão premium'}).` : 'Nível máximo.'}`,
+    [{ id: 'pin', rotulo: '🎨 Pintura (%)', tipo: 'num', min: 70, max: 200, valor: d.pct_pintura }, { id: 'mot', rotulo: '⚙️ Motor (%)', tipo: 'num', min: 70, max: 200, valor: d.pct_motor },
+      { id: 'bli', rotulo: '🛡️ Blindagem (%)', tipo: 'num', min: 70, max: 200, valor: d.pct_blindagem }, { id: 'saq', rotulo: '💰 Sacar do caixa para a carteira', tipo: 'num', min: 1, max: d.caixa, valor: d.caixa || '' }],
+    [{ rotulo: '💾 Salvar preços', fn: async (v) => { await rede.oficinasJog.precos(v.pin, v.mot, v.bli); tempoOficinasJog = 0; return '💾 Preços salvos.'; } },
+      { rotulo: '💰 Sacar', fn: async (v) => { await rede.oficinasJog.sacar(v.saq); jogador.perfil.moedas += v.saq; atualizarInfo(); tempoOficinasJog = 0; return `💰 ${v.saq.toLocaleString('pt-BR')} na sua carteira.`; } },
+      ...(d.nivel < 3 ? [{ rotulo: `⬆️ Evoluir para o nível ${d.nivel + 1} (${prox.toLocaleString('pt-BR')})`, confirmar: true, fn: async () => { const n = await rede.oficinasJog.evoluir(); jogador.perfil.moedas -= prox; atualizarInfo(); tempoOficinasJog = 0; return `⬆️ Oficina no nível ${n}! O galpão muda em instantes.`; } }] : []),
+      { rotulo: '🏷️ Vender a oficina (metade do investido + caixa)', confirmar: true, fn: async () => { const v = await rede.oficinasJog.vender(); jogador.perfil.moedas += v; atualizarInfo(); tempoOficinasJog = 0; return `🏷️ Oficina vendida: +${v.toLocaleString('pt-BR')}.`; } }]);
+}
+// ---------------------------------------------------------------- reboque automático (113): carro parado 30 min na rua
+// vai para o estacionamento mais perto dele. Qualquer jogador on-line dispara; o banco confere os 30 min e avisa o dono.
+let tempoReboque = 40;
+function rebocarAbandonados() {
+  if (!jogador.perfil || !ESTACIONAMENTOS.length) return;
+  const agora = agoraServidor(); let feitos = 0;
+  for (const v of carrosMundo.values()) {
+    const d = v.d;
+    if (feitos >= 3 || !d.parado_em || d.no_patio || d.ladrao || d.queimado || ['helicoptero', 'presidencial'].includes(d.modelo)) continue;
+    if (agora - Date.parse(d.parado_em) < 30.5 * 60000 || (d.oficina_ate && Date.parse(d.oficina_ate) > agora) || jogador.carro?.id === d.id) continue;
+    let e = null, dm = Infinity;
+    for (const k of ESTACIONAMENTOS) { const dd = Math.hypot(k.vaga.x - d.x, k.vaga.z - d.z); if (dd < dm) { dm = dd; e = k; } }
+    if (!e || dm < 12) continue;   // já está num estacionamento
+    const livre = (dx) => ![...carrosMundo.values()].some((c) => c !== v && Math.hypot(c.d.x - e.vaga.x - dx, c.d.z - e.vaga.z) < 3);
+    const dx = [0, -5.5, 5.5, -11, 11].find(livre) ?? 0;
+    feitos++;
+    rede.carros.rebocar(d.id, e.vaga.x + dx, e.vaga.z, e.vaga.ang).then((ok) => { if (ok) tempoCarros = 0; }).catch(() => {});
+  }
 }
 // ---------------------------------------------------------------- concessionária online 🛒 (111): +15%, entrega no estacionamento
 const MODELOS_ONLINE = ['popular', 'saveiro', 'saveiro_som', 'suv', 'esportivo', 'classico'];
@@ -10311,6 +10433,7 @@ function lugaresCelular() {
     const l = LOTES_VENDA.find((x) => x.id === lote); if (!l) continue;
     emp.push({ icone: '🏭', nome: e.nome, info: e.dono === eu ? 'sua empresa' : 'onde você trabalha', x: l.portao.x, z: l.portao.z - 1.5 });
   }
+  for (const t of TERRENOS_OFICINA) if (t.d?.dono === eu && t.oficina?.balcao) emp.push({ icone: '🔧', nome: t.d.nome, info: `sua oficina · nível ${t.d.nivel} · caixa ${t.d.caixa.toLocaleString('pt-BR')}`, x: t.oficina.balcao.x, z: t.oficina.balcao.z });
   for (const d of casasLista) if (moraEm(d)) casas.push({ icone: '🏠', nome: d.rotulo || 'Minha casa', info: d.dono === eu ? 'sua' : 'alugada', x: d.x, z: d.z });
   let cla = null;
   if (jogador.cla) {
