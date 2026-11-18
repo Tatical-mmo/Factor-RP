@@ -1110,6 +1110,20 @@ export const aviacao = {
 
 // ---------------------------------------------------------------- jujubas (ração militar), licitação e comprador ilegal
 // logo das empresas na lona do baú (106): imagem própria (passa por avaliação) ou logo pronta do jogo
+// música da Saveiro com som enviada do celular (119): uma por jogador, a anterior é apagada
+export const musicas = {
+  enviar: async (arquivo) => {
+    const eu = (await sb.auth.getUser()).data.user?.id; if (!eu) throw new Error('Faça login.');
+    if (arquivo.size > 10 * 1024 * 1024) throw new Error('Música grande demais (máximo 10 MB).');
+    const ext = (arquivo.name.match(/\.(mp3|m4a|aac|ogg|wav)$/i)?.[1] || 'mp3').toLowerCase();
+    try { const { data } = await sb.storage.from('musicas').list(eu); if (data?.length) await sb.storage.from('musicas').remove(data.map((f) => `${eu}/${f.name}`)); } catch { /* sem anterior */ }
+    const caminho = `${eu}/${Date.now()}.${ext}`;
+    const tipo = arquivo.type || (ext === 'mp3' ? 'audio/mpeg' : ext === 'm4a' ? 'audio/mp4' : `audio/${ext}`);
+    const { error } = await sb.storage.from('musicas').upload(caminho, arquivo, { contentType: tipo, upsert: false });
+    if (error) throw new Error(error.message?.includes('row-level security') ? 'Só quem tem a Saveiro com som pode enviar música.' : /mime|type/i.test(error.message || '') ? 'Formato não aceito: use MP3.' : traduzir(error));
+    return sb.storage.from('musicas').getPublicUrl(caminho).data.publicUrl;
+  },
+};
 export const logos = {
   lista: () => sel(sb.from('empresa_logos').select('empresa, tipo, url, pronta, cor, status, motivo')),
   painel: () => rpc('logos_painel'),

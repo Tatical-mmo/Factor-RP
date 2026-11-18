@@ -16641,8 +16641,19 @@ async function desenharTatica() {
     $('taticaTitulo').textContent = '🔊 Som da Saveiro';
     c.innerHTML = `<p class="dica">Cole um link <b>https</b> direto de um arquivo de música (MP3). Quem estiver perto (até 80 m) ouve, e o anúncio aparece em cima do carro: use para festas, reuniões e empresas.</p>
       <p class="dica" style="color:#ffb3b3"><b>⚠️ Nada de música proibida</b> (apologia ao crime, ódio, conteúdo adulto). Todo link fica registrado e, se a moderação pegar, é <b>ban</b>.</p>
+      <div class="botoes"><button id="tSomArq">📁 Enviar MP3 do celular</button><input id="tSomFile" type="file" accept="audio/*,.mp3,.m4a" style="display:none"></div>
+      <p class="dica" id="tSomMsg">Escolha uma música do seu aparelho (até 10 MB). Ela fica guardada até você enviar outra. Ou cole um link https direto de MP3:</p>
       <div class="form"><input id="tSomUrl" placeholder="https://…/musica.mp3" value="${esc(somAtivo?.url || '')}"><input id="tSomTxt" maxlength="60" placeholder="Anúncio (opcional): Festa hoje na Favela do Porto!" value="${esc(somAtivo?.txt || '')}"></div>
       <div class="botoes"><button id="tSomTocar">▶️ Tocar</button><button id="tSomParar">⏹ Parar</button></div>`;
+    $('tSomArq').onclick = () => $('tSomFile').click();
+    $('tSomFile').onchange = async () => {
+      const f = $('tSomFile').files?.[0]; if (!f) return;
+      const msg = $('tSomMsg'); msg.textContent = `⏳ Enviando "${f.name}"…`;
+      try { const url = await rede.musicas.enviar(f); $('tSomUrl').value = url; msg.textContent = '✅ Música enviada. Tocando…'; tocarSom(url, $('tSomTxt').value); }
+      catch (e) { msg.textContent = `❌ ${e.message}`; }
+      $('tSomFile').value = '';
+    };
+    for (const id of ['tSomUrl', 'tSomTxt']) $(id).addEventListener('keydown', (e) => e.stopPropagation());
     $('tSomTocar').onclick = () => tocarSom($('tSomUrl').value, $('tSomTxt').value);
     $('tSomParar').onclick = () => pararSom();
     return;
