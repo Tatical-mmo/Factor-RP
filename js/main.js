@@ -1017,6 +1017,16 @@ const ANIM_LANC = ['lanc_mirar', 'lanc_tiro', 'lanc_recarga'];
 // farda completa (19i): em serviço o personagem inteiro vira a farda da corporação; os NPCs dela também usam
 const SKIN_FARDA = { exercito: 'Farda_Exercito', marinha: 'Farda_Marinha', aeronautica: 'Farda_Aeronautica', paraquedista: 'Farda_Paraquedista', policia: 'Farda_Policia', prf: 'Farda_PRF', bope: 'Farda_BOPE' };
 const ehSkinFarda = (id) => /^Farda_/.test(id || '');
+// bombeiros e médicos (19j): a farda muda com a patente; no hospital dá para escolher farda masculina ou feminina
+const FARDA_FALTA = new Set(['Farda_Medica_1', 'Farda_Medica_3']);   // ainda sem o arquivo: usa a masculina do mesmo nível
+function skinDaFarda(papel, patente, sexo) {
+  if (papel === 'bombeiro') return ['Capitão', 'Comandante'].includes(patente) ? 'Farda_Bombeiro_Comandante' : ['Cabo', 'Sargento', 'Tenente'].includes(patente) ? 'Farda_Bombeiro_Medio' : 'Farda_Bombeiro_Inicial';
+  if (papel === 'medico') {
+    const n = patente === 'Diretor' ? 3 : patente === 'Doutor' || patente === 'Supervisor' ? 2 : 1, f = `Farda_Medica_${n}`;
+    return sexo === 'f' && !FARDA_FALTA.has(f) ? f : `Farda_Medico_${n}`;
+  }
+  return SKIN_FARDA[papel] || null;
+}
 for (const n of ANIM_LANC) ANIM_EXTRAS.add(n);
 const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
@@ -3596,7 +3606,7 @@ function conectarMultiplayer(perfil) {
 }
 
 // o que o outro jogador mostra: a farda (em serviço) ou o personagem dele
-function skinRemota(meta) { return SKIN_FARDA['farda' in (meta || {}) ? meta.farda : fardaDe(meta)] || meta?.personagem; }
+function skinRemota(meta) { return skinDaFarda('farda' in (meta || {}) ? meta.farda : fardaDe(meta), meta?.patente, meta?.sf) || meta?.personagem; }
 async function adicionarRemoto(id, meta) {
   const r = { meta, av: null, arma: null, alvo: null, anim: '', caixa: null };
   remotos.set(id, r);
@@ -4404,7 +4414,7 @@ async function npcFardado(papel, i, arma, farda) {
 function metaPresenca() {
   const p = jogador.perfil;
   return { mk: jogador.mascara || 0, rd: jogador.rendido ? 1 : 0, ceu: jogador.noCeu ? 1 : 0, bope: !!p.bope, invis: !!p.invisivel, som: somAtivo ? { url: somAtivo.url, txt: somAtivo.txt } : null, emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
-    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
+    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, sf: sexoFarda(), on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
 function etiquetaStatus(r) {
@@ -6570,7 +6580,7 @@ function marcasSocorro() {
 }
 const socorristas = [];
 async function socorristaNpc(amb, alvo, atender, liberar) {
-  let av = null; try { av = await criarAvatar('personagens', Math.random() < 0.5 ? 'Enfermeiro' : 'Enfermeira'); } catch { /* sem modelo: atende sem descer */ }
+  let av = null; try { av = await criarAvatar('personagens', skinDaFarda('medico', 'Socorrista', Math.random() < 0.5 ? 'f' : 'm')); } catch { /* sem modelo: atende sem descer */ }
   if (!av) { setTimeout(() => { atender(); setTimeout(liberar, 2500); }, 2500); return; }
   const a = amb.rotation.y, porta = { x: amb.position.x - Math.sin(a) * 4.2, z: amb.position.z - Math.cos(a) * 4.2 };
   av.raiz.position.set(porta.x, alturaChao(porta.x, porta.z), porta.z); scene.add(av.raiz); avataresObra.add(av);
@@ -12079,11 +12089,16 @@ function vestiario(trabalho) {
   else { aviso(`Só quem está no expediente ${trabalho ? `(${trabalho}) ` : ''}veste a farda. Entre em serviço primeiro.`, 3.5); return; }
   if (souEquipe() && jogador.farda) opcoes.push({ rotulo: 'Tirar a farda', fn: () => definirFarda(null) });
   if (jogador.farda || p) { const e = escudoAtual(); opcoes.unshift({ rotulo: e >= ESCUDO_MAX ? '🛡️ Colete inteiro (100%)' : `🛡️ Pegar colete novo (escudo ${Math.round(e)}% → 100%)`, fn: () => { if (e < ESCUDO_MAX) trocarColete(); } }); }
+  if (p === 'medico' || (souEquipe() && jogador.farda === 'medico')) {   // hospital: farda masculina ou feminina (fica guardada)
+    const f = sexoFarda() === 'f';
+    opcoes.push({ rotulo: f ? '🚹 Usar a farda masculina' : '🚺 Usar a farda feminina', fn: () => { try { localStorage.setItem('fator_sexo_farda', f ? 'm' : 'f'); } catch { /* sem armazenamento */ } conexao?.rastrear(metaPresenca()); aviso(f ? '👔 Farda masculina escolhida.' : '👔 Farda feminina escolhida.', 2.5); } });
+  }
   escolher('👔 Vestiário', souEquipe() ? 'Equipe: escolha qualquer farda.' : 'Sua farda de trabalho:', opcoes);
 }
 // personagem que o jogador mostra: a farda da corporação (em serviço) ou o personagem escolhido
 let tentouSkin = 0;
-const skinDoJogador = () => SKIN_FARDA[jogador.farda] || skinAtual();
+const skinDoJogador = () => skinDaFarda(jogador.farda, jogador.patente, sexoFarda()) || skinAtual();
+function sexoFarda() { try { return localStorage.getItem('fator_sexo_farda') === 'f' ? 'f' : 'm'; } catch { return 'm'; } }
 function atualizarUniformes() {
   seguirExpediente();
   if (jogador.avatar && jogador.perfil && !trocandoAvatar && !editorFarda && performance.now() > tentouSkin) { const sk = skinDoJogador(); if (sk && jogador.avatar.personagemId !== sk) { tentouSkin = performance.now() + 5000; trocarAvatar(sk).catch(() => {}); } }
