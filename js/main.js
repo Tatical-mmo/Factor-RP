@@ -16281,6 +16281,7 @@ function receberTravado(e) { if (e.alvo === jogador.perfil?.id) { aviso(e.k ? `�
 function receberMissilAcerto(e) {
   const m = misseis.find((x) => x.id === e.id); if (m) { efeitoExplosao(m.mesh.position.x, m.mesh.position.y, m.mesh.position.z, 1.2, false); scene.remove(m.mesh); misseis.splice(misseis.indexOf(m), 1); }
   if (e.alvo !== jogador.perfil?.id) return;
+  if (e.terra) { const c = jogador.carro; if (c && !c.voa && !c.explodiu) acidenteVeiculo(c, '💥 Um foguete explodiu o veículo!'); return; }   // 19w: carro, moto, caminhão…
   if (e.dano) { danoAeronave(Number(e.dano) || 0, 'foguete'); return; }
   const c = jogador.carro; if (c?.voa && !c.explodiu) acidenteVeiculo(c, '💥 Abatido por um míssil do Exército!');
 }
@@ -16397,6 +16398,13 @@ function fogueteAtualizar(m) {
     const o = aeronaveRemota(r); if (!o) continue;
     if (p.distanceTo(o.position) < (civico.CARROS[r.carroModelo]?.jato ? 5.5 : 4.5)) { bateu = id; break; }
   }
+  // 19w: explode também ao bater em muro, prédio, casa ou veículo (o que estiver na frente)
+  if (!bateu && !fim && m.t > 0.06) {
+    if (bloqueado(p.x, p.z, true)) { const t = topoEm(p.x, p.z); if (t == null || p.y < t + 0.2) fim = true; }
+    if (!fim) for (const [, r] of remotos) { if (r.carro && !aeronaveRemota(r) && p.distanceTo(_vF.copy(r.carro.position).setY(r.carro.position.y + 1)) < 2.6) { fim = true; break; } }
+    if (!fim) for (const v of carrosMundo.values()) { if (v.mesh?.visible && p.distanceTo(_vF.copy(v.mesh.position).setY(v.mesh.position.y + 0.9)) < 2.4) { fim = true; break; } }
+    if (!fim && jogador.carro?.mesh && !m.meu && p.distanceTo(_vF.copy(jogador.carro.mesh.position).setY(jogador.carro.mesh.position.y + 1)) < 2.6) fim = true;
+  }
   if (!m.meu) { if (fim) efeitoExplosao(p.x, p.y, p.z, 0.8, false); return fim; }
   if (!bateu && !fim) for (const [, r] of remotos) { if (r.av?.raiz.visible && !r.carro && p.distanceTo(r.av.raiz.position) < 1.4) { fim = true; break; } }
   if (bateu) { conexao?.enviar('missilAcerto', { id: m.id, alvo: bateu, de: m.de, dano: m.dano }); aviso('💥 Acertou a aeronave!', 2.5); }
@@ -16404,10 +16412,17 @@ function fogueteAtualizar(m) {
   return false;
 }
 // explosão do foguete: raio de 4 m em quem está a pé (jogadores, policiais e moradores)
+const _vF = new THREE.Vector3();
 function explosaoFoguete(p, dano, menos) {
   efeitoExplosao(p.x, p.y, p.z, 1.1, false);
   const ok = (q) => { const d = p.distanceTo(q.clone().add(new THREE.Vector3(0, 1, 0))); return d < 4 ? Math.round(dano * (1 - d / 5)) : 0; };
-  for (const [id, r] of remotos) { if (id === menos || r.carro || !r.av?.raiz.visible) continue; const v = ok(r.av.raiz.position); if (v > 0) aplicarDanoRemoto(id, v); }
+  for (const [id, r] of remotos) {
+    if (id === menos || !r.av?.raiz.visible && !r.carro) continue;
+    if (r.carro) { if (!aeronaveRemota(r) && p.distanceTo(_vF.copy(r.carro.position).setY(r.carro.position.y + 1)) < 4.5) conexao?.enviar('missilAcerto', { id: 'x', alvo: id, de: jogador.perfil.id, terra: 1 }); continue; }   // veículo no raio: explode (quem dirige decide)
+    const v = ok(r.av.raiz.position); if (v > 0) aplicarDanoRemoto(id, v);
+  }
+  // muito perto de quem atirou (tiro no chão ou na parede à frente): machuca e pode matar
+  if (!jogador.carro && !jogador.morto) { const v = ok(jogador.pos); if (v > 0 && !jogador.perfil?.imortal) { jogador.vida -= absorverEscudo(v); desenharFome(); if (jogador.vida <= 0) morrerLocal(); else aviso('💥 A explosão do seu foguete te atingiu!', 2.5); } }
   for (const n of npcs) { if (n.caido > 0 || !n.av.raiz.visible) continue; const v = ok(n.av.raiz.position); if (v <= 0) continue; if (n.policia) acertarPoliciaNPC(n, v); else if (n.civil) acertarCivil(n, v); }
 }
 // vida da minha aeronave: "bala" (fuzil, ponto 50) ou "foguete" (RPG, bazuca). O helicóptero do Exército tem blindagem leve:
