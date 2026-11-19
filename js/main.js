@@ -1333,7 +1333,7 @@ canvas.addEventListener('pointermove', (e) => {
   const ant = ponteiros.get(e.pointerId);
   if (miraM.ativo && ponteiros.size === 1 && podeMiraManual()) {   // mira manual: arrastar vira o personagem e sobe/desce a mira
     const k = e.pointerType === 'mouse' ? 0.004 : 0.006, dx = e.clientX - ant.x, dy = e.clientY - ant.y;
-    jogador.yaw -= dx * k; miraM.pitch = THREE.MathUtils.clamp(miraM.pitch - dy * k, -0.75, 0.9);
+    jogador.yaw -= dx * k; miraM.pitch = THREE.MathUtils.clamp(miraM.pitch - dy * k, -0.75, ARMAS[jogador.armaTipo || 'basica']?.lanca ? 1.3 : 0.9);   // lançador mira bem mais para cima (aeronaves)
     ponteiros.set(e.pointerId, { ...ant, x: e.clientX, y: e.clientY, mov: (ant.mov || 0) + 99 }); return;
   }
   if (p50.ativo && ponteiros.size === 1 && heliP50()) {   // ponto 50 ligada: arrastar mira (para os lados e para cima/baixo)
@@ -16370,7 +16370,7 @@ function dispararFoguete(A, alvoChao) {
   if (qtdItem('foguete') < 1) { aviso('🚀 Sem foguetes. Militares pegam no Arsenal; clãs compram com o contrabandista.', 3); return; }
   const rr = lanc.ok && lanc.alvo ? remotos.get(lanc.alvo) : null, o = aeronaveRemota(rr);
   if (o) jogador.yaw = Math.atan2(o.position.x - jogador.pos.x, o.position.z - jogador.pos.z);
-  else if (alvoChao) jogador.yaw = Math.atan2(alvoChao.x - jogador.pos.x, alvoChao.z - jogador.pos.z);
+  else if (miraM.ativo && podeMiraManual()) { /* mira manual: mantém para onde está virado */ } else if (alvoChao) jogador.yaw = Math.atan2(alvoChao.x - jogador.pos.x, alvoChao.z - jogador.pos.z);
   jogador.avatar.raiz.rotation.y = jogador.yaw; jogador.avatar.raiz.updateMatrixWorld(true);
   const boca = jogador.arma && modelos[A.modelo] ? jogador.arma.localToWorld(new THREE.Vector3(...A.boca)) : jogador.pos.clone().add(new THREE.Vector3(Math.sin(jogador.yaw) * 0.6, 1.5, Math.cos(jogador.yaw) * 0.6));
   let dir;
@@ -16378,7 +16378,8 @@ function dispararFoguete(A, alvoChao) {
     const alvo = o.position.clone().add(new THREE.Vector3(0, 1.2, 0));
     if (A.lanca === 'baz' && rr.vAero) for (let k = 0; k < 3; k++) { const t = alvo.distanceTo(boca) / 75; alvo.copy(o.position).add(new THREE.Vector3(0, 1.2, 0)).addScaledVector(rr.vAero, t); }   // onde ela vai estar
     dir = alvo.sub(boca).normalize();
-  } else dir = new THREE.Vector3(Math.sin(jogador.yaw), 0.04, Math.cos(jogador.yaw)).normalize();
+  } else if (miraM.ativo && podeMiraManual()) dir = direcaoMira();   // sem trava, com a mira manual: vai exatamente pelos pontinhos
+  else dir = new THREE.Vector3(Math.sin(jogador.yaw), 0.04, Math.cos(jogador.yaw)).normalize();
   const vel = dir.multiplyScalar(A.vel), id = jogador.perfil.id.slice(0, 6) + Date.now().toString(36);
   const m = { id, de: jogador.perfil.id, alvo: o && A.lanca === 'rpg' ? lanc.alvo : null, mira: o ? lanc.alvo : null, pos: boca.clone(), vel, meu: true, k: A.lanca, dano: A.dano };
   lancarMissil(m);
@@ -16455,7 +16456,7 @@ function balaNaAeronave(b) {
 // Os pontinhos vermelhos mostram o caminho exato da bala (com a queda da arma); o tiro sai exatamente por ali,
 // sem mira assistida. O tronco do personagem inclina junto.
 const miraM = { ativo: false, pitch: 0, pontos: null, fim: null };
-function podeMiraManual() { const j = jogador; return !!(j.avatar && j.armado && !j.carro && !j.passageiro && !j.morto && !ARMAS[j.armaTipo || 'basica']?.lanca); }
+function podeMiraManual() { const j = jogador; return !!(j.avatar && j.armado && !j.carro && !j.passageiro && !j.morto); }   // 19v: RPG e bazuca também
 function direcaoMira() { const p = miraM.pitch, y = jogador.yaw; return new THREE.Vector3(Math.sin(y) * Math.cos(p), Math.sin(p), Math.cos(y) * Math.cos(p)); }
 function bocaDaArma() { const A = ARMAS[jogador.armaTipo || 'basica']; return jogador.arma.localToWorld(new THREE.Vector3(...(modelos[A.modelo] ? A.boca : ARMAS.basica.boca))); }
 function inclinarMira(av) {
@@ -16468,7 +16469,7 @@ function inclinarColuna(av, pitch) {
   av.coluna ||= av.raiz.getObjectByName('mixamorigSpine2') || av.raiz.getObjectByName('mixamorigSpine1');
   if (!av.coluna) return;
   av.colunaAntes = av.coluna.quaternion.clone();
-  av.coluna.rotateX(-pitch * 0.8); av.raiz.updateMatrixWorld(true);
+  av.coluna.rotateX(-THREE.MathUtils.clamp(pitch, -0.75, 0.9) * 0.8); av.raiz.updateMatrixWorld(true);   // o tronco inclina até ~40°; o resto é o braço/arma
 }
 function botaoMira(mostra) {
   let b = $('btMiraM');
@@ -16497,8 +16498,8 @@ function atualizarMiraManual() {
     miraM.fim = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.3, 20), new THREE.MeshBasicMaterial({ color: '#ff3030', transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false })); miraM.fim.renderOrder = 5; miraM.fim.visible = false; scene.add(miraM.fim);
   }
   if (!on) { for (const s of miraM.pontos) s.visible = false; miraM.fim.visible = false; return; }
-  const A = ARMAS[jogador.armaTipo || 'basica'], dourada = tenhoArmaPd(), vel = dourada ? 34 : A.vel, g = 9.8 * (dourada ? 1 : A.grav ?? 1);
-  const vida = Math.min(4, (A.alc || 40) / vel), p = bocaDaArma(), v = direcaoMira().multiplyScalar(vel), dt = vida / miraM.pontos.length;
+  const A = ARMAS[jogador.armaTipo || 'basica'], dourada = tenhoArmaPd(), vel = dourada ? 34 : A.vel, g = A.lanca ? 0 : 9.8 * (dourada ? 1 : A.grav ?? 1);   // foguete vai reto
+  const vida = A.lanca ? 260 / vel : Math.min(4, (A.alc || 40) / vel), p = bocaDaArma(), v = direcaoMira().multiplyScalar(vel), dt = vida / miraM.pontos.length;
   let acabou = false;
   for (const s of miraM.pontos) {
     if (acabou) { s.visible = false; continue; }
