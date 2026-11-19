@@ -2145,10 +2145,10 @@ const ARMAS = {
   rpg: { cod: 9, lanca: 'rpg', modelo: 'arma_rpg', comp: 1.0, reserva: 'arma_militar', dano: 55, recarga: 3, vel: 45, cor: '#7a8a4a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.55] },
   bazuca: { cod: 10, lanca: 'baz', modelo: 'arma_bazuca', comp: 1.3, reserva: 'arma_militar', dano: 90, recarga: 5, vel: 60, cor: '#3f5233', pega: [0, 0.02, 0], boca: [0, 0.02, 0.75] },
   // armas laser do laboratório (19q): só com a armadura vestida; pente de 10 e 10 s de recarga; o cano do modelo vem em -x
-  laser_azul: { cod: 12, laser: true, alc: 160, grav: 0.03, modelo: 'laser_azul', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 30, recarga: 0.18, vel: 70, cor: '#3ec8ff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
-  laser_roxo: { cod: 13, laser: true, alc: 160, grav: 0.03, modelo: 'laser_roxo', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 34, recarga: 0.22, vel: 70, cor: '#b14bff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
-  laser_vermelho: { cod: 14, laser: true, alc: 160, grav: 0.03, modelo: 'laser_vermelho', comp: 1.1, vira: true, reserva: 'arma_militar', dano: 40, recarga: 0.3, vel: 66, cor: '#ff3b3b', pega: [0, 0.02, 0], boca: [0, 0.02, 0.74], bola: 1.5 },
-  laser_energia: { cod: 15, laser: true, alc: 170, grav: 0.03, modelo: 'laser_energia', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 36, recarga: 0.24, vel: 72, cor: '#7dff5a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
+  laser_azul: { cod: 12, laser: true, alc: 140, grav: 0.03, modelo: 'laser_azul', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 30, recarga: 0.18, vel: 70, cor: '#3ec8ff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
+  laser_roxo: { cod: 13, laser: true, alc: 140, grav: 0.03, modelo: 'laser_roxo', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 34, recarga: 0.22, vel: 70, cor: '#b14bff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
+  laser_vermelho: { cod: 14, laser: true, alc: 140, grav: 0.03, modelo: 'laser_vermelho', comp: 1.1, vira: true, reserva: 'arma_militar', dano: 40, recarga: 0.3, vel: 66, cor: '#ff3b3b', pega: [0, 0.02, 0], boca: [0, 0.02, 0.74], bola: 1.5 },
+  laser_energia: { cod: 15, laser: true, alc: 140, grav: 0.03, modelo: 'laser_energia', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 36, recarga: 0.24, vel: 72, cor: '#7dff5a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
   ponto50: { cod: 11, alc: 220, grav: 0.1, modelo: 'arma_ponto50', dano: 34, recarga: 0.12, vel: 90, cor: '#ffcc33' },
   fuzil: { cod: 8, alc: 130, grav: 0.18, modelo: 'arma_fuzil', comp: 0.95, vira: true, reserva: 'arma_militar', dano: 26, recarga: 0.11, vel: 42, cor: '#d9dde3', pega: [0, 0.02, 0], boca: [0, 0.02, 0.62] },
 };
@@ -12174,7 +12174,10 @@ function absorverEscudo(v) {
 // A armadura é do jogador (guardada como um carro): veste e guarda quando quiser. Leva o dano no lugar da vida;
 // com 10% pede para recuar; 3 min sem dano e ela se recupera aos poucos; com 2% ejeta o jogador de paraquedas e
 // é perdida (precisa pegar outra no laboratório da Área 51).
-async function carregarMinhaArmadura() { try { jogador.minhaArmadura = await rede.lab.minha(); } catch { jogador.minhaArmadura = null; } }
+async function carregarMinhaArmadura() {
+  try { jogador.minhaArmadura = await rede.lab.minha(); } catch { jogador.minhaArmadura = null; }
+  try { for (const l of (await rede.lab.danos()) || []) if (ARMAS[l.item]?.laser) ARMAS[l.item].dano = l.dano; } catch { /* sem o 126: dano padrão */ }   // dano dos lasers: o admin ajusta
+}
 function venderArmadura() {
   const lista = [...remotos].filter(([, r]) => r.meta?.nome && r.av && r.av.raiz.position.distanceTo(jogador.pos) < 25);
   if (!lista.length) { aviso('💰 Chegue perto (até 25 m) de quem vai comprar.', 3); return; }
@@ -12249,6 +12252,8 @@ function menuLaboratorio() {
       { rotulo: '⛔ Tirar a autorização', fn: () => rede.lab.autorizar(id, false).then(() => aviso(`⛔ ${r.meta.nome} sem autorização.`, 3)).catch((e) => aviso(e.message, 3)) }]) }));
     escolher('🔐 Autorizar jogador', lista.length ? 'Jogadores online:' : 'Ninguém online agora.', lista);
   } });
+  if (adm) ops.push({ rotulo: '⚙️ Dano das armas laser', fn: () => escolher('⚙️ Dano das armas laser', 'Escolha a arma:', Object.keys(ARMAS).filter((k) => ARMAS[k].laser).map((k) => ({ rotulo: `${NOME_ITEM_T[k]}: dano ${ARMAS[k].dano}`, fn: () =>
+    escolher(`⚙️ ${NOME_ITEM_T[k]}`, 'Novo dano por tiro (fuzil do Exército: 26; arma do Exército: 32):', [20, 25, 30, 35, 40, 45, 50, 60].map((d) => ({ rotulo: String(d), fn: () => rede.lab.definirDano(k, d).then((v) => { ARMAS[k].dano = v; aviso(`⚙️ ${NOME_ITEM_T[k]}: dano ${v} (vale para todos ao entrar de novo).`, 3.5); }).catch((e) => aviso(e.message, 3)) }))) }))) });
   if (adm) ops.push({ rotulo: '🕊️ Perdoar desertor', fn: () => {
     const ds = [...remotos].filter(([, r]) => r.meta?.des).map(([id, r]) => ({ rotulo: r.meta.nome, fn: () => rede.lab.perdoar(id).then(() => aviso(`🕊️ ${r.meta.nome} perdoado: não é mais desertor.`, 3)).catch((e) => aviso(e.message, 3)) }));
     escolher('🕊️ Perdoar desertor', ds.length ? 'Desertores online:' : 'Nenhum desertor online.', ds);
@@ -17447,6 +17452,11 @@ async function desenharTatica() {
   try { const of = await rede.lab.ofertas(); const pra = (of || []).filter((o) => o.comprador === eu && Date.parse(o.em) > agoraServidor() - 600000);
     if (pra.length) h += `<div class="sub">🤖 Ofertas de armadura</div><p class="dica">Comprar armadura de outro jogador é negócio do mercado negro: quem vende comete crime (e vira desertor se for de corporação).</p>
       <div class="botoes">${pra.map((o) => `<button data-armac="${o.vendedor}">Aceitar de ${esc(remotos.get(o.vendedor)?.meta?.nome || 'jogador')} por ${Number(o.preco).toLocaleString('pt-BR')}</button>`).join('')}</div>`; } catch { /* sem o 125 */ }
+  if ((p.profissao === 'exercito' || p.policial || p.prf) && p.cargo !== 'admin') {
+    const ds = [...remotos].filter(([, r]) => r.meta?.des && r.av && r.av.raiz.position.distanceTo(jogador.pos) < 30);
+    if (ds.length) h += `<div class="sub">🚨 Desertores por perto</div><p class="dica">Desertor não entra na sua corporação. Oficial de patente alta (Polícia/BOPE e Exército: Tenente para cima; PRF: Inspetor para cima) pode liberar a entrada por 24 h. A ficha continua como desertor até o administrador perdoar.</p>
+      <div class="botoes">${ds.map(([id, r]) => `<button data-libdes="${id}">Liberar ${esc(r.meta.nome)}</button>`).join('')}</div>`;
+  }
   if (p.profissao === 'exercito' || p.policial || p.prf || p.cargo === 'admin') {
     try { const vs = await rede.lab.vendas(); if (vs?.length) h += `<div class="sub">🚨 Vendas de armadura (24 h)</div><div class="lista">${vs.map((v) => `<div class="linha item"><span class="nm"><b>${esc(v.quem)}</b><small>${esc(v.tipo)} · ${Number(v.valor).toLocaleString('pt-BR')}</small></span></div>`).join('')}</div>`; } catch { /* sem o 125 */ }
   }
@@ -17538,6 +17548,7 @@ async function desenharTatica() {
   on('tArmVestir', () => { vestirArmadura(); $('fecharTatica')?.click(); });
   on('tArmTirar', () => { guardarArmadura(); desenharTatica(); });
   on('tArmVender', () => venderArmadura());
+  c.querySelectorAll('[data-libdes]').forEach((b) => { b.onclick = () => fazerTatica(() => rede.lab.liberar(b.dataset.libdes), (c2) => `🚨 Entrada liberada por 24 h (${c2}).`); });
   c.querySelectorAll('[data-armac]').forEach((b) => { b.onclick = () => fazerTatica(async () => { const r = await rede.lab.aceitar(b.dataset.armac); await carregarMinhaArmadura(); return r; }, '🤖 Armadura comprada! Vista no Tático.'); });
   on('tPatroc', () => fazerTatica(() => rede.tatica.tornarPatrocinador(), '💼 Agora você é patrocinador.'));
   on('tPatrocinar', () => fazerTatica(() => rede.tatica.patrocinar(Number($('tCla').value), Number($('tValor').value)), 'Patrocínio enviado.'));

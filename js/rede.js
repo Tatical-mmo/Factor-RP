@@ -210,6 +210,11 @@ function traduzirRpc(m) {
   'precisa de autorizacao': 'Precisa da autorização de um Tenente para cima (ou do General Supremo), a mesma da arma pesada.',
   'aguarde para pegar o lancador': 'O lançador sai a cada 2 minutos. Aguarde.',
   'sem autorizacao do laboratorio': 'Só jogadores autorizados pelo General Supremo pegam armadura.',
+  'desertor sem liberacao': 'Desertor não entra na corporação sem a liberação de um oficial de patente alta (ou o perdão do administrador).',
+  'patente baixa para liberar': 'Só oficial de patente alta libera desertor (Polícia/BOPE e Exército: Tenente para cima; PRF: Inspetor para cima).',
+  'nao e desertor': 'Esse jogador não é desertor.',
+  'so oficiais das corporacoes': 'Só oficiais da Polícia, PRF, BOPE ou Exército.',
+  'o admin perdoa direto': 'O administrador perdoa direto no painel do laboratório.',
   'voce ja tem essa arma': 'Você já tem essa arma laser.',
   'oferta expirada': 'A oferta expirou (vale 10 minutos).',
   'esse jogador ja tem armadura': 'Esse jogador já tem uma armadura.',
@@ -849,6 +854,9 @@ export const lab = {
   ofertas: () => sel(sb.from('armadura_ofertas').select('*')),
   vendas: () => rpc('vendas_armadura'),
   perdoar: (alvo) => rpc('perdoar_desertor', { p_alvo: alvo }),
+  liberar: (alvo) => rpc('liberar_desertor', { p_alvo: alvo }),   // 126
+  danos: () => sel(sb.from('laser_config').select('*')),
+  definirDano: (item, dano) => rpc('definir_dano_laser', { p_item: item, p_dano: dano }),
 };
 export const exercito = {
   especializarParaquedista: () => rpc('especializar_paraquedista'),
