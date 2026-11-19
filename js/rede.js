@@ -210,6 +210,10 @@ function traduzirRpc(m) {
   'precisa de autorizacao': 'Precisa da autorização de um Tenente para cima (ou do General Supremo), a mesma da arma pesada.',
   'aguarde para pegar o lancador': 'O lançador sai a cada 2 minutos. Aguarde.',
   'sem autorizacao do laboratorio': 'Só jogadores autorizados pelo General Supremo pegam armadura.',
+  'voce ja tem essa arma': 'Você já tem essa arma laser.',
+  'oferta expirada': 'A oferta expirou (vale 10 minutos).',
+  'esse jogador ja tem armadura': 'Esse jogador já tem uma armadura.',
+  'voce nao tem armadura': 'Você não tem armadura.',
   'voce ja tem uma armadura': 'Você já tem uma armadura guardada. Outra só se ela for destruída.',
   'arsenal sem lancador': 'O arsenal está sem esse lançador. Peça um lote na Central de rações (vem de caminhão até a Base Aérea).',
   'ja tem lote a caminho': 'Já tem um lote de lançadores a caminho.',
@@ -839,6 +843,12 @@ export const lab = {
   salvar: (f) => rpc('salvar_armadura', { p_blindagem: f }),
   perder: () => rpc('perder_armadura'),
   autorizar: (alvo, sim) => rpc('lab_autorizar', { p_alvo: alvo, p_sim: sim }),
+  laser: (item) => rpc('pegar_laser', { p_item: item }),   // 125
+  ofertar: (comprador, preco) => rpc('ofertar_armadura', { p_comprador: comprador, p_preco: preco }),
+  aceitar: (vendedor) => rpc('aceitar_armadura', { p_vendedor: vendedor }),
+  ofertas: () => sel(sb.from('armadura_ofertas').select('*')),
+  vendas: () => rpc('vendas_armadura'),
+  perdoar: (alvo) => rpc('perdoar_desertor', { p_alvo: alvo }),
 };
 export const exercito = {
   especializarParaquedista: () => rpc('especializar_paraquedista'),

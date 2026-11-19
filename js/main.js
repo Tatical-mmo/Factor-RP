@@ -2144,8 +2144,13 @@ const ARMAS = {
   espingarda: { cod: 7, grav: 1.2, modelo: 'arma_espingarda', comp: 0.9, reserva: 'arma_grande_porte', dano: 11, recarga: 0.85, vel: 23, cor: '#ff7a1a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.58], chumbos: 7, espalha: 0.13, alcance: 0.6 },
   rpg: { cod: 9, lanca: 'rpg', modelo: 'arma_rpg', comp: 1.0, reserva: 'arma_militar', dano: 55, recarga: 3, vel: 45, cor: '#7a8a4a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.55] },
   bazuca: { cod: 10, lanca: 'baz', modelo: 'arma_bazuca', comp: 1.3, reserva: 'arma_militar', dano: 90, recarga: 5, vel: 60, cor: '#3f5233', pega: [0, 0.02, 0], boca: [0, 0.02, 0.75] },
+  // armas laser do laboratório (19q): só com a armadura vestida; pente de 10 e 10 s de recarga; o cano do modelo vem em -x
+  laser_azul: { cod: 12, laser: true, alc: 160, grav: 0.03, modelo: 'laser_azul', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 30, recarga: 0.18, vel: 70, cor: '#3ec8ff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
+  laser_roxo: { cod: 13, laser: true, alc: 160, grav: 0.03, modelo: 'laser_roxo', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 34, recarga: 0.22, vel: 70, cor: '#b14bff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
+  laser_vermelho: { cod: 14, laser: true, alc: 160, grav: 0.03, modelo: 'laser_vermelho', comp: 1.1, vira: true, reserva: 'arma_militar', dano: 40, recarga: 0.3, vel: 66, cor: '#ff3b3b', pega: [0, 0.02, 0], boca: [0, 0.02, 0.74], bola: 1.5 },
+  laser_energia: { cod: 15, laser: true, alc: 170, grav: 0.03, modelo: 'laser_energia', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 36, recarga: 0.24, vel: 72, cor: '#7dff5a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
   ponto50: { cod: 11, alc: 220, grav: 0.1, modelo: 'arma_ponto50', dano: 34, recarga: 0.12, vel: 90, cor: '#ffcc33' },
-  fuzil: { cod: 8, alc: 130, grav: 0.18, modelo: 'arma_fuzil', comp: 0.95, reserva: 'arma_militar', dano: 26, recarga: 0.11, vel: 42, cor: '#d9dde3', pega: [0, 0.02, 0], boca: [0, 0.02, 0.62] },
+  fuzil: { cod: 8, alc: 130, grav: 0.18, modelo: 'arma_fuzil', comp: 0.95, vira: true, reserva: 'arma_militar', dano: 26, recarga: 0.11, vel: 42, cor: '#d9dde3', pega: [0, 0.02, 0], boca: [0, 0.02, 0.62] },
 };
 // alcance (alc, em metros) e queda da bala (grav, 1 = tinta de paintball): arma melhor vai mais longe e cai menos.
 // Antes todas caíam com a gravidade inteira e batiam no chão a uns 15–20 m, qualquer que fosse a arma.
@@ -2154,7 +2159,7 @@ const ARMA_POR_COD = Object.fromEntries(Object.entries(ARMAS).map(([k, a]) => [a
 function tipoArma() {
   const p = jogador.perfil; if (!p) return 'basica';
   const general = p.cargo === 'admin';
-  if (jogador.armaEspecial && (jogador.desviada?.item === jogador.armaEspecial ? jogador.desviada.balas > 0 : qtdItem(jogador.armaEspecial) > 0) && !jogador.armaPesada) return jogador.armaEspecial;   // espingarda ou fuzil (desviada: até acabarem as balas)   // espingarda ou fuzil equipado
+  if (jogador.armaEspecial && (!ARMAS[jogador.armaEspecial]?.laser || jogador.armadura) && (jogador.desviada?.item === jogador.armaEspecial ? jogador.desviada.balas > 0 : qtdItem(jogador.armaEspecial) > 0) && !jogador.armaPesada) return jogador.armaEspecial;   // espingarda ou fuzil (desviada: até acabarem as balas)   // espingarda ou fuzil equipado
   if (jogador.armaPesada && (general || (p.profissao === 'exercito' && p.arma_pesada_ate && Date.parse(p.arma_pesada_ate) > agoraServidor()))) return 'pesada';
   if (militar()) return 'exercito';   // militar em serviço (o General Supremo sempre)
   if (p.policial) return 'policia';
@@ -2189,18 +2194,28 @@ function modelosLancadores() {
   }
 }
 function novaArma(tipo, av) {
-  const a = ARMAS[tipo]; if (a.lanca) modelosLancadores();
-  if (a.comp && modelos[a.modelo]) { const arma = armaNormalizada(a.modelo, a.comp); av.encaixarArma(arma, a.pega); return arma; }
+  const a = ARMAS[tipo]; if (a.lanca) modelosLancadores(); if (a.laser) modeloLaser(a.modelo);
+  if (a.comp && modelos[a.modelo]) { const arma = armaNormalizada(a.modelo, a.comp, a.vira); av.encaixarArma(arma, a.pega); return arma; }
   const nome = modelos[a.modelo] ? a.modelo : a.reserva && modelos[a.reserva] ? a.reserva : null;
   const arma = nome ? clonar(nome) : clonar('arma_paintball');
   av.encaixarArma(arma, nome === a.modelo ? a.pega : nome ? (Object.values(ARMAS).find((x) => x.modelo === nome)?.pega || a.pega) : ARMAS.basica.pega); return arma;
 }
 // armas geradas (tamanho 1, cano em +x): gira o cano para a frente, ajusta o comprimento e põe a empunhadura na origem
 const cacheArmaN = new Map();
-function armaNormalizada(nome, comp) {
+// modelos laser: só baixam quando alguém equipa (não pesam na abertura do jogo); ao chegar, troca a arma na mão
+const pedidosLaser = new Set();
+function modeloLaser(nome) {
+  if (modelos[nome] || pedidosLaser.has(nome)) return; pedidosLaser.add(nome);
+  carregarGLB(`assets/modelos/${nome}.glb`).then((g) => {
+    modelos[nome] = prepararEstatico(g.scene);
+    if (jogador.armaTipo === nome && jogador.avatar) { jogador.armaTipo = null; conferirArma(); }
+    for (const [, r] of remotos) if (r.av && ARMA_POR_COD[r.armaCod] === nome) r.armaCod = -1;   // remotos: refaz a arma no próximo quadro
+  }).catch(() => pedidosLaser.delete(nome));
+}
+function armaNormalizada(nome, comp, vira) {
   if (!cacheArmaN.has(nome)) {
     const g = new THREE.Group(), piv = new THREE.Group(), c = modelos[nome].clone(true);
-    c.rotation.y = -Math.PI / 2; piv.add(c); piv.updateMatrixWorld(true);
+    c.rotation.y = vira ? Math.PI / 2 : -Math.PI / 2; piv.add(c); piv.updateMatrixWorld(true);   // vira: modelo com o cano em -x
     const b = new THREE.Box3().setFromObject(piv), L = Math.max(0.01, b.max.z - b.min.z), s = comp / L;
     c.position.set(-(b.min.x + b.max.x) / 2, -(b.min.y + b.max.y) / 2, -b.min.z - L * 0.35); piv.scale.setScalar(s); g.add(piv);
     cacheArmaN.set(nome, g);
@@ -2234,6 +2249,12 @@ function atirar(alvo) {
   const A = ARMAS[jogador.armaTipo || 'basica'];
   jogador.alvo = null;
   if (A.lanca) { dispararFoguete(A, alvo); return; }
+  if (A.laser) {   // pente de 10; vazio, recarrega sozinho em 10 s
+    const pe = jogador.pente ||= { balas: 10, ate: 0 }, t = performance.now();
+    if (pe.ate && t >= pe.ate) { pe.balas = 10; pe.ate = 0; }
+    if (pe.balas <= 0) { aviso(`🔋 Recarregando o laser… ${Math.ceil((pe.ate - t) / 1000)} s`, 1.2); return; }
+    pe.balas--; if (pe.balas <= 0) { pe.ate = t + 10000; aviso('🔋 Pente vazio: o laser recarrega em 10 s.', 2.5); }
+  }
   const manual = miraM.ativo && podeMiraManual();
   if (manual) { /* mira manual: vai exatamente pelos pontinhos */ } else if (modoCam === 'p1' && !jogador.carro) jogador.yaw = olhar.yaw;
   else if (alvo) jogador.yaw = Math.atan2(alvo.x - jogador.pos.x, alvo.z - jogador.pos.z);
@@ -2252,7 +2273,7 @@ function atirar(alvo) {
   const v = dir.multiplyScalar(dourada ? 34 : A.vel).add(new THREE.Vector3(0, vyMira ?? (dourada ? 0.6 : 1.2 * 24 / A.vel * (A.grav ?? 1)), 0));   // menos queda: mira mais reta
   if (manual) v.copy(direcaoMira().multiplyScalar(dourada ? 34 : A.vel));
   else if (modoCam === 'p1' && vyMira == null) v.y += Math.tan(THREE.MathUtils.clamp(olhar.pitch, -0.6, 0.6)) * (dourada ? 34 : A.vel);   // mira para cima / para baixo
-  criarBola(boca, v, cor, true, dourada ? 1 : A.bola || 1); balistica(bolas[bolas.length - 1], A);
+  criarBola(boca, v, cor, true, dourada ? 1 : A.bola || 1, !dourada && !!A.laser); balistica(bolas[bolas.length - 1], A);
   const critico = Math.random() < bonusTreino('tiro');   // treino de tiro: chance de acerto crítico (dano dobrado)
   bolas[bolas.length - 1].dano = Math.round(A.dano * (critico ? 2 : 1) * fatorForca()); bolas[bolas.length - 1].critico = critico;
   if (dourada) {
@@ -2262,7 +2283,7 @@ function atirar(alvo) {
     jogador.recarga = 1.2;
   }
   const r2 = (n) => Math.round(n * 100) / 100;
-  conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: cor, s: A.bola || 1, g: A.grav ?? 1, vd: A.alc ? r2(A.alc / A.vel) : 0 });
+  conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: cor, s: A.bola || 1, g: A.grav ?? 1, vd: A.alc ? r2(A.alc / A.vel) : 0, l: A.laser && !dourada ? 1 : 0 });
   if (A.chumbos && !dourada) chumbos(A, boca, v, cor);
   if (!dourada && jogador.desviada && jogador.armaTipo === jogador.desviada.item) gastarBalaDesviada();
   if (!dourada) jogador.recarga = A.recarga / (1 + bonusTreino('luta'));
@@ -2291,9 +2312,9 @@ function chumbos(A, boca, v, cor) {
     conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(vv.x), vy: r2(vv.y), vz: r2(vv.z), c: cor, s: 0.8 });
   }
 }
-function criarBola(pos, vel, cor, minha = false, escala = 1) {
-  if (escala < 3) sons.tocar('tiro', { vol: 0.7, dist: jogador.avatar ? Math.hypot(pos.x - jogador.pos.x, pos.z - jogador.pos.z) : 0, raio: 55, velocidade: 0.9 + Math.random() * 0.2 });
-  const m = new THREE.Mesh(geoBola, new THREE.MeshStandardMaterial({ color: cor, roughness: 0.3 }));
+function criarBola(pos, vel, cor, minha = false, escala = 1, laser = false) {
+  if (escala < 3) sons.tocar(laser ? 'laser' : 'tiro', { vol: laser ? 0.8 : 0.7, dist: jogador.avatar ? Math.hypot(pos.x - jogador.pos.x, pos.z - jogador.pos.z) : 0, raio: laser ? 70 : 55, velocidade: 0.9 + Math.random() * 0.2 });
+  const m = new THREE.Mesh(geoBola, laser ? new THREE.MeshBasicMaterial({ color: cor, toneMapped: false }) : new THREE.MeshStandardMaterial({ color: cor, roughness: 0.3 }));   // laser: brilha
   m.position.copy(pos); m.scale.setScalar(escala); scene.add(m);
   bolas.push({ m, v: vel.clone(), vida: escala >= 3 ? 2.5 : 2, cor, minha, tanque: escala >= 3 });
 }
@@ -3595,7 +3616,7 @@ function conectarMultiplayer(perfil) {
           const alvo = r.alvo; removerRemoto(id); adicionarRemoto(id, meta).then(() => { const n = remotos.get(id); if (n && alvo && !n.alvo) n.alvo = alvo; });
         } else if (!r) adicionarRemoto(id, meta);
         else {
-          const chave = (m) => [m.crimes, m.policial, m.cla, m.prf, m.eleitoral, m.prefeito, m.profissao, m.ferido, m.recompensa, m.patente, m.ref, m.bope, m.invis, m.farda, m.cc, m.sf, m.arm, m.som ? `${m.som.url}|${m.som.txt}` : ''].join('|');
+          const chave = (m) => [m.crimes, m.policial, m.cla, m.prf, m.eleitoral, m.prefeito, m.profissao, m.ferido, m.recompensa, m.patente, m.ref, m.bope, m.invis, m.farda, m.cc, m.sf, m.arm, m.des, m.som ? `${m.som.url}|${m.som.txt}` : ''].join('|');
           if (chave(r.meta) !== chave(meta)) {
             r.meta = meta; etiquetaStatus(r);
             if (meta.ferido && r.av) {
@@ -3616,7 +3637,7 @@ function conectarMultiplayer(perfil) {
       atualizarInfo();
     },
     pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
-    tiro: (t) => { criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1); const b = bolas[bolas.length - 1]; if (b && t.g != null) { b.g = 9.8 * Number(t.g); if (Number(t.vd) > 0) b.vida = Math.min(6, Number(t.vd)); } },
+    tiro: (t) => { criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1, !!t.l); const b = bolas[bolas.length - 1]; if (b && t.g != null) { b.g = 9.8 * Number(t.g); if (Number(t.vd) > 0) b.vida = Math.min(6, Number(t.vd)); } },
     explosao: (e) => receberExplosao(e),
     voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, dm: (m) => { if (m?.para === jogador.perfil?.id && amigosIds.has(m.de)) celular.mensagemChegou(m.de, remotos.get(m.de)?.meta?.nome); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
@@ -4444,7 +4465,7 @@ async function npcFardado(papel, i, arma, farda) {
 function metaPresenca() {
   const p = jogador.perfil;
   return { mk: jogador.mascara || 0, rd: jogador.rendido ? 1 : 0, ceu: jogador.noCeu ? 1 : 0, bope: !!p.bope, invis: !!p.invisivel, som: somAtivo ? { url: somAtivo.url, txt: somAtivo.txt } : null, emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
-    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, sf: sexoFarda(), cc: jogador.coleteCivil && !jogador.farda ? 1 : 0, arm: jogador.armadura?.modelo || null, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
+    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, des: p.desertor ? 1 : 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, sf: sexoFarda(), cc: jogador.coleteCivil && !jogador.farda ? 1 : 0, arm: jogador.armadura?.modelo || null, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
 function etiquetaStatus(r) {
@@ -4452,7 +4473,7 @@ function etiquetaStatus(r) {
   if (r.status) { r.av.raiz.remove(r.status); r.status = null; }
   const m = r.meta;
   const inimigo = m.cla && inimigos.has(m.cla);
-  const txt = m.ferido ? '✚ FERIDO' : m.recompensa > 0 ? `🎯 PROCURADO · ${Number(m.recompensa).toLocaleString('pt-BR')}` : inimigo ? `⚔️ INIMIGO [${m.cla}]` : m.crimes > 0 ? `PROCURADO${m.eleitoral ? ' (PRF)' : ''} ${estrelas(m.crimes)}` : m.prefeito ? '★ PREFEITO ★'
+  const txt = m.ferido ? '✚ FERIDO' : m.des && corporacao() ? '🚨 DESERTOR' : m.recompensa > 0 ? `🎯 PROCURADO · ${Number(m.recompensa).toLocaleString('pt-BR')}` : inimigo ? `⚔️ INIMIGO [${m.cla}]` : m.crimes > 0 ? `PROCURADO${m.eleitoral ? ' (PRF)' : ''} ${estrelas(m.crimes)}` : m.prefeito ? '★ PREFEITO ★'
     : m.policial && m.bope ? `💀 BOPE${m.patente ? ` · ${m.patente}` : ''}` : m.policial ? `POLÍCIA${m.patente ? ` · ${m.patente}` : ''}` : m.prf ? `PRF${m.patente ? ` · ${m.patente}` : ''}` : m.profissao === 'medico' ? `✚ ${(m.patente || 'MÉDICO').toUpperCase()}`
     : m.profissao === 'bombeiro' ? `🚒 ${(m.patente || 'BOMBEIRO').toUpperCase()}` : m.profissao === 'jornalista' ? `📰 ${(m.patente || 'IMPRENSA').toUpperCase()}` : m.profissao === 'exercito' ? `🎖️ ${(m.patente || 'EXÉRCITO').toUpperCase()}` : m.cla ? `[${m.cla}]` : null;
   if (!txt) return;
@@ -4473,7 +4494,7 @@ function aplicarDanoRemoto(id, valor) {
 let ultimaFaltaMil = 0;
 function militarFeriu(id) {
   if (jogador.perfil?.profissao !== 'exercito' || jogador.perfil?.cargo === 'admin' || jogador.dentroCasa === 'treino') return;
-  const m = remotos.get(id)?.meta; if (!m || m.crimes > 0 || m.recompensa > 0 || m.inv) return;
+  const m = remotos.get(id)?.meta; if (!m || m.crimes > 0 || m.recompensa > 0 || m.inv || m.des) return;
   if (performance.now() - ultimaFaltaMil < 120000) return; ultimaFaltaMil = performance.now();
   rede.exercito.feriuInocente(id, !!m.inv).then((r) => {
     if (!r) return;
@@ -12154,6 +12175,15 @@ function absorverEscudo(v) {
 // com 10% pede para recuar; 3 min sem dano e ela se recupera aos poucos; com 2% ejeta o jogador de paraquedas e
 // é perdida (precisa pegar outra no laboratório da Área 51).
 async function carregarMinhaArmadura() { try { jogador.minhaArmadura = await rede.lab.minha(); } catch { jogador.minhaArmadura = null; } }
+function venderArmadura() {
+  const lista = [...remotos].filter(([, r]) => r.meta?.nome && r.av && r.av.raiz.position.distanceTo(jogador.pos) < 25);
+  if (!lista.length) { aviso('💰 Chegue perto (até 25 m) de quem vai comprar.', 3); return; }
+  escolher('💰 Vender a armadura', '⚠️ Vender é CRIME e as corporações ficam sabendo. Militar, policial, PRF ou BOPE que vende vira DESERTOR. Para quem?', lista.map(([id, r]) => ({ rotulo: r.meta.nome, fn: () =>
+    escolher(`💰 Preço para ${r.meta.nome}`, 'Ele aceita no Tático em até 10 min.', [50000, 150000, 300000, 600000, 1000000].map((v) => ({ rotulo: v.toLocaleString('pt-BR'), fn: () => {
+      if (jogador.armadura) guardarArmadura(true);
+      rede.lab.ofertar(id, v).then(() => aviso(`💰 Oferta enviada a ${r.meta.nome}.`, 3)).catch((e) => aviso(e.message, 3));
+    } }))) })));
+}
 function vestirArmadura() {
   const m = jogador.minhaArmadura; if (!m || jogador.armadura) return;
   if (jogador.carro || jogador.passageiro || jogador.voo || jogador.ave) { aviso('Vista a armadura a pé.', 2.5); return; }
@@ -12165,7 +12195,7 @@ function vestirArmadura() {
 function guardarArmadura(silencioso) {
   const a = jogador.armadura; if (!a) return;
   const A = ARMADURAS[a.modelo], f = Math.max(0, Math.min(1, a.b / A.blind));
-  jogador.armadura = null; if (jogador.minhaArmadura) jogador.minhaArmadura.blindagem = f;
+  jogador.armadura = null; if (jogador.minhaArmadura) jogador.minhaArmadura.blindagem = f; conferirArma();
   rede.lab.salvar(f).catch(() => {});
   conexao?.rastrear(metaPresenca()); desenharEscudo();
   if (!silencioso) aviso(`🤖 Armadura guardada (blindagem ${Math.round(f * 100)}%).`, 2.5);
@@ -12180,7 +12210,7 @@ function danoArmadura(v) {
 }
 function ejetarArmadura() {
   const A = ARMADURAS[jogador.armadura.modelo];
-  jogador.armadura = null; jogador.minhaArmadura = null;
+  jogador.armadura = null; jogador.minhaArmadura = null; conferirArma();
   rede.lab.perder().catch(() => {});
   conexao?.rastrear(metaPresenca()); desenharEscudo();
   if (jogador.carro || jogador.passageiro) { aviso(`💥 A ${A.nome} foi destruída!`, 4); return; }
@@ -12211,12 +12241,17 @@ function menuLaboratorio() {
       try { await rede.lab.pegar(k); await carregarMinhaArmadura(); aviso(`🧪 ${A.nome} é sua! Vista agora ou pelo 🎯 Tático, quando quiser.`, 4); } catch (e) { aviso(e.message, 3.5); }
     } });
   }
+  for (const k of ['laser_azul', 'laser_roxo', 'laser_vermelho', 'laser_energia']) if (!qtdItem(k)) ops.push({ rotulo: `🔋 Pegar ${NOME_ITEM_T[k]} (só funciona com armadura)`, fn: () => rede.lab.laser(k).then(() => { recarregarInventario(); aviso(`🔋 ${NOME_ITEM_T[k]} na mochila. Equipe no 🎯 Tático com a armadura vestida.`, 4); }).catch((e) => aviso(e.message, 3)) });
   if (m && !adm) ops.push({ rotulo: 'ℹ️ Cada autorizado guarda um exemplar. Se for destruída, volte aqui para pegar outra.', fn: () => {} });
   if (adm) ops.push({ rotulo: '🔐 Autorizar / tirar autorização de jogador', fn: () => {
     const lista = [...remotos].filter(([, r]) => r.meta?.nome).map(([id, r]) => ({ rotulo: r.meta.nome, fn: () => escolher(`🔐 ${r.meta.nome}`, 'Laboratório e Área 51:', [
       { rotulo: '✅ Autorizar (entra na Área 51 e pega armadura)', fn: () => rede.lab.autorizar(id, true).then(() => aviso(`✅ ${r.meta.nome} autorizado.`, 3)).catch((e) => aviso(e.message, 3)) },
       { rotulo: '⛔ Tirar a autorização', fn: () => rede.lab.autorizar(id, false).then(() => aviso(`⛔ ${r.meta.nome} sem autorização.`, 3)).catch((e) => aviso(e.message, 3)) }]) }));
     escolher('🔐 Autorizar jogador', lista.length ? 'Jogadores online:' : 'Ninguém online agora.', lista);
+  } });
+  if (adm) ops.push({ rotulo: '🕊️ Perdoar desertor', fn: () => {
+    const ds = [...remotos].filter(([, r]) => r.meta?.des).map(([id, r]) => ({ rotulo: r.meta.nome, fn: () => rede.lab.perdoar(id).then(() => aviso(`🕊️ ${r.meta.nome} perdoado: não é mais desertor.`, 3)).catch((e) => aviso(e.message, 3)) }));
+    escolher('🕊️ Perdoar desertor', ds.length ? 'Desertores online:' : 'Nenhum desertor online.', ds);
   } });
   escolher('🧪 Laboratório · tecnologia alienígena', adm ? 'General Supremo: acesso ilimitado.' : 'Autorizado do laboratório.', ops);
 }
@@ -17356,6 +17391,7 @@ function tiqueTatica(dt) {
 // ---------------------------------------------------------------- janela tática (menu 🎯)
 function equiparArma(item) {
   if (item && qtdItem(item) < 1) { aviso('Você não tem essa arma.'); return; }
+  if (item && ARMAS[item]?.laser && !jogador.armadura) { aviso('🔋 As armas laser só funcionam com a armadura vestida.', 3); return; }
   enviarBalas(); jogador.desviada = null;
   jogador.armaEspecial = item || null; conferirArma();
   aviso(item ? `🔫 ${NOME_ITEM_T[item] || item} equipad${item === 'bazuca' || item === 'espingarda' ? 'a' : 'o'}. Saque com o botão Arma.${ARMAS[item]?.lanca ? ' Mire numa aeronave por 2 s para travar.' : ''}` : '🔫 Voltou para a arma padrão.', 2.5);
@@ -17372,7 +17408,7 @@ function abrirTatica(modo) {
 }
 function msgTatica(t, ok = true) { const m = $('taticaMsg'); if (!m) return; m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'erro'); clearTimeout(msgTatica.t); msgTatica.t = setTimeout(() => { m.textContent = ''; }, 4500); }
 async function fazerTatica(fn, ok) { try { const r = await fn(); msgTatica(typeof ok === 'function' ? ok(r) : ok); recarregarInventario(); setTimeout(desenharTatica, 300); } catch (e) { msgTatica(e.message, false); } }
-const NOME_ITEM_T = { espingarda: 'Espingarda', fuzil: 'Fuzil', granada: 'Granada', rpg: 'RPG', bazuca: 'Bazuca', foguete: 'Foguete' };
+const NOME_ITEM_T = { espingarda: 'Espingarda', fuzil: 'Fuzil', granada: 'Granada', rpg: 'RPG', bazuca: 'Bazuca', foguete: 'Foguete', laser_azul: 'Laser azul', laser_roxo: 'Laser roxo', laser_vermelho: 'Laser vermelho', laser_energia: 'Laser de energia' };
 async function desenharTatica() {
   const c = $('taticaConteudo'); if (!c || !modoTatica) return;
   const p = jogador.perfil, eu = p.id;
@@ -17403,7 +17439,16 @@ async function desenharTatica() {
   if (jogador.minhaArmadura) {   // 19p: armadura guardada com o jogador (como um carro)
     const A = ARMADURAS[jogador.minhaArmadura.modelo], pc = Math.round((jogador.armadura ? jogador.armadura.b / A.blind : jogador.minhaArmadura.blindagem) * 100);
     h += `<div class="sub">🤖 ${esc(A.nome)}</div><p class="dica">Blindagem <b>${pc}%</b>. Corre e soca ${Math.round(A.bonus * 100)}% mais e pula mais alto. Com 10% ela pede para recuar; 3 min fora de combate e ela se recupera aos poucos; com 2% ela ejeta você de paraquedas e é perdida.</p>
-      <div class="botoes">${jogador.armadura ? '<button id="tArmTirar">🤖 Guardar a armadura</button>' : '<button id="tArmVestir">🤖 Vestir a armadura</button>'}</div>`;
+      <div class="botoes">${jogador.armadura ? '<button id="tArmTirar">🤖 Guardar a armadura</button>' : '<button id="tArmVestir">🤖 Vestir a armadura</button>'}<button id="tArmVender">💰 Vender a armadura</button></div>`;
+  }
+  { const ls = Object.keys(ARMAS).filter((k) => ARMAS[k].laser && qtdItem(k) > 0);
+    if (ls.length) h += `<div class="sub">🔋 Armas laser</div><p class="dica">Só funcionam com a armadura vestida. Pente de 10 tiros; vazio, recarrega sozinho em 10 s.${jogador.pente?.ate ? ' <b>Recarregando…</b>' : jogador.pente ? ` Pente: <b>${jogador.pente.balas}/10</b>.` : ''}</p>
+      <div class="botoes">${ls.map((k) => `<button data-eq="${k}" ${jogador.armadura ? '' : 'disabled'}>${jogador.armaEspecial === k ? '✔️ ' : ''}🔋 ${NOME_ITEM_T[k]}</button>`).join('')}</div>`; }
+  try { const of = await rede.lab.ofertas(); const pra = (of || []).filter((o) => o.comprador === eu && Date.parse(o.em) > agoraServidor() - 600000);
+    if (pra.length) h += `<div class="sub">🤖 Ofertas de armadura</div><p class="dica">Comprar armadura de outro jogador é negócio do mercado negro: quem vende comete crime (e vira desertor se for de corporação).</p>
+      <div class="botoes">${pra.map((o) => `<button data-armac="${o.vendedor}">Aceitar de ${esc(remotos.get(o.vendedor)?.meta?.nome || 'jogador')} por ${Number(o.preco).toLocaleString('pt-BR')}</button>`).join('')}</div>`; } catch { /* sem o 125 */ }
+  if (p.profissao === 'exercito' || p.policial || p.prf || p.cargo === 'admin') {
+    try { const vs = await rede.lab.vendas(); if (vs?.length) h += `<div class="sub">🚨 Vendas de armadura (24 h)</div><div class="lista">${vs.map((v) => `<div class="linha item"><span class="nm"><b>${esc(v.quem)}</b><small>${esc(v.tipo)} · ${Number(v.valor).toLocaleString('pt-BR')}</small></span></div>`).join('')}</div>`; } catch { /* sem o 125 */ }
   }
   h += `<div class="sub">🎒 Seu equipamento</div><p class="dica">Espingarda: <b>${q('espingarda')}</b> · Fuzil: <b>${q('fuzil')}</b> · Granadas: <b>${q('granada')}</b> · Barricadas: <b>${q('barricada')}</b>${q('rpg') || q('bazuca') || q('foguete') ? ` · RPG: <b>${q('rpg')}</b> · Bazuca: <b>${q('bazuca')}</b> · Foguetes: <b>${q('foguete')}</b>` : ''}. Arma na mão: <b>${jogador.armaEspecial ? NOME_ITEM_T[jogador.armaEspecial] : 'padrão'}</b>.</p>
     <div class="botoes">${q('espingarda') ? '<button data-eq="espingarda">🔫 Equipar espingarda</button>' : ''}${q('fuzil') ? '<button data-eq="fuzil">🔫 Equipar fuzil</button>' : ''}${q('rpg') ? '<button data-eq="rpg">🚀 Equipar RPG</button>' : ''}${q('bazuca') ? '<button data-eq="bazuca">🚀 Equipar bazuca</button>' : ''}${jogador.armaEspecial ? '<button data-eq="">Arma padrão</button>' : ''}</div>
@@ -17492,6 +17537,8 @@ async function desenharTatica() {
   c.querySelectorAll('[data-rmapa]').forEach((b) => { b.onclick = () => { rastrear({ nome: '📡 Movimentação ilícita (aprox.)', x: Number(b.dataset.x), z: Number(b.dataset.z) }); msgTatica('Marcado no mapa.'); }; });
   on('tArmVestir', () => { vestirArmadura(); $('fecharTatica')?.click(); });
   on('tArmTirar', () => { guardarArmadura(); desenharTatica(); });
+  on('tArmVender', () => venderArmadura());
+  c.querySelectorAll('[data-armac]').forEach((b) => { b.onclick = () => fazerTatica(async () => { const r = await rede.lab.aceitar(b.dataset.armac); await carregarMinhaArmadura(); return r; }, '🤖 Armadura comprada! Vista no Tático.'); });
   on('tPatroc', () => fazerTatica(() => rede.tatica.tornarPatrocinador(), '💼 Agora você é patrocinador.'));
   on('tPatrocinar', () => fazerTatica(() => rede.tatica.patrocinar(Number($('tCla').value), Number($('tValor').value)), 'Patrocínio enviado.'));
   on('tFabricar', () => fazerTatica(() => rede.tatica.fabricar($('tFabItem').value, Number($('tFabQtd').value)), (n) => `Fabricado. Estoque: ${n}.`));
