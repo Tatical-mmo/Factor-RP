@@ -425,7 +425,7 @@ function abaEu() {
   if (eu.cargo === 'admin') h += '<div class="sub">Prefeitura</div><div id="pPref" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') {
     h += `<div class="sub">Personagens limitados: vitrine</div><p class="dica">Abre a vitrine para os jogadores comprarem. Marque quais (nenhum marcado = todos) e o tempo.</p>
-      <div id="pEvLista" class="poderes">${PERSONAGENS_EVENTO.map((x) => `<label><input type="checkbox" data-ev="${x.id}"> ${esc(x.nome)}</label>`).join('')}</div>
+      <div id="pEvLista" class="poderes">${PERSONAGENS_EVENTO.filter((x) => !x.soPresente).map((x) => `<label><input type="checkbox" data-ev="${x.id}"> ${esc(x.nome)}</label>`).join('')}</div>
       <div class="botoes"><select id="pEvTempo">${[[30, '30 min'], [60, '1 h'], [180, '3 h'], [720, '12 h'], [1440, '1 dia'], [4320, '3 dias'], [10080, '7 dias']].map(([m, t]) => `<option value="${m}" ${m === 60 ? 'selected' : ''}>${t}</option>`).join('')}</select>
       <button id="pEvAbrir">✨ Abrir vitrine</button><button id="pEvFechar">Fechar vitrine</button></div>`;
     h += `<div class="sub">Resetar o mapa</div><p class="dica">Para deixar o mapa limpo antes de abrir para os jogadores. As contas continuam; a equipe mantém o cargo. <b>Não dá para desfazer.</b></p>

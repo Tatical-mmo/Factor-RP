@@ -44,6 +44,7 @@ export const PERSONAGENS_EVENTO = [   // limitados (Meshy): só o admin dá de p
   { id: 'Dona_Morro', nome: 'Dona do Morro' },
   { id: 'Mascarado', nome: 'Mascarado do Morro' },
   { id: 'Dono_Morro', nome: 'Dono do Morro' },
+  { id: 'Doutor_Peste', nome: 'Doutor da Peste', soPresente: true },   // 19p: só o admin usa e presenteia; nunca à venda
 ];
 
 // grátis ao criar a conta; os outros custam 8.000 na loja de personagens (mesma lista do banco)

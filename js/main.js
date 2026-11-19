@@ -1016,7 +1016,17 @@ for (const n of ANIM_CORRIDA) ANIM_EXTRAS.add(n);
 const ANIM_LANC = ['lanc_mirar', 'lanc_tiro', 'lanc_recarga'];
 // farda completa (19i): em serviço o personagem inteiro vira a farda da corporação; os NPCs dela também usam
 const SKIN_FARDA = { exercito: 'Farda_Exercito', marinha: 'Farda_Marinha', aeronautica: 'Farda_Aeronautica', paraquedista: 'Farda_Paraquedista', policia: 'Farda_Policia', prf: 'Farda_PRF', bope: 'Farda_BOPE' };
-const ehSkinFarda = (id) => /^Farda_/.test(id || '');
+const ehSkinFarda = (id) => /^(Farda_|Armadura_)/.test(id || '');   // farda ou armadura: o corpo inteiro (sem colete por cima)
+// armaduras do laboratório da Área 51 (19p), da menor para a maior: blindagem (pontos de dano), bônus de corrida e
+// soco (até 15%) e regeneração (pontos por segundo, depois de 3 min sem levar dano). O pulo é 2% mais alto em todas.
+const ARMADURAS = {
+  vilkron: { nome: 'Armadura Vilkron', skin: 'Armadura_Vilkron', blind: 260, bonus: 0.08, regen: 3 },
+  veloster: { nome: 'Armadura Veloster', skin: 'Armadura_Veloster', blind: 300, bonus: 0.09, regen: 3.5 },
+  prisma: { nome: 'Armadura Prisma', skin: 'Armadura_Prisma', blind: 340, bonus: 0.1, regen: 4 },
+  reformulado: { nome: 'Soldado Reformulado', skin: 'Armadura_Reformulado', blind: 380, bonus: 0.11, regen: 4.5 },
+  sentinel: { nome: 'Armadura Sentinel', skin: 'Armadura_Sentinel', blind: 440, bonus: 0.13, regen: 5 },
+  predador: { nome: 'Predador Vilkronomita', skin: 'Armadura_Predador', blind: 560, bonus: 0.15, regen: 6 },
+};
 // bombeiros e médicos (19j): a farda muda com a patente; no hospital dá para escolher farda masculina ou feminina
 const FARDA_FALTA = new Set(['Farda_Medica_1', 'Farda_Medica_3']);   // ainda sem o arquivo: usa a masculina do mesmo nível
 function skinDaFarda(papel, patente, sexo) {
@@ -1510,6 +1520,7 @@ function acaoContexto() {
   if (BANCAS.some((b) => perto(b, 3.2))) { abrirServico('jornal'); return; }
   if (perto(GUARITA_ALIST, 3.2)) { menuGuarita(); return; }
   if (perto(VEST_AEREA, 2)) { vestiario('Aeronáutica', 'aerea'); return; }
+  if (area51 && perto(LAB_A51, 2.5)) { entrarPublico('laboratorio', salaLaboratorio, LAB_A51, '🧪 Laboratório da Área 51: armaduras de tecnologia alienígena.'); return; }
   if (perto(CENTRAL_MISSEIS, 4)) { entrarPublico('comandonaval', salaComandoNaval, CENTRAL_MISSEIS, '⚓ Comando Naval: central de mísseis e controle dos navios.'); return; }
   if ((jogador.embarcado || navioNoPier()) && acaoNavio()) return;
   if (perto(civico.EXERCITO.balcao, 3.2)) { abrirServico(jogador.perfil?.profissao === 'exercito' ? 'trabalho' : 'empregos'); return; }
@@ -3584,7 +3595,7 @@ function conectarMultiplayer(perfil) {
           const alvo = r.alvo; removerRemoto(id); adicionarRemoto(id, meta).then(() => { const n = remotos.get(id); if (n && alvo && !n.alvo) n.alvo = alvo; });
         } else if (!r) adicionarRemoto(id, meta);
         else {
-          const chave = (m) => [m.crimes, m.policial, m.cla, m.prf, m.eleitoral, m.prefeito, m.profissao, m.ferido, m.recompensa, m.patente, m.ref, m.bope, m.invis, m.farda, m.cc, m.sf, m.som ? `${m.som.url}|${m.som.txt}` : ''].join('|');
+          const chave = (m) => [m.crimes, m.policial, m.cla, m.prf, m.eleitoral, m.prefeito, m.profissao, m.ferido, m.recompensa, m.patente, m.ref, m.bope, m.invis, m.farda, m.cc, m.sf, m.arm, m.som ? `${m.som.url}|${m.som.txt}` : ''].join('|');
           if (chave(r.meta) !== chave(meta)) {
             r.meta = meta; etiquetaStatus(r);
             if (meta.ferido && r.av) {
@@ -3625,7 +3636,7 @@ function conectarMultiplayer(perfil) {
 }
 
 // o que o outro jogador mostra: a farda (em serviço) ou o personagem dele
-function skinRemota(meta) { return skinDaFarda('farda' in (meta || {}) ? meta.farda : fardaDe(meta), meta?.patente, meta?.sf) || meta?.personagem; }
+function skinRemota(meta) { if (ARMADURAS[meta?.arm]) return ARMADURAS[meta.arm].skin; return skinDaFarda('farda' in (meta || {}) ? meta.farda : fardaDe(meta), meta?.patente, meta?.sf) || meta?.personagem; }
 async function adicionarRemoto(id, meta) {
   const r = { meta, av: null, arma: null, alvo: null, anim: '', caixa: null };
   remotos.set(id, r);
@@ -4433,7 +4444,7 @@ async function npcFardado(papel, i, arma, farda) {
 function metaPresenca() {
   const p = jogador.perfil;
   return { mk: jogador.mascara || 0, rd: jogador.rendido ? 1 : 0, ceu: jogador.noCeu ? 1 : 0, bope: !!p.bope, invis: !!p.invisivel, som: somAtivo ? { url: somAtivo.url, txt: somAtivo.txt } : null, emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
-    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, sf: sexoFarda(), cc: jogador.coleteCivil && !jogador.farda ? 1 : 0, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
+    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, sf: sexoFarda(), cc: jogador.coleteCivil && !jogador.farda ? 1 : 0, arm: jogador.armadura?.modelo || null, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
 function etiquetaStatus(r) {
@@ -4474,7 +4485,7 @@ function militarFeriu(id) {
 function golpeSoco() {
   const f = new THREE.Vector3(Math.sin(jogador.yaw), 0, Math.cos(jogador.yaw));
   if (golpeNoBoneco(f)) return;
-  const forca = Math.round(10 * fatorForca() * (racaoAtiva() ? 1.3 : 1));   // com a ração militar o soco ganha da briga
+  const forca = Math.round(10 * fatorForca() * (racaoAtiva() ? 1.3 : 1) * (jogador.armadura ? 1 + ARMADURAS[jogador.armadura.modelo].bonus : 1));   // ração militar e armadura: soco mais forte
   for (const n of npcs) {
     if (!n.policia) continue;
     const d = new THREE.Vector3().subVectors(n.av.raiz.position, jogador.pos); d.y = 0;
@@ -6153,7 +6164,7 @@ function criarBruxo() {
     m.scale.setScalar(k); m.position.y = -bb.min.y * k; m.traverse((q) => { if (q.isMesh) q.castShadow = true; }); g.add(m);
   } else {   // manto, barba, chapéu pontudo e cajado com o cristal (até o personagem 3D do Bruxo carregar)
     const proc = new THREE.Group(); g.add(proc);
-    criarAvatar('personagens', 'Bruxo').then((av) => { proc.visible = false; g.add(av.raiz); av.tocar('idle'); avataresObra.add(av); }).catch(() => {});
+    criarAvatar('personagens', 'Doutor_Peste').then((av) => { proc.visible = false; g.add(av.raiz); av.tocar('idle'); avataresObra.add(av); }).catch(() => {});
     const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.7, ...o });
     const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; proc.add(o); return o; };
     add(new THREE.ConeGeometry(0.55, 1.5, 14, 1, true), M('#3b1f5c', { side: THREE.DoubleSide }), 0, 0.75, 0);
@@ -8243,6 +8254,7 @@ function atualizarJogador(dt) {
     if (forca > 0.15) {
       vel = j.carregando ? VELOCIDADE.carregando : j.armado ? (correr && turbinado() ? VELOCIDADE.correr * 0.92 : VELOCIDADE.armado) : correr ? VELOCIDADE.correr : VELOCIDADE.andar;
       if (racaoAtiva()) vel *= 1.1;
+      if (correr && jogador.armadura) vel *= 1 + ARMADURAS[jogador.armadura.modelo].bonus;   // armadura: corre até 15% mais
       if (joy.ativo && !correr) vel *= THREE.MathUtils.clamp(forca * 1.3, 0.5, 1);
       vel *= fatorVelocidade();
       j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 12);
@@ -8748,6 +8760,7 @@ function contexto() {
   if (perto(CONTRABANDISTA, 3.2)) return ['contrabandista: arma militar e alicate de corte', 'Negociar'];
   { const cn = contextoNavio(); if (cn) return cn; }
   if (perto(VEST_AEREA, 2)) return ['vestiário da Aeronáutica (militares do Exército)', 'Farda'];
+  if (area51 && perto(LAB_A51, 2.5)) return ['entrar no laboratório (armaduras)', '🧪 Entrar'];
   if (perto(CENTRAL_MISSEIS, 4)) return ['entrar no Comando Naval (mísseis e navios)', '⚓ Entrar'];
   if (perto(GUARITA_ALIST, 3.2)) return [militar() ? 'guarita do Exército: pedidos de alistamento' : 'guarita do Exército: alistamento e licitação de rações', 'Guarita'];
   if (perto(civico.EXERCITO.balcao, 3.2)) return [jogador.perfil?.profissao === 'exercito' ? 'comando do Exército: ordens e caçadas' : 'comando do Exército: alistar-se', 'Comando'];
@@ -12098,7 +12111,7 @@ function seguirExpediente() {
   if (papelVisto === undefined) {   // ao abrir o jogo: volta com a farda que estava
     papelVisto = p; let salva = null; try { salva = localStorage.getItem(chaveFarda()); } catch { /* nada */ }
     jogador.farda = salva && UNIFORMES[salva] && salva !== 'civil' && p && (fardaPermitida(salva, p) || souEquipe()) ? salva : p;   // fora do expediente: o seu personagem
-    lerColeteCivil(); desenharEscudo();
+    lerColeteCivil(); desenharEscudo(); carregarMinhaArmadura();
     if (jogador.farda || jogador.coleteCivil) conexao?.rastrear(metaPresenca());
     return;
   }
@@ -12124,6 +12137,7 @@ function lerColeteCivil() { try { jogador.coleteCivil = localStorage.getItem(cha
 function definirColeteCivil(v) { jogador.coleteCivil = !!v; try { if (v) localStorage.setItem(chaveColete(), '1'); else localStorage.removeItem(chaveColete()); } catch { /* nada */ } conexao?.rastrear(metaPresenca()); desenharEscudo(); }
 const comColete = () => (!!jogador.farda || !!jogador.coleteCivil) && !jogador.carro;
 function absorverEscudo(v) {
+  if (jogador.armadura && v > 0) return danoArmadura(v);   // vestindo armadura: ela leva o dano no lugar da vida
   if (!comColete() || v <= 0) return v;
   const e = escudoAtual(), tira = Math.min(e, v), resto = (v - tira) * 0.9;   // capacete: -10% no que chega à vida
   if (tira > 0) {
@@ -12135,9 +12149,108 @@ function absorverEscudo(v) {
   }
   return resto;
 }
+// ================================================================= ARMADURAS (19p)
+// A armadura é do jogador (guardada como um carro): veste e guarda quando quiser. Leva o dano no lugar da vida;
+// com 10% pede para recuar; 3 min sem dano e ela se recupera aos poucos; com 2% ejeta o jogador de paraquedas e
+// é perdida (precisa pegar outra no laboratório da Área 51).
+async function carregarMinhaArmadura() { try { jogador.minhaArmadura = await rede.lab.minha(); } catch { jogador.minhaArmadura = null; } }
+function vestirArmadura() {
+  const m = jogador.minhaArmadura; if (!m || jogador.armadura) return;
+  if (jogador.carro || jogador.passageiro || jogador.voo || jogador.ave) { aviso('Vista a armadura a pé.', 2.5); return; }
+  const A = ARMADURAS[m.modelo]; if (!A) return;
+  jogador.armadura = { modelo: m.modelo, b: Math.max(0.03, m.blindagem) * A.blind, ultimoDano: 0, avisou: false, salvoEm: performance.now(), tick: performance.now() };
+  conexao?.rastrear(metaPresenca()); desenharEscudo();
+  aviso(`🤖 ${A.nome} vestida! Blindagem ${Math.round(jogador.armadura.b / A.blind * 100)}%.`, 3.5);
+}
+function guardarArmadura(silencioso) {
+  const a = jogador.armadura; if (!a) return;
+  const A = ARMADURAS[a.modelo], f = Math.max(0, Math.min(1, a.b / A.blind));
+  jogador.armadura = null; if (jogador.minhaArmadura) jogador.minhaArmadura.blindagem = f;
+  rede.lab.salvar(f).catch(() => {});
+  conexao?.rastrear(metaPresenca()); desenharEscudo();
+  if (!silencioso) aviso(`🤖 Armadura guardada (blindagem ${Math.round(f * 100)}%).`, 2.5);
+}
+function danoArmadura(v) {
+  const a = jogador.armadura, A = ARMADURAS[a.modelo];
+  a.b -= v; a.ultimoDano = performance.now(); desenharEscudo();
+  const f = a.b / A.blind;
+  if (f <= 0.02) { ejetarArmadura(); return 0; }
+  if (f <= 0.1 && !a.avisou) { a.avisou = true; aviso('⚠️ Blindagem em 10%! RECUE: fora de combate por 3 min ela se recupera. Com 2% ela ejeta você.', 5); }
+  return 0;
+}
+function ejetarArmadura() {
+  const A = ARMADURAS[jogador.armadura.modelo];
+  jogador.armadura = null; jogador.minhaArmadura = null;
+  rede.lab.perder().catch(() => {});
+  conexao?.rastrear(metaPresenca()); desenharEscudo();
+  if (jogador.carro || jogador.passageiro) { aviso(`💥 A ${A.nome} foi destruída!`, 4); return; }
+  endireitar(jogador.avatar); jogador.pulo = null;
+  jogador.pos.y = alturaChao(jogador.pos.x, jogador.pos.z) + 45; jogador.paraquedas = { t: 0, livre: 0.6 };
+  aviso(`💥 ${A.nome} destruída! O sistema de emergência ejetou você: paraquedas aberto. Outra só no laboratório da Área 51.`, 5.5);
+}
+function tickArmadura() {
+  const a = jogador.armadura; if (!a) return;
+  const agora = performance.now(), dt = Math.min(1, (agora - a.tick) / 1000), A = ARMADURAS[a.modelo]; a.tick = agora;
+  if (a.b < A.blind && agora - a.ultimoDano > 180000) {   // 3 min sem levar dano: regenera aos poucos
+    a.b = Math.min(A.blind, a.b + A.regen * dt); if (a.b / A.blind > 0.1) a.avisou = false;
+    if (((agora / 1000) | 0) % 2 === 0) desenharEscudo();
+  }
+  if (agora - a.salvoEm > 20000) { a.salvoEm = agora; const f = a.b / A.blind; if (jogador.minhaArmadura) jogador.minhaArmadura.blindagem = f; rede.lab.salvar(f).catch(() => {}); }
+  if (jogador.morto) guardarArmadura(true);
+}
+// laboratório da Área 51: pegar armadura (autorizados) e, para o General Supremo, autorizar jogadores
+function menuLaboratorio() {
+  const p = jogador.perfil, adm = p?.cargo === 'admin', aut = adm || !!p?.lab_autorizado, ops = [];
+  if (!aut) { aviso('🧪 Laboratório: só jogadores autorizados pelo General Supremo.', 3.5); return; }
+  const m = jogador.minhaArmadura;
+  if (m) ops.push({ rotulo: jogador.armadura ? `🤖 Guardar a ${ARMADURAS[m.modelo].nome}` : `🤖 Vestir a ${ARMADURAS[m.modelo].nome} (${Math.round(m.blindagem * 100)}%)`, fn: () => (jogador.armadura ? guardarArmadura() : vestirArmadura()) });
+  for (const [k, A] of Object.entries(ARMADURAS)) {
+    if (m && !adm) break;
+    ops.push({ rotulo: `🧪 Pegar ${A.nome} · blindagem ${A.blind} · +${Math.round(A.bonus * 100)}%`, fn: async () => {
+      if (jogador.armadura) guardarArmadura(true);
+      try { await rede.lab.pegar(k); await carregarMinhaArmadura(); aviso(`🧪 ${A.nome} é sua! Vista agora ou pelo 🎯 Tático, quando quiser.`, 4); } catch (e) { aviso(e.message, 3.5); }
+    } });
+  }
+  if (m && !adm) ops.push({ rotulo: 'ℹ️ Cada autorizado guarda um exemplar. Se for destruída, volte aqui para pegar outra.', fn: () => {} });
+  if (adm) ops.push({ rotulo: '🔐 Autorizar / tirar autorização de jogador', fn: () => {
+    const lista = [...remotos].filter(([, r]) => r.meta?.nome).map(([id, r]) => ({ rotulo: r.meta.nome, fn: () => escolher(`🔐 ${r.meta.nome}`, 'Laboratório e Área 51:', [
+      { rotulo: '✅ Autorizar (entra na Área 51 e pega armadura)', fn: () => rede.lab.autorizar(id, true).then(() => aviso(`✅ ${r.meta.nome} autorizado.`, 3)).catch((e) => aviso(e.message, 3)) },
+      { rotulo: '⛔ Tirar a autorização', fn: () => rede.lab.autorizar(id, false).then(() => aviso(`⛔ ${r.meta.nome} sem autorização.`, 3)).catch((e) => aviso(e.message, 3)) }]) }));
+    escolher('🔐 Autorizar jogador', lista.length ? 'Jogadores online:' : 'Ninguém online agora.', lista);
+  } });
+  escolher('🧪 Laboratório · tecnologia alienígena', adm ? 'General Supremo: acesso ilimitado.' : 'Autorizado do laboratório.', ops);
+}
+function salaLaboratorio() {
+  return montarSala('laboratorio', 3600, 2200, 26, 16, { piso: '#2a3036', parede: '#cfd8dc', luz: '#d8f3ff' }, (i) => {
+    const { caixa, placa } = i;
+    caixa(26, 0.3, 0.3, '#19c6a8', 0, 3.4, -7.8);   // faixa verde-água
+    Object.values(ARMADURAS).forEach((A, k) => {   // pedestais com cápsulas de vidro
+      const x = -10 + k * 4;
+      caixa(1.8, 0.5, 1.8, '#3b444c', x, 0.25, -5.6); caixa(1.4, 2.6, 1.4, '#7fe8ff', x, 1.8, -5.6);
+      placa(A.nome, x, -5.6, 3.6);
+    });
+    caixa(3.8, 1.1, 1.3, '#20262c', 0, 0.55, 2); caixa(3.4, 1.4, 0.1, '#0b2b33', 0, 1.9, 1.4);
+    movel(i, 'painel', 0, 2, 3.8, 1.3); placa('🧪 Painel do laboratório', 0, 2, 2.9);
+  });
+}
+SALAS.laboratorio = {
+  contexto: () => {
+    if (naPorta()) return ['sair do laboratório', 'Sair'];
+    if (pontoInterior('painel', 2)) return ['painel do laboratório: armaduras', '🧪 Painel'];
+    return ['', ''];
+  },
+  acao: () => {
+    if (naPorta()) { sairSala(); return; }
+    if (pontoInterior('painel', 2)) menuLaboratorio();
+  },
+};
 function desenharEscudo() {
   const linha = $('linhaEscudo'); if (!linha) return;
-  const ver = !!jogador.farda || !!jogador.coleteCivil; linha.style.display = ver ? '' : 'none'; if (!ver) return;
+  const ver = !!jogador.farda || !!jogador.coleteCivil || !!jogador.armadura; linha.style.display = ver ? '' : 'none'; if (!ver) return;
+  if (jogador.armadura) {   // a barra mostra a blindagem da armadura
+    const A = ARMADURAS[jogador.armadura.modelo], f = Math.max(0, jogador.armadura.b / A.blind), b = $('barEscudo');
+    b.firstChild.style.width = (f * 100).toFixed(0) + '%'; $('txtEscudo').textContent = f <= 0.1 ? ' ⚠️' : ''; b.title = `${A.nome}: ${Math.round(f * 100)}%`; return;
+  }
   const e = escudoAtual(), b = $('barEscudo');
   b.firstChild.style.width = (e / ESCUDO_MAX * 100).toFixed(0) + '%';
   $('txtEscudo').textContent = e <= 0 ? ' ⚠️' : ''; b.title = e <= 0 ? 'Colete quebrado: tire e vista a farda de novo no vestiário' : `Escudo ${Math.round(e)}%`;
@@ -12199,10 +12312,10 @@ function saltarDeCarona() {
 }
 // personagem que o jogador mostra: a farda da corporação (em serviço) ou o personagem escolhido
 let tentouSkin = 0;
-const skinDoJogador = () => skinDaFarda(jogador.farda, jogador.patente, sexoFarda()) || skinAtual();
+const skinDoJogador = () => ARMADURAS[jogador.armadura?.modelo]?.skin || skinDaFarda(jogador.farda, jogador.patente, sexoFarda()) || skinAtual();
 function sexoFarda() { try { return localStorage.getItem('fator_sexo_farda') === 'f' ? 'f' : 'm'; } catch { return 'm'; } }
 function atualizarUniformes() {
-  seguirExpediente();
+  seguirExpediente(); tickArmadura();
   if (jogador.avatar && jogador.perfil && !trocandoAvatar && !editorFarda && performance.now() > tentouSkin) { const sk = skinDoJogador(); if (sk && jogador.avatar.personagemId !== sk) { tentouSkin = performance.now() + 5000; trocarAvatar(sk).catch(() => {}); } }
   if (jogador.avatar) { vestir(jogador.avatar, jogador.carro || jogador.passageiro ? null : jogador.farda || (jogador.coleteCivil ? 'civil' : null)); posicionarUniforme(jogador.avatar); vestirMascara(jogador.avatar, mascaraPrevia ?? jogador.mascara); }
   for (const av of NPC_FARDADOS) {   // NPCs fardados: veste quando as peças chegam e põe a arma na mão
@@ -15144,7 +15257,7 @@ function materialLuzChao() {
 let area51Luz = null;
 let area51 = null, avisoA51 = 0, tAvistamento = 0, ovniMarcaAte = 0, abducaoPronta = 0, ultimaAbducao = -1e9;
 const feixesOvni = [];
-function acessoArea51() { return jogador.perfil?.cargo === 'admin' || (militar() && podePilotarHeliExercito()); }
+function acessoArea51() { return jogador.perfil?.cargo === 'admin' || !!jogador.perfil?.lab_autorizado || (militar() && podePilotarHeliExercito()); }   // 19p: autorizados do laboratório também
 function dentroArea51(x, z, m = 0) { return x > A51.x0 - m && x < A51.x1 + m && z > A51.z0 - m && z < A51.z1 + m; }
 function regiaoDe(x, z) {
   if (x <= -640) return 'deserto a oeste da Metrópole';
@@ -15153,6 +15266,7 @@ function regiaoDe(x, z) {
   return p.length ? `zona ${p.join('-')} da Metrópole` : 'centro da Metrópole';
 }
 const holofotesA51 = [];
+const LAB_A51 = { x: -737, z: 34 };   // porta do laboratório (19p)
 function montarArea51() {
   if (area51) return;
   const g = new THREE.Group(); scene.add(g);
@@ -15188,6 +15302,10 @@ function montarArea51() {
   caixa(A51.x1 - 3.95, 1.8, 10, 0.05, 1, 2.6, M('#9fd0e8', { roughness: 0.1, emissive: '#29424f' }), false, false);
   const placa = textoSprite('⚠️ ÁREA 51 · ACESSO RESTRITO AO EXÉRCITO', { escala: 0.8, fundo: 'rgba(150,30,20,.94)' }); placa.position.set(A51.x1 + 2, 7, 0); g.add(placa);
   const placa2 = textoSprite('🚫 Proibido fotografar · uso de força autorizado', { escala: 0.55, fundo: 'rgba(40,40,40,.9)' }); placa2.position.set(-660, 3.2, 8); g.add(placa2);
+  // laboratório (19p): bunker com a porta para leste; dentro, as armaduras de tecnologia alienígena
+  caixa(LAB_A51.x - 8, 2.5, LAB_A51.z, 16, 5, 10, M('#5f676e', { metalness: 0.4, roughness: 0.6 }), true);
+  caixa(LAB_A51.x - 0.05, 1.3, LAB_A51.z, 0.12, 2.6, 2.2, M('#19c6a8', { emissive: '#0d6b5c' }), false, false);
+  { const pl = textoSprite('🧪 LABORATÓRIO · acesso autorizado', { escala: 0.55, fundo: 'rgba(10,90,80,.94)' }); pl.position.set(LAB_A51.x + 0.5, 6, LAB_A51.z); g.add(pl); }
   // hangar: paredes altas e o teto aberto no meio (o óvni sai por cima)
   const iCasca = g.children.length;
   const Hg = A51.hangar, hx0 = Hg.x - Hg.w / 2, hx1 = Hg.x + Hg.w / 2, hz0 = Hg.z - Hg.d / 2, hz1 = Hg.z + Hg.d / 2, HH = 11;
@@ -17282,6 +17400,11 @@ async function desenharTatica() {
   $('taticaTitulo').textContent = '🎯 Tático';
   let h = '';
   const q = (k) => qtdItem(k);
+  if (jogador.minhaArmadura) {   // 19p: armadura guardada com o jogador (como um carro)
+    const A = ARMADURAS[jogador.minhaArmadura.modelo], pc = Math.round((jogador.armadura ? jogador.armadura.b / A.blind : jogador.minhaArmadura.blindagem) * 100);
+    h += `<div class="sub">🤖 ${esc(A.nome)}</div><p class="dica">Blindagem <b>${pc}%</b>. Corre e soca ${Math.round(A.bonus * 100)}% mais e pula mais alto. Com 10% ela pede para recuar; 3 min fora de combate e ela se recupera aos poucos; com 2% ela ejeta você de paraquedas e é perdida.</p>
+      <div class="botoes">${jogador.armadura ? '<button id="tArmTirar">🤖 Guardar a armadura</button>' : '<button id="tArmVestir">🤖 Vestir a armadura</button>'}</div>`;
+  }
   h += `<div class="sub">🎒 Seu equipamento</div><p class="dica">Espingarda: <b>${q('espingarda')}</b> · Fuzil: <b>${q('fuzil')}</b> · Granadas: <b>${q('granada')}</b> · Barricadas: <b>${q('barricada')}</b>${q('rpg') || q('bazuca') || q('foguete') ? ` · RPG: <b>${q('rpg')}</b> · Bazuca: <b>${q('bazuca')}</b> · Foguetes: <b>${q('foguete')}</b>` : ''}. Arma na mão: <b>${jogador.armaEspecial ? NOME_ITEM_T[jogador.armaEspecial] : 'padrão'}</b>.</p>
     <div class="botoes">${q('espingarda') ? '<button data-eq="espingarda">🔫 Equipar espingarda</button>' : ''}${q('fuzil') ? '<button data-eq="fuzil">🔫 Equipar fuzil</button>' : ''}${q('rpg') ? '<button data-eq="rpg">🚀 Equipar RPG</button>' : ''}${q('bazuca') ? '<button data-eq="bazuca">🚀 Equipar bazuca</button>' : ''}${jogador.armaEspecial ? '<button data-eq="">Arma padrão</button>' : ''}</div>
     ${q('rpg') || q('bazuca') ? '<p class="dica">🚀 RPG: trave (mire 2 s numa aeronave) e o foguete persegue o calor do motor. Bazuca: trava e vai reta para onde a aeronave vai estar. Sem trava, os dois vão retos. Cada tiro gasta 1 foguete.</p>' : ''}
@@ -17367,6 +17490,8 @@ async function desenharTatica() {
   on('tArsenal', () => fazerTatica(() => rede.tatica.armasArsenal(), (t) => `Você pegou ${t}.`));
   c.querySelectorAll('[data-invest]').forEach((b) => { b.onclick = () => fazerTatica(() => rede.tatica.investigar(Number(b.dataset.invest)), (n) => (n ? `🚨 Achado: ${n}. Agora ele é procurado (+500 para você).` : 'Pista fria: não deu para achar o responsável.')); });
   c.querySelectorAll('[data-rmapa]').forEach((b) => { b.onclick = () => { rastrear({ nome: '📡 Movimentação ilícita (aprox.)', x: Number(b.dataset.x), z: Number(b.dataset.z) }); msgTatica('Marcado no mapa.'); }; });
+  on('tArmVestir', () => { vestirArmadura(); $('fecharTatica')?.click(); });
+  on('tArmTirar', () => { guardarArmadura(); desenharTatica(); });
   on('tPatroc', () => fazerTatica(() => rede.tatica.tornarPatrocinador(), '💼 Agora você é patrocinador.'));
   on('tPatrocinar', () => fazerTatica(() => rede.tatica.patrocinar(Number($('tCla').value), Number($('tValor').value)), 'Patrocínio enviado.'));
   on('tFabricar', () => fazerTatica(() => rede.tatica.fabricar($('tFabItem').value, Number($('tFabQtd').value)), (n) => `Fabricado. Estoque: ${n}.`));
@@ -18070,7 +18195,7 @@ function pular() {
     let alcance = 0;
     if (correndo) for (let d = 0.3; d <= 2.6; d += 0.3) { if (bloqueado(x0 + dx * d, z0 + dz * d)) break; alcance = d; }
     const novo = correndo && !j.armado && !!av.clipes?.pular_movendo;   // pulo em movimento novo (passada no ar, já sobe o quadril ~0,3 m)
-    pl = { dur: correndo ? 0.9 : 1.0, h: novo ? 0.16 : correndo ? 0.42 : 0.3, para: { x: x0 + dx * alcance, z: z0 + dz * alcance } };   // a animação já sobe o quadril (0,2-0,4 m)
+    pl = { dur: correndo ? 0.9 : 1.0, h: (novo ? 0.16 : correndo ? 0.42 : 0.3) * (j.armadura ? 1.02 : 1), para: { x: x0 + dx * alcance, z: z0 + dz * alcance } };   // a animação já sobe o quadril (0,2-0,4 m)
     // armado: o mesmo pulo segurando a arma (o de passar por cima), no tempo do pulo
     if (j.armado) av.tocar('pular_armado', { umaVez: true, velocidade: 0.8 / pl.dur, fade: 0.06 });
     else if (novo) av.tocar('pular_movendo', { umaVez: true, velocidade: 0.87 / pl.dur, fade: 0.06 });

@@ -244,6 +244,7 @@ async function desenharVisual(c) {
       return `<div class="carta"><img src="assets/miniaturas/${x.id}.webp" alt="" loading="lazy"><div>${esc(x.nome)}</div>
       ${p.personagem === x.id ? '<button class="acao em-uso" disabled>Em uso</button>'
         : meu ? `<button class="acao" data-usar${admin ? '-adm' : ''}="${x.id}">Usar</button>`
+        : x.soPresente ? '<button class="acao" disabled>🎁 Só de presente</button>'
         : aberto(x.id) ? `<button class="acao" data-comprar-p="${x.id}">✨ ${Number(e.preco).toLocaleString('pt-BR')}</button><small>até ${hora(e.liberado_ate)}</small>`
         : `<button class="acao" disabled>🔒 Fora da vitrine</button>`}</div>`; }).join('')}</div>`;
   $('vNomeOk').onclick = () => {

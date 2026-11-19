@@ -209,6 +209,8 @@ function traduzirRpc(m) {
     'so as forcas armadas': 'Só as Forças Armadas pegam armas no Arsenal.',
   'precisa de autorizacao': 'Precisa da autorização de um Tenente para cima (ou do General Supremo), a mesma da arma pesada.',
   'aguarde para pegar o lancador': 'O lançador sai a cada 2 minutos. Aguarde.',
+  'sem autorizacao do laboratorio': 'Só jogadores autorizados pelo General Supremo pegam armadura.',
+  'voce ja tem uma armadura': 'Você já tem uma armadura guardada. Outra só se ela for destruída.',
   'arsenal sem lancador': 'O arsenal está sem esse lançador. Peça um lote na Central de rações (vem de caminhão até a Base Aérea).',
   'ja tem lote a caminho': 'Já tem um lote de lançadores a caminho.',
   'arsenal cheio': 'O arsenal de lançadores está cheio.',
@@ -829,6 +831,14 @@ export const marinha = {
   historico: () => rpc('missil_historico'),
   definirForca: (id, forca) => rpc('definir_forca', { p_jogador: id, p_forca: forca }),
   forcas: (ids) => ids.length ? sel(sb.from('perfis').select('id,forca').in('id', ids)) : Promise.resolve([]),
+};
+// laboratório da Área 51 (124): armaduras e autorização do General Supremo
+export const lab = {
+  minha: async () => { const u = (await sb.auth.getUser()).data.user; if (!u) return null; return (await sel(sb.from('armaduras').select('*').eq('dono', u.id)))[0] || null; },
+  pegar: (modelo) => rpc('pegar_armadura', { p_modelo: modelo }),
+  salvar: (f) => rpc('salvar_armadura', { p_blindagem: f }),
+  perder: () => rpc('perder_armadura'),
+  autorizar: (alvo, sim) => rpc('lab_autorizar', { p_alvo: alvo, p_sim: sim }),
 };
 export const exercito = {
   especializarParaquedista: () => rpc('especializar_paraquedista'),
