@@ -2082,6 +2082,9 @@ function opcoesRoda() {
   const r = [{ id: 'mao', ic: '✋', nome: 'Mão' }], [ic, nome] = nomeArmaPadrao();
   r.push({ id: 'padrao', ic, nome });
   for (const [it, ic2] of [['espingarda', '🔫'], ['fuzil', '🔫'], ['rpg', '🚀'], ['bazuca', '🚀']]) if (qtdItem(it) > 0) r.push({ id: it, ic: ic2, nome: NOME_ITEM_T[it], qtd: it === 'rpg' || it === 'bazuca' ? `${qtdItem('foguete')} foguetes` : null });
+  if (jogador.armadura) for (const it of ['laser_azul', 'laser_roxo', 'laser_vermelho', 'laser_energia']) if (qtdItem(it) > 0) {   // lasers: só com a armadura vestida
+    const pe = jogador.pente; r.push({ id: it, ic: '🔋', nome: NOME_ITEM_T[it], qtd: jogador.armaEspecial === it && pe ? (pe.ate ? '⏳' : `${pe.balas}/10`) : '10/10' });
+  }
   if (qtdItem('granada') > 0) r.push({ id: 'granada', ic: '💣', nome: 'Granada', qtd: `${qtdItem('granada')}` });
   return r;
 }
