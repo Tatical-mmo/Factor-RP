@@ -15201,7 +15201,10 @@ function montarArea51() {
     cone.lookAt(x, 14, z); cone.rotateX(-Math.PI / 2);
     // o holofote varre o pátio de um lado para o outro: o cone gira em volta da lâmpada
     const piv = new THREE.Group(); piv.position.set(x, 14, z); g.add(piv); cone.position.sub(piv.position); piv.add(cone);
-    holofotesA51.push({ piv, fase: holofotesA51.length * 1.7 });
+    // luz de verdade (19m): um refletor que ilumina o chão por onde o cone passa (sem sombra, para o celular aguentar)
+    const hip = Math.hypot(dx, 14, dz), luz = new THREE.SpotLight('#fff1cc', 0, 120, Math.atan2(9, L) * 1.15, 0.45, 1.2);
+    luz.position.set(0, 0, 0); luz.target.position.set(dx / hip * L * 2, -14 / hip * L * 2, dz / hip * L * 2); piv.add(luz, luz.target);
+    holofotesA51.push({ piv, luz, fase: holofotesA51.length * 1.7 });
   }
   // deserto: dunas baixas e cactos (fora do muro e da estrada)
   const duna = M('#c9a46c'), cacto = M('#4f7a3a');
@@ -15241,7 +15244,7 @@ function atualizarArea51(dt) {
     const abre = ok && Math.hypot(p.x - A51.x1, p.z) < 18;
     area51.cancela.rotation.x = THREE.MathUtils.lerp(area51.cancela.rotation.x, abre ? -Math.PI / 2 * 0.95 : 0, Math.min(1, dt * 3));
     area51.luzCone.opacity = 0.16 * noiteAtual;
-    { const tt = agora / 1000; for (const h of holofotesA51) h.piv.rotation.y = Math.sin(tt * 0.35 + h.fase) * 0.65; }
+    { const tt = agora / 1000; for (const h of holofotesA51) { h.piv.rotation.y = Math.sin(tt * 0.35 + h.fase) * 0.65; if (h.luz) h.luz.intensity = 900 * noiteAtual; } }
   }
   // de fora não entra (nem pousando)
   if (!ok && !jogador.abducao && dentroArea51(p.x, p.z)) {
