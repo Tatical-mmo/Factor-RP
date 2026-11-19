@@ -17502,11 +17502,11 @@ async function desenharTatica() {
   }
   if (militar()) {
     const pontosArsenal = [civico.EXERCITO.arsenal, CENTRAL_MISSEIS, { x: (mundo.BASE_AEREA.x0 + mundo.BASE_AEREA.x1) / 2, z: (mundo.BASE_AEREA.z0 + mundo.BASE_AEREA.z1) / 2 }];
-    const perto = pontosArsenal.some((a) => a && Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z) < (a === pontosArsenal[2] ? 80 : 15));
+    const perto = souAdmin() || pontosArsenal.some((a) => a && Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z) < (a === pontosArsenal[2] ? 80 : 15));   // o General Supremo pega de qualquer lugar
     h += `<div class="sub">🎖️ Forças Armadas</div><p class="dica">Exército, Marinha e Aeronáutica pegam espingarda, fuzil e granadas no Arsenal do Quartel, no Comando Naval ou na Base Aérea (a cada 10 min). Na Central de rações dá para mandar kits de armas para Polícia e PRF de caminhão.</p>
       <div class="botoes"><button id="tArsenal" ${perto ? '' : 'disabled'}>${perto ? '🔫 Pegar as armas' : '🔫 Vá até o Arsenal ou uma base'}</button></div>
-      <p class="dica">🚀 Anti-aéreo (com a autorização da arma pesada, a cada 10 min, com 4 foguetes):</p>
-      <div class="botoes"><button data-lanc="rpg" ${perto ? '' : 'disabled'}>🚀 Pegar RPG</button><button data-lanc="bazuca" ${perto ? '' : 'disabled'}>🚀 Pegar bazuca</button></div>`;
+      <p class="dica">🚀 Anti-aéreo: RPG ou bazuca e até 4 foguetes, do estoque do arsenal (chega de caminhão na Base Aérea), a cada 2 min. Depois escolha na roda do botão Arma.</p>
+      <div class="botoes">${perto ? '<button data-lanc="rpg">🚀 Pegar RPG</button><button data-lanc="bazuca">🚀 Pegar bazuca</button>' : '<button disabled>🚀 Vá até o Arsenal, o Comando Naval ou a Base Aérea</button>'}</div>`;
   }
   if (p.prf || p.cargo === 'admin') {
     let radar = []; try { radar = await rede.tatica.radar(); } catch (e) { radar = null; }
