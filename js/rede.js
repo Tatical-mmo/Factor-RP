@@ -614,6 +614,7 @@ export const algemas = {
   soltar: (alvo) => rpc('soltar_algemas', { p_alvo: alvo }),
   cortar: (alvo) => rpc('cortar_algemas', { p_alvo: alvo }),
   comprarAlicate: () => rpc('comprar_alicate'),
+  comprarColete: () => rpc('comprar_colete'),   // contrabandista: colete balístico (8.000)
   seguranca: (slot, nome) => rpc('prefeito_seguranca', { p_slot: slot, p_nome: nome }),
 };
 export const qg = {

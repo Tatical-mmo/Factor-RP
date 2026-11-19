@@ -3565,7 +3565,7 @@ function conectarMultiplayer(perfil) {
           const alvo = r.alvo; removerRemoto(id); adicionarRemoto(id, meta).then(() => { const n = remotos.get(id); if (n && alvo && !n.alvo) n.alvo = alvo; });
         } else if (!r) adicionarRemoto(id, meta);
         else {
-          const chave = (m) => [m.crimes, m.policial, m.cla, m.prf, m.eleitoral, m.prefeito, m.profissao, m.ferido, m.recompensa, m.patente, m.ref, m.bope, m.invis, m.som ? `${m.som.url}|${m.som.txt}` : ''].join('|');
+          const chave = (m) => [m.crimes, m.policial, m.cla, m.prf, m.eleitoral, m.prefeito, m.profissao, m.ferido, m.recompensa, m.patente, m.ref, m.bope, m.invis, m.farda, m.cc, m.sf, m.som ? `${m.som.url}|${m.som.txt}` : ''].join('|');
           if (chave(r.meta) !== chave(meta)) {
             r.meta = meta; etiquetaStatus(r);
             if (meta.ferido && r.av) {
@@ -4414,7 +4414,7 @@ async function npcFardado(papel, i, arma, farda) {
 function metaPresenca() {
   const p = jogador.perfil;
   return { mk: jogador.mascara || 0, rd: jogador.rendido ? 1 : 0, ceu: jogador.noCeu ? 1 : 0, bope: !!p.bope, invis: !!p.invisivel, som: somAtivo ? { url: somAtivo.url, txt: somAtivo.txt } : null, emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
-    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, sf: sexoFarda(), on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
+    prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, sf: sexoFarda(), cc: jogador.coleteCivil && !jogador.farda ? 1 : 0, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
 function etiquetaStatus(r) {
@@ -7099,6 +7099,11 @@ async function falarContrabandista() {
   opcoes.push({ rotulo: '🚀 3 foguetes: 18.000 (só clãs; é crime)', fn: async () => {
     if (!jogador.claInfo) { aviso('Contrabandista: "Isso aí só pra gente de clã."', 3); return; }
     try { const n = await rede.tatica.comprarFoguetes(3); recarregarInventario(); aviso(`🚀 Foguetes comprados (você tem ${n}).`, 3); } catch (e) { aviso(e.message, 3); }
+  } });
+  opcoes.push({ rotulo: jogador.coleteCivil && escudoAtual() >= ESCUDO_MAX ? '🛡️ Colete balístico (você já usa um inteiro)' : '🛡️ Colete balístico: 8.000 (escudo 100; não é crime)', fn: async () => {
+    if (jogador.farda) { aviso('Contrabandista: "Fardado já tem colete, parceiro."', 3); return; }
+    if (jogador.coleteCivil && escudoAtual() >= ESCUDO_MAX) { aviso('Seu colete ainda está inteiro.', 2.5); return; }
+    try { await rede.algemas.comprarColete(); escudo = ESCUDO_MAX; guardarEscudo(); definirColeteCivil(true); aviso('🛡️ Colete balístico vestido: escudo 100%. Quando ele quebrar, compre outro aqui.', 4); } catch (e) { aviso(e.message, 3); }
   } });
   escolher('Contrabandista', '"Fala baixo. O que vai ser?"', opcoes);
 }
@@ -11792,8 +11797,9 @@ const UNIFORMES = {
   exercito: { cor: '#4b5d33', texto: 'EXÉRCITO', letra: '#e8e3c8', faixa: null, chapeu: '#3c4a28' },
   jornalista: { cor: '#1f4f8a', texto: 'IMPRENSA', letra: '#ffffff', faixa: '#ffffff', chapeu: '#1f4f8a' },
   bope: { cor: '#0c0c0c', texto: 'BOPE', letra: '#e8e8e8', faixa: null, chapeu: '#0a0a0a' },   // colete e capacete pretos, BOPE nas costas
+  civil: { cor: '#2b2f33', texto: ' ', letra: '#2b2f33', faixa: null, chapeu: '#2b2f33' },   // colete balístico do contrabandista (21k): cinza, sem nome
 };
-const NOME_FARDA = { policia: 'Polícia', prf: 'PRF', bombeiro: 'Bombeiros', medico: 'Resgate (Hospital)', exercito: 'Exército', jornalista: 'Imprensa', bope: 'BOPE' };
+const NOME_FARDA = { civil: 'Colete balístico', policia: 'Polícia', prf: 'PRF', bombeiro: 'Bombeiros', medico: 'Resgate (Hospital)', exercito: 'Exército', jornalista: 'Imprensa', bope: 'BOPE' };
 function papelDe(m) { return m?.policial ? 'policia' : m?.prf ? 'prf' : UNIFORMES[m?.profissao] ? m.profissao : null; }
 const _texUni = new Map();
 function texturaUniforme(u) {
@@ -11817,7 +11823,7 @@ const PECAS_FARDA = {
   jaleco: { arq: 'farda_jaleco', auto: 'corpo', alt: 1.75, subir: -0.36 },
   mascara: { arq: 'farda_mascara', auto: 'cabeca', folga: 0.9, subir: -0.58, frente: 0.22 },
 };
-const CHAPEU_DE = { policia: 'bone', prf: 'bone', bombeiro: 'bombeiro', medico: 'mascara', exercito: 'militar', jornalista: 'bone', bope: 'militar' };
+const CHAPEU_DE = { civil: 'bone', policia: 'bone', prf: 'bone', bombeiro: 'bombeiro', medico: 'mascara', exercito: 'militar', jornalista: 'bone', bope: 'militar' };
 const fardaDe = (m) => { const p = papelDe(m); return p === 'policia' && m?.bope ? 'bope' : p; };   // policial do BOPE veste preto
 const pecasFarda = {}; let pecasPedidas = false;
 function carregarPecasFarda() {
@@ -11986,6 +11992,7 @@ function vestir(av, papel) {
       preso = true;
     }
   }
+  if (papel === 'civil') chapeu.visible = false;   // colete avulso: só o colete, sem boné
   if (!preso) scene.add(colete, chapeu);
   av.uniforme = { papel, colete, chapeu, ossos, glb, preso, peca: chapNome, v: versaoFarda };
 }
@@ -12034,6 +12041,7 @@ function posicionarUniforme(av) {
 let papelVisto;
 function chaveFarda() { return 'fator_farda_' + (jogador.perfil?.id || ''); }
 function definirFarda(papel, silencioso) {
+  if (papel && !jogador.farda) { escudo = ESCUDO_MAX; guardarEscudo(); }   // a farda já vem com o colete (19k): vestir de novo traz um inteiro
   jogador.farda = papel || null;
   try { if (papel) localStorage.setItem(chaveFarda(), papel); else localStorage.removeItem(chaveFarda()); } catch { /* sem armazenamento */ }
   conexao?.rastrear(metaPresenca()); desenharEscudo();
@@ -12045,7 +12053,8 @@ function seguirExpediente() {
   if (papelVisto === undefined) {   // ao abrir o jogo: volta com a farda que estava
     papelVisto = p; let salva = null; try { salva = localStorage.getItem(chaveFarda()); } catch { /* nada */ }
     jogador.farda = salva && UNIFORMES[salva] && (salva === p || souEquipe()) ? salva : p;
-    if (jogador.farda) conexao?.rastrear(metaPresenca());
+    lerColeteCivil(); desenharEscudo();
+    if (jogador.farda || jogador.coleteCivil) conexao?.rastrear(metaPresenca());
     return;
   }
   if (jogador.farda && !souEquipe() && jogador.farda !== p) definirFarda(p || null, true);   // farda é só da própria corporação
@@ -12064,31 +12073,36 @@ function escudoAtual() {
   return escudo;
 }
 function guardarEscudo() { try { localStorage.setItem(chaveEscudo(), String(Math.round(escudo))); } catch { /* nada */ } }
-const comColete = () => !!jogador.farda && !jogador.carro;
+// colete balístico avulso (comprado no contrabandista): fica guardado no aparelho até ser destruído
+function chaveColete() { return 'fator_colete_' + (jogador.perfil?.id || ''); }
+function lerColeteCivil() { try { jogador.coleteCivil = localStorage.getItem(chaveColete()) === '1'; } catch { jogador.coleteCivil = false; } }
+function definirColeteCivil(v) { jogador.coleteCivil = !!v; try { if (v) localStorage.setItem(chaveColete(), '1'); else localStorage.removeItem(chaveColete()); } catch { /* nada */ } conexao?.rastrear(metaPresenca()); desenharEscudo(); }
+const comColete = () => (!!jogador.farda || !!jogador.coleteCivil) && !jogador.carro;
 function absorverEscudo(v) {
   if (!comColete() || v <= 0) return v;
   const e = escudoAtual(), tira = Math.min(e, v), resto = (v - tira) * 0.9;   // capacete: -10% no que chega à vida
   if (tira > 0) {
     escudo = e - tira; guardarEscudo();
-    if (escudo <= 0) aviso('🛡️ Seu colete foi destruído! Vá ao vestiário do seu trabalho e pegue um colete novo.', 4.5);
+    if (escudo <= 0) {
+      if (!jogador.farda && jogador.coleteCivil) { definirColeteCivil(false); aviso('🛡️ Seu colete balístico foi destruído! Outro só com o contrabandista do Morro da Serra.', 4.5); }
+      else aviso('🛡️ O colete da farda foi destruído! Tire e vista a farda de novo no vestiário para ganhar um novo.', 4.5);
+    }
   }
   return resto;
 }
 function desenharEscudo() {
   const linha = $('linhaEscudo'); if (!linha) return;
-  const ver = !!jogador.farda; linha.style.display = ver ? '' : 'none'; if (!ver) return;
+  const ver = !!jogador.farda || !!jogador.coleteCivil; linha.style.display = ver ? '' : 'none'; if (!ver) return;
   const e = escudoAtual(), b = $('barEscudo');
   b.firstChild.style.width = (e / ESCUDO_MAX * 100).toFixed(0) + '%';
-  $('txtEscudo').textContent = e <= 0 ? ' ⚠️' : ''; b.title = e <= 0 ? 'Colete quebrado: pegue um novo no vestiário' : `Escudo ${Math.round(e)}%`;
+  $('txtEscudo').textContent = e <= 0 ? ' ⚠️' : ''; b.title = e <= 0 ? 'Colete quebrado: tire e vista a farda de novo no vestiário' : `Escudo ${Math.round(e)}%`;
 }
-function trocarColete() { escudo = ESCUDO_MAX; guardarEscudo(); desenharEscudo(); aviso('🛡️ Colete novo! Escudo 100%.', 2.5); }
 function vestiario(trabalho) {
   const p = fardaDe(jogador.perfil), opcoes = [];
-  if (souEquipe()) for (const k of Object.keys(UNIFORMES)) opcoes.push({ rotulo: `${jogador.farda === k ? '✔️ ' : ''}${NOME_FARDA[k]}`, fn: () => definirFarda(k) });
+  if (souEquipe()) for (const k of Object.keys(UNIFORMES).filter((x) => x !== 'civil')) opcoes.push({ rotulo: `${jogador.farda === k ? '✔️ ' : ''}${NOME_FARDA[k]}`, fn: () => definirFarda(k) });
   else if (p) opcoes.push({ rotulo: jogador.farda === p ? `Tirar a farda (${NOME_FARDA[p]})` : `Vestir a farda: ${NOME_FARDA[p]}`, fn: () => definirFarda(jogador.farda === p ? null : p) });
   else { aviso(`Só quem está no expediente ${trabalho ? `(${trabalho}) ` : ''}veste a farda. Entre em serviço primeiro.`, 3.5); return; }
   if (souEquipe() && jogador.farda) opcoes.push({ rotulo: 'Tirar a farda', fn: () => definirFarda(null) });
-  if (jogador.farda || p) { const e = escudoAtual(); opcoes.unshift({ rotulo: e >= ESCUDO_MAX ? '🛡️ Colete inteiro (100%)' : `🛡️ Pegar colete novo (escudo ${Math.round(e)}% → 100%)`, fn: () => { if (e < ESCUDO_MAX) trocarColete(); } }); }
   if (p === 'medico' || (souEquipe() && jogador.farda === 'medico')) {   // hospital: farda masculina ou feminina (fica guardada)
     const f = sexoFarda() === 'f';
     opcoes.push({ rotulo: f ? '🚹 Usar a farda masculina' : '🚺 Usar a farda feminina', fn: () => { try { localStorage.setItem('fator_sexo_farda', f ? 'm' : 'f'); } catch { /* sem armazenamento */ } conexao?.rastrear(metaPresenca()); aviso(f ? '👔 Farda masculina escolhida.' : '👔 Farda feminina escolhida.', 2.5); } });
@@ -12102,14 +12116,14 @@ function sexoFarda() { try { return localStorage.getItem('fator_sexo_farda') ===
 function atualizarUniformes() {
   seguirExpediente();
   if (jogador.avatar && jogador.perfil && !trocandoAvatar && !editorFarda && performance.now() > tentouSkin) { const sk = skinDoJogador(); if (sk && jogador.avatar.personagemId !== sk) { tentouSkin = performance.now() + 5000; trocarAvatar(sk).catch(() => {}); } }
-  if (jogador.avatar) { vestir(jogador.avatar, jogador.carro || jogador.passageiro ? null : jogador.farda || null); posicionarUniforme(jogador.avatar); vestirMascara(jogador.avatar, mascaraPrevia ?? jogador.mascara); }
+  if (jogador.avatar) { vestir(jogador.avatar, jogador.carro || jogador.passageiro ? null : jogador.farda || (jogador.coleteCivil ? 'civil' : null)); posicionarUniforme(jogador.avatar); vestirMascara(jogador.avatar, mascaraPrevia ?? jogador.mascara); }
   for (const av of NPC_FARDADOS) {   // NPCs fardados: veste quando as peças chegam e põe a arma na mão
     if (!av.raiz.parent) { NPC_FARDADOS.delete(av); continue; }
     if (!av.raiz.visible || av.raiz.position.distanceTo(jogador.pos) > 70) continue;
     vestir(av, av.papelNpc); posicionarUniforme(av); if (av.armaNpc?.visible) av.posicionarArma();
   }
   for (const r of remotos.values()) {
-    if (!r.av) continue; vestir(r.av, r.meta && 'farda' in r.meta ? r.meta.farda : fardaDe(r.meta)); posicionarUniforme(r.av);
+    if (!r.av) continue; vestir(r.av, (r.meta && 'farda' in r.meta ? r.meta.farda : fardaDe(r.meta)) || (r.meta?.cc ? 'civil' : null)); posicionarUniforme(r.av);
     vestirMascara(r.av, r.meta?.mk || null);
     if (r.av.mascara?.obj) r.av.mascara.obj.visible = r.av.raiz.position.distanceTo(jogador.pos) < 45;   // longe: some (a máscara tem muitos detalhes)
   }
