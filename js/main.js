@@ -1014,6 +1014,9 @@ const ANIM_CORRIDA = ['corrida_fome', 'corrida_carga', 'corrida_rapida', 'corrid
 for (const n of ANIM_CORRIDA) ANIM_EXTRAS.add(n);
 // RPG e bazuca no ombro: mirar (parado), disparo (coice) e recarga (19e; outro esqueleto de origem, outro arquivo)
 const ANIM_LANC = ['lanc_mirar', 'lanc_tiro', 'lanc_recarga'];
+// farda completa (19i): em serviço o personagem inteiro vira a farda da corporação; os NPCs dela também usam
+const SKIN_FARDA = { exercito: 'Farda_Exercito', marinha: 'Farda_Marinha', aeronautica: 'Farda_Aeronautica', paraquedista: 'Farda_Paraquedista', policia: 'Farda_Policia', prf: 'Farda_PRF', bope: 'Farda_BOPE' };
+const ehSkinFarda = (id) => /^Farda_/.test(id || '');
 for (const n of ANIM_LANC) ANIM_EXTRAS.add(n);
 const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
@@ -3548,7 +3551,7 @@ function conectarMultiplayer(perfil) {
       for (const [id, meta] of Object.entries(lista)) {
         if (id === perfil.id) continue;
         const r = remotos.get(id);
-        if (r && (r.meta.personagem !== meta.personagem || r.meta.cargo !== meta.cargo || r.meta.nome !== meta.nome)) {
+        if (r && (skinRemota(r.meta) !== skinRemota(meta) || r.meta.cargo !== meta.cargo || r.meta.nome !== meta.nome)) {
           const alvo = r.alvo; removerRemoto(id); adicionarRemoto(id, meta).then(() => { const n = remotos.get(id); if (n && alvo && !n.alvo) n.alvo = alvo; });
         } else if (!r) adicionarRemoto(id, meta);
         else {
@@ -3592,12 +3595,14 @@ function conectarMultiplayer(perfil) {
   desenharBotaoVoz();
 }
 
+// o que o outro jogador mostra: a farda (em serviço) ou o personagem dele
+function skinRemota(meta) { return SKIN_FARDA['farda' in (meta || {}) ? meta.farda : fardaDe(meta)] || meta?.personagem; }
 async function adicionarRemoto(id, meta) {
   const r = { meta, av: null, arma: null, alvo: null, anim: '', caixa: null };
   remotos.set(id, r);
   try {
-    const pasta = ROBOS.includes(meta.personagem) ? 'robos' : 'personagens';
-    const av = await criarAvatar(pasta, meta.personagem);
+    const sk = skinRemota(meta), pasta = ROBOS.includes(sk) ? 'robos' : 'personagens';
+    const av = await criarAvatar(pasta, sk);
     if (remotos.get(id) !== r) return;          // saiu enquanto carregava
     const arma = clonar('arma_paintball'); av.encaixarArma(arma); arma.visible = false; r.armaCod = 1;
     const et = textoSprite(meta.nome, { escala: 0.8, cor: meta.cargo === 'admin' ? '#ff6b6b' : meta.cargo === 'moderador' ? '#7fb8ff' : '#ffffff' });
@@ -3634,11 +3639,12 @@ function atualizarRemotos(dt) {
     if (a.ave) { mostrarAveRemota(r, a, dt); raiz.visible = false; if (r.arma) r.arma.visible = false; r.av.mixer.update(dt); continue; }
     if (r.ave) { scene.remove(r.ave); r.ave = null; }
     if (r.carro && r.carroModelo === 'helicoptero_bombeiros') { const bd = r.carro.getObjectByName('balde'); if (bd) bd.visible = r.carro.position.y > alturaChao(r.carro.position.x, r.carro.position.z) + 2.5; }
-    if (r.carro && civico.CARROS[r.carroModelo]?.voa) { const ro = rotorDe(r.carro); if (ro) { ro.rotation.y += dt * (r.carro.position.y > alturaChao(r.carro.position.x, r.carro.position.z) + 1 ? 28 : 12); civico.rotorRapido(ro, true); } }
+    if (r.carro && civico.CARROS[r.carroModelo]?.voa) { const ro = rotorDe(r.carro); { const vr = r.carro.position.y > alturaChao(r.carro.position.x, r.carro.position.z) + 1 ? 28 : 12; if (ro) { ro.rotation.y += dt * vr; civico.rotorRapido(ro, true); } civico.girarCauda(r.carro, dt, vr); } }
     if (a.pg) {   // passageiro de outro jogador (no jipe aberto aparece sentado)
       raiz.position.set(a.x, a.y, a.z); raiz.visible = false; if (r.algemas) r.algemas.visible = false; r.av.mixer.update(dt);
-      const vp = a.pg === jogador.perfil?.id ? (jogador.carro?.modelo === 'militar' ? jogador.carro.mesh : null) : (remotos.get(a.pg)?.carroModelo === 'militar' ? remotos.get(a.pg).carro : null);
-      if (vp && sentarNoVeiculo(r.av, vp, 'militar', lugarPassageiro(a.id, a.pg))) { r.arma.visible = false; r.anim = 'idle'; }
+      const mp = a.pg === jogador.perfil?.id ? jogador.carro?.modelo : remotos.get(a.pg)?.carroModelo;   // jipe ou helicóptero do Exército: aparece sentado
+      const vp = !civico.ABERTOS[mp] ? null : a.pg === jogador.perfil?.id ? jogador.carro?.mesh : remotos.get(a.pg)?.carro;
+      if (vp && sentarNoVeiculo(r.av, vp, mp, lugarPassageiro(a.id, a.pg))) { r.arma.visible = false; r.anim = 'idle'; }
       continue;
     }
     if (a.vc) {   // dirigindo um veículo de empresa: o veículo segue a posição dele
@@ -3670,19 +3676,24 @@ function atualizarRemotos(dt) {
     if (!raiz.visible || Math.hypot(a.x - raiz.position.x, a.z - raiz.position.z) > 8) { raiz.position.set(a.x, a.y, a.z); raiz.visible = true; }
     const k = Math.min(1, dt * 10);
     raiz.position.x += (a.x - raiz.position.x) * k; raiz.position.y += (a.y - raiz.position.y) * k; raiz.position.z += (a.z - raiz.position.z) * k;
-    raiz.rotation.y = suavizarAngulo(raiz.rotation.y, a.r, dt * 12);
+    endireitar(r.av); raiz.rotation.y = suavizarAngulo(raiz.rotation.y, a.r, dt * 12);
     if (a.a !== r.anim) {
       r.anim = a.a;
-      const umaVez = a.a in ANIM_UMA_VEZ;
-      r.av.tocar(a.a, { umaVez, velocidade: ANIM_UMA_VEZ[a.a] || ANIM_VEL[a.a] || 1, fade: umaVez ? 0.1 : 0.2 });
+      if (a.a === 'lanc_tiro' || a.a === 'lanc_recarga') animLancadorRemoto(r.av, a);   // lançador (19h): coice e recarga uma vez só, como em quem atira
+      else {
+        const umaVez = a.a in ANIM_UMA_VEZ;
+        r.av.tocar(a.a, { umaVez, velocidade: ANIM_UMA_VEZ[a.a] || ANIM_VEL[a.a] || 1, fade: umaVez ? 0.1 : 0.2 });
+      }
     }
     if (a.ar && a.ar !== r.armaCod && ARMA_POR_COD[a.ar]) { const nova = novaArma(ARMA_POR_COD[a.ar], r.av); r.arma.parent?.remove(r.arma); r.arma = nova; r.armaCod = a.ar; }
     r.arma.visible = !!a.ar;
     if (r.caixa && codigoCaixa(r.caixa) !== (a.cx || 0)) { scene.remove(r.caixa); r.caixa = null; }
     if (a.cx && !r.caixa) r.caixa = criarCaixa(tipoDoCodigo(a.cx));
+    if (r.av.colunaAntes) { r.av.coluna.quaternion.copy(r.av.colunaAntes); r.av.colunaAntes = null; }
     r.av.mixer.update(dt);
     garrafaNaMao(r.av, r.anim === 'beber'); celularNaMao(r.av, r.anim === 'celular');
     raiz.updateMatrixWorld(true);
+    if (a.mp && a.ar) inclinarColuna(r.av, a.mp);   // mira manual de quem está longe: o corpo inclina igual
     if (a.mh) posarAperto(r.av);
     if (r.caixa) posicionarCaixa(r.av, r.caixa, raiz.rotation.y);
     if (a.al && !r.algemas) { r.algemas = clonar('algemas'); r.algemas.scale.setScalar(1.4); scene.add(r.algemas); }
@@ -3697,9 +3708,9 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), iv: j.carro?.invisivel ? 1 : 0, mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? (j.paraquedas.mesh ? 1 : 2) : 0, ave: j.ave ? (j.ave.tipo === 'corvo' ? 1 : 2) : 0, bd: j.ave?.bando ? 1 : 0, oc: nomeOculto ? 1 : 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), iv: j.carro?.invisivel ? 1 : 0, mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? (j.paraquedas.mesh ? 1 : 2) : 0, ave: j.ave ? (j.ave.tipo === 'corvo' ? 1 : 2) : 0, bd: j.ave?.bando ? 1 : 0, oc: nomeOculto ? 1 : 0, mp: miraM.ativo && j.armado && podeMiraManual() ? Math.round(miraM.pitch * 20) / 20 : 0 };
   const u = ultimoEnvio;
-  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs || u.iv !== est.iv || u.mh !== est.mh || u.ap !== est.ap || u.sg !== est.sg;
+  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs || u.iv !== est.iv || u.mh !== est.mh || u.ap !== est.ap || u.sg !== est.sg || u.mp !== est.mp;
   if (!mudou && tempoKeepAlive > 0) return;
   conexao.enviar('pos', est); ultimoEnvio = est; tempoKeepAlive = 3;
 }
@@ -4373,8 +4384,8 @@ const skinAtual = () => jogador.perfil?.personagem;
 // continua como fonte das animações e como boneco de treino.
 const ROSTOS_NPC = PERSONAGENS.map((p) => p.id).filter((id) => id !== 'Vovo');
 const NPC_FARDADOS = new Set();
-async function npcFardado(papel, i, arma) {
-  const av = await criarAvatar('personagens', ROSTOS_NPC[Math.abs(i | 0) % ROSTOS_NPC.length]);
+async function npcFardado(papel, i, arma, farda) {
+  const av = await criarAvatar('personagens', SKIN_FARDA[farda || papel] || ROSTOS_NPC[Math.abs(i | 0) % ROSTOS_NPC.length]);
   carregarPecasFarda(); av.papelNpc = papel; NPC_FARDADOS.add(av);
   try { vestir(av, papel); } catch { /* farda ainda carregando: veste depois */ }
   if (arma) { try { av.armaNpc = novaArma(arma, av); av.armaNpc.visible = papel !== 'policia' && papel !== 'prf'; } catch { /* sem arma */ } }
@@ -8048,14 +8059,17 @@ async function trocarAvatar(personagem) {
   if (trocandoAvatar) return; trocandoAvatar = true;
   try {
     const novo = await criarAvatar(ROBOS.includes(personagem) ? 'robos' : 'personagens', personagem);
-    const arma = clonar('arma_paintball'); novo.encaixarArma(arma); arma.visible = jogador.armado;
+    const tipo = ARMAS[jogador.armaTipo] ? jogador.armaTipo : 'basica';   // vestir a farda não tira a arma da mão
+    let arma = null; if (tipo !== 'basica') { try { arma = novaArma(tipo, novo); } catch { arma = null; } }
+    if (!arma) { arma = clonar('arma_paintball'); novo.encaixarArma(arma); }
+    arma.visible = jogador.armado;
     const velho = jogador.avatar;
     vestir(velho, null); velho.raiz.remove(jogador.etiqueta); velho.raiz.removeFromParent();   // de onde estiver (rua, banco do carro...)
     novo.nomePersonagem = personagem;
     novo.raiz.add(jogador.etiqueta); jogador.etiqueta.position.y = alturaNome(novo);
     novo.raiz.position.copy(jogador.pos); novo.raiz.rotation.y = jogador.yaw;
     scene.add(novo.raiz); novo.tocar('idle');
-    jogador.avatar = novo; jogador.arma = arma; jogador.armaTipo = 'basica';
+    jogador.avatar = novo; jogador.arma = arma; jogador.armaTipo = tipo;
   } finally { trocandoAvatar = false; }
 }
 
@@ -8070,7 +8084,7 @@ function aplicarPerfil(novo) {
     return;
   }
   // o personagem não muda mais ao entrar em serviço (a farda é que mostra): recriar o boneco aqui deixava uma cópia parada
-  if (novo.personagem && novo.personagem !== antigo.personagem && novo.personagem !== jogador.avatar?.nomePersonagem) trocarAvatar(skinAtual());
+  if (novo.personagem && novo.personagem !== antigo.personagem && novo.personagem !== jogador.avatar?.nomePersonagem) trocarAvatar(skinDoJogador());
   if (novo.policial !== antigo.policial) aviso(novo.policial ? 'Você está em serviço na polícia. Prenda os procurados (em vermelho)!' : 'Você saiu do serviço da polícia.', 4);
   if ((novo.crimes || 0) > (antigo.crimes || 0)) aviso('Você está PROCURADO pela polícia.', 4);
   if (novo.prf !== antigo.prf) aviso(novo.prf ? 'Você está em serviço na PRF. Investigue a prefeitura!' : 'Você saiu do serviço da PRF.', 4);
@@ -8167,7 +8181,7 @@ function atualizarJogador(dt) {
   if (j.passageiro) {
     seguirComoPassageiro(); av.mixer.update(dt);
     const rp = j.passageiro && remotos.get(j.passageiro.piloto);
-    if (rp?.carroModelo === 'militar' && rp.carro) sentarNoVeiculo(av, rp.carro, 'militar', lugarPassageiro(j.perfil.id, j.passageiro.piloto));
+    if (civico.ABERTOS[rp?.carroModelo] && rp.carro) sentarNoVeiculo(av, rp.carro, rp.carroModelo, lugarPassageiro(j.perfil.id, j.passageiro.piloto));
     return;
   }
   if (j.carro) { if (!j.carro.taxi) dirigir(dt); av.mixer.update(dt); if (!j.carro || !sentarNoVeiculo(av, j.carro.mesh, j.carro.modelo)) av.raiz.updateMatrixWorld(true); return; }
@@ -8241,7 +8255,7 @@ function atualizarJogador(dt) {
   }
   j.pos.y = THREE.MathUtils.lerp(j.pos.y, alturaChao(j.pos.x, j.pos.z), Math.min(1, dt * 12));
   av.raiz.position.copy(j.pos); av.raiz.position.y += j.puloY || 0;
-  av.raiz.rotation.y = j.yaw;
+  endireitar(av); av.raiz.rotation.y = j.yaw;
   if (av.colunaAntes) { av.coluna.quaternion.copy(av.colunaAntes); av.colunaAntes = null; }
   av.mixer.update(dt);
   av.raiz.updateMatrixWorld(true);
@@ -8332,14 +8346,24 @@ function lugarPassageiro(id, piloto) {
   for (const [rid, r] of remotos) if (r.alvo?.pg === piloto) ids.push(rid);
   ids.sort(); const i = ids.indexOf(id); return i < 0 ? -1 : i + 1;
 }
+// saiu do helicóptero: tira a inclinação do voo que ficou no corpo
+function endireitar(av) { if (av?.inclinado) { av.raiz.rotation.x = 0; av.raiz.rotation.z = 0; av.inclinado = false; } }
 function sentarNoVeiculo(av, mesh, modelo, lugar = 0) {
   const A = civico.ABERTOS[modelo]; if (!A || !av || !mesh) return false;
   const L = A.lugares[lugar]; if (!L) return false;
   if (av.nomeAtual !== 'idle') av.tocar('idle', { fade: 0.15 });
-  const b = caixaDoModelo(mesh), cx = (b.min.x + b.max.x) / 2, W = b.max.x - b.min.x, raiz = av.raiz;
-  const banco = mesh.localToWorld(_vS.set(cx + L[0] * Math.min(0.45, W * 0.2), L[1], L[2]));
-  raiz.visible = true; raiz.rotation.y = mesh.rotation.y; raiz.position.copy(banco); raiz.updateMatrixWorld(true);
-  _latS.set(1, 0, 0).applyAxisAngle(_Y, raiz.rotation.y);
+  const raiz = av.raiz; let banco;
+  if (A.abs) {   // lugar com posição exata no modelo (helicóptero): acompanha também a inclinação do voo
+    mesh.updateMatrixWorld(true); banco = mesh.localToWorld(_vS.set(L[0], L[1], L[2]));
+    raiz.quaternion.copy(mesh.getWorldQuaternion(_qS)).multiply(_qP.setFromAxisAngle(_Y, L[3] || 0));
+    av.inclinado = true;
+  } else {
+    const b = caixaDoModelo(mesh), cx = (b.min.x + b.max.x) / 2, W = b.max.x - b.min.x;
+    banco = mesh.localToWorld(_vS.set(cx + L[0] * Math.min(0.45, W * 0.2), L[1], L[2]));
+    raiz.rotation.set(0, mesh.rotation.y, 0); av.inclinado = false;
+  }
+  raiz.visible = true; raiz.position.copy(banco); raiz.updateMatrixWorld(true);
+  _latS.set(1, 0, 0).applyQuaternion(raiz.quaternion);
   const o = ossosSentar(av);
   girarOsso(o.leftupleg, -1.45); girarOsso(o.rightupleg, -1.45);
   girarOsso(o.leftleg, 1.5); girarOsso(o.rightleg, 1.5);
@@ -8348,6 +8372,7 @@ function sentarNoVeiculo(av, mesh, modelo, lugar = 0) {
   if (o.hips) { raiz.updateMatrixWorld(true); const yq = o.hips.getWorldPosition(_eixoS).y; raiz.position.y += banco.y + 0.1 - yq; }
   if (av.uniforme) { /* colete e chapéu seguem os ossos sozinhos */ }
   raiz.updateMatrixWorld(true);
+  if (A.abs && av === jogador.avatar && modoCam === 'p1') raiz.visible = false;   // na cabine em 1ª pessoa o próprio corpo atrapalharia a visão
   return true;
 }
 function olhoDoVeiculo(mesh, tipo) {
@@ -11895,6 +11920,7 @@ function definirAjusteFarda(novo) {
 }
 function vestir(av, papel) {
   if (!av) return;
+  if (ehSkinFarda(av.personagemId)) papel = null;   // a farda já é o corpo inteiro: sem colete e capacete por cima
   const corpoNome = PECA_CORPO_DE[papel] && !faltaPeca.has(PECA_CORPO_DE[papel]) ? PECA_CORPO_DE[papel] : 'colete';
   const chapNome = faltaPeca.has(CHAPEU_DE[papel]) ? 'bone' : CHAPEU_DE[papel];
   const glb = !!(papel && pecasFarda[corpoNome] && pecasFarda[chapNome]);
@@ -12055,8 +12081,12 @@ function vestiario(trabalho) {
   if (jogador.farda || p) { const e = escudoAtual(); opcoes.unshift({ rotulo: e >= ESCUDO_MAX ? '🛡️ Colete inteiro (100%)' : `🛡️ Pegar colete novo (escudo ${Math.round(e)}% → 100%)`, fn: () => { if (e < ESCUDO_MAX) trocarColete(); } }); }
   escolher('👔 Vestiário', souEquipe() ? 'Equipe: escolha qualquer farda.' : 'Sua farda de trabalho:', opcoes);
 }
+// personagem que o jogador mostra: a farda da corporação (em serviço) ou o personagem escolhido
+let tentouSkin = 0;
+const skinDoJogador = () => SKIN_FARDA[jogador.farda] || skinAtual();
 function atualizarUniformes() {
   seguirExpediente();
+  if (jogador.avatar && jogador.perfil && !trocandoAvatar && !editorFarda && performance.now() > tentouSkin) { const sk = skinDoJogador(); if (sk && jogador.avatar.personagemId !== sk) { tentouSkin = performance.now() + 5000; trocarAvatar(sk).catch(() => {}); } }
   if (jogador.avatar) { vestir(jogador.avatar, jogador.carro || jogador.passageiro ? null : jogador.farda || null); posicionarUniforme(jogador.avatar); vestirMascara(jogador.avatar, mascaraPrevia ?? jogador.mascara); }
   for (const av of NPC_FARDADOS) {   // NPCs fardados: veste quando as peças chegam e põe a arma na mão
     if (!av.raiz.parent) { NPC_FARDADOS.delete(av); continue; }
@@ -14206,7 +14236,7 @@ function pilotarHeli(c, dt, max) {
   jogador.pos.y = ch2; c.mesh.position.set(jogador.pos.x, ch2 + c.alt, jogador.pos.z);
   c.mesh.rotation.set(noAr ? c.vel / Math.max(max, 1) * (ufo ? 0.06 : 0.18) : 0, jogador.yaw, noAr ? c.volante * (ufo ? 0.05 : 0.12) : 0, 'YXZ');   // inclina para a frente e para o lado da curva
   { const bd = c.mesh.getObjectByName('balde'); if (bd) bd.visible = c.alt > 2.5; }   // bolsa de água: só voando (some para pousar)
-  const ro = c.mesh.userData.rotor || rotorDe(c.mesh); if (ro) { ro.visible = true; ro.rotation.y += dt * (c.motorParado ? 8 : c.alt > 0.3 || sobe ? 28 : 12); civico.rotorRapido(ro, !c.motorParado); }
+  const ro = c.mesh.userData.rotor || rotorDe(c.mesh), vr = c.motorParado ? 8 : c.alt > 0.3 || sobe ? 28 : 12; if (ro) { ro.visible = true; ro.rotation.y += dt * vr; civico.rotorRapido(ro, !c.motorParado); } civico.girarCauda(c.mesh, dt, vr);
   jogador.avatar.raiz.position.copy(jogador.pos);
   const bp = $('vPairar'), revisa = c.alt <= 0 && !!chaveHeli(c) && (Math.hypot(MECANICO_HANGAR.x - jogador.pos.x, MECANICO_HANGAR.z - jogador.pos.z) < 35 || naOficinaMilitar(c));
   if (bp) { bp.style.display = revisa ? 'block' : 'none'; if (revisa && bp.dataset.rev !== '1') { bp.dataset.rev = '1'; bp.innerHTML = '🔧<br>REVISÃO'; } }
@@ -15495,7 +15525,7 @@ function gerarPostos(B, n) {
 async function criarGuarda(B, d, idx) {
   try {
     // uma arma só (antes vinha a do fardado e mais esta: ficavam duas, uma solta ao lado)
-    const av = await npcFardado('exercito', idx + 4, 'militar');
+    const av = await npcFardado('exercito', idx + 4, 'militar', B.id === 'naval' ? 'marinha' : B.id === 'aerea' ? 'aeronautica' : 'exercito');
     if (idx >= B.pedidos) return;   // o número diminuiu enquanto carregava
     const et = textoSprite(B.rotulo || 'Exército', { escala: 0.5, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
     av.arma = av.armaNpc || null;
@@ -16020,6 +16050,16 @@ function atualizarLancador(dt) {
   ui.style.display = 'block'; ui.style.borderColor = '';
   ui.innerHTML = `${A.lanca === 'rpg' ? '🚀 RPG' : '🚀 Bazuca'} · ${qtdItem('foguete')} foguete(s) · ${!lanc.alvo ? 'mire numa aeronave' : lanc.ok ? `<span style="color:#ff5252">🔒 TRAVADO: ${nome}</span>` : `<span style="color:#ffd23e">travando ${nome}… ${Math.max(0, 2 - lanc.t).toFixed(1)} s</span>`}`;
 }
+// outro jogador com o lançador: o nome da animação chega pela rede; o tempo da recarga sai da arma dele
+function animLancadorRemoto(av, a) {
+  if (a.a === 'lanc_tiro') {
+    av.tocar('lanc_tiro', { umaVez: true, fade: 0.06, velocidade: 1.6 });
+    if (av.nomeAtual === 'lanc_tiro' && av.atual) av.atual.time = 0.55;
+  } else {
+    const rec = (ARMAS[ARMA_POR_COD[a.ar]]?.recarga || 3) - 1.2;
+    av.tocar('lanc_recarga', { umaVez: true, fade: 0.15, velocidade: Math.max(0.6, 2.97 / Math.max(0.8, rec) * 0.95) });
+  }
+}
 function animLancador(av, j) {
   const t = performance.now();
   if (t < (j.lancTiroAte || 0)) {   // o coice: pula o começo da animação (a mira) para o tranco sair junto com o foguete
@@ -16123,10 +16163,15 @@ function direcaoMira() { const p = miraM.pitch, y = jogador.yaw; return new THRE
 function bocaDaArma() { const A = ARMAS[jogador.armaTipo || 'basica']; return jogador.arma.localToWorld(new THREE.Vector3(...(modelos[A.modelo] ? A.boca : ARMAS.basica.boca))); }
 function inclinarMira(av) {
   if (!miraM.ativo || !podeMiraManual()) { if (av.colunaAntes) { av.coluna.quaternion.copy(av.colunaAntes); av.colunaAntes = null; } return; }
+  inclinarColuna(av, miraM.pitch);
+}
+// inclina o tronco para cima/baixo; volta antes do próximo quadro (a animação "mirar" não mexe nesse osso: senão a
+// inclinação acumulava)
+function inclinarColuna(av, pitch) {
   av.coluna ||= av.raiz.getObjectByName('mixamorigSpine2') || av.raiz.getObjectByName('mixamorigSpine1');
   if (!av.coluna) return;
-  av.colunaAntes = av.coluna.quaternion.clone();   // volta antes do próximo quadro (a animação "mirar" não mexe nesse osso: senão a inclinação acumulava)
-  av.coluna.rotateX(-miraM.pitch * 0.8); av.raiz.updateMatrixWorld(true);
+  av.colunaAntes = av.coluna.quaternion.clone();
+  av.coluna.rotateX(-pitch * 0.8); av.raiz.updateMatrixWorld(true);
 }
 function botaoMira(mostra) {
   let b = $('btMiraM');
@@ -16508,7 +16553,7 @@ function montarNavios() {
 async function criarGuardasNavio(n, k) {
   for (let i = 0; i < k; i++) {
     try {
-      const av = await npcFardado('exercito', i + 5, 'militar'); const et = textoSprite('Marinha', { escala: 0.5, fundo: 'rgba(24,52,96,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+      const av = await npcFardado('exercito', i + 5, 'militar', 'marinha'); const et = textoSprite('Marinha', { escala: 0.5, fundo: 'rgba(24,52,96,.95)' }); et.position.y = 2.2; av.raiz.add(et);
       scene.add(av.raiz); av.tocar('idle'); n.guardas.push({ av, lx: (i % 2 ? 1 : -1) * (n.id === 'porta' ? 9 : 3), lz: (i < 2 ? -0.3 : 0.3) * n.comp });
     } catch { /* sem guarda */ }
   }

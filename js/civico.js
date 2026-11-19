@@ -204,7 +204,10 @@ export function aceleracao(modelo, v, max) {
 export const LUGARES = { helicoptero_resgate: 3, helicoptero_bombeiros: 3, caveirao: 5, viatura_civil: 3, viatura_prf: 3, saveiro: 2, saveiro_som: 2, ovni: 2, tanque: 1, militar: 3, exercito_caminhao: 8, helicoptero_exercito: 6, helicoptero: 4, suv: 3, popular: 3, classico: 3, esportivo: 1, presidencial: 3 };
 // veículos abertos: o motorista aparece sentado (banco: altura e posição no modelo, motorista do lado esquerdo)
 // lugares: [lado (1 = esquerda, -1 = direita), altura do assento, z]; o 1º é o do motorista
-export const ABERTOS = { militar: { lugares: [[1, 0.98, -0.28], [-1, 0.98, -0.28], [1, 1.0, -0.98], [-1, 1.0, -0.98]] } };
+// helicóptero do Exército (19h): lugares em coordenadas do modelo [x, y, z, giro]; os militares sentam na beira do
+// piso, virados para as portas abertas, com as pernas para fora (o 1º é o piloto, na cabine)
+export const ABERTOS = { militar: { lugares: [[1, 0.98, -0.28], [-1, 0.98, -0.28], [1, 1.0, -0.98], [-1, 1.0, -0.98]] },
+  helicoptero_exercito: { abs: true, lugares: [[-0.5, 1.4, 3.9, 0], [1.0, 0.95, 2.3, Math.PI / 2], [-1.0, 0.95, 2.3, -Math.PI / 2], [1.0, 0.95, 1.75, Math.PI / 2], [-1.0, 0.95, 1.75, -Math.PI / 2], [1.0, 0.95, 2.85, Math.PI / 2], [-1.0, 0.95, 2.85, -Math.PI / 2]] } };
 export const DO_EXERCITO = new Set(['caca_leve', 'caca_furtivo', 'asa_furtiva', 'ovni', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'tanque']);
 export const CORES_CARRO = ['#c0392b', '#2c3e50', '#ecf0f1', '#f1c40f', '#2980b9', '#16a085', '#8e44ad', '#1f1f1f', '#d35400'];
 
@@ -442,6 +445,36 @@ function separarHelices(base, lista) {
     const disco = new THREE.Mesh(new THREE.CircleGeometry(H.r * 0.92, 28), new THREE.MeshBasicMaterial({ color: '#555', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
     disco.name = 'discoHelice'; disco.position.set(cx, cy, H.z); disco.visible = false; base.add(disco);
   }
+}
+// rotor de cauda (19h): as pás saem do modelo para um grupo "rotorCauda" que gira no eixo x (de lado).
+// x: plano do rotor; y, z: centro do cubo; r: raio; dx: meia espessura (medidos no modelo, em metros do GLB).
+const CAUDA = { helicoptero_exercito: { x: -0.6, y: 4.19, z: -6.316, r: 1.25, dx: 0.2 } };
+function separarCauda(base, C) {
+  if (!C || base.userData.cauda) return; base.userData.cauda = true;
+  base.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(base.matrixWorld).invert();
+  const malhas = []; base.traverse((o) => { if (o.isMesh && o.geometry?.index) malhas.push(o); });
+  const v = new THREE.Vector3(), m = new THREE.Matrix4(), grupo = new THREE.Group(); grupo.name = 'rotorCauda';
+  for (const o of malhas) {
+    const geo = o.geometry, pos = geo.attributes.position, uv = geo.attributes.uv, nor = geo.attributes.normal, idx = geo.index, fica = [], P = [], U = [], N = [];
+    m.multiplyMatrices(inv, o.matrixWorld); const mn = new THREE.Matrix3().getNormalMatrix(m);
+    for (let t = 0; t < idx.count; t += 3) {
+      const ids = [idx.getX(t), idx.getX(t + 1), idx.getX(t + 2)], pa = ids.map((i) => v.fromBufferAttribute(pos, i).applyMatrix4(m).clone());
+      if (pa.every((q) => Math.abs(q.x - C.x) < C.dx && Math.hypot(q.y - C.y, q.z - C.z) < C.r)) {
+        for (let k = 0; k < 3; k++) { P.push(pa[k].x, pa[k].y - C.y, pa[k].z - C.z); if (uv) U.push(uv.getX(ids[k]), uv.getY(ids[k])); if (nor) { v.fromBufferAttribute(nor, ids[k]).applyMatrix3(mn).normalize(); N.push(v.x, v.y, v.z); } }
+      } else fica.push(...ids);
+    }
+    if (!P.length) continue;
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    if (U.length) g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+    if (N.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); else g.computeVertexNormals();
+    g.computeBoundingSphere(); grupo.add(new THREE.Mesh(g, o.material)); geo.setIndex(fica);
+  }
+  if (grupo.children.length) { grupo.position.set(0, C.y, C.z); base.add(grupo); }
+}
+// gira o rotor de cauda junto com o principal (bem mais rápido); "vel" é a velocidade do rotor principal
+export function girarCauda(o, dt, vel) {
+  const c = o.userData.rotorCauda !== undefined ? o.userData.rotorCauda : (o.userData.rotorCauda = o.getObjectByName('rotorCauda') || null);
+  if (c) c.rotation.x += dt * vel * 2.6;
 }
 export function girarHelices(o, dt, ligado) {
   const l = o.userData.listaHelices ||= (() => { const r = []; o.traverse((x) => { if (x.name === 'helice') r.push(x); }); return r; })();
@@ -1007,6 +1040,7 @@ function modeloCarroBase(modelo, cor) {
     if (qual) { const o = veiculoGLBNovo(qual, cor); o.userData.modelo = 'viatura'; adicionarLuzes(o, 'viatura'); cacheCarro.set(chave, o); return o.clone(); } }
   const base = ctx?.modelo?.(GLB_CARRO[modelo]);
   if (base && HELICES[modelo]) separarHelices(base, HELICES[modelo]);
+  if (base && CAUDA[modelo]) separarCauda(base, CAUDA[modelo]);
   if (base) {   // modelo 3D: pinta de leve com a cor escolhida (o presidencial fica como é)
     const g = base.clone(true); g.userData.glb = GLB_CARRO[modelo]; g.userData.modelo = modelo;
     if (modelo === 'militar') removerTriangulos(g, VIDRO_JIPE, 'semVidro');
