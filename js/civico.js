@@ -1350,6 +1350,9 @@ function adicionarLuzes(g, tipo, chave = null) {
     sp(M.estrobo, e.nz.x, e.nz.y, e.nz.z - 0.05, t * 2);
     sp(M.giro, e.nz.x, e.nz.y + 0.45, e.nz.z + 0.3, t * 1.4);
     sp(M.giro, cx, Math.max(e.min.y, 0) + 0.45, (e.min.z + e.max.z) / 2 + 1, t * 1.2);   // farol de baixo
+    // navegação: vermelha à esquerda (+X), verde à direita, na altura do meio da cabine
+    const yn = e.min.y + h * 0.42, zn = e.min.z + (e.max.z - e.min.z) * 0.62;
+    sp(M.navV, e.max.x + 0.05, yn, zn, t * 1.1); sp(M.navG, e.min.x - 0.05, yn, zn, t * 1.1);
   } else {
     const t = Math.max(0.9, w * 0.05);
     sp(M.navV, e.px.x, e.px.y, e.px.z, t * 1.3);   // ponta esquerda (o modelo olha para +Z: esquerda = +X)

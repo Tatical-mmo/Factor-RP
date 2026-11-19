@@ -92,9 +92,9 @@ export function criarJato(tipo, glb) {
 export function chamas(g, k, ultra = false) { g.traverse((o) => { if (o.name === 'chama') { o.visible = ultra && k > 0.05; o.scale.set(1, 0.4 + k * 1.2, 1); } }); }
 
 // míssil: corpo branco, ponta cinza e fumaça
-export function criarMissil(glb) {
+export function criarMissil(glb, giro = GIRO_GLB.missil, comp = 3.5) {
   const g = new THREE.Group(), m = mats();
-  if (glb) g.add(ajustarGLB(glb, GIRO_GLB.missil, 3.5, true));
+  if (glb) g.add(ajustarGLB(glb, giro, comp, true));
   else {
     const c = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 3, 8), m.branco); c.rotation.x = Math.PI / 2; g.add(c);
     const p = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.6, 8), m.cinza); p.rotation.x = Math.PI / 2; p.position.z = 1.8; g.add(p);
