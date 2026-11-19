@@ -15126,6 +15126,15 @@ function atualizarCativeiro(dt) {
 // no feixe, não vê nada (tela branca e depois preta) e acorda numa rua qualquer. À noite, quem está perto vê
 // "luzes estranhas" e os jornalistas recebem o avistamento (região aproximada) para correr e fotografar.
 const A51 = mundo.AREA51;
+// mancha de luz no chão (degradê redondo, soma com o que está embaixo): o holofote ilumina sem luz de verdade
+function materialLuzChao() {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,240,200,1)'); gr.addColorStop(0.45, 'rgba(255,230,180,.55)'); gr.addColorStop(1, 'rgba(255,220,160,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+}
+let area51Luz = null;
 let area51 = null, avisoA51 = 0, tAvistamento = 0, ovniMarcaAte = 0, abducaoPronta = 0, ultimaAbducao = -1e9;
 const feixesOvni = [];
 function acessoArea51() { return jogador.perfil?.cargo === 'admin' || (militar() && podePilotarHeliExercito()); }
@@ -15191,6 +15200,7 @@ function montarArea51() {
   { const an = new THREE.Mesh(new THREE.RingGeometry(7, 7.5, 48), amarelo); an.rotation.x = -Math.PI / 2; an.position.set(Hg.x, 0.04, Hg.z); g.add(an); }
   const pl3 = textoSprite('HANGAR 18', { escala: 0.6, fundo: 'rgba(40,46,40,.92)' }); pl3.position.set(hx1 + 0.6, HH - 1.5, Hg.z - 2); g.add(pl3);
   // holofotes nas quinas (acendem à noite)
+  const luzChaoA51 = materialLuzChao(); area51Luz = luzChaoA51;
   const lamp = new THREE.MeshBasicMaterial({ color: '#fff6d8', toneMapped: false }), luzCone = new THREE.MeshBasicMaterial({ color: '#fff3c4', transparent: true, opacity: 0.0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false });
   for (const [x, z] of [[A51.x0 + 3, A51.z0 + 3], [A51.x0 + 3, A51.z1 - 3], [A51.x1 - 3, A51.z0 + 3], [A51.x1 - 3, A51.z1 - 3]]) {
     caixa(x, 7, z, 0.5, 14, 0.5, ferro, false); caixa(x, 14.2, z, 1.4, 0.8, 1.4, ferro, false);
@@ -15201,10 +15211,11 @@ function montarArea51() {
     cone.lookAt(x, 14, z); cone.rotateX(-Math.PI / 2);
     // o holofote varre o pátio de um lado para o outro: o cone gira em volta da lâmpada
     const piv = new THREE.Group(); piv.position.set(x, 14, z); g.add(piv); cone.position.sub(piv.position); piv.add(cone);
-    // luz de verdade (19m): um refletor que ilumina o chão por onde o cone passa (sem sombra, para o celular aguentar)
-    const hip = Math.hypot(dx, 14, dz), luz = new THREE.SpotLight('#fff1cc', 0, 120, Math.atan2(9, L) * 1.15, 0.45, 1.2);
-    luz.position.set(0, 0, 0); luz.target.position.set(dx / hip * L * 2, -14 / hip * L * 2, dz / hip * L * 2); piv.add(luz, luz.target);
-    holofotesA51.push({ piv, luz, fase: holofotesA51.length * 1.7 });
+    holofotesA51.push({ piv, fase: holofotesA51.length * 1.7 });
+    // 19n: holofote parado, apontado para o pátio, com a mancha de luz no chão (como os postes do Exército)
+    const hip = Math.hypot(dx, 14, dz), cx = x + dx / hip * L * 0.75, cz = z + dz / hip * L * 0.75;
+    const mancha = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), luzChaoA51); mancha.scale.set(64, 1, 64);
+    mancha.position.set(cx, alturaChao(cx, cz) + 0.06, cz); mancha.renderOrder = 2; g.add(mancha);
   }
   // deserto: dunas baixas e cactos (fora do muro e da estrada)
   const duna = M('#c9a46c'), cacto = M('#4f7a3a');
@@ -15244,7 +15255,7 @@ function atualizarArea51(dt) {
     const abre = ok && Math.hypot(p.x - A51.x1, p.z) < 18;
     area51.cancela.rotation.x = THREE.MathUtils.lerp(area51.cancela.rotation.x, abre ? -Math.PI / 2 * 0.95 : 0, Math.min(1, dt * 3));
     area51.luzCone.opacity = 0.16 * noiteAtual;
-    { const tt = agora / 1000; for (const h of holofotesA51) { h.piv.rotation.y = Math.sin(tt * 0.35 + h.fase) * 0.65; if (h.luz) h.luz.intensity = 900 * noiteAtual; } }
+    if (area51Luz) { area51Luz.opacity = 0.85 * noiteAtual; area51Luz.visible = noiteAtual > 0.02; }   // holofotes parados: a luz no chão acende à noite
   }
   // de fora não entra (nem pousando)
   if (!ok && !jogador.abducao && dentroArea51(p.x, p.z)) {
