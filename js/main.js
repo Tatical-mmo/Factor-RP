@@ -1288,6 +1288,11 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   if (!ponteiros.has(e.pointerId)) return;
   const ant = ponteiros.get(e.pointerId);
+  if (p50.ativo && ponteiros.size === 1 && heliP50()) {   // ponto 50 ligada: arrastar mira (para os lados e para cima/baixo)
+    const k = e.pointerType === 'mouse' ? 0.005 : 0.007, dx = e.clientX - ant.x, dy = e.clientY - ant.y;
+    p50.yaw -= dx * k; p50.pitch = THREE.MathUtils.clamp(p50.pitch - dy * k, -1.35, 0.8);
+    ponteiros.set(e.pointerId, { ...ant, x: e.clientX, y: e.clientY, mov: (ant.mov || 0) + 99 }); return;
+  }
   if (modo3D() && ponteiros.size === 1) {   // câmera 3D: arrastar gira (para os lados) e inclina (para cima e para baixo)
     const dx = e.clientX - ant.x, dy = e.clientY - ant.y; ant.mov = (ant.mov || 0) + Math.abs(dx) + Math.abs(dy);
     const k = e.pointerType === 'mouse' ? 0.006 : 0.0085;
@@ -1306,6 +1311,7 @@ function soltarPonteiro(e) {
   const p = ponteiros.get(e.pointerId); ponteiros.delete(e.pointerId);
   if (pinca) { if (ponteiros.size === 0) pinca = null; return; }
   if (!p || !jogador.avatar || e.type === 'pointercancel') return;
+  if (p50.ativo && heliP50()) return;   // mirando a ponto 50: arrastar/tocar não anda nem atira
   if (performance.now() - p.t > 450) return;      // segurou: não é toque
   if (modo3D() && (p.mov || 0) > 10) return;      // arrastou para olhar: não é toque
   if (modoCam === 'p1' && !(jogador.armado && e.pointerType === 'mouse')) return;   // primeira pessoa: anda pelo joystick / teclado
@@ -2025,6 +2031,9 @@ const ARMAS = {
   militar: { cod: 5, alc: 75, grav: 0.4, modelo: 'arma_militar', dano: 30, recarga: 0.16, vel: 30, cor: null, pega: [0, 0.12, -0.21], boca: [0, 0.22, 0.45] },
   pesada: { cod: 6, alc: 95, grav: 0.35, modelo: 'arma_grande_porte', dano: 55, recarga: 0.45, vel: 34, cor: '#1f9e46', pega: [0, 0.15, -0.18], boca: [0, 0.25, 0.58], bola: 2.2 },
   espingarda: { cod: 7, grav: 1.2, modelo: 'arma_espingarda', comp: 0.9, reserva: 'arma_grande_porte', dano: 11, recarga: 0.85, vel: 23, cor: '#ff7a1a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.58], chumbos: 7, espalha: 0.13, alcance: 0.6 },
+  rpg: { cod: 9, lanca: 'rpg', modelo: 'arma_rpg', comp: 1.0, reserva: 'arma_militar', dano: 55, recarga: 3, vel: 45, cor: '#7a8a4a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.55] },
+  bazuca: { cod: 10, lanca: 'baz', modelo: 'arma_bazuca', comp: 1.3, reserva: 'arma_militar', dano: 90, recarga: 5, vel: 60, cor: '#3f5233', pega: [0, 0.02, 0], boca: [0, 0.02, 0.75] },
+  ponto50: { cod: 11, alc: 220, grav: 0.1, modelo: 'arma_ponto50', dano: 34, recarga: 0.12, vel: 90, cor: '#ffcc33' },
   fuzil: { cod: 8, alc: 130, grav: 0.18, modelo: 'arma_fuzil', comp: 0.95, reserva: 'arma_militar', dano: 26, recarga: 0.11, vel: 42, cor: '#d9dde3', pega: [0, 0.02, 0], boca: [0, 0.02, 0.62] },
 };
 // alcance (alc, em metros) e queda da bala (grav, 1 = tinta de paintball): arma melhor vai mais longe e cai menos.
@@ -2042,8 +2051,29 @@ function tipoArma() {
   if ((p.arma_militar || jogador.armaDoQG) && jogador.claInfo) return 'militar';
   return 'basica';
 }
+// lançadores provisórios (feitos por código, cano em +x, tamanho 1) até chegarem os modelos do Meshy
+function modelosLancadores() {
+  if (modelos.arma_rpg && modelos.arma_bazuca) return;
+  const M = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.55, metalness: 0.35 });
+  const cil = (r, l, m, x, y = 0) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, l, 14).rotateZ(Math.PI / 2), m); o.position.set(x, y, 0); return o; };
+  const caixa = (w, h, d, m, x, y) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, 0); return o; };
+  if (!modelos.arma_rpg) {
+    const g = new THREE.Group(), verde = M('#5d6b3a'), madeira = M('#7b5131'), ogiva = M('#4a4f45');
+    g.add(cil(0.035, 0.75, verde, 0)); g.add(caixa(0.1, 0.05, 0.06, madeira, -0.05, -0.04)); g.add(caixa(0.03, 0.09, 0.03, madeira, 0.02, -0.08)); g.add(caixa(0.03, 0.08, 0.03, madeira, -0.18, -0.07));
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 14).rotateZ(-Math.PI / 2), ogiva); cone.position.x = 0.48; g.add(cone); g.add(cil(0.06, 0.08, ogiva, 0.36));
+    modelos.arma_rpg = g;
+  }
+  if (!modelos.arma_bazuca) {
+    const g = new THREE.Group(), verde = M('#3f5233'), preto = M('#1d2220'), tela = new THREE.MeshStandardMaterial({ color: '#2a4', emissive: '#1a3', emissiveIntensity: 0.6 });
+    g.add(cil(0.055, 1, verde, 0)); g.add(cil(0.07, 0.08, preto, 0.48)); g.add(cil(0.07, 0.08, preto, -0.48));
+    g.add(caixa(0.03, 0.1, 0.03, preto, 0.05, -0.09)); g.add(caixa(0.16, 0.05, 0.05, preto, -0.2, -0.07));
+    const mira = caixa(0.12, 0.08, 0.06, preto, 0.1, 0.03); mira.position.z = 0.09; g.add(mira);
+    const vis = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.05), tela); vis.position.set(0.1, 0.03, 0.121); g.add(vis);
+    modelos.arma_bazuca = g;
+  }
+}
 function novaArma(tipo, av) {
-  const a = ARMAS[tipo];
+  const a = ARMAS[tipo]; if (a.lanca) modelosLancadores();
   if (a.comp && modelos[a.modelo]) { const arma = armaNormalizada(a.modelo, a.comp); av.encaixarArma(arma, a.pega); return arma; }
   const nome = modelos[a.modelo] ? a.modelo : a.reserva && modelos[a.reserva] ? a.reserva : null;
   const arma = nome ? clonar(nome) : clonar('arma_paintball');
@@ -2082,15 +2112,21 @@ function atirar(alvo) {
   if (jogador.passageiro) { atirarDoCaveirao(alvo); return; }
   const A = ARMAS[jogador.armaTipo || 'basica'];
   jogador.alvo = null;
+  if (A.lanca) { dispararFoguete(A, alvo); return; }
   if (modoCam === 'p1' && !jogador.carro) jogador.yaw = olhar.yaw;
   else if (alvo) jogador.yaw = Math.atan2(alvo.x - jogador.pos.x, alvo.z - jogador.pos.z);
   jogador.avatar.raiz.rotation.y = jogador.yaw;
   jogador.avatar.raiz.updateMatrixWorld(true);
-  const boca = jogador.arma.localToWorld(new THREE.Vector3(...(modelos[A.modelo] ? A.boca : ARMAS.basica.boca)));
-  const dir = new THREE.Vector3(Math.sin(jogador.yaw), 0, Math.cos(jogador.yaw));
+  let boca = jogador.arma.localToWorld(new THREE.Vector3(...(modelos[A.modelo] ? A.boca : ARMAS.basica.boca)));
   const dourada = tenhoArmaPd();
+  // mira assistida (19c): pessoa (jogador, policial ou soldado) a até ~12° da frente e dentro do alcance da arma:
+  // vira para ela e calcula a altura do tiro para a bola chegar no peito (com a queda da arma)
+  const assist = modoCam === 'p1' ? null : alvoAssistido(boca, A, dourada ? 34 : A.vel);
+  if (assist) { jogador.yaw = assist.yaw; jogador.avatar.raiz.rotation.y = jogador.yaw; jogador.avatar.raiz.updateMatrixWorld(true); boca = jogador.arma.localToWorld(new THREE.Vector3(...(modelos[A.modelo] ? A.boca : ARMAS.basica.boca))); }
+  const dir = new THREE.Vector3(Math.sin(jogador.yaw), 0, Math.cos(jogador.yaw));
   const cor = dourada ? '#ffd23e' : A.cor || CORES_TINTA[Math.floor(Math.random() * CORES_TINTA.length)];
-  const vyMira = dourada ? null : miraNoAlvo(boca, dir, A.vel, A.grav ?? 1);
+  let vyMira = dourada ? null : miraNoAlvo(boca, dir, A.vel, A.grav ?? 1);
+  if (vyMira == null && assist) { const vv = dourada ? 34 : A.vel, d = Math.hypot(assist.x - boca.x, assist.z - boca.z), t = d / vv; vyMira = (assist.y - boca.y + 4.9 * (dourada ? 1 : A.grav ?? 1) * t * t) / t; }
   const v = dir.multiplyScalar(dourada ? 34 : A.vel).add(new THREE.Vector3(0, vyMira ?? (dourada ? 0.6 : 1.2 * 24 / A.vel * (A.grav ?? 1)), 0));   // menos queda: mira mais reta
   if (modoCam === 'p1' && vyMira == null) v.y += Math.tan(THREE.MathUtils.clamp(olhar.pitch, -0.6, 0.6)) * (dourada ? 34 : A.vel);   // mira para cima / para baixo
   criarBola(boca, v, cor, true, dourada ? 1 : A.bola || 1); balistica(bolas[bolas.length - 1], A);
@@ -2107,6 +2143,20 @@ function atirar(alvo) {
   if (A.chumbos && !dourada) chumbos(A, boca, v, cor);
   if (!dourada && jogador.desviada && jogador.armaTipo === jogador.desviada.item) gastarBalaDesviada();
   if (!dourada) jogador.recarga = A.recarga / (1 + bonusTreino('luta'));
+}
+function alvoAssistido(boca, A, vel) {
+  const alc = Math.min(A.alc || 40, vel * 2.2) * 0.95, cone = Math.cos(THREE.MathUtils.degToRad(12));
+  const fx = Math.sin(jogador.yaw), fz = Math.cos(jogador.yaw);
+  let melhor = null, nota = -Infinity;
+  const ver = (q) => {
+    const dx = q.x - boca.x, dz = q.z - boca.z, d = Math.hypot(dx, dz); if (d < 1 || d > alc) return;
+    const c = (dx * fx + dz * fz) / d; if (c < cone) return;
+    const n = c * 3 - d / alc; if (n > nota) { nota = n; melhor = { x: q.x, y: q.y + 1.15, z: q.z, yaw: Math.atan2(dx, dz) }; }
+  };
+  for (const [, r] of remotos) if (r.av?.raiz.visible && !r.carro) ver(r.av.raiz.position);
+  for (const n of npcs) if (n.policia && n.caido <= 0 && n.av.raiz.visible) ver(n.av.raiz.position);
+  if (cacada && esquadra.pronto) for (const u of esquadra.soldados) if (u.av.raiz.visible) ver(u.av.raiz.position);
+  return melhor;
 }
 // espingarda: mais chumbos espalhados (cada um com o dano dele), que caem logo (curto alcance)
 function chumbos(A, boca, v, cor) {
@@ -2287,9 +2337,11 @@ function carcaca(x, z, mod, r) {
 const semPiloto = [];
 function ejetar() {
   const c = jogador.carro; if (!c?.voa || c.caminhao) return;
-  if (qtdItem('paraquedas') < 1) { aviso('🪂 Você não tem paraquedas (compre no balcão do aeroporto, 5.000).', 3); return; }
+  const embutido = aeronaveMilitar(c);   // aeronaves militares já vêm com paraquedas no assento ejetável
+  if (!embutido && qtdItem('paraquedas') < 1) { aviso('🪂 Você não tem paraquedas (compre no balcão do aeroporto, 5.000).', 3); return; }
   if ((c.alt || 0) < 8) { aviso('🪂 Baixo demais para o paraquedas abrir.', 2.5); return; }
-  rede.aviacao.usarParaquedas().then(() => recarregarInventario()).catch(() => {});
+  if (!embutido) rede.aviacao.usarParaquedas().then(() => recarregarInventario()).catch(() => {});
+  alertaEjetar = 0;
   const chao = alturaChao(jogador.pos.x, jogador.pos.z);
   semPiloto.push({ c, mesh: c.mesh, yaw: jogador.yaw, alt: c.alt, vel: Math.max(c.vel, 8), vs: Math.min(c.vs || 0, -1), pitch: c.pitch || 0 });
   if (c.ap) c.ap = null; if (c.aula && c.aula === aula) c.aula.comAP = true;
@@ -3445,7 +3497,7 @@ function conectarMultiplayer(perfil) {
     explosao: (e) => receberExplosao(e),
     voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, dm: (m) => { if (m?.para === jogador.perfil?.id && amigosIds.has(m.de)) celular.mensagemChegou(m.de, remotos.get(m.de)?.meta?.nome); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
-    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), cruzeiro: (e) => receberCruzeiro(e), navio: (e) => receberNavio(e),
+    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), navio: (e) => receberNavio(e),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -4387,6 +4439,7 @@ function acertoDaBola(b) {
     for (const u of esquadra.jipes) { const q = u.obj.position; if (u.obj.visible && Math.hypot(p.x - q.x, p.z - q.z) < 2.2 && p.y < q.y + 2.5) { esquadra.hostil = 60; manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; } }
   }
   if (b.tanque) return acertoTanque(b);
+  if (p.y - alturaChao(p.x, p.z) > 2.5 && balaNaAeronave(b)) return true;   // bala no ar: aeronave de outro jogador
   for (const n of npcs) {
     if (!n.policia) continue;
     const q = n.av.raiz.position;
@@ -6912,7 +6965,12 @@ function usarArsenal() {
   if (p?.profissao !== 'exercito' && p?.cargo !== 'admin') { aviso('O arsenal é só para militares em serviço.', 2.5); return; }
   escolher('🎖️ Arsenal do Quartel', 'Militar em serviço: o kit sai a cada 10 min. A arma pesada precisa de autorização.', [
     { rotulo: '🔫 Pegar fuzil, espingarda e 6 granadas', fn: () => rede.tatica.armasArsenal().then((t) => { aviso(`🔫 Você pegou ${t}. Equipe a arma no 🎯 Tático; granada pelo botão na tela.`, 4); recarregarInventario(); }).catch((e) => aviso(e.message, 3)) },
-    { rotulo: '💥 Pegar a arma pesada', fn: () => armaPesadaArsenal() }]);
+    { rotulo: '💥 Pegar a arma pesada', fn: () => armaPesadaArsenal() },
+    { rotulo: '🚀 Pegar RPG + 4 foguetes (autorização)', fn: () => pegarLancador('rpg') },
+    { rotulo: '🚀 Pegar bazuca + 4 foguetes (autorização)', fn: () => pegarLancador('bazuca') }]);
+}
+function pegarLancador(item) {
+  return rede.tatica.pegarLancador(item).then((t) => { aviso(`🚀 Você pegou ${t}. Equipe no 🎯 Tático e saque com o botão Arma.`, 4); return recarregarInventario(); }).catch((e) => aviso(e.message, 3.5));
 }
 function armaPesadaArsenal() {
   const p = jogador.perfil;
@@ -6932,6 +6990,14 @@ async function falarContrabandista() {
   if (!jogador.perfil?.arma_militar) opcoes.unshift({ rotulo: '🔫 Arma militar: 60.000 (só para clãs; é crime)', fn: async () => {
     if (!jogador.claInfo) { aviso('Contrabandista: "Arma só negocio com gente de clã."', 3); return; }
     try { await rede.exercito.comprarArmaMilitar(); aviso('🔫 Você comprou a ARMA MILITAR. Ela substitui a arma básica (fora do expediente). Você virou procurado.', 4.5); } catch (e) { aviso(e.message, 3); }
+  } });
+  if (!qtdItem('rpg')) opcoes.push({ rotulo: '🚀 RPG com 2 foguetes: 90.000 (só clãs; é crime)', fn: async () => {
+    if (!jogador.claInfo) { aviso('Contrabandista: "Isso aí só pra gente de clã."', 3); return; }
+    try { await rede.tatica.comprarRpg(); recarregarInventario(); aviso('🚀 RPG comprado. Equipe no 🎯 Tático. Você virou procurado.', 4); } catch (e) { aviso(e.message, 3); }
+  } });
+  opcoes.push({ rotulo: '🚀 3 foguetes: 18.000 (só clãs; é crime)', fn: async () => {
+    if (!jogador.claInfo) { aviso('Contrabandista: "Isso aí só pra gente de clã."', 3); return; }
+    try { const n = await rede.tatica.comprarFoguetes(3); recarregarInventario(); aviso(`🚀 Foguetes comprados (você tem ${n}).`, 3); } catch (e) { aviso(e.message, 3); }
   } });
   escolher('Contrabandista', '"Fala baixo. O que vai ser?"', opcoes);
 }
@@ -8013,7 +8079,7 @@ function atualizarJogador(dt) {
     if (d < 0.25) { j.alvo = null; forca = 0; } else { dir.normalize(); forca = 1; }
   }
   if (j.embarcado) { seguirNavio(dt, dir, forca); return; }
-  { const ej = !!(j.carro?.voa && !j.carro.caminhao && (j.carro.alt || 0) >= 8 && qtdItem('paraquedas') > 0); if (ej !== document.body.classList.contains('ejetar')) document.body.classList.toggle('ejetar', ej); }
+  { const ej = !!(j.carro?.voa && !j.carro.caminhao && (j.carro.alt || 0) >= 8 && (qtdItem('paraquedas') > 0 || aeronaveMilitar(j.carro))); if (ej !== document.body.classList.contains('ejetar')) document.body.classList.toggle('ejetar', ej); }
   if (j.paraquedas) { descerParaquedas(dt, dir, forca); return; }
   if (j.ave) { voarAve(dt, dir, forca); return; }
   if (j.voo) { seguirVoo(); return; }
@@ -8059,7 +8125,7 @@ function atualizarJogador(dt) {
       else if (correr) av.tocar(animCorrida(), { velocidade: 1 });
       else av.tocar('walk', { velocidade: vel / VELOCIDADE.andar });
     } else {
-      if ((j.tCorre || 0) > 1.2) { j.paradaAte = performance.now() + 1700; av.tocar('parada', { umaVez: true, fade: 0.1 }); }   // vinha correndo e parou de vez
+      if ((j.tCorre || 0) > 1.2 && treinadoMax() && racaoAtiva()) { j.paradaAte = performance.now() + 1700; av.tocar('parada', { umaVez: true, fade: 0.1 }); }   // vinha correndo muito rápido (treino no máximo + jujuba) e parou de vez
       j.tCorre = 0;
       if (performance.now() < (j.paradaAte || 0)) { /* termina a parada brusca */ }
       else if (j.algemado) av.tocar('algemado');
@@ -15789,19 +15855,23 @@ function dispararMissil() {
   aviso('🚀 Míssil disparado!', 1.5);
 }
 function lancarMissil(m) {
-  const mesh = jato.criarMissil(modelos.missil); mesh.position.copy(m.pos); scene.add(mesh);
+  const mesh = jato.criarMissil(modelos.missil); mesh.position.copy(m.pos); if (m.k) mesh.scale.multiplyScalar(0.45); scene.add(mesh);
   misseis.push({ ...m, mesh, t: 0, fum: 0 });
   sons.tocar('tiro', { vol: 0.9, dist: m.pos.distanceTo(jogador.pos), raio: 200, velocidade: 0.5 });
 }
 function receberMissil(e) {
   if (!jogador.perfil) return;
-  lancarMissil({ id: e.id, de: e.de, alvo: e.alvo, pos: new THREE.Vector3(e.x, e.y, e.z), vel: new THREE.Vector3(e.vx, e.vy, e.vz), meu: false });
-  if (e.alvo === jogador.perfil.id) { aviso('🚀 MÍSSIL A CAMINHO! Acelere e faça curva fechada!', 4); sons.radio?.(); }
+  lancarMissil({ id: e.id, de: e.de, alvo: e.alvo, pos: new THREE.Vector3(e.x, e.y, e.z), vel: new THREE.Vector3(e.vx, e.vy, e.vz), meu: false, k: e.k, dano: e.d });
+  if (e.alvo === jogador.perfil.id || e.mira === jogador.perfil.id) {
+    aviso(e.k ? `🚀 ${e.k === 'rpg' ? 'RPG' : 'BAZUCA'} A CAMINHO! Faça curva fechada${aeronaveMilitar(jogador.carro) ? ' ou EJETE (🪂)' : ''}!` : `🚀 MÍSSIL A CAMINHO! Acelere e faça curva fechada${aeronaveMilitar(jogador.carro) ? ' ou EJETE (🪂)' : ''}!`, 4); sons.radio?.();
+    if (aeronaveMilitar(jogador.carro)) alertaEjetar = 6;
+  }
 }
-function receberTravado(e) { if (e.alvo === jogador.perfil?.id) { aviso('⚠️ Um caça TRAVOU míssil em você!', 4); sons.radio?.(); } }
+function receberTravado(e) { if (e.alvo === jogador.perfil?.id) { aviso(e.k ? `⚠️ Travaram ${e.k === 'rpg' ? 'um RPG' : 'uma bazuca'} em você!` : '⚠️ Um caça TRAVOU míssil em você!', 4); sons.radio?.(); if (aeronaveMilitar(jogador.carro)) alertaEjetar = 4; } }
 function receberMissilAcerto(e) {
   const m = misseis.find((x) => x.id === e.id); if (m) { efeitoExplosao(m.mesh.position.x, m.mesh.position.y, m.mesh.position.z, 1.2, false); scene.remove(m.mesh); misseis.splice(misseis.indexOf(m), 1); }
   if (e.alvo !== jogador.perfil?.id) return;
+  if (e.dano) { danoAeronave(Number(e.dano) || 0, 'foguete'); return; }
   const c = jogador.carro; if (c?.voa && !c.explodiu) acidenteVeiculo(c, '💥 Abatido por um míssil do Exército!');
 }
 function atualizarMisseis(dt) {
@@ -15809,22 +15879,205 @@ function atualizarMisseis(dt) {
   for (let i = misseis.length - 1; i >= 0; i--) {
     const m = misseis[i]; m.t += dt;
     const alvoPos = m.alvo === jogador.perfil?.id ? (jogador.carro?.mesh?.position || jogador.pos) : remotos.get(m.alvo)?.carro?.position;
-    const v = m.vel, vel = Math.min(150, v.length() + 60 * dt);
-    if (alvoPos && m.t > 0.4) {   // persegue: vira no máximo 1,1 rad/s
-      const quer = alvoPos.clone().sub(m.mesh.position).normalize(), atual = v.clone().normalize(), ang = atual.angleTo(quer), max = 1.1 * dt;
+    const v = m.vel, vel = m.k ? Math.min(m.k === 'rpg' ? 70 : 75, v.length() + 30 * dt) : Math.min(150, v.length() + 60 * dt);
+    if (alvoPos && m.t > (m.k ? 0.25 : 0.4) && m.k !== 'baz') {   // persegue (caça 1,1 rad/s; RPG segue o calor do motor, 1,6 rad/s); a bazuca vai reta
+      const quer = alvoPos.clone().sub(m.mesh.position).normalize(), atual = v.clone().normalize(), ang = atual.angleTo(quer), max = (m.k ? 1.6 : 1.1) * dt;
       if (ang > 1e-4) atual.lerp(quer, Math.min(1, max / ang)).normalize();
       v.copy(atual.multiplyScalar(vel));
     } else v.setLength(vel);
     m.mesh.position.addScaledVector(v, dt);
     m.mesh.lookAt(m.mesh.position.clone().add(v));
     if ((m.fum -= dt) <= 0) { m.fum = 0.04; fumacas.push(jato.fumaca(scene, m.mesh.position.clone().addScaledVector(v.clone().normalize(), -2.4))); }
+    if (m.k) { if (fogueteAtualizar(m)) { scene.remove(m.mesh); misseis.splice(i, 1); } continue; }
     const acertou = alvoPos && m.mesh.position.distanceTo(alvoPos) < 7, fim = m.t > 9 || m.mesh.position.y < alturaChao(m.mesh.position.x, m.mesh.position.z);
     if (acertou && m.meu) { conexao?.enviar('missilAcerto', { id: m.id, alvo: m.alvo, de: m.de }); aviso('💥 Alvo abatido!', 3); }
     if ((acertou && m.meu) || fim) { efeitoExplosao(m.mesh.position.x, m.mesh.position.y, m.mesh.position.z, acertou ? 1.2 : 0.6, false); scene.remove(m.mesh); misseis.splice(i, 1); }
   }
   if (!jogador.carro?.jato) { const pn = $('painelJato'); if (pn) pn.style.display = 'none'; }
+  atualizarLancador(dt); atualizarP50(dt); hudAeronave(dt);
   // som dos caças dos outros
   for (const r of remotos.values()) if (r.carro?.visible && civico.CARROS[r.carroModelo]?.jato) sons.continuo('aviaoG_alto', 0.6 * sons.perto(r.carro.position.distanceTo(jogador.pos), 260), 1.4);
+}
+
+// ================================================================= anti-aéreo (19d): RPG, bazuca, vida das aeronaves e a ponto 50
+// RPG: trava (2 s com a aeronave à frente) e o foguete persegue o calor do motor. Bazuca: trava e vai reta para onde a
+// aeronave vai estar (não persegue). Sem trava, os dois vão retos. Aeronave tem vida; o helicóptero do Exército tem
+// blindagem leve; aeronaves militares têm paraquedas embutido (o jogo sugere ejetar quando vem projétil).
+let alertaEjetar = 0;
+function aeronaveMilitar(c) { return !!(c?.voa && !c.caminhao && (c.jato || civico.DO_EXERCITO.has(c.servico))); }
+function aeronaveRemota(r) { const o = r?.carro; return o && o.visible && civico.CARROS[r.carroModelo]?.voa && o.position.y - alturaChao(o.position.x, o.position.z) > 3 ? o : null; }
+const lanc = { alvo: null, t: 0, ok: false };
+function hudLanc() {
+  let el = $('hudLanc');
+  if (!el) { el = document.createElement('div'); el.id = 'hudLanc'; el.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 96px);transform:translateX(-50%);z-index:30;padding:6px 12px;border-radius:12px;background:rgba(14,24,40,.85);color:#fff;font:800 13px system-ui;pointer-events:none;display:none'; document.body.appendChild(el); }
+  return el;
+}
+function atualizarLancador(dt) {
+  for (const r of remotos.values()) {   // velocidade das aeronaves dos outros (a bazuca mira à frente delas)
+    const o = r.carro; if (!o || !civico.CARROS[r.carroModelo]?.voa) continue;
+    if (r.pAero && dt > 0) { const v = o.position.clone().sub(r.pAero).divideScalar(dt); r.vAero = r.vAero ? r.vAero.lerp(v, Math.min(1, dt * 3)) : v; }
+    r.pAero = o.position.clone();
+  }
+  const A = ARMAS[jogador.armaTipo || 'basica'], ui = hudLanc();
+  if (!A.lanca || !jogador.armado || jogador.carro || jogador.morto || jogador.passageiro) { lanc.alvo = null; lanc.ok = false; ui.style.display = 'none'; return; }
+  const fx = Math.sin(jogador.yaw), fz = Math.cos(jogador.yaw), cone = (id) => {
+    const o = aeronaveRemota(remotos.get(id)); if (!o) return -1;
+    const dx = o.position.x - jogador.pos.x, dz = o.position.z - jogador.pos.z, d = Math.hypot(dx, dz);
+    return d > 320 ? -1 : d < 5 ? 1 : (dx * fx + dz * fz) / d;
+  };
+  if (!(lanc.alvo && cone(lanc.alvo) > 0.85)) {   // segura o alvo atual; senão procura o mais à frente (até ~20°)
+    let melhor = null, nota = 0.94; for (const id of remotos.keys()) { const c = cone(id); if (c > nota) { nota = c; melhor = id; } }
+    if (melhor !== lanc.alvo) { lanc.alvo = melhor; lanc.t = 0; lanc.ok = false; }
+  }
+  if (lanc.alvo) {
+    lanc.t += dt;
+    if (!lanc.ok && lanc.t >= 2) { lanc.ok = true; sons.radio?.(); conexao?.enviar('travado', { de: jogador.perfil.id, alvo: lanc.alvo, k: A.lanca }); }
+  }
+  const nome = lanc.alvo ? esc((remotos.get(lanc.alvo)?.meta?.nome || 'aeronave').slice(0, 14)) : '';
+  ui.style.display = 'block'; ui.style.borderColor = '';
+  ui.innerHTML = `${A.lanca === 'rpg' ? '🚀 RPG' : '🚀 Bazuca'} · ${qtdItem('foguete')} foguete(s) · ${!lanc.alvo ? 'mire numa aeronave' : lanc.ok ? `<span style="color:#ff5252">🔒 TRAVADO: ${nome}</span>` : `<span style="color:#ffd23e">travando ${nome}… ${Math.max(0, 2 - lanc.t).toFixed(1)} s</span>`}`;
+}
+function dispararFoguete(A, alvoChao) {
+  if (jogador.carro || jogador.passageiro) return;
+  if (qtdItem('foguete') < 1) { aviso('🚀 Sem foguetes. Militares pegam no Arsenal; clãs compram com o contrabandista.', 3); return; }
+  const rr = lanc.ok && lanc.alvo ? remotos.get(lanc.alvo) : null, o = aeronaveRemota(rr);
+  if (o) jogador.yaw = Math.atan2(o.position.x - jogador.pos.x, o.position.z - jogador.pos.z);
+  else if (alvoChao) jogador.yaw = Math.atan2(alvoChao.x - jogador.pos.x, alvoChao.z - jogador.pos.z);
+  jogador.avatar.raiz.rotation.y = jogador.yaw; jogador.avatar.raiz.updateMatrixWorld(true);
+  const boca = jogador.arma && modelos[A.modelo] ? jogador.arma.localToWorld(new THREE.Vector3(...A.boca)) : jogador.pos.clone().add(new THREE.Vector3(Math.sin(jogador.yaw) * 0.6, 1.5, Math.cos(jogador.yaw) * 0.6));
+  let dir;
+  if (o) {
+    const alvo = o.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+    if (A.lanca === 'baz' && rr.vAero) for (let k = 0; k < 3; k++) { const t = alvo.distanceTo(boca) / 75; alvo.copy(o.position).add(new THREE.Vector3(0, 1.2, 0)).addScaledVector(rr.vAero, t); }   // onde ela vai estar
+    dir = alvo.sub(boca).normalize();
+  } else dir = new THREE.Vector3(Math.sin(jogador.yaw), 0.04, Math.cos(jogador.yaw)).normalize();
+  const vel = dir.multiplyScalar(A.vel), id = jogador.perfil.id.slice(0, 6) + Date.now().toString(36);
+  const m = { id, de: jogador.perfil.id, alvo: o && A.lanca === 'rpg' ? lanc.alvo : null, mira: o ? lanc.alvo : null, pos: boca.clone(), vel, meu: true, k: A.lanca, dano: A.dano };
+  lancarMissil(m);
+  conexao?.enviar('missil', { id, de: m.de, alvo: m.alvo, mira: m.mira, k: m.k, d: m.dano, x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(vel.x), vy: r2(vel.y), vz: r2(vel.z) });
+  jogador.recarga = A.recarga; tremor = Math.max(tremor, 0.25);
+  rede.tatica.usarFoguete().then(() => recarregarInventario()).catch((e) => aviso(e.message, 2));
+  aviso(o ? (A.lanca === 'rpg' ? '🚀 RPG disparado: seguindo o calor do motor!' : '🚀 Bazuca disparada na trava!') : '🚀 Disparo sem trava: vai reto.', 1.8);
+}
+// foguete em voo: devolve true quando acabou (explodiu ou sumiu). Só quem disparou decide o acerto.
+function fogueteAtualizar(m) {
+  const p = m.mesh.position, chao = alturaChao(p.x, p.z);
+  let bateu = null, fim = m.t > 7 || p.y < chao + 0.2;
+  for (const [id, r] of remotos) {
+    const o = aeronaveRemota(r); if (!o) continue;
+    if (p.distanceTo(o.position) < (civico.CARROS[r.carroModelo]?.jato ? 5.5 : 4.5)) { bateu = id; break; }
+  }
+  if (!m.meu) { if (fim) efeitoExplosao(p.x, p.y, p.z, 0.8, false); return fim; }
+  if (!bateu && !fim) for (const [, r] of remotos) { if (r.av?.raiz.visible && !r.carro && p.distanceTo(r.av.raiz.position) < 1.4) { fim = true; break; } }
+  if (bateu) { conexao?.enviar('missilAcerto', { id: m.id, alvo: bateu, de: m.de, dano: m.dano }); aviso('💥 Acertou a aeronave!', 2.5); }
+  if (bateu || fim) { explosaoFoguete(p, m.dano, bateu); return true; }
+  return false;
+}
+// explosão do foguete: raio de 4 m em quem está a pé (jogadores, policiais e moradores)
+function explosaoFoguete(p, dano, menos) {
+  efeitoExplosao(p.x, p.y, p.z, 1.1, false);
+  const ok = (q) => { const d = p.distanceTo(q.clone().add(new THREE.Vector3(0, 1, 0))); return d < 4 ? Math.round(dano * (1 - d / 5)) : 0; };
+  for (const [id, r] of remotos) { if (id === menos || r.carro || !r.av?.raiz.visible) continue; const v = ok(r.av.raiz.position); if (v > 0) aplicarDanoRemoto(id, v); }
+  for (const n of npcs) { if (n.caido > 0 || !n.av.raiz.visible) continue; const v = ok(n.av.raiz.position); if (v <= 0) continue; if (n.policia) acertarPoliciaNPC(n, v); else if (n.civil) acertarCivil(n, v); }
+}
+// vida da minha aeronave: "bala" (fuzil, ponto 50) ou "foguete" (RPG, bazuca). O helicóptero do Exército tem blindagem leve:
+// as balas só gastam a blindagem; o foguete gasta a blindagem e um pouco da vida
+function danoAeronave(v, tipo) {
+  const c = jogador.carro; if (!c?.voa || c.caminhao || c.explodiu || v <= 0) return;
+  c.vidaAero ??= 100;
+  if (c.servico === 'helicoptero_exercito') {
+    c.blindAero ??= 100;
+    if (c.blindAero > 0) {
+      if (tipo === 'bala') { c.blindAero = Math.max(0, c.blindAero - v * 0.6); v = 0; }
+      else { const b = Math.min(c.blindAero, v * 0.7); c.blindAero -= b; v -= b; }
+    }
+  }
+  c.vidaAero = Math.max(0, c.vidaAero - v); c.tDanoAero = 4;
+  tremor = Math.max(tremor, tipo === 'bala' ? 0.08 : 0.5);
+  if (tipo !== 'bala') aviso(`💥 Atingido por um foguete! Vida ${Math.round(c.vidaAero)}%${c.blindAero !== undefined ? ` · blindagem ${Math.round(c.blindAero)}%` : ''}`, 3);
+  if (c.vidaAero <= 0) acidenteVeiculo(c, tipo === 'bala' ? '💥 Abatido a tiros!' : '💥 Abatido por um foguete!');
+}
+function hudAeronave(dt) {
+  let el = $('hudAero');
+  const c = jogador.carro, mostra = c?.voa && !c.caminhao && (c.vidaAero < 100 || c.servico === 'helicoptero_exercito');
+  if (!el) { if (!mostra) return; el = document.createElement('div'); el.id = 'hudAero'; el.style.cssText = 'position:fixed;right:10px;top:calc(env(safe-area-inset-top,0px) + 120px);z-index:30;padding:5px 10px;border-radius:10px;background:rgba(14,24,40,.8);color:#fff;font:700 12px system-ui;pointer-events:none'; document.body.appendChild(el); }
+  el.style.display = mostra ? 'block' : 'none';
+  if (mostra) {
+    const vd = Math.round(c.vidaAero ?? 100), bl = c.servico === 'helicoptero_exercito' ? Math.round(c.blindAero ?? 100) : null;
+    const t = `❤️ ${vd}%${bl !== null ? ` · 🛡️ ${bl}%` : ''}`; if (el.textContent !== t) el.textContent = t;
+    el.style.color = vd < 35 ? '#ff8a80' : '#fff';
+  }
+  // projétil chegando numa aeronave militar: o botão de ejetar pisca
+  const bt = $('vEjetar'); if (bt) { alertaEjetar = Math.max(0, alertaEjetar - dt); bt.style.boxShadow = alertaEjetar > 0 && Math.floor(alertaEjetar * 4) % 2 ? '0 0 0 4px #ffd23e' : ''; }
+}
+// bala minha numa aeronave de outro jogador (a pé ou da ponto 50): manda o dano para o dono dela
+function balaNaAeronave(b) {
+  const p = b.m.position;
+  for (const [id, r] of remotos) {
+    if (id === jogador.passageiro?.piloto) continue;   // o helicóptero em que estou
+    const o = aeronaveRemota(r); if (!o) continue;
+    if (p.distanceTo(o.position.clone().add(new THREE.Vector3(0, 1.4, 0))) > (civico.CARROS[r.carroModelo]?.jato ? 4.5 : 3.4)) continue;
+    conexao?.enviar('aeroDano', { alvo: id, v: Math.round((b.dano || 20) * (b.p50 ? 0.25 : 0.15) * 10) / 10, de: jogador.perfil.id });
+    return true;
+  }
+  return false;
+}
+// ---- ponto 50 do helicóptero do Exército: mira livre (arrastar na tela), qualquer direção, independente do nariz
+const p50 = { ativo: false, yaw: 0, pitch: -0.25, t: 0, atirando: false, arma: null, linha: null };
+function heliP50() {
+  if (jogador.carro?.servico === 'helicoptero_exercito') return jogador.carro.mesh;
+  const ps = jogador.passageiro, r = ps?.piloto && remotos.get(ps.piloto);
+  return r?.carroModelo === 'helicoptero_exercito' && r.carro ? r.carro : null;
+}
+function malhaP50() {
+  if (p50.arma) return;
+  const g = new THREE.Group(), M = new THREE.MeshStandardMaterial({ color: '#2b2f2c', roughness: 0.5, metalness: 0.6 });
+  const corpo = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.2, 0.6), M); g.add(corpo);
+  const cano = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.9, 10).rotateX(Math.PI / 2), M); cano.position.z = 0.7; g.add(cano);
+  const caixa = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.22), new THREE.MeshStandardMaterial({ color: '#4b5a2e', roughness: 0.7 })); caixa.position.set(-0.17, -0.02, 0.05); g.add(caixa);
+  g.scale.setScalar(1.7); p50.arma = g; scene.add(g);
+  // laser da mira: um feixe fino até 120 m (linha de 1 px some no celular)
+  p50.linha = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 120, 6, 1, true).rotateX(Math.PI / 2).translate(0, 0, 61), new THREE.MeshBasicMaterial({ color: '#ff3030', transparent: true, opacity: 0.45, depthWrite: false }));
+  g.add(p50.linha);
+}
+function painelP50(mostra) {
+  let pn = $('painelP50');
+  if (!pn) {
+    if (!mostra) return;
+    pn = document.createElement('div'); pn.id = 'painelP50';
+    pn.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 64px);transform:translateX(-50%);z-index:30;display:flex;gap:6px';
+    const bt = (id, html, down, up) => { const b = document.createElement('button'); b.id = id; b.innerHTML = html; b.style.cssText = 'border-radius:14px;border:2px solid #ffd23e;background:rgba(14,24,40,.88);color:#fff;font:800 13px system-ui;padding:8px 12px;min-width:96px;touch-action:none';
+      b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); down(); }); if (up) for (const t of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(t, (ev) => { ev.stopPropagation(); up(); }); pn.appendChild(b); return b; };
+    bt('btP50', '🎯 Ponto 50', () => {
+      p50.ativo = !p50.ativo; const h = heliP50();
+      if (p50.ativo && h) { p50.yaw = h.rotation.y; p50.pitch = -0.25; aviso('🎯 Ponto 50: arraste na tela para mirar em qualquer direção. Segure 🔫 para atirar.', 4); }
+    });
+    bt('btP50Tiro', '🔫 Atirar', () => { if (!p50.ativo) { aviso('🎯 Ligue a ponto 50 primeiro.', 1.5); return; } p50.atirando = true; }, () => { p50.atirando = false; });
+    document.body.appendChild(pn);
+  }
+  pn.style.display = mostra ? 'flex' : 'none';
+  if (mostra) { const b = $('btP50'); b.style.borderColor = p50.ativo ? '#7dff8a' : '#ffd23e'; $('btP50Tiro').style.opacity = p50.ativo ? '1' : '.5'; }
+}
+function atualizarP50(dt) {
+  const h = heliP50(); painelP50(!!h);
+  if (!h) { p50.ativo = false; p50.atirando = false; if (p50.arma) p50.arma.visible = false; return; }
+  malhaP50();
+  // fica na porta direita do helicóptero
+  const ca = Math.cos(h.rotation.y), sa = Math.sin(h.rotation.y), lx = -2.2, lz = 0.8;
+  p50.arma.position.set(h.position.x + lx * ca + lz * sa, h.position.y + 2.9, h.position.z - lx * sa + lz * ca);
+  p50.arma.rotation.set(0, p50.ativo ? p50.yaw : h.rotation.y - Math.PI / 2, 0, 'YXZ'); p50.arma.rotateX(p50.ativo ? -p50.pitch : 0.3);
+  p50.arma.visible = true; p50.linha.visible = p50.ativo;
+  p50.t -= dt;
+  if (p50.ativo && p50.atirando && p50.t <= 0) {
+    if (armasProibidas()) { aviso('🚫 Armas não são permitidas aqui.'); p50.atirando = false; return; }
+    p50.t = ARMAS.ponto50.recarga;
+    const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(p50.arma.quaternion).normalize();
+    const boca = p50.arma.position.clone().addScaledVector(dir, 1.2), A = ARMAS.ponto50;
+    const v = dir.clone().multiplyScalar(A.vel);
+    criarBola(boca, v, A.cor, true, 0.7); const b = bolas[bolas.length - 1]; b.dano = A.dano; b.p50 = true; balistica(b, A);
+    conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: A.cor, s: 0.7, g: A.grav, vd: r2(A.alc / A.vel) });
+    tremor = Math.max(tremor, 0.05);
+  }
 }
 
 // ================================================================= MARINHA: Base Naval, navios e míssil de cruzeiro
@@ -16652,7 +16905,7 @@ function equiparArma(item) {
   if (item && qtdItem(item) < 1) { aviso('Você não tem essa arma.'); return; }
   enviarBalas(); jogador.desviada = null;
   jogador.armaEspecial = item || null; conferirArma();
-  aviso(item ? `🔫 ${item === 'fuzil' ? 'Fuzil' : 'Espingarda'} equipado. Saque com o botão Arma.` : '🔫 Voltou para a arma padrão.', 2.5);
+  aviso(item ? `🔫 ${NOME_ITEM_T[item] || item} equipad${item === 'bazuca' || item === 'espingarda' ? 'a' : 'o'}. Saque com o botão Arma.${ARMAS[item]?.lanca ? ' Mire numa aeronave por 2 s para travar.' : ''}` : '🔫 Voltou para a arma padrão.', 2.5);
 }
 let modoTatica = null;
 function abrirTatica(modo) {
@@ -16666,7 +16919,7 @@ function abrirTatica(modo) {
 }
 function msgTatica(t, ok = true) { const m = $('taticaMsg'); if (!m) return; m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'erro'); clearTimeout(msgTatica.t); msgTatica.t = setTimeout(() => { m.textContent = ''; }, 4500); }
 async function fazerTatica(fn, ok) { try { const r = await fn(); msgTatica(typeof ok === 'function' ? ok(r) : ok); recarregarInventario(); setTimeout(desenharTatica, 300); } catch (e) { msgTatica(e.message, false); } }
-const NOME_ITEM_T = { espingarda: 'Espingarda', fuzil: 'Fuzil', granada: 'Granada' };
+const NOME_ITEM_T = { espingarda: 'Espingarda', fuzil: 'Fuzil', granada: 'Granada', rpg: 'RPG', bazuca: 'Bazuca', foguete: 'Foguete' };
 async function desenharTatica() {
   const c = $('taticaConteudo'); if (!c || !modoTatica) return;
   const p = jogador.perfil, eu = p.id;
@@ -16694,8 +16947,9 @@ async function desenharTatica() {
   $('taticaTitulo').textContent = '🎯 Tático';
   let h = '';
   const q = (k) => qtdItem(k);
-  h += `<div class="sub">🎒 Seu equipamento</div><p class="dica">Espingarda: <b>${q('espingarda')}</b> · Fuzil: <b>${q('fuzil')}</b> · Granadas: <b>${q('granada')}</b> · Barricadas: <b>${q('barricada')}</b>. Arma na mão: <b>${jogador.armaEspecial ? NOME_ITEM_T[jogador.armaEspecial] : 'padrão'}</b>.</p>
-    <div class="botoes">${q('espingarda') ? '<button data-eq="espingarda">🔫 Equipar espingarda</button>' : ''}${q('fuzil') ? '<button data-eq="fuzil">🔫 Equipar fuzil</button>' : ''}${jogador.armaEspecial ? '<button data-eq="">Arma padrão</button>' : ''}</div>
+  h += `<div class="sub">🎒 Seu equipamento</div><p class="dica">Espingarda: <b>${q('espingarda')}</b> · Fuzil: <b>${q('fuzil')}</b> · Granadas: <b>${q('granada')}</b> · Barricadas: <b>${q('barricada')}</b>${q('rpg') || q('bazuca') || q('foguete') ? ` · RPG: <b>${q('rpg')}</b> · Bazuca: <b>${q('bazuca')}</b> · Foguetes: <b>${q('foguete')}</b>` : ''}. Arma na mão: <b>${jogador.armaEspecial ? NOME_ITEM_T[jogador.armaEspecial] : 'padrão'}</b>.</p>
+    <div class="botoes">${q('espingarda') ? '<button data-eq="espingarda">🔫 Equipar espingarda</button>' : ''}${q('fuzil') ? '<button data-eq="fuzil">🔫 Equipar fuzil</button>' : ''}${q('rpg') ? '<button data-eq="rpg">🚀 Equipar RPG</button>' : ''}${q('bazuca') ? '<button data-eq="bazuca">🚀 Equipar bazuca</button>' : ''}${jogador.armaEspecial ? '<button data-eq="">Arma padrão</button>' : ''}</div>
+    ${q('rpg') || q('bazuca') ? '<p class="dica">🚀 RPG: trave (mire 2 s numa aeronave) e o foguete persegue o calor do motor. Bazuca: trava e vai reta para onde a aeronave vai estar. Sem trava, os dois vão retos. Cada tiro gasta 1 foguete.</p>' : ''}
     ${q('granada') ? '<p class="dica">💣 Granada: botão na tela (no PC, tecla <b>H</b>). Estoura 2,3 s depois, tinta num raio de 6 m.</p>' : ''}`;
   desviadas = await rede.tatica.minhasDesviadas(eu);
   if (desviadas.length) h += `<div class="sub">🔫 Armas desviadas</div><p class="dica">Compradas do Seu Tonho: só têm as balas que restam e depois são descartadas.</p>
@@ -16732,7 +16986,9 @@ async function desenharTatica() {
     const pontosArsenal = [civico.EXERCITO.arsenal, CENTRAL_MISSEIS, { x: (mundo.BASE_AEREA.x0 + mundo.BASE_AEREA.x1) / 2, z: (mundo.BASE_AEREA.z0 + mundo.BASE_AEREA.z1) / 2 }];
     const perto = pontosArsenal.some((a) => a && Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z) < (a === pontosArsenal[2] ? 80 : 15));
     h += `<div class="sub">🎖️ Forças Armadas</div><p class="dica">Exército, Marinha e Aeronáutica pegam espingarda, fuzil e granadas no Arsenal do Quartel, no Comando Naval ou na Base Aérea (a cada 10 min). Na Central de rações dá para mandar kits de armas para Polícia e PRF de caminhão.</p>
-      <div class="botoes"><button id="tArsenal" ${perto ? '' : 'disabled'}>${perto ? '🔫 Pegar as armas' : '🔫 Vá até o Arsenal ou uma base'}</button></div>`;
+      <div class="botoes"><button id="tArsenal" ${perto ? '' : 'disabled'}>${perto ? '🔫 Pegar as armas' : '🔫 Vá até o Arsenal ou uma base'}</button></div>
+      <p class="dica">🚀 Anti-aéreo (com a autorização da arma pesada, a cada 10 min, com 4 foguetes):</p>
+      <div class="botoes"><button data-lanc="rpg" ${perto ? '' : 'disabled'}>🚀 Pegar RPG</button><button data-lanc="bazuca" ${perto ? '' : 'disabled'}>🚀 Pegar bazuca</button></div>`;
   }
   if (p.prf || p.cargo === 'admin') {
     let radar = []; try { radar = await rede.tatica.radar(); } catch (e) { radar = null; }
@@ -16758,6 +17014,7 @@ async function desenharTatica() {
     c.dataset.lojas = JSON.stringify(lojas.map((l) => [l.dono, l.item]));
   }
   c.innerHTML = h;
+  c.querySelectorAll('[data-lanc]').forEach((b) => { b.onclick = () => pegarLancador(b.dataset.lanc).then(desenharTatica); });
   c.querySelectorAll('[data-eq]').forEach((b) => { b.onclick = () => { equiparArma(b.dataset.eq || null); desenharTatica(); }; });
   const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
   on('tBarComprar', () => fazerTatica(() => rede.tatica.comprarBarricada(1), 'Barricada comprada.'));
