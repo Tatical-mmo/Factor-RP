@@ -826,6 +826,7 @@ export const marinha = {
   forcas: (ids) => ids.length ? sel(sb.from('perfis').select('id,forca').in('id', ids)) : Promise.resolve([]),
 };
 export const exercito = {
+  especializarParaquedista: () => rpc('especializar_paraquedista'),   // 19l: Cabo para cima
   pedirAlistamento: () => rpc('pedir_alistamento'),
   alistamentosPendentes: () => rpc('alistamentos_pendentes'),
   decidirAlistamento: (id, aprovar) => rpc('decidir_alistamento', { p_id: id, p_aprovar: !!aprovar }),

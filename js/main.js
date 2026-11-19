@@ -1061,6 +1061,21 @@ function adaptarClipe(clip, cenaR, cenaN) {
   const restoMundoR = new Map(), restoMundoN = new Map();
   for (const [n, o] of R) restoMundoR.set(n, o.getWorldQuaternion(new THREE.Quaternion()));
   for (const [n, o] of N) restoMundoN.set(n, o.getWorldQuaternion(new THREE.Quaternion()));
+  // personagem feito em pose A (braços já descendo, como as fardas do Meshy): sem isto a animação baixava os braços
+  // de novo e eles entravam no corpo. Cada osso torto mais de 12° em relação à base é "endireitado" (vira para a
+  // mesma direção do osso da base) antes de copiar o movimento. Personagens em pose T não mudam.
+  cenaR.updateMatrixWorld(true);
+  const _pa = new THREE.Vector3(), _pb = new THREE.Vector3(), _da = new THREE.Vector3(), _db = new THREE.Vector3(), _al = new THREE.Quaternion();
+  for (const [n, o] of N) {
+    const r = R.get(n); if (!r || !/(Arm|ForeArm)$/.test(n)) continue;   // só o braço e o antebraço (a pose A só muda eles)
+    const fN = o.children.find((c) => R.has(c.name)); if (!fN) continue;
+    const fR = R.get(fN.name);
+    _da.subVectors(fN.getWorldPosition(_pb), o.getWorldPosition(_pa)); _db.subVectors(fR.getWorldPosition(_pb), r.getWorldPosition(_pa));
+    if (_da.lengthSq() < 1e-8 || _db.lengthSq() < 1e-8) continue;
+    _da.normalize(); _db.normalize();
+    if (_da.dot(_db) > Math.cos(12 * Math.PI / 180)) continue;
+    _al.setFromUnitVectors(_da, _db); restoMundoN.get(n).premultiply(_al);
+  }
   const faixas = new Map(); let hipsPos = null, tempos = null;
   for (const t of clip.tracks) {
     const [osso, prop] = t.name.split('.');
@@ -1132,7 +1147,9 @@ async function criarAvatar(pasta, id) {
       try {
         const daBase = bases.flatMap((b) => b.animations.map((c) => adaptarClipe(c, b.scene, gltf.scene))), tem = new Set(daBase.map((c) => c.name));
         const doRobo = robo ? robo.animations.filter((c) => DO_ROBO.includes(c.name) && !tem.has(c.name)).map((c) => adaptarClipe(c, robo.scene, gltf.scene)) : [];
-        anims = [...daBase, ...doRobo];
+        // animações de sentado do próprio arquivo (fardas da Marinha e do Paraquedista): ficam como sentado_0, sentado_1...
+        const sentados = gltf.animations.filter((a) => /sit/i.test(a.name)).map((a, k) => { const c = a.clone(); c.name = 'sentado_' + k; return c; });
+        anims = [...daBase, ...doRobo, ...sentados];
       } catch (e) { console.warn('não adaptou as animações da base:', id, e); }
     } else if (robo) {
       try {
@@ -1420,6 +1437,7 @@ function livre() {
 function acaoContexto() {
   if (jogador.ave) { if (bruxoPerto()) falarBruxo(); else aviso(jogador.ave.y > chaoAve(jogador.pos.x, jogador.pos.z) + 0.3 ? '🐦 Voando: ⬆️/⬇️ sobem e descem; pousado, dá para voltar a ser gente.' : '🐦 Pousado.', 2); return; }
   if (jogador.onibus) { acaoNoOnibus(); return; }
+  if (podeSaltarCarona()) { saltarDeCarona(); return; }
   if (jogador.voo) { aviso('Você está voando: desce quando o avião chegar.', 2); return; }
   if (jogador.trem) {
     const est = ferrovia.estadoDe(jogador.trem.li, jogador.trem.k);
@@ -1491,6 +1509,7 @@ function acaoContexto() {
   if (perto(CONTRABANDISTA, 3.2)) { falarContrabandista(); return; }
   if (BANCAS.some((b) => perto(b, 3.2))) { abrirServico('jornal'); return; }
   if (perto(GUARITA_ALIST, 3.2)) { menuGuarita(); return; }
+  if (perto(VEST_AEREA, 2)) { vestiario('Aeronáutica', 'aerea'); return; }
   if (perto(CENTRAL_MISSEIS, 4)) { entrarPublico('comandonaval', salaComandoNaval, CENTRAL_MISSEIS, '⚓ Comando Naval: central de mísseis e controle dos navios.'); return; }
   if ((jogador.embarcado || navioNoPier()) && acaoNavio()) return;
   if (perto(civico.EXERCITO.balcao, 3.2)) { abrirServico(jogador.perfil?.profissao === 'exercito' ? 'trabalho' : 'empregos'); return; }
@@ -3654,7 +3673,7 @@ function atualizarRemotos(dt) {
       raiz.position.set(a.x, a.y, a.z); raiz.visible = false; if (r.algemas) r.algemas.visible = false; r.av.mixer.update(dt);
       const mp = a.pg === jogador.perfil?.id ? jogador.carro?.modelo : remotos.get(a.pg)?.carroModelo;   // jipe ou helicóptero do Exército: aparece sentado
       const vp = !civico.ABERTOS[mp] ? null : a.pg === jogador.perfil?.id ? jogador.carro?.mesh : remotos.get(a.pg)?.carro;
-      if (vp && sentarNoVeiculo(r.av, vp, mp, lugarPassageiro(a.id, a.pg))) { r.arma.visible = false; r.anim = 'idle'; }
+      if (vp && sentarNoVeiculo(r.av, vp, mp, lugarPassageiro(a.id, a.pg))) { r.arma.visible = false; r.anim = r.av.nomeAtual; }
       continue;
     }
     if (a.vc) {   // dirigindo um veículo de empresa: o veículo segue a posição dele
@@ -8366,7 +8385,11 @@ function endireitar(av) { if (av?.inclinado) { av.raiz.rotation.x = 0; av.raiz.r
 function sentarNoVeiculo(av, mesh, modelo, lugar = 0) {
   const A = civico.ABERTOS[modelo]; if (!A || !av || !mesh) return false;
   const L = A.lugares[lugar]; if (!L) return false;
-  if (av.nomeAtual !== 'idle') av.tocar('idle', { fade: 0.15 });
+  // passageiro do helicóptero com animação própria de sentado (sorteada uma vez): toca ela em vez da pose por código
+  if (av.sentadoAnim === undefined) { const op = Object.keys(av.clipes || {}).filter((n) => n.startsWith('sentado_')); av.sentadoAnim = op.length ? op[(Math.random() * op.length) | 0] : null; }
+  const anim = A.abs && lugar > 0 && av.sentadoAnim;
+  if (anim) { if (av.nomeAtual !== anim) av.tocar(anim, { fade: 0.2 }); }
+  else if (av.nomeAtual !== 'idle') av.tocar('idle', { fade: 0.15 });
   const raiz = av.raiz; let banco;
   if (A.abs) {   // lugar com posição exata no modelo (helicóptero): acompanha também a inclinação do voo
     mesh.updateMatrixWorld(true); banco = mesh.localToWorld(_vS.set(L[0], L[1], L[2]));
@@ -8380,6 +8403,10 @@ function sentarNoVeiculo(av, mesh, modelo, lugar = 0) {
   raiz.visible = true; raiz.position.copy(banco); raiz.updateMatrixWorld(true);
   _latS.set(1, 0, 0).applyQuaternion(raiz.quaternion);
   const o = ossosSentar(av);
+  if (anim) {   // a animação já senta: só acerta o quadril no lugar (altura e posição)
+    if (o.hips) { raiz.updateMatrixWorld(true); const hp = o.hips.getWorldPosition(_eixoS); raiz.position.x += banco.x - hp.x; raiz.position.z += banco.z - hp.z; raiz.position.y += banco.y + 0.1 - hp.y; }
+    raiz.updateMatrixWorld(true); if (av === jogador.avatar && modoCam === 'p1') raiz.visible = false; return true;
+  }
   girarOsso(o.leftupleg, -1.45); girarOsso(o.rightupleg, -1.45);
   girarOsso(o.leftleg, 1.5); girarOsso(o.rightleg, 1.5);
   if (lugar === 0) { girarOsso(o.leftarm, -0.95); girarOsso(o.rightarm, -0.95); girarOsso(o.leftforearm, -0.45); girarOsso(o.rightforearm, -0.45); }   // mãos no volante
@@ -8652,6 +8679,7 @@ function atualizarHUD(dt) {
 function contexto() {
   const pd = jogador.carregando?.userData.pedido;
   if (jogador.onibus) return contextoNoOnibus();
+  if (podeSaltarCarona()) return ['saltar de paraquedas (paraquedista)', '🪂 Saltar'];
   if (jogador.voo) return [`em voo para ${AERO[jogador.voo.d].nome}`, 'Voando'];
   if (jogador.passageiro) return passageiroPodeDescer() ? ['descer do helicóptero', 'Descer'] : ['passageiro no helicóptero', 'Voando'];
   if (jogador.carro?.taxi) return textoTaxi();
@@ -8712,6 +8740,7 @@ function contexto() {
   if (BANCAS.some((b) => perto(b, 3.2))) return ['banca de jornal: ler as notícias', 'Jornal'];
   if (perto(CONTRABANDISTA, 3.2)) return ['contrabandista: arma militar e alicate de corte', 'Negociar'];
   { const cn = contextoNavio(); if (cn) return cn; }
+  if (perto(VEST_AEREA, 2)) return ['vestiário da Aeronáutica (militares do Exército)', 'Farda'];
   if (perto(CENTRAL_MISSEIS, 4)) return ['entrar no Comando Naval (mísseis e navios)', '⚓ Entrar'];
   if (perto(GUARITA_ALIST, 3.2)) return [militar() ? 'guarita do Exército: pedidos de alistamento' : 'guarita do Exército: alistamento e licitação de rações', 'Guarita'];
   if (perto(civico.EXERCITO.balcao, 3.2)) return [jogador.perfil?.profissao === 'exercito' ? 'comando do Exército: ordens e caçadas' : 'comando do Exército: alistar-se', 'Comando'];
@@ -11797,9 +11826,12 @@ const UNIFORMES = {
   exercito: { cor: '#4b5d33', texto: 'EXÉRCITO', letra: '#e8e3c8', faixa: null, chapeu: '#3c4a28' },
   jornalista: { cor: '#1f4f8a', texto: 'IMPRENSA', letra: '#ffffff', faixa: '#ffffff', chapeu: '#1f4f8a' },
   bope: { cor: '#0c0c0c', texto: 'BOPE', letra: '#e8e8e8', faixa: null, chapeu: '#0a0a0a' },   // colete e capacete pretos, BOPE nas costas
+  marinha: { cor: '#1d2f55', texto: 'MARINHA', letra: '#ffffff', faixa: null, chapeu: '#f2f2f2' },   // 19l: só militares do Exército vestem
+  aeronautica: { cor: '#3c5a7a', texto: 'AERONÁUTICA', letra: '#ffffff', faixa: null, chapeu: '#2f4660' },
+  paraquedista: { cor: '#5a4a2c', texto: 'PARAQUEDISTA', letra: '#f2e2b0', faixa: null, chapeu: '#7a1f2b' },
   civil: { cor: '#2b2f33', texto: ' ', letra: '#2b2f33', faixa: null, chapeu: '#2b2f33' },   // colete balístico do contrabandista (21k): cinza, sem nome
 };
-const NOME_FARDA = { civil: 'Colete balístico', policia: 'Polícia', prf: 'PRF', bombeiro: 'Bombeiros', medico: 'Resgate (Hospital)', exercito: 'Exército', jornalista: 'Imprensa', bope: 'BOPE' };
+const NOME_FARDA = { marinha: 'Marinha', aeronautica: 'Aeronáutica', paraquedista: 'Paraquedista', civil: 'Colete balístico', policia: 'Polícia', prf: 'PRF', bombeiro: 'Bombeiros', medico: 'Resgate (Hospital)', exercito: 'Exército', jornalista: 'Imprensa', bope: 'BOPE' };
 function papelDe(m) { return m?.policial ? 'policia' : m?.prf ? 'prf' : UNIFORMES[m?.profissao] ? m.profissao : null; }
 const _texUni = new Map();
 function texturaUniforme(u) {
@@ -11823,7 +11855,7 @@ const PECAS_FARDA = {
   jaleco: { arq: 'farda_jaleco', auto: 'corpo', alt: 1.75, subir: -0.36 },
   mascara: { arq: 'farda_mascara', auto: 'cabeca', folga: 0.9, subir: -0.58, frente: 0.22 },
 };
-const CHAPEU_DE = { civil: 'bone', policia: 'bone', prf: 'bone', bombeiro: 'bombeiro', medico: 'mascara', exercito: 'militar', jornalista: 'bone', bope: 'militar' };
+const CHAPEU_DE = { marinha: 'militar', aeronautica: 'militar', paraquedista: 'militar', civil: 'bone', policia: 'bone', prf: 'bone', bombeiro: 'bombeiro', medico: 'mascara', exercito: 'militar', jornalista: 'bone', bope: 'militar' };
 const fardaDe = (m) => { const p = papelDe(m); return p === 'policia' && m?.bope ? 'bope' : p; };   // policial do BOPE veste preto
 const pecasFarda = {}; let pecasPedidas = false;
 function carregarPecasFarda() {
@@ -12039,6 +12071,12 @@ function posicionarUniforme(av) {
 // A farda: veste sozinha ao entrar no expediente e sai ao terminar. No vestiário do QG de cada trabalho dá para
 // vestir ou tirar quando quiser. A equipe (admin e moderadores) pode vestir qualquer uma.
 let papelVisto;
+// quem é do Exército também veste Marinha e Aeronáutica (nos vestiários de cada base) e, especializado, Paraquedista
+function fardaPermitida(f, p) {
+  if (!f || f === p) return true;
+  if (p !== 'exercito') return false;
+  return f === 'marinha' || f === 'aeronautica' || (f === 'paraquedista' && !!jogador.perfil?.paraquedista);
+}
 function chaveFarda() { return 'fator_farda_' + (jogador.perfil?.id || ''); }
 function definirFarda(papel, silencioso) {
   if (papel && !jogador.farda) { escudo = ESCUDO_MAX; guardarEscudo(); }   // a farda já vem com o colete (19k): vestir de novo traz um inteiro
@@ -12052,16 +12090,16 @@ function seguirExpediente() {
   const p = fardaDe(jogador.perfil);
   if (papelVisto === undefined) {   // ao abrir o jogo: volta com a farda que estava
     papelVisto = p; let salva = null; try { salva = localStorage.getItem(chaveFarda()); } catch { /* nada */ }
-    jogador.farda = salva && UNIFORMES[salva] && (salva === p || souEquipe()) ? salva : p;
+    jogador.farda = salva && UNIFORMES[salva] && salva !== 'civil' && p && (fardaPermitida(salva, p) || souEquipe()) ? salva : p;   // fora do expediente: o seu personagem
     lerColeteCivil(); desenharEscudo();
     if (jogador.farda || jogador.coleteCivil) conexao?.rastrear(metaPresenca());
     return;
   }
-  if (jogador.farda && !souEquipe() && jogador.farda !== p) definirFarda(p || null, true);   // farda é só da própria corporação
+  if (jogador.farda && !souEquipe() && (!p || !fardaPermitida(jogador.farda, p))) definirFarda(p || null, true);   // farda é só da própria corporação
   if (p === papelVisto) return;
   papelVisto = p;
   if (p) definirFarda(p);                                          // entrou no expediente: veste
-  else if (jogador.farda && !souEquipe()) definirFarda(null);       // saiu: guarda
+  else if (jogador.farda) definirFarda(null);       // saiu do expediente: guarda a farda e volta o personagem de antes (a equipe também)
 }
 // ---- escudo da farda: o colete aguenta 100 de dano antes da vida; o capacete segura 10% do que passar.
 // Colete destruído: só um novo no vestiário (o escudo fica guardado entre expedientes, não volta sozinho).
@@ -12097,8 +12135,17 @@ function desenharEscudo() {
   b.firstChild.style.width = (e / ESCUDO_MAX * 100).toFixed(0) + '%';
   $('txtEscudo').textContent = e <= 0 ? ' ⚠️' : ''; b.title = e <= 0 ? 'Colete quebrado: tire e vista a farda de novo no vestiário' : `Escudo ${Math.round(e)}%`;
 }
-function vestiario(trabalho) {
+function vestiario(trabalho, local) {
+  if (local) { vestiarioMilitar(local); return; }
   const p = fardaDe(jogador.perfil), opcoes = [];
+  if (p === 'exercito') {   // quartel: Exército, Paraquedista (especializado) e a especialização
+    const pq = !!jogador.perfil?.paraquedista;
+    opcoes.push({ rotulo: jogador.farda === 'exercito' ? 'Tirar a farda (Exército)' : 'Vestir a farda: Exército', fn: () => definirFarda(jogador.farda === 'exercito' ? null : 'exercito') });
+    if (pq) opcoes.push({ rotulo: jogador.farda === 'paraquedista' ? 'Tirar a farda (Paraquedista)' : '🪂 Vestir a farda: Paraquedista', fn: () => definirFarda(jogador.farda === 'paraquedista' ? null : 'paraquedista') });
+    else opcoes.push({ rotulo: '🪂 Especializar como Paraquedista (Cabo para cima)', fn: especializarParaquedista });
+    if (jogador.farda && jogador.farda !== 'exercito' && jogador.farda !== 'paraquedista') opcoes.push({ rotulo: `Tirar a farda (${NOME_FARDA[jogador.farda]})`, fn: () => definirFarda(null) });
+    escolher('👔 Vestiário do Quartel', 'Sua farda de trabalho:', opcoes); return;
+  }
   if (souEquipe()) for (const k of Object.keys(UNIFORMES).filter((x) => x !== 'civil')) opcoes.push({ rotulo: `${jogador.farda === k ? '✔️ ' : ''}${NOME_FARDA[k]}`, fn: () => definirFarda(k) });
   else if (p) opcoes.push({ rotulo: jogador.farda === p ? `Tirar a farda (${NOME_FARDA[p]})` : `Vestir a farda: ${NOME_FARDA[p]}`, fn: () => definirFarda(jogador.farda === p ? null : p) });
   else { aviso(`Só quem está no expediente ${trabalho ? `(${trabalho}) ` : ''}veste a farda. Entre em serviço primeiro.`, 3.5); return; }
@@ -12108,6 +12155,40 @@ function vestiario(trabalho) {
     opcoes.push({ rotulo: f ? '🚹 Usar a farda masculina' : '🚺 Usar a farda feminina', fn: () => { try { localStorage.setItem('fator_sexo_farda', f ? 'm' : 'f'); } catch { /* sem armazenamento */ } conexao?.rastrear(metaPresenca()); aviso(f ? '👔 Farda masculina escolhida.' : '👔 Farda feminina escolhida.', 2.5); } });
   }
   escolher('👔 Vestiário', souEquipe() ? 'Equipe: escolha qualquer farda.' : 'Sua farda de trabalho:', opcoes);
+}
+// vestiários da Base Naval (Marinha) e da Base Aérea (Aeronáutica): só para quem é do Exército (são uma força só)
+function vestiarioMilitar(local) {
+  const f = local === 'naval' ? 'marinha' : 'aeronautica';
+  if (!militar()) { aviso(`Vestiário da ${NOME_FARDA[f]}: só para militares do Exército em serviço.`, 3.5); return; }
+  escolher(`👔 Vestiário da ${NOME_FARDA[f]}`, 'Farda da base:', [
+    { rotulo: jogador.farda === f ? `Tirar a farda (${NOME_FARDA[f]})` : `Vestir a farda: ${NOME_FARDA[f]}`, fn: () => definirFarda(jogador.farda === f ? null : f) },
+    ...(jogador.farda && jogador.farda !== f ? [{ rotulo: `Tirar a farda (${NOME_FARDA[jogador.farda]})`, fn: () => definirFarda(null) }] : []),
+  ]);
+}
+// especialização de Paraquedista: Cabo para cima (2 patentes acima de Recruta); depois veste a farda no quartel
+async function especializarParaquedista() {
+  if (jogador.perfil?.cargo !== 'admin' && (jogador.patenteNivel || 0) < 3) { aviso('🪂 Paraquedista: só de Cabo para cima. Continue servindo para subir de patente.', 3.5); return; }
+  try {
+    await rede.exercito.especializarParaquedista(); jogador.perfil.paraquedista = true;
+    aviso('🪂 Você agora é PARAQUEDISTA! Vista a farda no vestiário do quartel. Com ela, de carona em qualquer aeronave, use 🪂 Saltar.', 5);
+  } catch (e) { aviso(e.message, 3.5); }
+}
+// salto de carona (paraquedista fardado): sai do helicóptero ou do avião de outro jogador, ou do voo comercial
+function podeSaltarCarona() {
+  if (jogador.farda !== 'paraquedista') return false;
+  if (jogador.voo) return (jogador.vooY || 0) - alturaChao(jogador.pos.x, jogador.pos.z) > 15;
+  const o = jogador.passageiro?.c.obj; return !!o && o.position.y - alturaChao(o.position.x, o.position.z) > 15;
+}
+function saltarDeCarona() {
+  if (!podeSaltarCarona()) { aviso('🪂 Alto demais ou baixo demais para saltar.', 2.5); return; }
+  let x, y, z;
+  if (jogador.voo) { x = jogador.pos.x; z = jogador.pos.z; y = jogador.vooY - 2; jogador.voo = null; }
+  else { const o = jogador.passageiro.c.obj; x = o.position.x; z = o.position.z; y = o.position.y - 1.5; jogador.passageiro = null; document.body.classList.remove('passageiro', 'atirador'); }
+  endireitar(jogador.avatar);
+  jogador.pos.set(x, y, z); jogador.avatar.raiz.visible = true;
+  const alt = y - alturaChao(x, z), livre = alt > 45 ? Math.min(4, (alt - 30) / 15) : 0;
+  jogador.paraquedas = { t: 0, livre };
+  aviso(livre ? '🪂 Saltou! Queda livre… o paraquedas abre em instantes.' : '🪂 Saltou! Paraquedas aberto: guie com o joystick.', 3.5);
 }
 // personagem que o jogador mostra: a farda da corporação (em serviço) ou o personagem escolhido
 let tentouSkin = 0;
@@ -15727,6 +15808,7 @@ function atualizarQuartelExtras(dt) {
 }
 // ---- Base Aérea (a leste do quartel): pista, hangares, torre, cancela, soldados e antiaéreo
 let baseAerea = null;
+const VEST_AEREA = { x: 421, z: 982.6 };
 function montarBaseAerea() {
   const B = mundo.BASE_AEREA, g = new THREE.Group(); scene.add(g);
   const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, ...o });
@@ -15767,6 +15849,9 @@ function montarBaseAerea() {
   const pl2 = textoSprite('Torre · Base Aérea', { escala: 0.55, fundo: 'rgba(30,60,110,.94)' }); pl2.position.set(560, 23.5, 1005); g.add(pl2);
   // plataformas de vigia
   for (const [x, z] of [[B.x0 + 6, B.z0 + 6], [B.x1 - 6, B.z0 + 6], [B.x0 + 6, B.z1 - 6], [B.x1 - 6, B.z1 - 6]]) caixa(x, 2, z, 3.2, 4, 3.2, M('#6b6f5e'), true);
+  // vestiário da Aeronáutica (19l): armários ao lado da guarita, só para militares do Exército
+  caixa(VEST_AEREA.x, 1.1, VEST_AEREA.z + 1.4, 2.6, 2.2, 0.7, M('#3c5a7a'), true);
+  const pl3 = textoSprite('👔 Vestiário da Aeronáutica', { escala: 0.5, fundo: 'rgba(30,60,110,.94)' }); pl3.position.set(VEST_AEREA.x, 3, VEST_AEREA.z + 1.4); g.add(pl3);
   const baterias = [[318, 1000], [604, 1030]].map(([x, z]) => criarBateria(g, x, z));
   baseAerea = { g, portao, braco };
   registrarBase({ id: 'aerea', nome: 'Base Aérea', rect: B, aviso: 30, tiro: 12, acesso: () => militar(), acessoAr: () => militar(),
@@ -16852,6 +16937,8 @@ function salaComandoNaval() {
     movel(i, 'navios', 5, -1, 4.2, 2.6); placa('⚓ Navios: chamar ao cais', 5, -1, 2.2);
     for (let k = 0; k < 4; k++) caixa(0.5, 0.45, 0.5, '#24467a', -1.5 + k * 0.8, 0.23, 4.5);   // cadeiras
     caixa(1.4, 2.4, 0.1, '#c9a227', 9.5, 1.6, -6.85);   // brasão
+    for (let k = 0; k < 4; k++) caixa(0.7, 1.9, 0.5, '#24467a', -10.2 + k * 0.8, 0.95, 6.4);   // armários do vestiário da Marinha (19l)
+    movel(i, 'vestiario', -9, 6.4, 3.2, 0.5, [0, -1]); placa('👔 Vestiário da Marinha', -9, 6.4, 2.6);
   });
 }
 SALAS.comandonaval = {
@@ -16859,12 +16946,14 @@ SALAS.comandonaval = {
     if (naPorta()) return ['sair do Comando Naval', 'Sair'];
     if (pontoInterior('misseis', 1.8)) return ['central de mísseis: míssil de cruzeiro', '🚀 Mísseis'];
     if (pontoInterior('navios', 2)) return ['mesa de operações: chamar navio ao cais', '⚓ Navios'];
+    if (pontoInterior('vestiario', 1.6)) return ['vestiário da Marinha (militares do Exército)', 'Farda'];
     return ['', ''];
   },
   acao: () => {
     if (naPorta()) { sairSala(); return; }
     if (pontoInterior('misseis', 1.8)) { menuCentralMisseis(); return; }
-    if (pontoInterior('navios', 2)) menuComandoNaval();
+    if (pontoInterior('navios', 2)) { menuComandoNaval(); return; }
+    if (pontoInterior('vestiario', 1.6)) vestiario('Marinha', 'naval');
   },
 };
 function menuComandoNaval() {
