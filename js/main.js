@@ -1652,7 +1652,7 @@ let voandoUI = false;
 function modoHeli(sim) {
   document.body.classList.toggle('heli', sim);
   const t = $('manche'); if (t) { t.querySelector('.m-t').textContent = sim ? '▲ FRENTE' : '▲ DESCE'; t.querySelector('.m-b').textContent = sim ? '▼ RÉ' : '▼ SOBE'; }
-  const a = $('vAcel'), f = $('vFreio'); if (a) a.innerHTML = sim ? '⬆️<br>SUBIR' : 'ACELERAR'; if (f) f.innerHTML = sim ? '⬇️<br>DESCER' : 'FREIO<br>RÉ';
+  const a = $('vAcel'), f = $('vFreio'); if (f) delete f.dataset.pouso; if (a) a.innerHTML = sim ? '⬆️<br>SUBIR' : 'ACELERAR'; if (f) f.innerHTML = sim ? '⬇️<br>DESCER' : 'FREIO<br>RÉ';
   const bp = $('vPairar'); if (bp && !sim) { bp.style.display = ''; delete bp.dataset.rev; }
 }
 function modoVolante(sim) {
@@ -13890,6 +13890,24 @@ function entrarAviao(porte, parado = aviaoLivre(porte)) {
   if (parado?.frota && (frotaVoos[parado.fid] ?? 0) >= 3) setTimeout(() => aviso(`⚠️ Este avião está com a revisão vencida (${frotaVoos[parado.fid]} voos). O motor pode falhar no ar. Revise com o mecânico do hangar.`, 6), 1200); jogador.alvo = null; jogador.avatar.raiz.visible = false;
   aviso(`✈️ Avião ${P.nome} (${prefixo()}): o manche amarelo (no PC, setas) vira e sobe/desce; os pedais aceleram (no PC, W/S). Taxie até a cabeceira ${a.cab}, acelere até ${P.vdec} m/s e puxe o manche (▼). Solto, ele mantém a altura.`, 8);
 }
+// ---- botão do lugar da RÉ: no ar vira 🛬 POUSAR (nariz um pouco para baixo, velocidade de aproximação e arredondamento
+// perto do chão); no chão volta a ser FREIO/RÉ (parado, segurar dá ré devagar)
+function botaoPousar(noAr) {
+  const f = $('vFreio'); if (!f || f.dataset.pouso === (noAr ? '1' : '0')) return;
+  f.dataset.pouso = noAr ? '1' : '0'; f.innerHTML = noAr ? '🛬<br>POUSAR' : 'FREIO<br>RÉ';
+}
+function assistPouso(c, dt, vAprox, puxa, suave) {
+  // acima de 8 m: nariz -5° e manche ainda corrige; embaixo: arredonda para tocar a ~1,5 m/s
+  const alvo = c.alt > 8 ? -0.09 + puxa * 0.12 : Math.asin(THREE.MathUtils.clamp(-Math.max(1.2, c.alt * 0.25) / Math.max(c.vel, 1), -0.2, 0));
+  suave(alvo, 0.5);
+  c.vel += THREE.MathUtils.clamp(vAprox - c.vel, -8 * dt, 4 * dt);
+}
+function marchaRe(c, dt, acel, freio) {   // no chão: freia; já parado, segurar o freio dá ré (até 3 m/s)
+  if (acel && !freio) return false;
+  if (freio) { c.vel = c.vel > 0.2 ? Math.max(0, c.vel - 10 * dt) : Math.max(-3, c.vel - 2 * dt); return true; }
+  if (c.vel < 0) { c.vel = Math.min(0, c.vel + 4 * dt); return true; }
+  return false;
+}
 function pilotarAviao(c, dt) {
   const P = PORTES[c.porte];
   // PC: W/S = motor, setas ↑/↓ = manche (↑ empurra, ↓ puxa), A/D ou ←/→ = inclinar. Celular: pedais = motor, manche amarelo = direção.
@@ -13920,7 +13938,7 @@ function pilotarAviao(c, dt) {
   const pe = pistaEm(jogador.pos.x, jogador.pos.z), suave = (alvo, taxa) => { c.pitch += THREE.MathUtils.clamp(alvo - c.pitch, -taxa * dt, taxa * dt); };
   if (!c.noAr) {
     const lim = pe && c.liberado ? P.vmax : 10;
-    if (acel && !freio) c.vel = Math.min(lim, c.vel + (pe ? 6 : 3) * dt); else if (freio) c.vel = Math.max(0, c.vel - 10 * dt); else c.vel = Math.max(0, c.vel - (c.vel > 10 ? 4 : 2) * dt);
+    if (marchaRe(c, dt, acel, freio)) { /* freio / ré */ } else if (acel) c.vel = Math.min(lim, c.vel + (pe ? 6 : 3) * dt); else c.vel = Math.max(0, c.vel - (c.vel > 10 ? 4 : 2) * dt);
     if (pe && !c.liberado && acel) pedirTorre(c, 'decolagem');
     jogador.yaw -= c.volante * 1.1 * Math.min(1, c.vel / 3) / (1 + c.vel / 15) * dt;
     jogador.pos.x += Math.sin(jogador.yaw) * c.vel * dt; jogador.pos.z += Math.cos(jogador.yaw) * c.vel * dt;
@@ -13945,11 +13963,12 @@ function pilotarAviao(c, dt) {
       const vsAlvo = THREE.MathUtils.clamp((falta * 0.12 - c.alt) * 0.6, -4.5, 1.5);
       desceAuto = Math.asin(THREE.MathUtils.clamp(vsAlvo / Math.max(c.vel, 1), -0.3, 0.3));
     }
+    const aterr = freio && !acel && !c.pousar && !c.motorParado;
     let alvo = estol ? -0.22 : THREE.MathUtils.clamp(desceAuto + puxa * 0.32, -0.32, 0.32);
     if (c.alt > 300 && alvo > 0) alvo = 0;   // teto
-    suave(alvo, estol ? 0.6 : 0.45);
+    if (aterr && !estol) assistPouso(c, dt, P.vdec * 1.05, puxa, suave); else suave(alvo, estol ? 0.6 : 0.45);
     if (estol && !c.avisoEstol) { c.avisoEstol = true; aviso('⚠️ ESTOL: devagar demais! Acelere e empurre o manche.', 3); } else if (!estol) c.avisoEstol = false;
-    if (acel && !freio) c.vel += 5 * dt; else if (freio) c.vel -= 6 * dt;
+    if (acel && !freio) c.vel += 5 * dt; else if (freio && !aterr) c.vel -= 6 * dt;
     if (c.pousar && !acel) c.vel = Math.max(P.vdec * 0.9, c.vel - 4 * dt);
     c.vel = THREE.MathUtils.clamp(c.vel - Math.sin(c.pitch) * 9 * dt, P.vdec * 0.6, P.vmax * 1.1);   // subir gasta velocidade, descer ganha
     c.vs = estol ? Math.min(c.vel * Math.sin(c.pitch), -6) : c.vel * Math.sin(c.pitch);
@@ -13976,6 +13995,7 @@ function pilotarAviao(c, dt) {
   c.mesh.rotation.set(-c.pitch, jogador.yaw, c.noAr ? c.volante * 0.35 : 0, 'YXZ');   // curva para a direita: asa direita abaixa
   jogador.avatar.raiz.position.copy(jogador.pos);
   const bp = $('vPairar'); if (bp) { bp.classList.toggle('ativo', !!c.ap); bp.innerHTML = c.ap ? '🤖<br>DESLIGAR' : '🤖<br>AUTO'; }
+  botaoPousar(c.noAr); civico.girarHelices(c.mesh, dt, !c.motorParado && (c.noAr || acel || Math.abs(c.vel) > 0.5));
 }
 // ---- rota amarela e instruções para o piloto: no chão leva à cabeceira; no ar mostra a aproximação e a pista
 // ---- helicóptero: o analógico leva para onde ele aponta (frente/ré) e vira o nariz (lados); SUBIR e DESCER devagar.
@@ -15600,7 +15620,7 @@ function pilotarJato(c, dt) {
   if (!c.noAr) {
     if (c.auto) { acel = false; freio = true; if (c.vel < 0.5) { c.auto = null; aviso('🛬 Pouso automático concluído.', 3); } }
     const lim = naPista ? J.vmax * 0.7 : 12;
-    if (acel && !freio) c.vel = Math.min(lim, c.vel + (naPista ? 14 : 4) * dt); else if (freio) c.vel = Math.max(0, c.vel - 16 * dt); else c.vel = Math.max(0, c.vel - 3 * dt);
+    if (c.auto && freio) c.vel = Math.max(0, c.vel - 16 * dt); else if (marchaRe(c, dt, acel, freio)) { /* freio / ré */ } else if (acel) c.vel = Math.min(lim, c.vel + (naPista ? 14 : 4) * dt); else c.vel = Math.max(0, c.vel - 3 * dt);
     jogador.yaw -= c.volante * 1.1 * Math.min(1, c.vel / 3) / (1 + c.vel / 15) * dt;
     jogador.pos.x += Math.sin(jogador.yaw) * c.vel * dt; jogador.pos.z += Math.cos(jogador.yaw) * c.vel * dt;
     if (c.alt > 1) { const n = NAVIOS.porta; if (n?.dx !== undefined) { const rx = jogador.pos.x - n.x0, rz = jogador.pos.z - n.z0, ca = Math.cos(n.dang), sa = Math.sin(n.dang); jogador.pos.x = n.x + rx * ca + rz * sa; jogador.pos.z = n.z - rx * sa + rz * ca; jogador.yaw += n.dang; } }
@@ -15616,8 +15636,9 @@ function pilotarJato(c, dt) {
     else {
       let alvo = estol ? -0.25 : THREE.MathUtils.clamp(puxa * 0.45, -0.45, 0.45);
       if (c.alt > 400 && alvo > 0) alvo = 0;
-      suave(alvo, 0.8);
-      if (acel && !freio) c.vel += 18 * dt; else if (freio) c.vel -= 16 * dt;
+      const aterr = freio && !acel;
+      if (aterr && !estol) assistPouso(c, dt, J.vdec * 1.1, puxa, suave); else suave(alvo, 0.8);
+      if (acel && !freio) c.vel += 18 * dt; else if (freio && !aterr) c.vel -= 16 * dt;
       c.vel = THREE.MathUtils.clamp(c.vel - Math.sin(c.pitch) * 9 * dt, J.vdec * 0.6, J.vmax);
     }
     c.vs = estol && !c.auto ? Math.min(c.vel * Math.sin(c.pitch), -8) : c.vel * Math.sin(c.pitch);
@@ -15642,7 +15663,7 @@ function pilotarJato(c, dt) {
   jato.chamas(c.mesh, acel ? 1 : c.vel / J.vmax * 0.35, visual.nivelAtual() === 'ultra');
   jogador.avatar.raiz.position.copy(jogador.pos);
   sons.continuo('aviaoG_alto', c.invisivel ? 0.15 : 0.35 + 0.4 * c.vel / J.vmax, 1.2 + c.vel / J.vmax * 0.5);
-  controlesJato(c, dt);
+  controlesJato(c, dt); botaoPousar(c.noAr);
 }
 // ---- pouso automático: escolhe a pista mais perto (Base Aérea ou porta-aviões), entra na reta final e desce na rampa
 function pistasPouso() {

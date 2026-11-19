@@ -406,6 +406,51 @@ function separarBalde(base, B) {
   base.add(balde);
   for (const c of base.children) c.position.y -= B.desce;
 }
+// hélices dos aviões (18w): as pás saem do modelo para um grupo "helice" que gira no eixo do motor (z, para a frente).
+// x, y, z: centro do cubo; r: raio das pás; dz: meia espessura do disco (medidos no modelo, em metros do GLB).
+const HELICES = {
+  aviao_pequeno: [{ x: 0, y: 1.53, z: 4.31, r: 1.15, dz: 0.23 }],
+  aviao_medio: [{ x: -3.38, y: 3.78, z: 3.95, r: 1.3, dz: 0.4 }, { x: 3.38, y: 3.78, z: 3.95, r: 1.3, dz: 0.4 }],
+};
+function separarHelices(base, lista) {
+  if (!lista || base.userData.helices) return; base.userData.helices = true;
+  base.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(base.matrixWorld).invert();
+  const malhas = []; base.traverse((o) => { if (o.isMesh && o.geometry?.index) malhas.push(o); });
+  const v = new THREE.Vector3(), m = new THREE.Matrix4();
+  for (const H of lista) {
+    const grupo = new THREE.Group(); grupo.name = 'helice';
+    for (const o of malhas) {
+      const geo = o.geometry, pos = geo.attributes.position, uv = geo.attributes.uv, nor = geo.attributes.normal, idx = geo.index, fica = [], P = [], U = [], N = [];
+      m.multiplyMatrices(inv, o.matrixWorld); const mn = new THREE.Matrix3().getNormalMatrix(m);
+      for (let t = 0; t < idx.count; t += 3) {
+        const ids = [idx.getX(t), idx.getX(t + 1), idx.getX(t + 2)], pa = ids.map((i) => v.fromBufferAttribute(pos, i).applyMatrix4(m).clone());
+        if (pa.every((q) => Math.abs(q.z - H.z) < H.dz && Math.hypot(q.x - H.x, q.y - H.y) < H.r)) {
+          for (let k = 0; k < 3; k++) { P.push(pa[k].x, pa[k].y, pa[k].z); if (uv) U.push(uv.getX(ids[k]), uv.getY(ids[k])); if (nor) { v.fromBufferAttribute(nor, ids[k]).applyMatrix3(mn).normalize(); N.push(v.x, v.y, v.z); } }
+        } else fica.push(...ids);
+      }
+      if (!P.length) continue;
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+      if (U.length) g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+      if (N.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); else g.computeVertexNormals();
+      grupo.add(new THREE.Mesh(g, o.material)); geo.setIndex(fica);
+    }
+    if (!grupo.children.length) continue;
+    const cx = H.x, cy = H.y;   // eixo: o centro do cone (spinner), medido no modelo
+    for (const pa of grupo.children) { pa.geometry.translate(-cx, -cy, 0); pa.geometry.computeBoundingSphere(); }
+    grupo.position.set(cx, cy, 0); base.add(grupo);
+    // disco borrado: aparece com a hélice rápida (as pás somem num vulto)
+    const disco = new THREE.Mesh(new THREE.CircleGeometry(H.r * 0.92, 28), new THREE.MeshBasicMaterial({ color: '#555', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+    disco.name = 'discoHelice'; disco.position.set(cx, cy, H.z); disco.visible = false; base.add(disco);
+  }
+}
+export function girarHelices(o, dt, ligado) {
+  const l = o.userData.listaHelices ||= (() => { const r = []; o.traverse((x) => { if (x.name === 'helice') r.push(x); }); return r; })();
+  const u = o.userData; u.giroHelice = THREE.MathUtils.lerp(u.giroHelice || 0, ligado ? 45 : 0, Math.min(1, dt * (ligado ? 1.2 : 0.6)));
+  for (const h of l) h.rotation.z += u.giroHelice * dt;
+  const d = u.discosHelice ||= (() => { const r = []; o.traverse((x) => { if (x.name === 'discoHelice') r.push(x); }); return r; })();
+  const op = THREE.MathUtils.clamp((u.giroHelice - 20) / 25, 0, 1) * 0.28;
+  for (const x of d) { x.visible = op > 0.01; x.material.opacity = op; }
+}
 function heliDeServico(modelo, vaga, cor) {
   const proprio = ctx.modelo?.(modelo); if (proprio) { GLB_CARRO[modelo] = modelo; SEM_TINTA.add(modelo); separarRotor(proprio, ROTOR[modelo]); separarBalde(proprio, BALDE[modelo]); }
   if (!ctx.modelo?.(GLB_CARRO[modelo])) return null;
@@ -961,6 +1006,7 @@ function modeloCarroBase(modelo, cor) {
   if (modelo === 'viatura') { const qual = ctx?.modelo?.('viatura_pm') ? 'viatura_pm' : ctx?.modelo?.('viatura_civil') ? 'viatura_civil' : null;
     if (qual) { const o = veiculoGLBNovo(qual, cor); o.userData.modelo = 'viatura'; adicionarLuzes(o, 'viatura'); cacheCarro.set(chave, o); return o.clone(); } }
   const base = ctx?.modelo?.(GLB_CARRO[modelo]);
+  if (base && HELICES[modelo]) separarHelices(base, HELICES[modelo]);
   if (base) {   // modelo 3D: pinta de leve com a cor escolhida (o presidencial fica como é)
     const g = base.clone(true); g.userData.glb = GLB_CARRO[modelo]; g.userData.modelo = modelo;
     if (modelo === 'militar') removerTriangulos(g, VIDRO_JIPE, 'semVidro');
