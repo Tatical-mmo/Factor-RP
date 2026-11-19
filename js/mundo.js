@@ -181,7 +181,7 @@ export function limitar(p) {
     if (md < 3) { p.x = melhor[0]; p.z = melhor[1]; return; }
   }
   if (p.x >= 110 && p.x <= 530 && p.z >= -880 && p.z <= -650) return;   // Aeroporto da Metrópole
-  if (p.x >= 880 && p.x <= 1096 && p.z >= 912 && p.z <= 1108) return;    // Favela do Morro do Porto e os lotes da rua dela
+  if (p.x >= 880 && p.x <= 1096 && p.z >= 894 && p.z <= 1108) return;    // Favela do Morro do Porto e os lotes da rua dela
   if (p.z > BASE_NAVAL.z1 - 4 && p.z < 1175 && p.x > BASE_NAVAL.x0 - 5 && p.x < BASE_NAVAL.x1 + 5) {   // cais e píeres da Base Naval
     const areas = [{ x0: BASE_NAVAL.x0, x1: BASE_NAVAL.x1, z0: BASE_NAVAL.z1 - 4, z1: 1114 }, ...[675, 760, 845].map((x) => ({ x0: x - 3.6, x1: x + 3.6, z0: 1110, z1: 1167.5 }))];
     let melhor = null, md = Infinity;
@@ -198,7 +198,7 @@ export function limitar(p) {
     // Porto Sul a leste (bases e Morro do Porto): para no limite mais perto da área permitida. Antes jogava o x para 300:
     // quem saía da rua da favela (atrás das empresas) ia parar do lado da Base Aérea/Marinha.
     if (s > 0 && p.x > CIDADE_Z.x) {
-      const areas = [{ x0: 250, x1: BASE_NAVAL.x1 + 10, z0: 938, z1: BASE_NAVAL.z1 + 2 }, { x0: 880, x1: 1096, z0: 912, z1: 1108 }, { x0: -CIDADE_Z.x, x1: CIDADE_Z.x, z0: CIDADE_Z.min, z1: CIDADE_Z.maxSul }];
+      const areas = [{ x0: 250, x1: BASE_NAVAL.x1 + 10, z0: 938, z1: BASE_NAVAL.z1 + 2 }, { x0: 880, x1: 1096, z0: 894, z1: 1108 }, { x0: -CIDADE_Z.x, x1: CIDADE_Z.x, z0: CIDADE_Z.min, z1: CIDADE_Z.maxSul }];
       let melhor = null, md = Infinity;
       for (const r of areas) { const x = THREE.MathUtils.clamp(p.x, r.x0, r.x1), z = THREE.MathUtils.clamp(p.z, r.z0, r.z1), d = Math.hypot(x - p.x, z - p.z); if (d < md) { md = d; melhor = [x, z]; } }
       p.x = melhor[0]; p.z = melhor[1]; return;
@@ -680,7 +680,9 @@ function gerarFavelas() {
   ruaMorro(1050, 945, 1050, 1058); ruaMorro(960, 945, 960, 1045);
   ruaMorro(935, 1000, 1050, 1000); ruaMorro(935, 1045, 1050, 1045);
   for (const x of [915, 937, 959, 981]) LOTES_FAVELA.push({ x, z: 927.5, portao: { x, z: 941 } });
-  limparArea(878, 910, 1100, 1112);
+  limparArea(878, 890, 1100, 1112);
+  // pátio de terra atrás dos lotes (19b): espaço para o caminhão encostar de ré nas docas e manobrar
+  extrasMesh.push({ geo: [90, 0.1, 26], cor: '#8f7d5e', pos: [948, 0.12, 909] });
   // nada de árvore no asfalto das ruas dos morros (as pontas das ruas dos lotes saíam da área limpa)
   for (const [rx, rz, w, d] of ruasMorro) for (let k = arvores.length - 1; k >= 0; k--) {
     const [x, z, , c] = arvores[k]; if (Math.abs(x - rx) > w / 2 + 1.2 || Math.abs(z - rz) > d / 2 + 1.2) continue;

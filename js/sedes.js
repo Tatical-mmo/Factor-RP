@@ -111,6 +111,14 @@ export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0, nom
     const D3 = 10.2, W3 = D3 / 0.831;
     return construirGlb({ g, glb, f, n: 3, W: W3, D: D3, cx, zw: FRENTE - D3, x, z, cor, helis, anima, alt: 1.113, nome, portas: [-0.309, 0, 0.309] });
   }
+  // sede níveis 10–14 (19b): prédio azul (torre de vidro em cima de um galpão com portas de doca nos dois lados).
+  // Proporção do modelo; 2 docas nas portas de fora (as do meio são estreitas para dois caminhões lado a lado);
+  // o heliporto vai no alto da torre
+  if (glb && f === 2 && !tr && !ab) {
+    const W2 = 9, D2 = W2 * 1.1606;
+    return construirGlb({ g, glb, f, n: 2, W: W2, D: D2, cx, zw: FRENTE - D2, x, z, cor, helis, anima, alt: 1.4631, nome, portas: [-0.216, 0.38],
+      pads: [{ x: cx - 0.015 * W2, z: FRENTE - D2 / 2 - 0.02 * D2 }], placaY: 3.2 });
+  }
   if (glb) return construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, cor, helis, anima, alt: ab ? 0.585 : (tr ? ALT_TR : ALT_GLB)[f], nome });
   // galpão: chão, paredes de zinco, telhado e faixa da cor da empresa
   caixa(g, M.piso, W, 0.1, D, cx, 0.05, zw + D / 2);
@@ -197,11 +205,11 @@ function placaNome(nome, cor) {
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
   return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.25 });
 }
-function construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, cor, helis, anima, alt: altRel, nome, portas = null }) {
+function construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, cor, helis, anima, alt: altRel, nome, portas = null, pads = null, placaY = null }) {
   caixa(g, M.piso, W, 0.1, D, cx, 0.05, zw + D / 2);
   const m = glb.clone(true), alt = W * altRel;
   m.position.set(cx, 0, zw + D / 2); m.scale.set(W, alt, D); m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); g.add(m);
-  caixa(g, placaNome(nome, cor), W * 0.62, 1.15, 0.12, cx, Math.min(alt - 1, 5.2), FRENTE + 0.1);   // placa com o nome e a cor da empresa
+  caixa(g, placaNome(nome, cor), W * 0.62, 1.15, 0.12, cx, placaY ?? Math.min(alt - 1, 5.2), FRENTE + 0.1);   // placa com o nome e a cor da empresa
   // docas no fundo
   const docas = [];
   // o modelo já tem as portas de doca: o caminhão encosta de ré nelas (sem as docas feitas por código)
@@ -219,8 +227,8 @@ function construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, cor, helis, anima, alt
   g.position.set(x, 0.18, z); g.updateMatrixWorld(true);
   const rc = new THREE.Raycaster(), teto = (lx, lz) => { rc.set(new THREE.Vector3(x + lx, 300, z + lz), new THREE.Vector3(0, -1, 0)); const h = rc.intersectObject(m, true)[0]; return h ? h.point.y - 0.18 : alt; };
   const heliportos = [];
-  for (let k = 0; k < Math.min(2, helis); k++) {
-    const hx = XR - 2.9, hz = zw + 2.7 + k * 4.7, hy = teto(hx, hz);
+  for (let k = 0; k < Math.min(pads ? pads.length : 2, helis); k++) {
+    const hx = pads ? pads[k].x : XR - 2.9, hz = pads ? pads[k].z : zw + 2.7 + k * 4.7, hy = teto(hx, hz);
     caixa(g, M.escuro, 4.6, 0.12, 4.6, hx, hy + 0.06, hz);
     const pad = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2).rotateX(-Math.PI / 2), M.heli); pad.position.set(hx, hy + 0.13, hz); g.add(pad);
     heliportos.push({ x: x + hx, z: z + hz, y: 0.18 + hy + 0.15 });
@@ -230,7 +238,7 @@ function construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, cor, helis, anima, alt
   const mats = []; g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); mats.push(o.material); } });
   return {
     grupo: g, mats, docas, heliportos, altura: Math.min(alt, 9), topo: alt,
-    caixa: new THREE.Box3(new THREE.Vector3(x + XL, 0, z + zw - 1.2), new THREE.Vector3(x + XR, alt, z + FRENTE)),
+    caixa: new THREE.Box3(new THREE.Vector3(x + Math.max(XL, cx - W / 2), 0, z + zw - 1.2), new THREE.Vector3(x + Math.min(XR, cx + W / 2), alt, z + FRENTE)),
     remover: () => { reg.vivo = false; vivas.delete(reg); ctx.scene.remove(g); },
   };
 }

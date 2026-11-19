@@ -3161,7 +3161,7 @@ async function iniciarJogo(perfil) {
   $('carregando').classList.remove('oculto');
   montarChao();
   // um modelo faltando não pode travar o jogo: ele só fica de fora (veículos e prédios têm versão feita por código)
-  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_exercito' ? '?v=pas4' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau2' : m === 'empresa_f3' ? '?v=sede18q' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
+  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_exercito' ? '?v=pas4' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau2' : m === 'empresa_f3' ? '?v=sede18q' : m === 'empresa_f2' ? '?v=sede19b' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
   const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
   const skin = id;   // em serviço o policial continua com o próprio personagem (a farda mostra a corporação)
   const avatarP = criarAvatar(ROBOS.includes(skin) ? 'robos' : pastaJogador, skin);
@@ -3257,7 +3257,7 @@ async function iniciarJogo(perfil) {
     entrarMoradia: (d) => entrarEmCasa(d),
     casaVendida: () => { tempoSocial = 0; if (jogador.dentroCasa) sairDeCasa(); } });
   racoes.iniciarRacoes({ perfil: () => jogador.perfil, agora: () => agoraServidor(), mudou: (e) => racoesMudou(e), duracaoViagem: (corp) => duracaoViagemJujuba(corp),
-    minhasTransportadoras: async () => (await rede.listarEmpresas()).filter((e) => e.dono === jogador.perfil.id && (e.tipo === 'transportadora' || e.transporte)) });
+    minhasTransportadoras: async () => (await rede.listarEmpresas()).filter((e) => e.dono === jogador.perfil.id && (e.tipo === 'transportadora' || e.transporte)), recarregarInventario: () => recarregarInventario() });
   iniciarEmpresa({
     perfil: () => jogador.perfil, agora: agoraServidor,
     definirEmprego: (id) => { emprego = id; },
@@ -6909,6 +6909,13 @@ let cacada = null, tempoCacada = 5, tempoArma = 1;
 function usarArsenal() {
   const p = jogador.perfil;
   if (jogador.armaPesada) { jogador.armaPesada = false; conferirArma(); aviso('Arma pesada guardada no arsenal.', 2); return; }
+  if (p?.profissao !== 'exercito' && p?.cargo !== 'admin') { aviso('O arsenal é só para militares em serviço.', 2.5); return; }
+  escolher('🎖️ Arsenal do Quartel', 'Militar em serviço: o kit sai a cada 10 min. A arma pesada precisa de autorização.', [
+    { rotulo: '🔫 Pegar fuzil, espingarda e 6 granadas', fn: () => rede.tatica.armasArsenal().then((t) => { aviso(`🔫 Você pegou ${t}. Equipe a arma no 🎯 Tático; granada pelo botão na tela.`, 4); recarregarInventario(); }).catch((e) => aviso(e.message, 3)) },
+    { rotulo: '💥 Pegar a arma pesada', fn: () => armaPesadaArsenal() }]);
+}
+function armaPesadaArsenal() {
+  const p = jogador.perfil;
   if (p?.cargo === 'admin') { jogador.armaPesada = true; conferirArma(); aviso('💥 General Supremo: arma pesada equipada. Saque com o botão Arma.', 3.5); return; }
   if (p?.profissao !== 'exercito') { aviso('O arsenal é só para militares em serviço.', 2.5); return; }
   if (!p.arma_pesada_ate || Date.parse(p.arma_pesada_ate) < agoraServidor()) { aviso('Você precisa da autorização de um Tenente para cima (ou do General Supremo) para pegar a arma pesada.', 3.5); return; }
@@ -8512,7 +8519,7 @@ function contexto() {
   { const o = contextoOnibus() || contextoAviacao() || contextoColeta(); if (o) return o; }
   if (Math.hypot(AUTOESCOLA.balcao.x - jogador.pos.x, AUTOESCOLA.balcao.z - jogador.pos.z) < 3) return ['autoescola: aulas e provas (carteiras B, C, D e brevê)', 'Autoescola'];
   if (tropaPerto()) return ['correr com a tropa (treino de corrida)', 'Correr'];
-  if (perto(civico.EXERCITO.arsenal, 3.2)) return [jogador.armaPesada ? 'guardar a arma pesada' : 'arsenal: pegar a arma pesada (com autorização)', 'Arsenal'];
+  if (perto(civico.EXERCITO.arsenal, 3.2)) return [jogador.armaPesada ? 'guardar a arma pesada' : 'arsenal: fuzil, espingarda, granadas e arma pesada', 'Arsenal'];
   if (BANCAS.some((b) => perto(b, 3.2))) return ['banca de jornal: ler as notícias', 'Jornal'];
   if (perto(CONTRABANDISTA, 3.2)) return ['contrabandista: arma militar e alicate de corte', 'Negociar'];
   { const cn = contextoNavio(); if (cn) return cn; }
