@@ -2129,6 +2129,7 @@ function escolherNaRoda(id) {
   jogador.granadaNaMao = false; tiroLabel('Atirar');
   if (id === 'mao') { if (jogador.armado) { jogador.trava = 0; alternarArma(); } else { $('btTiro').classList.add('oculto'); $('btArma').classList.remove('ativo'); } return; }
   const item = id === 'padrao' ? null : id;
+  if (item) jogador.armaPesada = false;   // escolher RPG, bazuca, laser… guarda a arma pesada (antes ela travava os outros)
   if ((jogador.armaEspecial || null) !== item || (item && jogador.armaTipo !== item)) { enviarBalas(); jogador.desviada = null; jogador.armaEspecial = item; conferirArma(); }
   if (!jogador.armado) { jogador.trava = 0; alternarArma(); }
 }
@@ -17401,6 +17402,7 @@ function equiparArma(item) {
   if (item && qtdItem(item) < 1) { aviso('Você não tem essa arma.'); return; }
   if (item && ARMAS[item]?.laser && !jogador.armadura) { aviso('🔋 As armas laser só funcionam com a armadura vestida.', 3); return; }
   enviarBalas(); jogador.desviada = null;
+  if (item) jogador.armaPesada = false;
   jogador.armaEspecial = item || null; conferirArma();
   aviso(item ? `🔫 ${NOME_ITEM_T[item] || item} equipad${item === 'bazuca' || item === 'espingarda' ? 'a' : 'o'}. Saque com o botão Arma.${ARMAS[item]?.lanca ? ' Mire numa aeronave por 2 s para travar.' : ''}` : '🔫 Voltou para a arma padrão.', 2.5);
 }
