@@ -1256,7 +1256,7 @@ window.addEventListener('keydown', (e) => {
   if (!jogador.avatar || e.repeat) return;
   if (k === 'e') acaoContexto();
   if (k === 'f') { if (jogador.carro?.servico === 'tanque') atirarTanque(); else if (!jogador.carro?.voa) socar(); }
-  if (k === 'q') alternarArma();
+  if (k === 'q') { if ($('rodaArmas')?.style.display === 'block') fecharRoda(); else botaoArma(); }
   if (k === ' ') pular();
   if (k === 'r') renderSe();
   if (k === 'z') girarCamera(-1);
@@ -1375,7 +1375,7 @@ function configurarJoystick() {
     document.addEventListener('visibilitychange', solta);
     b.addEventListener('pointerup', solta); b.addEventListener('pointercancel', solta); b.addEventListener('lostpointercapture', solta);
   }
-  toque('btAcao', acaoContexto); toque('btSoco', socar); toque('btArma', alternarArma); toque('btAlgema', acaoAlgema); toque('btCrime', acaoCrime);
+  toque('btAcao', acaoContexto); toque('btSoco', socar); toque('btArma', botaoArma); toque('btAlgema', acaoAlgema); toque('btCrime', acaoCrime);
   toque('btPular', pular); toque('btRender', renderSe);
   toque('btTiro', () => atirar(null)); toque('btGiraE', () => girarCamera(-1)); toque('btGiraD', () => girarCamera(1));
 }
@@ -2022,10 +2022,69 @@ function alternarArma() {
   if (jogador.carregando) { aviso('Solte a caixa antes de sacar a arma.'); return; }
   if (!jogador.armado && (jogador.rendido || performance.now() - (jogador.baixouMaos || -1e9) < 60000)) traiuRendicao();
   jogador.armado = !jogador.armado;
+  if (jogador.granadaNaMao) { jogador.granadaNaMao = false; const bt = $('btTiro'); if (bt) bt.innerHTML = 'Atirar'; }
   jogador.arma.visible = jogador.armado;
   $('btTiro').classList.toggle('oculto', !jogador.armado);
   $('btArma').classList.toggle('ativo', jogador.armado);
   jogador.trava = 0.2;
+}
+
+// ---- roda de armas (19g): o botão Arma abre uma roda com tudo o que o jogador pode usar (mão, arma padrão,
+// espingarda, fuzil, RPG, bazuca, granada); tocar numa opção equipa e fecha. Granada na mão: o botão Atirar arremessa.
+function nomeArmaPadrao() {
+  const esp = jogador.armaEspecial; jogador.armaEspecial = null; const t = tipoArma(); jogador.armaEspecial = esp;
+  return { basica: ['🔫', 'Pistola de tinta'], policia: ['🔫', 'Arma da Polícia'], prf: ['🔫', 'Arma da PRF'], exercito: ['🔫', 'Arma do Exército'], militar: ['🔫', 'Arma do clã'], pesada: ['💥', 'Arma pesada'] }[t] || ['🔫', 'Arma'];
+}
+function opcoesRoda() {
+  const r = [{ id: 'mao', ic: '✋', nome: 'Mão' }], [ic, nome] = nomeArmaPadrao();
+  r.push({ id: 'padrao', ic, nome });
+  for (const [it, ic2] of [['espingarda', '🔫'], ['fuzil', '🔫'], ['rpg', '🚀'], ['bazuca', '🚀']]) if (qtdItem(it) > 0) r.push({ id: it, ic: ic2, nome: NOME_ITEM_T[it], qtd: it === 'rpg' || it === 'bazuca' ? `${qtdItem('foguete')} foguetes` : null });
+  if (qtdItem('granada') > 0) r.push({ id: 'granada', ic: '💣', nome: 'Granada', qtd: `${qtdItem('granada')}` });
+  return r;
+}
+function itemAtualRoda() {
+  if (jogador.granadaNaMao) return 'granada';
+  if (!jogador.armado) return 'mao';
+  return jogador.armaEspecial && jogador.armaTipo === jogador.armaEspecial ? jogador.armaEspecial : 'padrao';
+}
+function botaoArma() {   // passageiro atirador (Caveirão) continua alternando direto
+  if (document.body.classList.contains('passageiro')) { alternarArma(); return; }
+  abrirRoda();
+}
+function abrirRoda() {
+  if (jogador.carro || jogador.morto || !jogador.avatar) return;
+  let el = $('rodaArmas');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'rodaArmas';
+    el.style.cssText = 'position:fixed;inset:0;z-index:60;background:rgba(5,10,20,.45);display:none;touch-action:none';
+    el.addEventListener('pointerdown', (ev) => { if (ev.target === el) fecharRoda(); });
+    document.body.appendChild(el);
+  }
+  const ops = opcoesRoda(), atual = itemAtualRoda(), n = ops.length, R = Math.min(140, Math.min(innerWidth, innerHeight) * 0.33), cx = innerWidth / 2, cy = innerHeight / 2;
+  let h = `<div style="position:absolute;left:${cx - R - 46}px;top:${cy - R - 46}px;width:${2 * R + 92}px;height:${2 * R + 92}px;border-radius:50%;background:radial-gradient(circle,rgba(14,24,40,.25) 30%,rgba(14,24,40,.85) 31%,rgba(14,24,40,.85) 100%);border:2px solid rgba(255,210,62,.5);pointer-events:none"></div>`;
+  ops.forEach((o, k) => {
+    const a = -Math.PI / 2 + k / n * Math.PI * 2, x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R, sel = o.id === atual;
+    h += `<button data-roda="${o.id}" style="position:absolute;left:${x - 42}px;top:${y - 42}px;width:84px;height:84px;border-radius:50%;border:3px solid ${sel ? '#7dff8a' : '#ffd23e'};background:${sel ? 'rgba(40,90,50,.95)' : 'rgba(20,32,52,.95)'};color:#fff;font:800 11px system-ui;line-height:1.15;padding:4px;touch-action:none"><span style="font-size:26px">${o.ic}</span><br>${esc(o.nome)}${o.qtd ? `<br><small style="color:#ffd23e">${esc(o.qtd)}</small>` : ''}</button>`;
+  });
+  h += `<div style="position:absolute;left:${cx - 60}px;top:${cy - 18}px;width:120px;text-align:center;color:#fff;font:800 13px system-ui;pointer-events:none">Escolha<br><small style="opacity:.75">toque fora para fechar</small></div>`;
+  el.innerHTML = h; el.style.display = 'block';
+  el.querySelectorAll('[data-roda]').forEach((b) => b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); escolherNaRoda(b.dataset.roda); fecharRoda(); }));
+}
+function fecharRoda() { const el = $('rodaArmas'); if (el) el.style.display = 'none'; }
+function escolherNaRoda(id) {
+  const tiroLabel = (t) => { const b = $('btTiro'); if (b) b.innerHTML = t; };
+  jogador.trava = 0;   // escolha na roda não espera a trava do saque anterior
+  if (id === 'granada') {
+    if (jogador.armado) alternarArma();
+    if (qtdItem('granada') < 1) return;
+    jogador.granadaNaMao = true; $('btTiro').classList.remove('oculto'); tiroLabel('💣<br>Jogar'); $('btArma').classList.add('ativo');
+    aviso('💣 Granada na mão: toque em Jogar para arremessar.', 2.5); return;
+  }
+  jogador.granadaNaMao = false; tiroLabel('Atirar');
+  if (id === 'mao') { if (jogador.armado) { jogador.trava = 0; alternarArma(); } else { $('btTiro').classList.add('oculto'); $('btArma').classList.remove('ativo'); } return; }
+  const item = id === 'padrao' ? null : id;
+  if ((jogador.armaEspecial || null) !== item || (item && jogador.armaTipo !== item)) { enviarBalas(); jogador.desviada = null; jogador.armaEspecial = item; conferirArma(); }
+  if (!jogador.armado) { jogador.trava = 0; alternarArma(); }
 }
 
 // nome acima da cabeça, com uma folga (os personagens têm alturas diferentes)
@@ -2121,6 +2180,11 @@ const geoMancha = new THREE.CircleGeometry(0.35, 14);
 const CORES_TINTA = ['#ff3e6c', '#35d07f', '#3ea8ff', '#ffd23e', '#b05cff', '#ff8a2a'];
 function atirar(alvo) {
   if (jogador.carro?.servico === 'tanque') { atirarTanque(); return; }
+  if (jogador.granadaNaMao && !jogador.carro && !jogador.passageiro) {   // roda de armas: granada na mão
+    lancarGranada();
+    if (qtdItem('granada') <= 1) setTimeout(() => { if (qtdItem('granada') < 1 && jogador.granadaNaMao) { jogador.granadaNaMao = false; $('btTiro').innerHTML = 'Atirar'; $('btTiro').classList.add('oculto'); $('btArma').classList.remove('ativo'); aviso('💣 Acabaram as granadas.', 2); } }, 2500);
+    return;
+  }
   if (!jogador.armado || jogador.trava > 0 || jogador.recarga > 0 || !livre()) return;
   if (armasProibidas()) { aviso('🚫 Armas não são permitidas aqui.'); return; }
   if (jogador.passageiro) { atirarDoCaveirao(alvo); return; }
@@ -8178,6 +8242,7 @@ function atualizarJogador(dt) {
   j.pos.y = THREE.MathUtils.lerp(j.pos.y, alturaChao(j.pos.x, j.pos.z), Math.min(1, dt * 12));
   av.raiz.position.copy(j.pos); av.raiz.position.y += j.puloY || 0;
   av.raiz.rotation.y = j.yaw;
+  if (av.colunaAntes) { av.coluna.quaternion.copy(av.colunaAntes); av.colunaAntes = null; }
   av.mixer.update(dt);
   av.raiz.updateMatrixWorld(true);
   inclinarMira(av);
@@ -16057,9 +16122,10 @@ function podeMiraManual() { const j = jogador; return !!(j.avatar && j.armado &&
 function direcaoMira() { const p = miraM.pitch, y = jogador.yaw; return new THREE.Vector3(Math.sin(y) * Math.cos(p), Math.sin(p), Math.cos(y) * Math.cos(p)); }
 function bocaDaArma() { const A = ARMAS[jogador.armaTipo || 'basica']; return jogador.arma.localToWorld(new THREE.Vector3(...(modelos[A.modelo] ? A.boca : ARMAS.basica.boca))); }
 function inclinarMira(av) {
-  if (!miraM.ativo || !podeMiraManual()) return;
+  if (!miraM.ativo || !podeMiraManual()) { if (av.colunaAntes) { av.coluna.quaternion.copy(av.colunaAntes); av.colunaAntes = null; } return; }
   av.coluna ||= av.raiz.getObjectByName('mixamorigSpine2') || av.raiz.getObjectByName('mixamorigSpine1');
   if (!av.coluna) return;
+  av.colunaAntes = av.coluna.quaternion.clone();   // volta antes do próximo quadro (a animação "mirar" não mexe nesse osso: senão a inclinação acumulava)
   av.coluna.rotateX(-miraM.pitch * 0.8); av.raiz.updateMatrixWorld(true);
 }
 function botaoMira(mostra) {
@@ -16079,12 +16145,13 @@ function botaoMira(mostra) {
   if (mostra) { const t = miraM.ativo ? `🎯 Mira manual ${Math.round(THREE.MathUtils.radToDeg(miraM.pitch))}° ✓` : '🎯 Mira manual'; if (b.textContent !== t) b.textContent = t; b.style.borderColor = miraM.ativo ? '#7dff8a' : '#ffd23e'; }
 }
 function atualizarMiraManual() {
+  if (jogador.granadaNaMao && (jogador.carro || jogador.passageiro || jogador.morto)) { jogador.granadaNaMao = false; const bt = $('btTiro'); if (bt) { bt.innerHTML = 'Atirar'; bt.classList.toggle('oculto', !jogador.armado); } }
   const pode = podeMiraManual(); botaoMira(pode);
   const on = pode && miraM.ativo;
   if (!miraM.pontos) {
     const cv = document.createElement('canvas'); cv.width = cv.height = 32; const cg = cv.getContext('2d'); cg.fillStyle = '#fff'; cg.beginPath(); cg.arc(16, 16, 13, 0, Math.PI * 2); cg.fill();
     const mat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), color: '#ff3030', transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, sizeAttenuation: false, toneMapped: false });   // tamanho fixo na tela
-    miraM.pontos = []; for (let k = 0; k < 44; k++) { const s = new THREE.Sprite(mat); s.scale.setScalar(0.022); s.renderOrder = 5; s.visible = false; scene.add(s); miraM.pontos.push(s); }
+    miraM.pontos = []; for (let k = 0; k < 44; k++) { const s = new THREE.Sprite(mat); s.scale.setScalar(0.009); s.renderOrder = 5; s.visible = false; scene.add(s); miraM.pontos.push(s); }
     miraM.fim = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.3, 20), new THREE.MeshBasicMaterial({ color: '#ff3030', transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false })); miraM.fim.renderOrder = 5; miraM.fim.visible = false; scene.add(miraM.fim);
   }
   if (!on) { for (const s of miraM.pontos) s.visible = false; miraM.fim.visible = false; return; }
