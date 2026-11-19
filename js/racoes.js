@@ -2,9 +2,9 @@
 // O estado vem do banco a cada 15 s (e o "relógio" do sistema — chegadas, licitação — roda junto).
 import * as rede from './rede.js';
 
-const CORP_NOME = { policia: 'Polícia', prf: 'PRF', bope: 'BOPE', bombeiros: 'Bombeiros' };
+const CORP_NOME = { policia: 'Polícia', prf: 'PRF', bope: 'BOPE', bombeiros: 'Bombeiros', aerea: 'Base Aérea' };
 const CORPS = ['policia', 'prf', 'bope', 'bombeiros'];
-const PROD = { jujuba: { nome: 'jujubas', ic: '🍬', col: 'estoque' }, antiacido: { nome: 'anti-ácidos', ic: '🥤', col: 'antiacido' } };
+const PROD = { jujuba: { nome: 'jujubas', ic: '🍬', col: 'estoque' }, antiacido: { nome: 'anti-ácidos', ic: '🥤', col: 'antiacido' }, lancador: { nome: 'lote(s) de lançadores', ic: '🚀', col: null } };
 let ctx = null, est = null, modo = null, tempo = 0, el = null;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -22,7 +22,7 @@ export const aberto = () => !!modo;
 export function corpDe(p) { return p?.bope ? 'bope' : p?.prf ? 'prf' : p?.policial ? 'policia' : p?.profissao === 'bombeiro' ? 'bombeiros' : null; }
 export async function recarregar() {
   try { await rede.jujuba.processar(); } catch (e) { /* o relógio é de todos: se falhar, outro roda */ }
-  try { est = await rede.jujuba.estado(); est.armas = await rede.jujuba.armamento(); est.cofre = await rede.jujuba.cofre(); ctx.mudou?.(est); } catch (e) { /* tenta de novo depois */ }
+  try { est = await rede.jujuba.estado(); est.armas = await rede.jujuba.armamento(); est.cofre = await rede.jujuba.cofre(); est.lancadores = await rede.jujuba.lancadores(); ctx.mudou?.(est); } catch (e) { /* tenta de novo depois */ }
   if (modo) desenhar();
 }
 export function atualizar(dt) { if ((tempo -= dt) <= 0) { tempo = 15; recarregar(); } }
@@ -95,6 +95,12 @@ async function desenhar() {
           ${k === 'policia' || k === 'prf' ? (() => { const a2 = (est.armas || []).find((x) => x.corp === k); return `<small>🔫 Armamento: ${a2 ? `${a2.espingarda} espingardas · ${a2.fuzil} fuzis · ${a2.granada} granadas` : '—'}</small>
             <div class="botoes">${pd && pd.status === 'aberto' ? `<button data-kit="${k}" data-ped="${pd.id}">🚚 Caminhão cheio + kit de armas</button>` : ''}<button data-kit="${k}">🚚 Só o kit de armas</button></div>`; })() : ''}</div>`; }).join('')}
       ${est.viagens.filter((v) => v.status === 'sequestrada').map((v) => `<p class="dica" style="color:#ff8a80">🚨 Caminhão (${nomeCarga(v)}) SEQUESTRADO a caminho de ${CORP_NOME[v.corp]}.</p>`).join('')}
+      ${(() => { const L = est.lancadores, vs = viag('aerea'), seq = est.viagens.some((v) => v.produto === 'lancador' && v.status === 'sequestrada');
+        return `<div class="linha" style="display:block;margin-bottom:8px"><b>🚀 Lançadores · arsenal da Base Aérea</b><br>
+          <small>${L ? `${L.rpg} RPG · ${L.bazuca} bazucas · ${L.foguete} foguetes` : '—'} (militares em serviço pegam no Arsenal sem autorização)</small>
+          ${vs.map((v) => `<br><small>🚚 lote a caminho (~${Math.max(0, Math.ceil((Date.parse(v.chegada) - ctx.agora()) / 1000))} s)${v.caminhao ? ' · caminhão da transportadora' : ''}</small>`).join('')}
+          ${!vs.length && !seq ? '<div class="botoes"><button id="rLanc">🚚 Mandar 1 lote (4 RPG, 4 bazucas e 40 foguetes)</button></div>' : ''}
+          <small class="dica">O caminhão passa no Quartel, carrega e leva até a Base Aérea. Clãs podem sequestrar no caminho.</small></div>`; })()}
       <div class="linha" style="display:block" id="rLicBox"><b>📄 Licitação do transporte</b><br><small>carregando…</small></div>
       <hr><p class="dica">🎒 Rações para você (militar em serviço): 5 de cada vez, a cada 5 min. Saem da produção do Exército, sem gastar o depósito das corporações.</p>
       <div class="botoes"><button data-pegarmil="jujuba">🍬 Pegar 5 jujubas</button><button data-pegarmil="antiacido">🥤 Pegar 5 anti-ácidos</button><button id="rArmasMil">🔫 Pegar fuzil, espingarda e granadas</button></div>
@@ -102,6 +108,7 @@ async function desenhar() {
       <div class="botoes"><input id="rRecNome" placeholder="nome do soldado" style="width:9em"><input id="rRecValor" type="number" min="100" max="1000000" step="100" value="5000" style="width:6em"></div>
       <div class="botoes"><input id="rRecMotivo" placeholder="motivo" style="width:15em"><button id="rRec">🎖️ Recompensar</button></div>`;
     desenharLicitacao(p);
+    if ($('rLanc')) $('rLanc').onclick = () => executar(() => rede.jujuba.despacharLancadores(ctx.duracaoViagem('aerea')), () => (semContrato() ? '🚚 Sem contrato vigente: o caminhão do Exército leva o lote até a Base Aérea.' : '🚚 Lote de lançadores despachado: o caminhão passa no Quartel e leva até a Base Aérea.'));
     c.querySelectorAll('[data-pegarmil]').forEach((b2) => { b2.onclick = () => executar(() => rede.jujuba.pegarRacao(b2.dataset.pegarmil), (n) => `Você pegou ${n} ${PROD[b2.dataset.pegarmil].nome}. Use pela mochila.`); });
     $('rArmasMil').onclick = () => executar(async () => { const t = await rede.tatica.armasArsenal(); ctx.recarregarInventario?.(); return t; }, (t) => `Você pegou ${t}. Equipe a arma no 🎯 Tático; granada pelo botão na tela.`);
     $('rRec').onclick = () => executar(() => rede.jujuba.recompensar($('rRecNome').value.trim(), Math.floor(Number($('rRecValor').value)), $('rRecMotivo').value.trim()), (v) => `🎖️ ${fmt(v)} moedas enviadas do cofre.`);

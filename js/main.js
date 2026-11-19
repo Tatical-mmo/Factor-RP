@@ -4453,8 +4453,23 @@ function etiquetaStatus(r) {
 
 function aplicarDanoRemoto(id, valor) {
   conexao?.enviar('dano', { alvo: id, v: valor, de: jogador.perfil.id });
+  militarFeriu(id);
   const ultimo = jogador.agredidos.get(id) || 0;
   if (performance.now() - ultimo > 60000) { jogador.agredidos.set(id, performance.now()); rede.combate.agressao(id).catch(() => {}); }
+}
+// militar em serviço que fere inocente (sem crime, sem recompensa, não invasor): o banco aplica a punição
+// (1ª e 2ª vez: perde uma patente; 3ª: expulso do Exército). Uma rajada conta uma vez só.
+let ultimaFaltaMil = 0;
+function militarFeriu(id) {
+  if (jogador.perfil?.profissao !== 'exercito' || jogador.perfil?.cargo === 'admin' || jogador.dentroCasa === 'treino') return;
+  const m = remotos.get(id)?.meta; if (!m || m.crimes > 0 || m.recompensa > 0 || m.inv) return;
+  if (performance.now() - ultimaFaltaMil < 120000) return; ultimaFaltaMil = performance.now();
+  rede.exercito.feriuInocente(id, !!m.inv).then((r) => {
+    if (!r) return;
+    if (r === 'expulso') aviso('🎖️ Você foi EXPULSO do Exército: feriu inocentes pela 3ª vez.', 6);
+    else if (r.startsWith('rebaixado:')) { const [, nome, n] = r.split(':'); aviso(`⚠️ Você feriu um inocente! Rebaixado para ${nome} (${n}ª falta; na 3ª é expulso).`, 6); tempoTurno = 0; }
+    else aviso(`⚠️ Você feriu um inocente! (${r.split(':')[1]}ª falta; na 3ª é expulso do Exército).`, 6);
+  }).catch(() => {});
 }
 function golpeSoco() {
   const f = new THREE.Vector3(Math.sin(jogador.yaw), 0, Math.cos(jogador.yaw));
@@ -7083,11 +7098,11 @@ function usarArsenal() {
   const p = jogador.perfil;
   if (jogador.armaPesada) { jogador.armaPesada = false; conferirArma(); aviso('Arma pesada guardada no arsenal.', 2); return; }
   if (p?.profissao !== 'exercito' && p?.cargo !== 'admin') { aviso('O arsenal é só para militares em serviço.', 2.5); return; }
-  escolher('🎖️ Arsenal do Quartel', 'Militar em serviço: o kit sai a cada 10 min. A arma pesada precisa de autorização.', [
+  escolher('🎖️ Arsenal do Quartel', 'Militar em serviço: o kit sai a cada 10 min. A arma pesada precisa de autorização. RPG e bazuca: livres enquanto houver estoque (chegam de caminhão).', [
     { rotulo: '🔫 Pegar fuzil, espingarda e 6 granadas', fn: () => rede.tatica.armasArsenal().then((t) => { aviso(`🔫 Você pegou ${t}. Equipe a arma no 🎯 Tático; granada pelo botão na tela.`, 4); recarregarInventario(); }).catch((e) => aviso(e.message, 3)) },
     { rotulo: '💥 Pegar a arma pesada', fn: () => armaPesadaArsenal() },
-    { rotulo: '🚀 Pegar RPG + 4 foguetes (autorização)', fn: () => pegarLancador('rpg') },
-    { rotulo: '🚀 Pegar bazuca + 4 foguetes (autorização)', fn: () => pegarLancador('bazuca') }]);
+    { rotulo: '🚀 Pegar RPG + até 4 foguetes (estoque do arsenal)', fn: () => pegarLancador('rpg') },
+    { rotulo: '🚀 Pegar bazuca + até 4 foguetes (estoque do arsenal)', fn: () => pegarLancador('bazuca') }]);
 }
 function pegarLancador(item) {
   return rede.tatica.pegarLancador(item).then((t) => { aviso(`🚀 Você pegou ${t}. Equipe no 🎯 Tático e saque com o botão Arma.`, 4); return recarregarInventario(); }).catch((e) => aviso(e.message, 3.5));
@@ -7110,14 +7125,6 @@ async function falarContrabandista() {
   if (!jogador.perfil?.arma_militar) opcoes.unshift({ rotulo: '🔫 Arma militar: 60.000 (só para clãs; é crime)', fn: async () => {
     if (!jogador.claInfo) { aviso('Contrabandista: "Arma só negocio com gente de clã."', 3); return; }
     try { await rede.exercito.comprarArmaMilitar(); aviso('🔫 Você comprou a ARMA MILITAR. Ela substitui a arma básica (fora do expediente). Você virou procurado.', 4.5); } catch (e) { aviso(e.message, 3); }
-  } });
-  if (!qtdItem('rpg')) opcoes.push({ rotulo: '🚀 RPG com 2 foguetes: 90.000 (só clãs; é crime)', fn: async () => {
-    if (!jogador.claInfo) { aviso('Contrabandista: "Isso aí só pra gente de clã."', 3); return; }
-    try { await rede.tatica.comprarRpg(); recarregarInventario(); aviso('🚀 RPG comprado. Equipe no 🎯 Tático. Você virou procurado.', 4); } catch (e) { aviso(e.message, 3); }
-  } });
-  opcoes.push({ rotulo: '🚀 3 foguetes: 18.000 (só clãs; é crime)', fn: async () => {
-    if (!jogador.claInfo) { aviso('Contrabandista: "Isso aí só pra gente de clã."', 3); return; }
-    try { const n = await rede.tatica.comprarFoguetes(3); recarregarInventario(); aviso(`🚀 Foguetes comprados (você tem ${n}).`, 3); } catch (e) { aviso(e.message, 3); }
   } });
   opcoes.push({ rotulo: jogador.coleteCivil && escudoAtual() >= ESCUDO_MAX ? '🛡️ Colete balístico (você já usa um inteiro)' : '🛡️ Colete balístico: 8.000 (escudo 100; não é crime)', fn: async () => {
     if (jogador.farda) { aviso('Contrabandista: "Fardado já tem colete, parceiro."', 3); return; }
@@ -10395,9 +10402,9 @@ function dirigirVeiculoEmpresa(c, carga) {
   const vj = [...viagensJuj.values()].find((v) => v.d.caminhao === c.d.id && (v.d.status === 'em_rota' || v.d.motorista === jogador.perfil.id));
   if (vj) {   // caminhão das rações do Exército: a carga vai junto e só o Seu Tonho compra
     vj.d = { ...vj.d, status: 'sequestrada', motorista: jogador.perfil.id, largado: false };
-    jogador.carro.jujuba = vj.d.id; jogador.carro.cargaJuj = vj.d.qtd; jogador.carro.kitJuj = vj.d.kit || 0; jogador.carro.salvar = 1e9;
+    jogador.carro.jujuba = vj.d.id; jogador.carro.cargaJuj = vj.d.qtd; jogador.carro.lancJuj = vj.d.produto === 'lancador'; jogador.carro.kitJuj = vj.d.kit || 0; jogador.carro.salvar = 1e9;
     rastrear({ nome: '📦 Comprador (Seu Tonho)', x: COMPRADOR.porta.x, z: COMPRADOR.porta.z + 6, comprador: true });
-    aviso(`🚚 Caminhão com ${vj.d.qtd.toLocaleString('pt-BR')} ${vj.d.produto === 'antiacido' ? 'anti-ácidos' : 'jujubas'} do Exército! Só o comprador do armazém de Vila Serra (ao lado da loja) compra.`, 5);
+    aviso(`🚚 Caminhão com ${vj.d.produto === 'lancador' ? '🚀 lançadores (RPG e bazuca)' : `${vj.d.qtd.toLocaleString('pt-BR')} ${vj.d.produto === 'antiacido' ? 'anti-ácidos' : 'jujubas'}`} do Exército! Só o comprador do armazém de Vila Serra (ao lado da loja) compra.`, 5);
     return;
   }
   aviso(carga > 0 ? `🚚 Agora é você no volante, com ${carga} caixas. Leve até o território do clã ou a sua casa e toque em Descarregar.` : '🚚 Agora é você no volante. O veículo está vazio.', 5);
@@ -10979,7 +10986,7 @@ async function usarJujuba() {
   aviso('🍬 Ração militar: 5 minutos mais rápido, mais forte no soco e recuperando vida.', 4);
   return true;
 }
-const destinoJujuba = (corp) => (corp === 'policia' ? pontos.delegacia : corp === 'prf' ? civico.PREFEITURA.prf : corp === 'bope' ? pontos.sedeBope : civico.BOMBEIROS.balcao) || { x: 0, z: 0 };
+const destinoJujuba = (corp) => (corp === 'aerea' ? { x: 400, z: 986 } : corp === 'policia' ? pontos.delegacia : corp === 'prf' ? civico.PREFEITURA.prf : corp === 'bope' ? pontos.sedeBope : civico.BOMBEIROS.balcao) || { x: 0, z: 0 };
 // caminho do Quartel até a corporação: sai de Porto Sul pela rodovia e entra na cidade pelas ruas
 // do portão do Quartel até a rodovia de Porto Sul pelas ruas (antes cortava o gramado ao lado do muro)
 const ACESSO_QUARTEL = [{ x: 138, z: 1055 }, { x: 81, z: 1055 }, { x: 81, z: 947 }, { x: 216, z: 947 }, { x: 216, z: 632 }];   // 632: ainda na rua da cidade (641 já era fora, a rota caía no gramado e cruzava a ferrovia)
@@ -11158,7 +11165,7 @@ function contextoComprador() {
   const c = jogador.carro;
   if (c?.jujuba && Math.hypot(COMPRADOR.porta.x - jogador.pos.x, COMPRADOR.porta.z - jogador.pos.z) < 20 && Math.abs(c.vel) < 2) {
     if (!compradorMontado.aberto) return ['o armazém está fechado (tem oficial por perto)', 'Fechado', () => aviso('O Seu Tonho fechou o armazém: tem oficial por perto.', 3)];
-    return [`vender a carga ao Seu Tonho (${((c.cargaJuj || 0) * 9 + (c.kitJuj || 0) * 230000).toLocaleString('pt-BR')} moedas${c.kitJuj ? ', com as armas' : ''})`, 'Vender', () => venderJujuba()];
+    return [`vender a carga ao Seu Tonho (${(c.lancJuj ? 50000 * (c.cargaJuj || 1) : (c.cargaJuj || 0) * 9 + (c.kitJuj || 0) * 230000).toLocaleString('pt-BR')} moedas${c.kitJuj ? ', com as armas' : c.lancJuj ? ' e o saque de lançadores para o clã' : ''})`, 'Vender', () => venderJujuba()];
   }
   if (c || !perto(COMPRADOR.porta, 3.5)) return null;
   if (!compradorMontado.aberto) return ['o armazém está fechado', 'Fechado', () => aviso('O Seu Tonho fechou o armazém: tem oficial por perto.', 3)];
@@ -11174,7 +11181,7 @@ async function venderJujuba() {
     else if (c.mesh) scene.remove(c.mesh);
     viagensJuj.delete(c.jujuba);
     if (rastreio?.comprador) rastrear(null);
-    aviso(`💰 O Seu Tonho comprou a carga: +${valor.toLocaleString('pt-BR')} moedas.`, 4);
+    aviso(c.lancJuj ? `💰 O Seu Tonho pagou ${valor.toLocaleString('pt-BR')} moedas. 🚀 Saque aberto: cada membro do clã pega 1 RPG e 2 foguetes com ele (10 min).` : `💰 O Seu Tonho comprou a carga: +${valor.toLocaleString('pt-BR')} moedas.`, 5);
   } catch (e) { aviso(e.message, 3); }
   finally { ocupado = false; }
 }
@@ -17838,7 +17845,7 @@ function gastarBalaDesviada() {
 const NOME_TONHO = { espingarda: '🔫 Espingarda desviada', fuzil: '🔫 Fuzil desviado', granada: '💣 Granada desviada' };
 async function menuTonho() {
   const est = await rede.tatica.tonhoEstoque();
-  const ops = [{ rotulo: '🍬 Jujubas (500 cada)', fn: () => racoes.abrir('comprador') }];
+  const ops = [{ rotulo: '🍬 Jujubas (500 cada)', fn: () => racoes.abrir('comprador') }, { rotulo: '🚀 Pegar minha parte do saque de lançadores (clã)', fn: () => rede.tatica.pegarSaque(jogador.pos.x, jogador.pos.z).then((t) => { aviso(`🚀 Você pegou ${t}. Equipe no 🎯 Tático.`, 4); recarregarInventario(); }).catch((x) => aviso(x.message, 3)) }];
   for (const e of est) ops.push({ rotulo: `${NOME_TONHO[e.item] || e.item} · ${num(e.preco)}${e.qtd ? ` (${e.qtd} no estoque)` : ' (sem estoque)'}`, fn: () => comprarTonho(e) });
   escolher('📦 Seu Tonho', '"Tenho jujuba e umas armas que caíram do caminhão do Exército. Arma desviada vem com <b>80 balas</b> e depois vira descartável, igual a dourada."', ops);
 }

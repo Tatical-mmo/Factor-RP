@@ -208,7 +208,12 @@ function traduzirRpc(m) {
     'armazem vazio ou voce ja esta equipado': 'O armamento está vazio ou você já está equipado.',
     'so as forcas armadas': 'Só as Forças Armadas pegam armas no Arsenal.',
   'precisa de autorizacao': 'Precisa da autorização de um Tenente para cima (ou do General Supremo), a mesma da arma pesada.',
-  'aguarde para pegar o lancador': 'O lançador sai a cada 10 minutos. Aguarde.',
+  'aguarde para pegar o lancador': 'O lançador sai a cada 2 minutos. Aguarde.',
+  'arsenal sem lancador': 'O arsenal está sem esse lançador. Peça um lote na Central de rações (vem de caminhão até a Base Aérea).',
+  'ja tem lote a caminho': 'Já tem um lote de lançadores a caminho.',
+  'arsenal cheio': 'O arsenal de lançadores está cheio.',
+  'o contrabandista nao vende mais lancadores': 'O contrabandista não vende mais lançadores: agora só sequestrando o caminhão do Exército.',
+  'nenhum saque para voce': 'Nenhum saque de lançadores para você agora (ou você já pegou a sua parte).',
   'voce ja tem o rpg': 'Você já tem um RPG.',
     'so policia e prf recebem armas': 'Só Polícia e PRF recebem kit de armas.',
     'so membros de cla': 'Só membros de clã.',
@@ -826,7 +831,8 @@ export const marinha = {
   forcas: (ids) => ids.length ? sel(sb.from('perfis').select('id,forca').in('id', ids)) : Promise.resolve([]),
 };
 export const exercito = {
-  especializarParaquedista: () => rpc('especializar_paraquedista'),   // 19l: Cabo para cima
+  especializarParaquedista: () => rpc('especializar_paraquedista'),
+  feriuInocente: (alvo, invasor) => rpc('militar_feriu_inocente', { p_alvo: alvo, p_invasor: invasor }),   // 19l: Cabo para cima
   pedirAlistamento: () => rpc('pedir_alistamento'),
   alistamentosPendentes: () => rpc('alistamentos_pendentes'),
   decidirAlistamento: (id, aprovar) => rpc('decidir_alistamento', { p_id: id, p_aprovar: !!aprovar }),
@@ -1188,6 +1194,8 @@ export const jujuba = {
   licitacaoComando: (acao) => rpc('licitacao_comando', { p_acao: acao }),
   valor: (v) => rpc('valor_caminhao_jujuba', { p_valor: v }),
   despachar: (pedido, modo, segundos) => rpc('despachar_jujubas', { p_pedido: pedido, p_modo: modo, p_segundos: segundos }),
+  despacharLancadores: (segundos) => rpc('despachar_lancadores', { p_segundos: segundos }),
+  lancadores: async () => { try { return (await sel(sb.from('lancadores_estoque').select('*')))[0] || null; } catch { return null; } },
   despacharKit: (corp, pedido, segundos) => rpc('despachar_kit', { p_corp: corp, p_pedido: pedido ?? null, p_segundos: segundos }),
   armamento: async () => { try { return await sel(sb.from('armamento_armazens').select('*')); } catch { return []; } },
   sequestrar: (id, x, z, ang) => rpc('sequestrar_jujubas', { p_viagem: id, p_x: x, p_z: z, p_ang: ang }),
@@ -1204,6 +1212,7 @@ export const tatica = {
   kitBope: () => rpc('pegar_kit_bope'),
   armasArsenal: () => rpc('pegar_armas_arsenal'),
   pegarLancador: (item) => rpc('pegar_lancador', { p_item: item }),
+  pegarSaque: (x, z) => rpc('pegar_saque_lancador', { p_x: x, p_z: z }),   // 123: saque de lançadores do clã no Seu Tonho
   comprarRpg: () => rpc('comprar_rpg'),
   comprarFoguetes: (qtd) => rpc('comprar_foguetes', { p_qtd: qtd }),
   usarFoguete: () => rpc('usar_foguete'),
