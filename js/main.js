@@ -8608,7 +8608,7 @@ function cabine(tipo) {
 function veiculoDoJogador() {
   if (jogador.carro?.mesh) return jogador.carro.mesh;
   if (jogador.onibus) return onibusNpc.find((b) => b.ativo && b.L === jogador.onibus.L && b.m === jogador.onibus.m)?.mesh || null;
-  if (jogador.voo) return npcAvioes[0]?.mesh || null;
+  if (jogador.voo) return npcAvioes.find((n) => n.tab === (jogador.voo.tab || VOO_REGULAR))?.mesh || null;
   if (jogador.tremCont) return regiaoNorte?.trem?.carros[1].g || null;
   if (jogador.passageiro) return jogador.passageiro.c?.obj || null;
   return null;
@@ -14299,7 +14299,7 @@ function montarTabela(trechos) {
   let t0 = 0; for (const tr of trechos) { tr.ini = t0; t0 += tr.q[tr.q.length - 1].t; }
   return { trechos, ciclo: t0 };
 }
-const VOO_REGULAR = montarTabela([['metro', 'serra'], ['serra', 'metro'], ['metro', 'porto'], ['porto', 'metro'], ['metro', 'oyster'], ['oyster', 'metro']].map(([o, d]) => ({ o, d, q: trechoQuadros(o, d) })));
+const VOO_REGULAR = montarTabela([['metro', 'serra'], ['serra', 'metro'], ['metro', 'porto'], ['porto', 'metro']].map(([o, d]) => ({ o, d, q: trechoQuadros(o, d) })));
 // voo internacional (avião grande): sai da Metrópole para leste, some no horizonte e volta pelo oeste
 const VAGA_INTER = { x: 385, z: -735 };
 const VOO_INTER = montarTabela([{ o: 'metro', d: 'metro', q: trechoQuadros('metro', 'metro', {
@@ -14318,6 +14318,27 @@ VOO_INTER.desloc = (() => {
   }
   return melhor;
 })();
+// linha própria Metrópole ⇄ Oyster River (20g): outro avião, com o mesmo ciclo do regular (espera o resto em Oyster River)
+// e deslocado no horário para não dividir a pista nem a vaga do portão da Metrópole com os outros
+const VOO_OYSTER = (() => {
+  const ida = trechoQuadros('metro', 'oyster'), t1 = ida[ida.length - 1].t, volta0 = trechoQuadros('oyster', 'metro'), t2 = volta0[volta0.length - 1].t;
+  const folga = Math.max(0, VOO_REGULAR.ciclo - t1 - t2);
+  return montarTabela([{ o: 'metro', d: 'oyster', q: ida }, { o: 'oyster', d: 'metro', q: trechoQuadros('oyster', 'metro', { espera: 75 + folga }) }]);
+})();
+VOO_OYSTER.cs = 'Fator 5';
+VOO_OYSTER.desloc = (() => {
+  const V = AERO.metro.vaga, ocupa = (tab, d, u) => { const v = vooNpc(u, tab, d); if (!v || v.y >= 1) return 0; return (pistaEm(v.x, v.z)?.id === 'metro' ? 1 : 0) + (Math.hypot(v.x - V.x, v.z - V.z) < 30 ? 2 : 0); };
+  let melhor = 0, menor = Infinity;
+  for (let d = 0; d < VOO_OYSTER.ciclo; d += 5) {
+    let n = 0;
+    for (let u = 0; u < VOO_REGULAR.ciclo * 2; u += 3) { const o = ocupa(VOO_OYSTER, d, u); if (!o) continue; if (o & ocupa(VOO_REGULAR, 0, u)) n++; if (o & ocupa(VOO_INTER, VOO_INTER.desloc, u)) n++; }
+    if (n < menor) { menor = n; melhor = d; }
+  }
+  return melhor;
+})();
+const TABS_PASS = [VOO_REGULAR, VOO_OYSTER];   // voos que levam passageiros
+const tabDe = (o, d) => TABS_PASS.find((t) => t.trechos.some((tr) => tr.o === o && tr.d === d)) || VOO_REGULAR;
+const vooDe = (tab) => vooNpc(agoraServidor() / 1000, tab, tab.desloc || 0);
 function vooNpc(seg, tab = VOO_REGULAR, desloc = 0) {
   const s = seg - desloc, ciclo = Math.floor(s / tab.ciclo), u = s - ciclo * tab.ciclo;
   let k = tab.trechos.length - 1; for (let i = 0; i < tab.trechos.length; i++) if (u < tab.trechos[i].ini + tab.trechos[i].q[tab.trechos[i].q.length - 1].t) { k = i; break; }
@@ -14337,6 +14358,7 @@ function vooNpc(seg, tab = VOO_REGULAR, desloc = 0) {
 const npcAvioes = [
   { tab: VOO_REGULAR, porte: 'medio', mesh: null, ang: 0, ult: null },
   { tab: VOO_INTER, porte: 'grande', mesh: null, ang: 0, ult: null },
+  { tab: VOO_OYSTER, porte: 'medio', mesh: null, ang: 0, ult: null },
 ];
 const vooRegular = () => vooNpc(agoraServidor() / 1000, VOO_REGULAR, 0);
 // ---- passageiro do voo regular
@@ -14344,10 +14366,10 @@ function balcaoPerto() { return AEROPORTOS.find((a) => Math.hypot(a.balcao.x - j
 function portaoPerto() { return AEROPORTOS.find((a) => Math.hypot(a.portao.x - jogador.pos.x, a.portao.z - jogador.pos.z) < 7) || null; }
 // próximo embarque do voo regular de o para d (janela em que o avião fica parado no portão)
 function proximoEmbarque(o, d, seg) {
-  const tab = VOO_REGULAR, c0 = Math.floor(seg / tab.ciclo);
+  const tab = tabDe(o, d), D = tab.desloc || 0, c0 = Math.floor((seg - D) / tab.ciclo);
   for (let c = c0; c <= c0 + 2; c++) for (const tr of tab.trechos) {
     if (tr.o !== o || tr.d !== d) continue;
-    const ini = c * tab.ciclo + tr.ini, fim = ini + tr.q[1].t;
+    const ini = D + c * tab.ciclo + tr.ini, fim = ini + tr.q[1].t;
     if (seg < fim) return { ini, fim };
   }
   return null;
@@ -14355,7 +14377,7 @@ function proximoEmbarque(o, d, seg) {
 let painelPassagem = false;
 function guiarPassageiro() {
   const p = jogador.passagem;
-  if (jogador.voo) { const v = vooRegular(); painelVoo(`✈️ Em voo para ${AERO[jogador.voo.d].nome} · chegada em ${Math.max(0, Math.ceil(v.fim))} s`); painelPassagem = true; return; }
+  if (jogador.voo) { const v = vooDe(jogador.voo.tab || VOO_REGULAR); painelVoo(`✈️ Em voo para ${AERO[jogador.voo.d].nome} · chegada em ${Math.max(0, Math.ceil(v.fim))} s`); painelPassagem = true; return; }
   if (!p || jogador.carro) { if (painelPassagem) { painelPassagem = false; painelVoo(''); } return; }
   const seg = agoraServidor() / 1000, e = proximoEmbarque(p.de, p.para, seg), a = AERO[p.de]; if (!e) return;
   const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -14366,14 +14388,14 @@ function guiarPassageiro() {
   if (!noPortao && !rastreio) rastrear({ nome: `✈️ Portão de embarque (${a.nome})`, x: a.portao.x, z: a.portao.z });
 }
 function comprarPassagem(a) {
-  const destinos = AEROPORTOS.filter((x) => x.id !== a.id && VOO_REGULAR.trechos.some((t) => t.o === a.id && t.d === x.id));
+  const destinos = AEROPORTOS.filter((x) => x.id !== a.id && TABS_PASS.some((tb) => tb.trechos.some((t) => t.o === a.id && t.d === x.id)));
   escolher('🎫 Passagem aérea · 150', `Saindo de ${a.nome}. O voo regular para no portão; embarque quando ele chegar.`, destinos.map((d) => ({
     rotulo: `✈️ ${d.nome} · embarque ${(() => { const e = proximoEmbarque(a.id, d.id, agoraServidor() / 1000); if (!e) return ''; const f = e.ini - agoraServidor() / 1000; return f <= 0 ? 'agora' : `em ${Math.floor(f / 60)}:${String(Math.floor(f % 60)).padStart(2, '0')}`; })()}`, fn: async () => { try { await rede.transporte.passagem(); jogador.passagem = { de: a.id, para: d.id }; rastrear({ nome: `✈️ Portão de embarque (${a.nome})`, x: a.portao.x, z: a.portao.z }); aviso(`🎫 Passagem para ${d.nome}! Siga a marcação até o portão ✈️; o painel no alto mostra quando o avião chega.`, 5); } catch (e) { aviso(e.message); } },
   })));
 }
-function embarcarVoo(v) { jogador.voo = { id: v.id, d: v.d }; jogador.passagem = null; jogador.avatar.raiz.visible = false; aviso(`✈️ Embarcou! Voo ${VOO_REGULAR.cs}${String(v.n % 100).padStart(2, '0')} para ${AERO[v.d].nome}.`, 3); }
+function embarcarVoo(v, tab = VOO_REGULAR) { jogador.voo = { id: v.id, d: v.d, tab }; jogador.passagem = null; jogador.avatar.raiz.visible = false; aviso(`✈️ Embarcou! Voo ${tab.cs}${String(v.n % 100).padStart(2, '0')} para ${AERO[v.d].nome}.`, 3); }
 function seguirVoo() {
-  const v = vooRegular();
+  const v = vooDe(jogador.voo.tab || VOO_REGULAR);
   if (v.id !== jogador.voo.id) {   // chegou
     const g = AERO[jogador.voo.d].portao; jogador.voo = null; jogador.pos.set(g.x + 2, alturaChao(g.x, g.z), g.z); jogador.avatar.raiz.visible = true;
     aviso('🛬 Chegamos! Bem-vindo.', 3); return;
@@ -14919,6 +14941,8 @@ function atualizarPainelVoos(seg) {
     const n = c * tab.trechos.length + k, est = sai - seg < 60 ? (sai - seg < 0 ? 'PARTIU' : 'EMBARQUE') : 'NO HORÁRIO';
     if (linhas.length < 2) linhas.push([`${tab.cs}${String(n % 100).padStart(2, '0')}`, AERO[tr.d].nome.replace('Pista de ', ''), hm(sai), est]);
   }
+  { const e = proximoEmbarque('metro', 'oyster', seg); if (e) { const k = Math.floor((e.ini - (VOO_OYSTER.desloc || 0)) / VOO_OYSTER.ciclo) * 2;
+    linhas.push([`${VOO_OYSTER.cs}${String(k % 100).padStart(2, '0')}`, 'Oyster River', hm(e.fim), e.fim - seg < 60 ? 'EMBARQUE' : 'NO HORÁRIO']); } }
   const vi = vooNpc(seg, VOO_INTER, VOO_INTER.desloc), saiI = seg + Math.max(0, vi.falta);
   linhas.push([`${VOO_INTER.cs}${String(vi.n % 100).padStart(2, '0')}`, 'Internacional', vi.embarque ? hm(saiI) : '—', vi.embarque ? (vi.falta < 40 ? 'EMBARQUE' : 'NO HORÁRIO') : vi.oculto ? 'EM VOO' : vi.y > 1 ? 'DECOLOU' : 'CHEGOU']);
   const txt = JSON.stringify(linhas); if (txt === painelVoos.txt) return; painelVoos.txt = txt;
@@ -14927,7 +14951,7 @@ function atualizarPainelVoos(seg) {
   g.fillStyle = '#ffd23e'; g.font = 'bold 34px system-ui'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText('✈ PARTIDAS', 20, 36);
   g.font = 'bold 22px monospace'; g.fillStyle = '#7f8ea3'; g.fillText('VOO      DESTINO        HORA  SITUAÇÃO', 20, 78);
   linhas.forEach(([v, d, h, s], i) => {
-    const y = 122 + i * 56; g.fillStyle = '#e9f5ff'; g.font = 'bold 26px monospace';
+    const y = 118 + i * 50; g.fillStyle = '#e9f5ff'; g.font = 'bold 26px monospace';
     g.fillText(v.padEnd(8), 20, y); g.fillText(d.slice(0, 13), 140, y); g.fillText(h, 330, y);
     g.fillStyle = s === 'EMBARQUE' ? '#7dff8a' : s === 'PARTIU' || s === 'DECOLOU' ? '#ff9a5a' : '#ffd23e'; g.font = 'bold 20px system-ui'; g.fillText(s, 418, y);
   });
@@ -14959,7 +14983,7 @@ function atualizarAviacao(dt) {
     // no chão, um avião respeita a vez do outro: o internacional espera parado no taxiamento se o regular está logo à
     // frente (ou cruzando o caminho), e recupera o atraso depois, encurtando a espera na vaga. O regular (que leva
     // passageiros) segue o horário de todos; o internacional é só paisagem, então o atraso dele pode ser local
-    if (idx > 0) {
+    if (n.tab === VOO_INTER) {   // só o internacional (paisagem) segura no taxiamento; os de passageiros seguem o horário
       const r = npcAvioes[0].mesh, frente = v.y < 1 && !v.parado && r && r.visible && r.position.y - alturaChao(r.position.x, r.position.z) < 3;
       let segura = false;
       if (frente) {
@@ -15000,7 +15024,7 @@ function contextoAviacao() {
   if (jogador.carro || jogador.voo) return null;
   { const hv = heliParaRevisar(); if (hv) return [`helicóptero: ${heliVoos['carro:' + hv.d.id] ?? '?'} voo(s) sem revisão`, 'Revisar']; }
   if (pertoMecanico()) return [jogador.perfil?.profissao === 'mecanico' ? 'oficina do hangar: você é mecânico (revise os aviões da frota)' : 'mecânico do hangar: revisões e vaga de mecânico', 'Oficina'];
-  const v = vooRegular(), g = portaoPerto();
+  const tabP = jogador.passagem ? tabDe(jogador.passagem.de, jogador.passagem.para) : VOO_REGULAR, v = vooDe(tabP), g = portaoPerto();
   if (g && v.embarque && v.o === g.id && jogador.passagem?.de === g.id && jogador.passagem.para === v.d) return [`embarcar no voo para ${AERO[v.d].nome} (sai em ${Math.ceil(v.falta)} s)`, 'Embarcar'];
   if (g && jogador.passagem?.de === g.id) return [`portão de embarque: o voo para ${AERO[jogador.passagem.para].nome} ${v.embarque && v.o === g.id ? 'é outro destino, espere o próximo' : 'ainda não chegou'}`, 'Portão'];
   const b = balcaoPerto(); if (b) return [jogador.passagem ? `passagem para ${AERO[jogador.passagem.para].nome} (embarque no portão ✈️)` : 'atendente: passagem aérea (150) e paraquedas (5.000)', 'Passagem'];
@@ -15014,8 +15038,8 @@ function contextoAviacao() {
 function acaoAviacao() {
   { const hv = !jogador.carro && heliParaRevisar(); if (hv) { const k = 'carro:' + hv.d.id; rede.aviacao.revisarHeli(k, true).then(() => { heliVoos[k] = 0; aviso('🔧 Helicóptero revisado! +300', 3); }).catch((e) => aviso(e.message, 3)); return true; } }
   if (!jogador.carro && pertoMecanico()) { abrirServico('mecanico'); return true; }
-  const v = vooRegular(), g = portaoPerto();
-  if (g && v.embarque && v.o === g.id && jogador.passagem?.de === g.id && jogador.passagem.para === v.d) { embarcarVoo(v); return true; }
+  const tabP = jogador.passagem ? tabDe(jogador.passagem.de, jogador.passagem.para) : VOO_REGULAR, v = vooDe(tabP), g = portaoPerto();
+  if (g && v.embarque && v.o === g.id && jogador.passagem?.de === g.id && jogador.passagem.para === v.d) { embarcarVoo(v, tabP); return true; }
   const b = balcaoPerto(); if (b) {
     escolher('🛫 Balcão do aeroporto', `Você tem ${qtdItem('paraquedas')} paraquedas na mochila. Com ele, aparece o botão 🪂 EJETAR no avião e no helicóptero (no PC, tecla J).`, [
       jogador.passagem ? { rotulo: `🎫 Você já tem passagem para ${AERO[jogador.passagem.para].nome} (espere no portão ✈️)`, fn: () => {} } : { rotulo: '🎫 Passagem aérea (150)', fn: () => comprarPassagem(b) },
@@ -15676,24 +15700,87 @@ function novaRegiao() {
   };
   const plano = (x, z, w, d, y, mat) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), mat); m.position.set(x, y, z); m.receiveShadow = true; g.add(m); return m; };
   const sprite = (txt, x, y, z, esc = 0.6, fundo = 'rgba(20,40,70,.92)') => { const s2 = textoSprite(txt, { escala: esc, fundo }); s2.position.set(x, y, z); g.add(s2); return s2; };
-  // muitos prédios de uma vez (uma malha só): [x, z, w, d, h, cor]
+  // muitos prédios de uma vez (uma malha só): [x, z, w, d, h, cor, loja]. Usam o material de fachada da ilha
+  // (janelas que acendem à noite, térreo com vitrine quando "loja") com a cor de cada prédio
+  const MATS = mundo.materiais();
   const predios = (lista, comCol = true) => {
-    if (!lista.length) return;
+    if (!lista.length) return null;
     const geo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0); geos.push(geo);
-    const mat = M('#ffffff'), im = new THREE.InstancedMesh(geo, mat, lista.length), m4 = new THREE.Matrix4(), cor = new THREE.Color();
+    geo.setAttribute('aLoja', new THREE.InstancedBufferAttribute(new Float32Array(lista.map((e) => (e[6] ? 1 : 0))), 1));
+    const mat = MATS?.fachada || M('#ffffff'), im = new THREE.InstancedMesh(geo, mat, lista.length), m4 = new THREE.Matrix4(), cor = new THREE.Color();
     lista.forEach(([x, z, w, d, h, c], k) => {
       m4.compose(new THREE.Vector3(x, 0.05, z), new THREE.Quaternion(), new THREE.Vector3(w, h, d)); im.setMatrixAt(k, m4); im.setColorAt(k, cor.set(c));
       if (comCol) { const cc = { tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, top: h }; colisores.push(cc); cols.push(cc); }
     });
+    im.castShadow = true; im.receiveShadow = true; g.add(im); return im;
+  };
+  const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
+  // telhados de duas águas (prisma) em cima das casas: [x, z, w, d, h, cor]
+  const telhados = (lista) => {
+    if (!lista.length) return;
+    const p = [-0.5, 0, 0.5, 0.5, 0, 0.5, 0.5, 1, 0, -0.5, 0, 0.5, 0.5, 1, 0, -0.5, 1, 0, 0.5, 0, -0.5, -0.5, 0, -0.5, -0.5, 1, 0, 0.5, 0, -0.5, -0.5, 1, 0, 0.5, 1, 0,
+      0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 1, 0, -0.5, 0, -0.5, -0.5, 0, 0.5, -0.5, 1, 0];
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); geo.computeVertexNormals(); geos.push(geo);
+    const im = new THREE.InstancedMesh(geo, M('#ffffff', { roughness: 0.8, side: THREE.DoubleSide }), lista.length);
+    lista.forEach(([x, z, w, d, h, c], k) => { _m4.compose(_v.set(x, h + 0.05, z), _q.identity(), _s.set(w + 0.8, Math.min(3, 1.2 + w * 0.12), d + 0.8)); im.setMatrixAt(k, _m4); im.setColorAt(k, _c.set(c)); });
+    im.castShadow = true; g.add(im);
+  };
+  // árvores de rua (tronco + copa, duas malhas): [x, z, escala]
+  const arvores = (lista, comCol = true) => {
+    if (!lista.length) return;
+    const gt = new THREE.CylinderGeometry(0.18, 0.26, 2.6, 6).translate(0, 1.3, 0), gc = new THREE.IcosahedronGeometry(1.9, 0).translate(0, 3.8, 0); geos.push(gt, gc);
+    const it = new THREE.InstancedMesh(gt, M('#6b4a2e', { roughness: 0.9 }), lista.length), ic = new THREE.InstancedMesh(gc, M('#ffffff', { roughness: 0.85, flatShading: true }), lista.length);
+    lista.forEach(([x, z, e = 1], k) => {
+      _m4.compose(_v.set(x, 0.18, z), _q.setFromAxisAngle(_s.set(0, 1, 0), (x * 13 + z * 7) % 6.28), _s.set(e, e * (0.9 + ((x * 3 + z) % 0.3)), e)); it.setMatrixAt(k, _m4); ic.setMatrixAt(k, _m4);
+      ic.setColorAt(k, _c.setHSL(0.27 + ((x + z) % 0.06), 0.45, 0.28 + ((x * z) % 0.08)));
+      if (comCol) { const cc = { tipo: 'circ', x, z, r: 0.35 }; colisores.push(cc); cols.push(cc); }
+    });
+    it.castShadow = ic.castShadow = true; g.add(it, ic);
+  };
+  // postes de luz nas calçadas: [x, z, ângulo do braço]
+  const postes = (lista) => {
+    if (!lista.length) return;
+    const gp = new THREE.CylinderGeometry(0.09, 0.12, 6.5, 6).translate(0, 3.25, 0), gb = new THREE.BoxGeometry(0.12, 0.12, 1.6).translate(0, 6.4, 0.75), gl = new THREE.BoxGeometry(0.5, 0.15, 0.3).translate(0, 6.3, 1.5);
+    geos.push(gp, gb, gl);
+    const mp = M('#5b6168', { metalness: 0.5, roughness: 0.5 }), ml = M('#fff4c8', { emissive: '#ffe9a8', emissiveIntensity: 0.6 });
+    const ims = [new THREE.InstancedMesh(gp, mp, lista.length), new THREE.InstancedMesh(gb, mp, lista.length), new THREE.InstancedMesh(gl, ml, lista.length)];
+    lista.forEach(([x, z, a], k) => { _m4.compose(_v.set(x, 0.18, z), _q.setFromAxisAngle(_s.set(0, 1, 0), a), _s.set(1, 1, 1)); for (const im of ims) im.setMatrixAt(k, _m4);
+      const cc = { tipo: 'circ', x, z, r: 0.2 }; colisores.push(cc); cols.push(cc); });
+    for (const im of ims) g.add(im);
+  };
+  // muitas caixas simples de uma cor (detalhes): [x, y, z, w, h, d]
+  const caixas = (lista, cor, col = false) => {
+    if (!lista.length) return;
+    const geo = new THREE.BoxGeometry(1, 1, 1); geos.push(geo);
+    const im = new THREE.InstancedMesh(geo, M(cor), lista.length);
+    lista.forEach(([x, y, z, w, h, d], k) => { _m4.compose(_v.set(x, y, z), _q.identity(), _s.set(w, h, d)); im.setMatrixAt(k, _m4);
+      if (col) { const cc = { tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, top: y + h / 2 }; colisores.push(cc); cols.push(cc); } });
     im.castShadow = true; im.receiveShadow = true; g.add(im);
+  };
+  // modelo GLB repetido (instâncias): cada malha do modelo vira uma InstancedMesh. lista: [x, z, altura, rotY]
+  const instGLB = (arq, lista) => {
+    if (!lista.length) return;
+    Promise.resolve(carregarGLB(`assets/modelos/${arq}.glb`)).then((gl) => {
+      if (!g.parent) return;
+      const cena = gl.scene; cena.updateMatrixWorld(true);
+      const bb = new THREE.Box3().setFromObject(cena), alt = Math.max(0.01, bb.max.y - bb.min.y);
+      cena.traverse((o) => {
+        if (!o.isMesh) return;
+        const geo = o.geometry.clone(); geo.applyMatrix4(o.matrixWorld); geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2); geos.push(geo);
+        const im = new THREE.InstancedMesh(geo, o.material, lista.length); im.userData.compartilhado = true;
+        lista.forEach(([x, z, h, r = 0], k) => { const e = h / alt; _m4.compose(_v.set(x, 0.05, z), _q.setFromAxisAngle(_s.set(0, 1, 0), r), _s.set(e, e, e)); im.setMatrixAt(k, _m4); });
+        im.castShadow = true; g.add(im);
+      });
+    }).catch(() => {});
   };
   const modelo = (arq, x, z, larg, rotY = 0, y = 0, fim) => Promise.resolve(carregarGLB(`assets/modelos/${arq}.glb`)).then((gl) => {
     if (!g.parent) return null;
-    const m = prepararEstatico(gl.scene), b = new THREE.Box3().setFromObject(m), k = larg / Math.max(0.01, b.max.x - b.min.x, b.max.z - b.min.z);
+    const m = prepararEstatico(gl.scene.clone(true)), b = new THREE.Box3().setFromObject(m), k = larg / Math.max(0.01, b.max.x - b.min.x, b.max.z - b.min.z);
     const piv = new THREE.Group(); m.scale.setScalar(k); m.position.set(-(b.min.x + b.max.x) / 2 * k, -b.min.y * k, -(b.min.z + b.max.z) / 2 * k); piv.add(m);
+    m.traverse((o) => { if (o.isMesh) o.userData.compartilhado = true; });   // geometria do cache: não descarta ao sair
     piv.position.set(x, y, z); piv.rotation.y = rotY; g.add(piv); fim?.(piv, (b.max.y - b.min.y) * k); return piv;
   }).catch(() => null);
-  return { g, cols, mats, geos, M, caixa, plano, sprite, predios, modelo };
+  return { g, cols, mats, geos, M, caixa, caixas, plano, sprite, predios, telhados, arvores, postes, instGLB, modelo, MATS };
 }
 function desmontarRegiao(R) {
   scene.remove(R.g);
@@ -15702,22 +15789,43 @@ function desmontarRegiao(R) {
   for (const c of R.cols) { const k = colisores.indexOf(c); if (k >= 0) colisores.splice(k, 1); }
 }
 // grade de ruas e quarteirões: devolve os quarteirões (centro e tamanho) para cada cidade preencher
-function gradeCidade(R, cx, cz, nx, nz, Q, rua, corRua = '#3d4047') {
-  const W = nx * (Q + rua) + rua, D = nz * (Q + rua) + rua, x0 = cx - W / 2, z0 = cz - D / 2, asf = R.M(corRua), calc = R.M('#cfc8b8'), faixa = R.M('#e8c23a');
-  R.plano(cx, cz, W, D, 0.07, asf);
-  const qs = [];
+function gradeCidade(R, cx, cz, nx, nz, Q, rua, { arv = 'meio', pular = null } = {}) {
+  // asfalto e calçadas com as texturas da ilha; quarteirões, faixas, árvores e postes em malhas instanciadas (poucas
+  // chamadas de desenho: antes eram centenas de caixas soltas)
+  const W = nx * (Q + rua) + rua, D = nz * (Q + rua) + rua, x0 = cx - W / 2, z0 = cz - D / 2, MT = R.MATS;
+  R.plano(cx, cz, W, D, 0.07, MT?.asfalto || R.M('#3d4047'));
+  const qs = [], m4 = new THREE.Matrix4(), q0 = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+  const geoB = new THREE.BoxGeometry(1, 1, 1); R.geos.push(geoB);
+  const blocos = new THREE.InstancedMesh(geoB, MT?.calcada || R.M('#cfc8b8'), nx * nz); let k = 0;
   for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
     const x = x0 + rua + Q / 2 + i * (Q + rua), z = z0 + rua + Q / 2 + j * (Q + rua);
-    R.caixa(x, 0.1, z, Q, 0.18, Q, calc); qs.push({ i, j, x, z });
+    m4.compose(v.set(x, 0.1, z), q0, sc.set(Q, 0.18, Q)); blocos.setMatrixAt(k++, m4); qs.push({ i, j, x, z });
   }
-  for (let i = 0; i <= nx; i++) { const x = x0 + rua / 2 + i * (Q + rua); for (let z = z0 + 6; z < z0 + D - 3; z += 12) R.caixa(x, 0.1, z, 0.25, 0.02, 5, faixa); }
-  for (let j = 0; j <= nz; j++) { const z = z0 + rua / 2 + j * (Q + rua); for (let x = x0 + 6; x < x0 + W - 3; x += 12) R.caixa(x, 0.1, z, 5, 0.02, 0.25, faixa); }
+  blocos.receiveShadow = true; R.g.add(blocos);
+  const fx = [];
+  for (let i = 0; i <= nx; i++) { const x = x0 + rua / 2 + i * (Q + rua); for (let z = z0 + 6; z < z0 + D - 3; z += 12) fx.push([x, z, 0.25, 5]); }
+  for (let j = 0; j <= nz; j++) { const z = z0 + rua / 2 + j * (Q + rua); for (let x = x0 + 6; x < x0 + W - 3; x += 12) fx.push([x, z, 5, 0.25]); }
+  const faixas = new THREE.InstancedMesh(geoB, R.M('#e8c23a'), fx.length);
+  fx.forEach(([x, z, w, d], k2) => { m4.compose(v.set(x, 0.09, z), q0, sc.set(w, 0.02, d)); faixas.setMatrixAt(k2, m4); }); R.g.add(faixas);
+  // árvores (no meio de cada lado do quarteirão ou nos cantos) e postes (o contrário), fora dos quarteirões pulados
+  const h = Q / 2 - 1, A = [], P = [];
+  for (const q of qs) {
+    if (pular?.(q.i, q.j)) continue;
+    const meio = [[0, -h, Math.PI], [0, h, 0], [-h, 0, -Math.PI / 2], [h, 0, Math.PI / 2]], cantos = [[-h, -h, Math.PI * 1.25], [h, -h, Math.PI * 0.75], [-h, h, -Math.PI / 4], [h, h, Math.PI / 4]];
+    for (const [dx, dz] of arv === 'meio' ? meio : cantos) A.push([q.x + dx, q.z + dz, 0.9]);
+    for (const [dx, dz, a] of arv === 'meio' ? cantos : meio.slice(0, 2)) P.push([q.x + dx, q.z + dz, a]);
+  }
+  R.arvores(A); R.postes(P);
   return { qs, x0, z0, W, D };
 }
 // prédio de serviço com a placa; com tipo, ganha uma porta que funciona (20d)
-function predioServico(R, q, nome, cor, h = 12, tipo = null, cidade = null) {
+// modelo 3D de cada corporação (os mesmos da ilha); sem modelo, fica a caixa com janelas
+const GLB_SERVICO = { delegacia: 'delegacia', prf: 'predio_prf', bombeiros: 'predio_bombeiros', hospital: 'predio_hospital', quartel: 'predio_exercito',
+  marinha: 'predio_marinha', aerea: 'predio_aeronautica', oficina: 'predio_galpao', prefeitura: 'predio_prefeitura', rodoviaria: 'terminal_rodoviario' };
+function predioServico(R, q, nome, cor, h = 12, tipo = null, cidade = null, glb = GLB_SERVICO[tipo]) {
   const w = q.w ?? 30, d = q.d ?? 26;
-  R.predios([[q.x, q.z, w, d, h, cor]]);
+  const im = R.predios([[q.x, q.z, w, d, h, cor]]);
+  if (glb) R.modelo(glb, q.x, q.z, Math.max(w, d), 0, 0.18, () => { im.visible = false; });   // o modelo chegou: some a caixa (a colisão continua)
   if (!tipo || tipo === 'info') { R.sprite(tipo ? nome : `${nome} · em breve`, q.x, h + 4, q.z, 0.55); return; }
   // porta na frente (lado sul): leva para o interior da corporação; ao sair, o jogador volta para esta porta
   R.sprite(nome, q.x, h + 4, q.z, 0.55);
@@ -15774,9 +15882,10 @@ async function painelPrefeituraCidade(c) {
 }
 const PASTEIS = ['#f2d16b', '#e8a87c', '#9fd3c7', '#f7f3e3', '#c8a2c8', '#f4b6b6', '#b5d99c', '#ffe0a3', '#a7c7e7'];
 const CINZAS = ['#9aa3ad', '#7c8794', '#b8bfc6', '#5f6b78', '#c9c2b6', '#8f8a80', '#a9b8c9', '#6e7f8f'];
+const TELHAS = ['#a0522d', '#b5562f', '#8e3b2a', '#7a4a3a', '#c06a3e'];
 const rndSeed = (s) => () => ((s = (s * 16807) % 2147483647) / 2147483647);
 function montarBarraAmarela(R, C) {
-  const rnd = rndSeed(4242), G = gradeCidade(R, C.x, C.z, 6, 6, 40, 12), L = [];
+  const rnd = rndSeed(4242), G = gradeCidade(R, C.x, C.z, 6, 6, 40, 12, { arv: 'meio', pular: (i, j) => (i >= 2 && i <= 3 && j >= 2 && j <= 3) || (i === 4 && j === 2) }), L = [];
   const especial = { '2,2': 'praca', '3,2': 'praca', '2,3': 'praca', '3,3': 'praca', '0,0': 'delegacia', '1,0': 'prf', '4,0': 'bombeiros', '5,0': 'hospital', '0,5': 'oficina', '5,5': 'estacao', '1,5': 'empresas', '4,5': 'empresas', '4,2': 'terminal' };
   for (const q of G.qs) {
     const e = especial[`${q.i},${q.j}`];
@@ -15793,17 +15902,20 @@ function montarBarraAmarela(R, C) {
       for (const sx of [-13, 13]) R.caixa(q.x + sx, 2.1, q.z - 12, 0.4, 4.2, 0.4, R.M('#666'));
       R.sprite('🚌 Terminal Intermunicipal · Linha 11', q.x, 7, q.z - 12, 0.55); continue; }
     for (const [dx, dz] of [[-10, -10], [10, -10], [-10, 10], [10, 10]]) {   // cidade do interior: casas baixas e coloridas
-      const h = 4 + rnd() * 5, w = 13 + rnd() * 4, d = 13 + rnd() * 4;
+      const h = 4 + rnd() * 5, w = 12 + rnd() * 3, d = 12 + rnd() * 3;
       L.push([q.x + dx, q.z + dz, w, d, h, PASTEIS[(rnd() * PASTEIS.length) | 0]]);
     }
   }
-  R.predios(L);
+  R.predios(L); R.telhados(L.map((e) => [...e.slice(0, 5), TELHAS[(Math.abs(e[0] * 7 + e[1] * 3) | 0) % TELHAS.length]]));
   // praça central: gramado, coreto, igreja e a prefeitura
   const pr = G.qs.filter((q) => especial[`${q.i},${q.j}`] === 'praca'), px = pr.reduce((a, q) => a + q.x, 0) / 4, pz = pr.reduce((a, q) => a + q.z, 0) / 4;
-  R.plano(px, pz, 92, 92, 0.2, R.M('#7fae5a'));
+  R.plano(px, pz, 92, 92, 0.2, R.MATS?.grama || R.M('#7fae5a'));
+  R.arvores([[px - 30, pz + 30, 1.3], [px - 38, pz + 10, 1.1], [px + 38, pz - 12, 1.2], [px - 12, pz + 40, 1], [px + 12, pz - 20, 1.1], [px - 25, pz - 15, 1.2]]);
   R.caixa(px, 0.5, pz, 10, 0.8, 10, R.M('#d8d1c3')); R.caixa(px, 4.2, pz, 11, 0.4, 11, R.M('#b0453a'));
   for (const [sx, sz] of [[-4.5, -4.5], [4.5, -4.5], [-4.5, 4.5], [4.5, 4.5]]) R.caixa(px + sx, 2.4, pz + sz, 0.4, 3.6, 0.4, R.M('#f2f2f2'));
-  R.predios([[px, pz - 34, 22, 16, 12, '#f5f0e1'], [px, pz - 40, 6, 6, 26, '#f5f0e1'], [px + 30, pz + 30, 24, 18, 11, '#e9d9a8']]);
+  R.predios([[px, pz - 34, 22, 16, 12, '#f5f0e1'], [px, pz - 40, 6, 6, 26, '#f5f0e1']]);
+  R.telhados([[px, pz - 34, 22, 16, 12, '#a0522d']]); R.caixas([[px, 27.5, pz - 40, 4, 3, 4]], '#a0522d');   // telhado da igreja e da torre
+  { const pi = R.predios([[px + 30, pz + 30, 24, 18, 11, '#e9d9a8']]); R.modelo('predio_prefeitura', px + 30, pz + 30, 24, 0, 0.2, () => { pi.visible = false; }); }
   R.sprite('⛪ Igreja Matriz', px, 30, pz - 40, 0.5); R.sprite('🏛️ Prefeitura de Barra Amarela', px + 30, 15, pz + 30, 0.55, 'rgba(110,80,20,.94)');
   R.caixa(px + 30, 1.6, pz + 39.06, 3.2, 3.2, 0.12, R.M('#2b2b2b')); (R.portas ||= []).push({ x: px + 30, z: pz + 40.6, tipo: 'prefeitura', cidade: 'barra', nome: '🏛️ Prefeitura de Barra Amarela' });
   R.sprite('🟡 Barra Amarela', C.x, 40, C.z, 1.2, 'rgba(170,130,10,.94)');
@@ -15816,22 +15928,26 @@ function montarBarraAmarela(R, C) {
   R.predios(F, false); R.sprite('🏘️ Favela da Barra', fx, 18, fz, 0.6);
 }
 function montarOysterRiver(R, C) {
-  const rnd = rndSeed(9090), G = gradeCidade(R, C.x, C.z, 10, 8, 50, 14), L = [];
+  const rnd = rndSeed(9090), G = gradeCidade(R, C.x, C.z, 10, 8, 50, 14, { arv: 'cantos' }), L = [], topo = [];
   const servicos = { '0,0': ['🚓 Delegacia de Oyster River', '#4c6fa8', 18, 'delegacia'], '1,0': ['💀 Base do BOPE', '#1d1d1d', 12, 'bope'], '2,0': ['🚔 Superintendência da PRF', '#3e6a9a', 16, 'prf'],
     '7,0': ['🚒 Bombeiros', '#c0392b', 12, 'bombeiros'], '8,0': ['🏥 Hospital Central', '#f0f0f0', 30, 'hospital'], '9,0': ['🎖️ Quartel do Exército', '#4b5a3a', 12, 'quartel'],
     '9,3': ['⚓ Marinha', '#24467a', 14, 'marinha'], '9,4': ['✈️ Aeronáutica', '#3c5a7a', 14, 'aerea'], '0,7': ['🔧 Oficina de Oyster River', '#8a6d3b', 8, 'oficina'],
-    '4,4': ['🏛️ Prefeitura de Oyster River', '#e9d9a8', 22, 'prefeitura'], '5,7': ['🚌 Rodoviária de Oyster River (Linha 12)', '#d9822b', 10, 'info'] };
+    '4,4': ['🏛️ Prefeitura de Oyster River', '#e9d9a8', 22, 'prefeitura'], '5,7': ['🚌 Rodoviária de Oyster River (Linha 12)', '#d9822b', 10, 'info', 'terminal_rodoviario'] };
   for (const q of G.qs) {
     const sv = servicos[`${q.i},${q.j}`];
-    if (sv) { predioServico(R, { ...q, w: 40, d: 36 }, sv[0], sv[1], sv[2], sv[3] || null, 'oyster'); continue; }
+    if (sv) { predioServico(R, { ...q, w: 40, d: 36 }, sv[0], sv[1], sv[2], sv[3] || null, 'oyster', sv[4] ?? GLB_SERVICO[sv[3]]); continue; }
     if ((q.i === 1 || q.i === 8) && q.j >= 5 && q.j <= 6) { R.sprite('🏗️ Terrenos para empresas · em breve', q.x, 4, q.z, 0.5); continue; }
     const centro = Math.max(0, 1 - Math.hypot(q.x - C.x, q.z - C.z) / 330);   // cidade grande: arranha-céus no centro
     for (const [dx, dz] of [[-12, -12], [12, -12], [-12, 12], [12, 12]]) {
-      const h = 10 + rnd() * 18 + centro * centro * (40 + rnd() * 60);
-      L.push([q.x + dx, q.z + dz, 18 + rnd() * 4, 18 + rnd() * 4, h, CINZAS[(rnd() * CINZAS.length) | 0]]);
+      const h = 10 + rnd() * 18 + centro * centro * (40 + rnd() * 60), w = 17 + rnd() * 3, d = 17 + rnd() * 3;
+      L.push([q.x + dx, q.z + dz, w, d, h, CINZAS[(rnd() * CINZAS.length) | 0], centro > 0.25 || rnd() < 0.3]);   // térreo com lojas no centro
+      // no telhado: caixa d'água, casa de máquinas ou antena
+      const t = rnd(); if (t < 0.45) topo.push([q.x + dx + (rnd() - 0.5) * w * 0.4, h + 1.3, q.z + dz + (rnd() - 0.5) * d * 0.4, 3.5, 2.6, 3.5]);
+      else if (t < 0.75) topo.push([q.x + dx, h + 1, q.z + dz, w * 0.4, 2, d * 0.35]);
+      else if (h > 50) topo.push([q.x + dx, h + 6, q.z + dz, 0.3, 12, 0.3]);
     }
   }
-  R.predios(L);
+  R.predios(L); R.caixas(topo, '#8d939a');
   R.sprite('🦪 Oyster River', C.x, 120, C.z, 1.6, 'rgba(20,90,130,.94)');
   // orla: praia, calçadão em ondas, quiosques, coqueiros e o mar
   const M = mundo.OYSTER_MAR, praiaZ = M.z1 + 45;
@@ -15840,9 +15956,13 @@ function montarOysterRiver(R, C) {
     for (let y = -8; y < 80; y += 22) { cg.beginPath(); for (let x = 0; x <= 256; x += 4) cg.lineTo(x, y + Math.sin(x / 256 * Math.PI * 4) * 8); cg.stroke(); }
     const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(60, 1); t.colorSpace = THREE.SRGBColorSpace;
     const m = R.M('#ffffff', { map: t }); R.plano(C.x - 100, praiaZ + 40, 1200, 10, 0.1, m); }
-  for (let x = C.x - 640; x < C.x + 480; x += 70) { R.caixa(x, 1.4, praiaZ + 52, 3, 2.8, 3, R.M('#d9822b'), true); R.caixa(x, 3, praiaZ + 52, 4.2, 0.3, 4.2, R.M('#2a7d4f')); }
-  for (let x = C.x - 670; x < C.x + 490; x += 26) { const h = 7 + rnd() * 4; R.caixa(x, h / 2, praiaZ + 30, 0.5, h, 0.5, R.M('#8b6b3d')); R.caixa(x, h, praiaZ + 30, 4, 0.6, 4, R.M('#3f8f3a')); }
-  R.plano((M.x0 + mundo.CONTINENTE.x1) / 2 + 25, (M.z1 + mundo.CONTINENTE.z0) / 2, mundo.CONTINENTE.x1 - M.x0 + 50, M.z1 - mundo.CONTINENTE.z0, 0.12, R.M('#3e7ea6', { roughness: 0.25, metalness: 0.1 }));
+  { const qb = [], qt = [], palm = [], pz = praiaZ + 52;
+    for (let x = C.x - 640; x < C.x + 480; x += 70) { qb.push([x, 1.4, pz, 3, 2.8, 3]); qt.push([x, 3, pz, 4.2, 0.3, 4.2]); }
+    R.caixas(qb, '#d9822b', true); R.caixas(qt, '#2a7d4f');   // quiosques
+    for (let x = C.x - 670; x < C.x + 490; x += 26) palm.push([x, praiaZ + 30, 7 + rnd() * 4, rnd() * 6.28]);
+    R.instGLB('arvore_palmeira', palm);   // coqueiros (modelo 3D)
+    for (const [x, z] of palm) { const cc = { tipo: 'circ', x, z, r: 0.35 }; colisores.push(cc); R.cols.push(cc); } }
+  R.plano((M.x0 + mundo.CONTINENTE.x1) / 2 + 25, (M.z1 + mundo.CONTINENTE.z0) / 2, mundo.CONTINENTE.x1 - M.x0 + 50, M.z1 - mundo.CONTINENTE.z0, 0.12, R.MATS?.agua || R.M('#3e7ea6'));
   // morro de pedra no mar, com o bondinho saindo da praia
   const MO = { x: C.x + 220, z: M.z1 - 170 }, EP = { x: C.x + 180, z: M.z1 + 12 };
   R.modelo('morro_pedra', MO.x, MO.z, 190, 0, 0, (piv, alt) => {
