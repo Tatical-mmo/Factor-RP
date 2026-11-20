@@ -16019,11 +16019,12 @@ function montarOysterRiver(R, C) {
       else if (h > 50) topo.push([q.x + dx, h + 6, q.z + dz, 0.3, 12, 0.3]);
     }
   }
-  { const imP = R.predios(L); R.caixas(topo, '#8d939a');
-    // perto do jogador: prédio da orla (até 30 m) ou residencial (até 70 m), esticados até a altura da caixa; os mais altos
-    // continuam caixa com janelas (o modelo de arranha-céu comercial ainda não chegou)
-    R.casas3d(L.map((e, k) => (e[4] > 70 ? null : { x: e[0], z: e[1], w: e[2], d: e[3], h: e[4], alto: true, tipo: e[4] <= 30 ? 'cid_orla' : 'cid_residencial',
-      rot: e[1] > G.z0 + 39 + Math.round((e[1] - G.z0 - 39) / 64) * 64 ? 0 : Math.PI, esconder: [[imP, k, R.matrizDe(imP, k)]] })).filter(Boolean)); }
+  for (const e of L) if (e[4] > 70) e[4] = Math.max(e[4], e[2] * 6);   // arranha-céus comerciais: finos e altos como o modelo
+  { const imP = R.predios(L); R.caixas(topo.filter((t) => t[1] < 70), '#8d939a');
+    // perto do jogador: prédio da orla (até 30 m), residencial (até 70 m) ou arranha-céu comercial de vidro (acima),
+    // esticados até a altura da caixa
+    R.casas3d(L.map((e, k) => ({ x: e[0], z: e[1], w: e[2], d: e[3], h: e[4], alto: true, tipo: e[4] <= 30 ? 'cid_orla' : e[4] <= 70 ? 'cid_residencial' : 'cid_comercial',
+      rot: e[1] > G.z0 + 39 + Math.round((e[1] - G.z0 - 39) / 64) * 64 ? 0 : Math.PI, esconder: [[imP, k, R.matrizDe(imP, k)]] }))); }
   R.sprite('🦪 Oyster River', C.x, 120, C.z, 1.6, 'rgba(20,90,130,.94)');
   // orla: praia, calçadão em ondas, quiosques, coqueiros e o mar
   const M = mundo.OYSTER_MAR, praiaZ = M.z1 + 45;
