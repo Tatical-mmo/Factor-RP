@@ -1324,11 +1324,13 @@ function pontoNoChao(cx, cy) {
 const ponteiros = new Map(); let pinca = null;
 canvas.addEventListener('pointerdown', (e) => {
   ponteiros.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now() });
+  if (e.pointerType === 'mouse' && e.button === 0 && jogador.armado && ARMAS[jogador.armaTipo || 'basica']?.rajada) { gatilho.segurando = true; gatilho.alvo = pontoNoChao(e.clientX, e.clientY); }
   if (ponteiros.size === 2) {
     const [a, b] = [...ponteiros.values()]; pinca = { d: Math.hypot(a.x - b.x, a.y - b.y), z: zoom };
   }
 });
 canvas.addEventListener('pointermove', (e) => {
+  if (gatilho.segurando && e.pointerType === 'mouse') gatilho.alvo = pontoNoChao(e.clientX, e.clientY);
   if (!ponteiros.has(e.pointerId)) return;
   const ant = ponteiros.get(e.pointerId);
   if (miraM.ativo && ponteiros.size === 1 && podeMiraManual()) {   // mira manual: arrastar vira o personagem e sobe/desce a mira
@@ -1356,6 +1358,7 @@ canvas.addEventListener('pointermove', (e) => {
   }
 });
 function soltarPonteiro(e) {
+  if (e.pointerType === 'mouse') gatilho.segurando = false;
   const p = ponteiros.get(e.pointerId); ponteiros.delete(e.pointerId);
   if (pinca) { if (ponteiros.size === 0) pinca = null; return; }
   if (!p || !jogador.avatar || e.type === 'pointercancel') return;
@@ -1417,7 +1420,8 @@ function configurarJoystick() {
   }
   toque('btAcao', acaoContexto); toque('btSoco', socar); toque('btArma', botaoArma); toque('btAlgema', acaoAlgema); toque('btCrime', acaoCrime);
   toque('btPular', pular); toque('btRender', renderSe);
-  toque('btTiro', () => atirar(null)); toque('btGiraE', () => girarCamera(-1)); toque('btGiraD', () => girarCamera(1));
+  toque('btTiro', () => { gatilho.segurando = true; gatilho.alvo = null; atirar(null); });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('btTiro').addEventListener(ev, () => { gatilho.segurando = false; }); toque('btGiraE', () => girarCamera(-1)); toque('btGiraD', () => girarCamera(1));
 }
 
 function girarCamera(s) { if (modo3D()) { olhar.yaw -= s * Math.PI / 4; return; } anguloCam += s; }
@@ -2148,11 +2152,11 @@ const ARMAS = {
   espingarda: { cod: 7, grav: 1.2, modelo: 'arma_espingarda', comp: 0.9, reserva: 'arma_grande_porte', dano: 11, recarga: 0.85, vel: 23, cor: '#ff7a1a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.58], chumbos: 7, espalha: 0.13, alcance: 0.6 },
   rpg: { cod: 9, lanca: 'rpg', modelo: 'arma_rpg', comp: 1.0, reserva: 'arma_militar', dano: 55, recarga: 3, vel: 45, cor: '#7a8a4a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.55] },
   bazuca: { cod: 10, lanca: 'baz', modelo: 'arma_bazuca', comp: 1.3, reserva: 'arma_militar', dano: 90, recarga: 5, vel: 60, cor: '#3f5233', pega: [0, 0.02, 0], boca: [0, 0.02, 0.75] },
-  // armas laser do laboratório (19q): só com a armadura vestida; pente de 10 e 10 s de recarga; o cano do modelo vem em -x
-  laser_azul: { cod: 12, laser: true, alc: 140, grav: 0.03, modelo: 'laser_azul', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 30, recarga: 0.18, vel: 70, cor: '#3ec8ff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
-  laser_roxo: { cod: 13, laser: true, alc: 140, grav: 0.03, modelo: 'laser_roxo', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 34, recarga: 0.22, vel: 70, cor: '#b14bff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
-  laser_vermelho: { cod: 14, laser: true, alc: 140, grav: 0.03, modelo: 'laser_vermelho', comp: 1.1, vira: true, reserva: 'arma_militar', dano: 40, recarga: 0.3, vel: 66, cor: '#ff3b3b', pega: [0, 0.02, 0], boca: [0, 0.02, 0.74], bola: 1.5 },
-  laser_energia: { cod: 15, laser: true, alc: 140, grav: 0.03, modelo: 'laser_energia', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 36, recarga: 0.24, vel: 72, cor: '#7dff5a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
+  // armas laser do laboratório (19q): só com a armadura vestida; pente de 10 em rajada (segurando o gatilho) e 5 s de recarga (20m); o cano do modelo vem em -x
+  laser_azul: { cod: 12, laser: true, alc: 140, grav: 0.03, modelo: 'laser_azul', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 30, recarga: 0.11, rajada: true, vel: 70, cor: '#3ec8ff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
+  laser_roxo: { cod: 13, laser: true, alc: 140, grav: 0.03, modelo: 'laser_roxo', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 34, recarga: 0.11, rajada: true, vel: 70, cor: '#b14bff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
+  laser_vermelho: { cod: 14, laser: true, alc: 140, grav: 0.03, modelo: 'laser_vermelho', comp: 1.1, vira: true, reserva: 'arma_militar', dano: 40, recarga: 0.11, rajada: true, vel: 66, cor: '#ff3b3b', pega: [0, 0.02, 0], boca: [0, 0.02, 0.74], bola: 1.5 },
+  laser_energia: { cod: 15, laser: true, alc: 140, grav: 0.03, modelo: 'laser_energia', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 36, recarga: 0.11, rajada: true, vel: 72, cor: '#7dff5a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
   ponto50: { cod: 11, alc: 220, grav: 0.1, modelo: 'arma_ponto50', dano: 34, recarga: 0.12, vel: 90, cor: '#ffcc33' },
   fuzil: { cod: 8, alc: 130, grav: 0.18, modelo: 'arma_fuzil', comp: 0.95, vira: true, reserva: 'arma_militar', dano: 26, recarga: 0.11, vel: 42, cor: '#d9dde3', pega: [0, 0.02, 0], boca: [0, 0.02, 0.62] },
 };
@@ -2236,7 +2240,11 @@ function conferirArma() {
 }
 
 // tiros de paintball
-const bolas = []; const manchas = [];
+const bolas = []; const manchas = []; const _vf = new THREE.Vector3();
+// feixe do laser: caixa fina de 2,5 m com a ponta na frente (o centro fica 1,25 m atrás da posição da "bala")
+const geoFeixe = new THREE.BoxGeometry(0.07, 0.07, 2.5).translate(0, 0, -1.25), EIXO_Z = new THREE.Vector3(0, 0, 1);
+// gatilho segurado (20m): arma de rajada (laser) continua atirando enquanto o botão / clique estiver apertado
+const gatilho = { segurando: false, avisou: 0 };
 const geoBola = new THREE.SphereGeometry(0.07, 10, 8);
 const geoMancha = new THREE.CircleGeometry(0.35, 14);
 const CORES_TINTA = ['#ff3e6c', '#35d07f', '#3ea8ff', '#ffd23e', '#b05cff', '#ff8a2a'];
@@ -2253,11 +2261,11 @@ function atirar(alvo) {
   const A = ARMAS[jogador.armaTipo || 'basica'];
   jogador.alvo = null;
   if (A.lanca) { dispararFoguete(A, alvo); return; }
-  if (A.laser) {   // pente de 10; vazio, recarrega sozinho em 10 s
+  if (A.laser) {   // pente de 10; vazio, recarrega sozinho em 5 s
     const pe = jogador.pente ||= { balas: 10, ate: 0 }, t = performance.now();
     if (pe.ate && t >= pe.ate) { pe.balas = 10; pe.ate = 0; }
-    if (pe.balas <= 0) { aviso(`🔋 Recarregando o laser… ${Math.ceil((pe.ate - t) / 1000)} s`, 1.2); return; }
-    pe.balas--; if (pe.balas <= 0) { pe.ate = t + 10000; aviso('🔋 Pente vazio: o laser recarrega em 10 s.', 2.5); }
+    if (pe.balas <= 0) { if (!gatilho.segurando || t > (gatilho.avisou || 0)) { gatilho.avisou = t + 1500; aviso(`🔋 Recarregando o laser… ${Math.ceil((pe.ate - t) / 1000)} s`, 1.2); } return; }
+    pe.balas--; if (pe.balas <= 0) { pe.ate = t + 5000; aviso('🔋 Pente vazio: o laser recarrega em 5 s.', 2.5); }
   }
   const manual = miraM.ativo && podeMiraManual();
   if (manual) { /* mira manual: vai exatamente pelos pontinhos */ } else if (modoCam === 'p1' && !jogador.carro) jogador.yaw = olhar.yaw;
@@ -2318,9 +2326,16 @@ function chumbos(A, boca, v, cor) {
 }
 function criarBola(pos, vel, cor, minha = false, escala = 1, laser = false) {
   if (escala < 3) sons.tocar(laser ? 'laser' : 'tiro', { vol: laser ? 0.8 : 0.7, dist: jogador.avatar ? Math.hypot(pos.x - jogador.pos.x, pos.z - jogador.pos.z) : 0, raio: laser ? 70 : 55, velocidade: 0.9 + Math.random() * 0.2 });
-  const m = new THREE.Mesh(geoBola, laser ? new THREE.MeshBasicMaterial({ color: cor, toneMapped: false }) : new THREE.MeshStandardMaterial({ color: cor, roughness: 0.3 }));   // laser: brilha
-  m.position.copy(pos); m.scale.setScalar(escala); scene.add(m);
-  bolas.push({ m, v: vel.clone(), vida: escala >= 3 ? 2.5 : 2, cor, minha, tanque: escala >= 3 });
+  let m;
+  if (laser) {   // laser (20m): feixe fino e comprido, na direção do tiro, com um miolo branco (brilha)
+    m = new THREE.Mesh(geoFeixe, new THREE.MeshBasicMaterial({ color: cor, toneMapped: false, transparent: true, opacity: 0.9 }));
+    const miolo = new THREE.Mesh(geoFeixe, new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false })); miolo.scale.set(0.4, 0.4, 0.92); m.add(miolo);
+    m.position.copy(pos); m.quaternion.setFromUnitVectors(EIXO_Z, vel.clone().normalize()); scene.add(m);
+  } else {
+    m = new THREE.Mesh(geoBola, new THREE.MeshStandardMaterial({ color: cor, roughness: 0.3 }));
+    m.position.copy(pos); m.scale.setScalar(escala); scene.add(m);
+  }
+  bolas.push({ m, v: vel.clone(), vida: escala >= 3 ? 2.5 : 2, cor, minha, tanque: escala >= 3, laser });
 }
 // ---------------------------------------------------------------- tanque: canhão de tinta que explode veículos
 let recargaTanque = 0;
@@ -2871,6 +2886,34 @@ function atualizarExplosoes(dt) {
     if (k >= 1) { for (const m of [e.fogo, e.tinta, e.fumaca]) { scene.remove(m); m.material?.dispose(); } explosoes.splice(i, 1); }
   }
 }
+// faíscas (20m): tiro batendo em armadura. Estouro de pontinhos amarelos/laranja que voam e caem, com o "tlim" metálico
+const faiscas = [];
+const geoFaisca = new THREE.BoxGeometry(0.035, 0.035, 0.16);
+let ultFaisca = 0;
+function faiscar(p, n = 14) {
+  const t = performance.now(); if (t - ultFaisca < 60 || faiscas.length > 12) return; ultFaisca = t;   // chumbo de espingarda: um estouro só
+  sons.metal({ dist: jogador.avatar ? Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z) : 0 });
+  const mat = new THREE.MeshBasicMaterial({ color: '#ffd76a', toneMapped: false, transparent: true });
+  const g = new THREE.Group(); g.position.copy(p); scene.add(g);
+  const ps = [];
+  for (let k = 0; k < n; k++) {
+    const m = new THREE.Mesh(geoFaisca, k % 3 ? mat : FAISCA_LARANJA), v = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.9 + 0.1, Math.random() - 0.5).normalize().multiplyScalar(3 + Math.random() * 4);
+    m.quaternion.setFromUnitVectors(EIXO_Z, v.clone().normalize()); g.add(m); ps.push({ m, v });
+  }
+  const luz = new THREE.Mesh(geoBola, new THREE.MeshBasicMaterial({ color: '#fff3c0', toneMapped: false, transparent: true })); luz.scale.setScalar(2.2); g.add(luz);
+  faiscas.push({ g, ps, mat, luz, t: 0 });
+}
+const FAISCA_LARANJA = new THREE.MeshBasicMaterial({ color: '#ff8a2a', toneMapped: false });
+function atualizarFaiscas(dt) {
+  for (let i = faiscas.length - 1; i >= 0; i--) {
+    const f = faiscas[i]; f.t += dt;
+    for (const p of f.ps) { p.v.y -= 9.8 * dt; p.m.position.addScaledVector(p.v, dt); p.m.quaternion.setFromUnitVectors(EIXO_Z, _vf.copy(p.v).normalize()); }
+    f.mat.opacity = Math.max(0, 1 - f.t / 0.45); f.luz.material.opacity = Math.max(0, 1 - f.t / 0.08); f.luz.visible = f.t < 0.08;
+    if (f.t > 0.45) { scene.remove(f.g); f.mat.dispose(); f.luz.material.dispose(); faiscas.splice(i, 1); }
+  }
+}
+// ponto no peito de um avatar (para as faíscas de quem leva o tiro)
+const peitoDe = (raiz) => new THREE.Vector3(raiz.position.x + Math.sin(raiz.rotation.y) * 0.25, raiz.position.y + 1.25, raiz.position.z + Math.cos(raiz.rotation.y) * 0.25);
 function manchar(p, normal, cor) {
   const m = new THREE.Mesh(geoMancha, new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
   m.position.copy(p).addScaledVector(normal, 0.03); m.lookAt(p.clone().add(normal)); m.scale.setScalar(0.7 + Math.random() * 0.6);
@@ -2878,9 +2921,11 @@ function manchar(p, normal, cor) {
   if (manchas.length > 80) { const v = manchas.shift(); scene.remove(v); v.material.dispose(); }
 }
 function atualizarBolas(dt) {
+  atualizarFaiscas(dt);
   for (let i = bolas.length - 1; i >= 0; i--) {
     const b = bolas[i]; b.vida -= dt; b.v.y -= (b.g ?? 9.8) * dt;
     const ant = b.m.position.clone(); b.m.position.addScaledVector(b.v, dt);
+    if (b.laser) b.m.quaternion.setFromUnitVectors(EIXO_Z, _vf.copy(b.v).normalize());
     let fim = false;
     if (b.minha) fim = acertoNoAlvo(b) || acertoDaBola(b);
     if (!fim) for (const c of colisores) {
@@ -2895,7 +2940,7 @@ function atualizarBolas(dt) {
     const chao = alturaChao(b.m.position.x, b.m.position.z);
     if (!fim && (b.m.position.y <= chao + 0.02 || b.vida <= 0)) { manchar(new THREE.Vector3(b.m.position.x, chao + 0.01, b.m.position.z), new THREE.Vector3(0, 1, 0), b.cor); fim = true; }
     if (fim && b.tanque && b.minha && !b.explodiu) { b.explodiu = true; explodir(b.m.position); }
-    if (fim) { scene.remove(b.m); b.m.material.dispose(); bolas.splice(i, 1); }
+    if (fim) { scene.remove(b.m); b.m.material.dispose(); b.m.children[0]?.material.dispose(); bolas.splice(i, 1); }
   }
 }
 
@@ -4632,7 +4677,8 @@ function acertoDaBola(b) {
     const q = r.av.raiz.position;
     if (Math.hypot(p.x - q.x, p.z - q.z) < 0.5 && p.y > q.y + 0.1 && p.y < q.y + 1.9) {
       if (b.pd) acertoDourado(id); else { aplicarDanoRemoto(id, b.dano || 20); if (b.critico) aviso('💥 Acerto crítico!', 1.2); }
-      manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true;
+      if (ARMADURAS[r.meta?.arm]) faiscar(p.clone()); else manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor);   // armadura: faísca em vez de tinta
+      return true;
     }
   }
   for (const c of caminhoes.values()) {
@@ -8222,6 +8268,7 @@ function atualizarJogador(dt) {
   const j = jogador, av = j.avatar;
   for (let i = j.eventos.length - 1; i >= 0; i--) { j.eventos[i].t -= dt; if (j.eventos[i].t <= 0) { j.eventos[i].fn(); j.eventos.splice(i, 1); } }
   j.recarga = Math.max(0, j.recarga - dt);
+  if (gatilho.segurando && j.recarga <= 0 && j.armado && ARMAS[j.armaTipo || 'basica']?.rajada) atirar(gatilho.alvo || null);   // rajada: segurando o gatilho
   if (j.abducao) { seguirAbducao(dt); return; }
   if (j.trem && seguirTrem()) {
     av.tocar(j.carregando ? 'carregar_parado' : 'idle'); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw;
@@ -12209,6 +12256,7 @@ function guardarArmadura(silencioso) {
 }
 function danoArmadura(v) {
   const a = jogador.armadura, A = ARMADURAS[a.modelo];
+  if (jogador.avatar) faiscar(peitoDe(jogador.avatar.raiz), 10);
   a.b -= v; a.ultimoDano = performance.now(); desenharEscudo();
   const f = a.b / A.blind;
   if (f <= 0.02) { ejetarArmadura(); return 0; }
@@ -17468,7 +17516,7 @@ async function desenharTatica() {
       <div class="botoes">${jogador.armadura ? '<button id="tArmTirar">🤖 Guardar a armadura</button>' : '<button id="tArmVestir">🤖 Vestir a armadura</button>'}<button id="tArmVender">💰 Vender a armadura</button></div>`;
   }
   { const ls = Object.keys(ARMAS).filter((k) => ARMAS[k].laser && qtdItem(k) > 0);
-    if (ls.length) h += `<div class="sub">🔋 Armas laser</div><p class="dica">Só funcionam com a armadura vestida. Pente de 10 tiros; vazio, recarrega sozinho em 10 s.${jogador.pente?.ate ? ' <b>Recarregando…</b>' : jogador.pente ? ` Pente: <b>${jogador.pente.balas}/10</b>.` : ''}</p>
+    if (ls.length) h += `<div class="sub">🔋 Armas laser</div><p class="dica">Só funcionam com a armadura vestida. Pente de 10 tiros em rajada (segure o Atirar); vazio, recarrega sozinho em 5 s.${jogador.pente?.ate ? ' <b>Recarregando…</b>' : jogador.pente ? ` Pente: <b>${jogador.pente.balas}/10</b>.` : ''}</p>
       <div class="botoes">${ls.map((k) => `<button data-eq="${k}" ${jogador.armadura ? '' : 'disabled'}>${jogador.armaEspecial === k ? '✔️ ' : ''}🔋 ${NOME_ITEM_T[k]}</button>`).join('')}</div>`; }
   try { const of = await rede.lab.ofertas(); const pra = (of || []).filter((o) => o.comprador === eu && Date.parse(o.em) > agoraServidor() - 600000);
     if (pra.length) h += `<div class="sub">🤖 Ofertas de armadura</div><p class="dica">Comprar armadura de outro jogador é negócio do mercado negro: quem vende comete crime (e vira desertor se for de corporação).</p>

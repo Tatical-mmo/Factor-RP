@@ -110,6 +110,17 @@ export function radio() {
 
 // óvni: zumbido grave que pulsa (gerado na hora, sem arquivo). O jogo pede o volume a cada quadro.
 let zum = null, zumVol = 0;
+// tiro batendo em armadura (20m): "tlim" metálico sintetizado (dois tons agudos que somem rápido + um estalo de ruído)
+export function metal({ vol = 1, dist = 0, raio = 45 } = {}) {
+  if (!ac || !ligado || ac.state !== 'running') return;
+  const v = vol * Math.max(0, 1 - dist / raio); if (v < 0.02) return;
+  const t = ac.currentTime, g = ac.createGain(); g.connect(mestre);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35 * v, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+  const f0 = 2300 + Math.random() * 900;
+  for (const f of [f0, f0 * 1.51]) { const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.92, t + 0.3); o.connect(g); o.start(t); o.stop(t + 0.36); }
+  const n = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.04), ac.sampleRate), d = n.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  const src = ac.createBufferSource(), gn = ac.createGain(); src.buffer = n; gn.gain.value = 0.25 * v; src.connect(gn); gn.connect(mestre); src.start(t);
+}
 export function zumbido(vol) { zumVol = Math.max(zumVol, vol); }
 function atualizarZumbido() {
   if (!ac) return;
