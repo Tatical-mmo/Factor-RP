@@ -55,21 +55,6 @@ export function iniciar(scene, lista, alturaChao, relogioServidor) {
   for (let i = 0; i < MAX * 3; i++) luzes.setColorAt(i, APAGADA[i % 3]);
 }
 
-// cruzamentos de outras cidades (continente, 20k), com a largura da rua de lá: { x, z, y } e h = meia rua + 0,9
-export function adicionar(lista, h) {
-  for (const c0 of lista) {
-    const c = { x: c0.x, z: c0.z, off: (((c0.x + c0.z) / 54) * 2.5 % CICLO + CICLO) % CICLO }; cruz.push(c);
-    const kx = Math.round(c.x), kz = Math.round(c.z);
-    if (!colunas.has(kx)) colunas.set(kx, []); colunas.get(kx).push(c);
-    if (!linhas.has(kz)) linhas.set(kz, []); linhas.get(kz).push(c);
-    for (const [dx, dz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
-      const rx = -dz, rz = dx, x = c.x + dx * h + rx * h, z = c.z + dz * h + rz * h;
-      cabecas.push({ c, vert: dx === 0, x, z, y: c0.y ?? 0.19, ang: Math.atan2(-dx, -dz) });
-    }
-  }
-  for (const l of [...colunas.values()]) l.sort((a, b) => a.z - b.z);
-  for (const l of [...linhas.values()]) l.sort((a, b) => a.x - b.x);
-}
 // a cada meio segundo escolhe as cabeças mais perto; a cada quadro acende as luzes certas
 export function atualizar(dt, px, pz) {
   if (!poste) return;

@@ -209,9 +209,6 @@ function traduzirRpc(m) {
     'so as forcas armadas': 'Só as Forças Armadas pegam armas no Arsenal.',
   'precisa de autorizacao': 'Precisa da autorização de um Tenente para cima (ou do General Supremo), a mesma da arma pesada.',
   'aguarde para pegar o lancador': 'O lançador sai a cada 2 minutos. Aguarde.',
-  'so o governador': 'Só o governador faz isso.',
-  'ja e seguranca': 'Esse jogador já é segurança.',
-  'cidade invalida': 'Cidade inválida.',
   'sem autorizacao do laboratorio': 'Só jogadores autorizados pelo General Supremo pegam armadura.',
   'desertor sem liberacao': 'Desertor não entra na corporação sem a liberação de um oficial de patente alta (ou o perdão do administrador).',
   'patente baixa para liberar': 'Só oficial de patente alta libera desertor (Polícia/BOPE e Exército: Tenente para cima; PRF: Inspetor para cima).',
@@ -843,30 +840,6 @@ export const marinha = {
   historico: () => rpc('missil_historico'),
   definirForca: (id, forca) => rpc('definir_forca', { p_jogador: id, p_forca: forca }),
   forcas: (ids) => ids.length ? sel(sb.from('perfis').select('id,forca').in('id', ids)) : Promise.resolve([]),
-};
-// governo do estado (127): pedágio da PRF na Ponte do Continente
-export const governo = {
-  pagarPedagio: () => rpc('pagar_pedagio'),
-  // 128: governador, eleição estadual, salário e seguranças
-  estado: async () => (await sel(sb.from('governo').select('*, gov:perfis!governo_governador_fkey(nome)')))[0] || null,
-  cofre: async () => (await sel(sb.from('estado_cofre').select('saldo')))[0]?.saldo ?? 0,
-  campanha: () => rpc('campanha_gov'),
-  candidatos: (m) => sel(sb.from('candidatos_gov').select('*, perfil:perfis!candidatos_gov_jogador_fkey(nome)').eq('mandato', m).order('votos', { ascending: false })),
-  candidatar: (slogan) => rpc('candidatar_governador', { p_slogan: slogan }),
-  votar: (id) => rpc('votar_governador', { p_candidato: id }),
-  processar: () => rpc('processar_governo'),
-  salario: () => rpc('salario_governador'),
-  nomear: (vaga, id) => rpc('nomear_seguranca_gov', { p_vaga: vaga, p_jogador: id }),
-};
-// prefeitos das cidades novas (129): Barra Amarela ('barra') e Oyster River ('oyster')
-export const cidades = {
-  estado: async (c) => (await sel(sb.from('prefeituras_cid').select('*, pref:perfis!prefeituras_cid_prefeito_fkey(nome)').eq('cidade', c)))[0] || null,
-  campanha: (c) => rpc('campanha_cid', { p_cidade: c }),
-  candidatos: (c, m) => sel(sb.from('candidatos_cid').select('*, perfil:perfis!candidatos_cid_jogador_fkey(nome)').eq('cidade', c).eq('mandato', m).order('votos', { ascending: false })),
-  candidatar: (c, slogan) => rpc('candidatar_prefeito_cid', { p_cidade: c, p_slogan: slogan }),
-  votar: (c, id) => rpc('votar_prefeito_cid', { p_cidade: c, p_candidato: id }),
-  processar: () => rpc('processar_cidades'),
-  salario: (c) => rpc('salario_prefeito_cid', { p_cidade: c }),
 };
 // laboratório da Área 51 (124): armaduras e autorização do General Supremo
 export const lab = {

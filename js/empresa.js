@@ -385,8 +385,8 @@ function telaFundir(c, e, minhas) {
 // ------------------------------------------------------------ comprar lote
 function telaCompra(c) {
   const l = LOTES_VENDA.find((x) => x.id === loteCompra);
-  $('empresaTitulo').textContent = `Lote ${loteCompra} à venda${l?.cidade ? ` · ${l.cidade}` : ''}`;
-  c.innerHTML = `<p>Preço: <b>${num(l?.preco || 20000)}</b> moedas (você tem ${num(ctx.perfil().moedas)}).</p>
+  $('empresaTitulo').textContent = `Lote ${loteCompra} à venda`;
+  c.innerHTML = `<p>Preço: <b>20.000</b> moedas (você tem ${num(ctx.perfil().moedas)}).</p>
     <div class="form">
       <label>Nome da empresa <input id="cNome" maxlength="24" placeholder="Ex.: Doces do Vale"></label>
       <label>Tipo <select id="cTipo"><option value="fabrica">Fábrica</option><option value="transportadora">Transportadora</option></select></label>
