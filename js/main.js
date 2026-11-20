@@ -3024,6 +3024,11 @@ const REGIOES_MAPA = [
   { x0: 100, z0: -900, x1: 560, z1: -640 },     // aeroporto da Metrópole
   { x0: 100, z0: 900, x1: 1120, z1: 1420 },     // bases militares (Quartel, Base Aérea, Base Naval, Morro do Porto e o mar)
   { x0: -900, z0: -270, x1: -630, z1: 270 },     // Área 51 (só aparece para quem tem acesso)
+  // continente (20f): em pedaços (um só seria grande demais para o celular)
+  { x0: -420, z0: -2100, x1: 100, z1: -1380 },    // Serra, ponte e pedágio
+  { x0: -1000, z0: -3560, x1: 100, z1: -2100 },   // continente: estação, Sede do Governo e aeroporto
+  { x0: -1800, z0: -2800, x1: -1000, z1: -2150 }, // Barra Amarela
+  { x0: 100, z0: -4500, x1: 1300, z1: -3150 },    // Oyster River
 ];
 let fundosMapa = [];
 function regiaoMapa(x, z) { return REGIOES_MAPA.findIndex((r) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1); }
@@ -3038,8 +3043,34 @@ function desenharFundoMapa() {
     ferrovia.desenharMapa(g);
     desenharCentroNoMapa(g);
     desenharTransporteNoMapa(g);
+    if (r.z1 <= -1380) desenharContinenteNoMapa(g);
     return c;
   });
+}
+// continente no mapa (20f): mar e praia de Oyster River, ruas e quarteirões das duas cidades, favela, linha do trem e estações
+function desenharContinenteNoMapa(g) {
+  const C = mundo.CONTINENTE, MAR = mundo.OYSTER_MAR;
+  g.fillStyle = '#4a86b5'; g.fillRect(MAR.x0, C.z0, C.x1 - MAR.x0, MAR.z1 - C.z0);
+  g.fillStyle = '#e9d8a6'; g.fillRect(MAR.x0 + 150, MAR.z1, 1200, 90);
+  const grade = (cx, cz, nx, nz, Q, rua, pular) => {
+    const W = nx * (Q + rua) + rua, D = nz * (Q + rua) + rua, x0 = cx - W / 2, z0 = cz - D / 2;
+    g.fillStyle = '#4a4e57'; g.fillRect(x0, z0, W, D);
+    for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { g.fillStyle = pular?.(i, j) || '#d8d1c3'; g.fillRect(x0 + rua + i * (Q + rua), z0 + rua + j * (Q + rua), Q, Q); }
+    return { x0, z0, W, D };
+  };
+  const B = mundo.BARRA_AMARELA, O = mundo.OYSTER_RIVER;
+  const gb = grade(B.x, B.z, 6, 6, 40, 12, (i, j) => (i >= 2 && i <= 3 && j >= 2 && j <= 3 ? '#7fae5a' : null));
+  g.fillStyle = '#b9774c'; g.beginPath(); g.ellipse(gb.x0 - 90, B.z, 70, 98, 0, 0, 7); g.fill();   // favela da Barra
+  grade(O.x, O.z, 10, 8, 50, 14, (i, j) => (i === 4 && j === 4 ? '#e9d9a8' : null));
+  g.fillStyle = '#6f8f4f'; g.beginPath(); g.arc(O.x - 520, MAR.z1 + 150, 100, 0, 7); g.fill();   // morro do monumento
+  g.strokeStyle = '#4a4e57'; g.lineWidth = 9; g.beginPath(); g.moveTo(-170, -3185); g.lineTo(-430, -3398); g.stroke();   // acesso ao aeroporto
+  // trem
+  const T = TREM_CONT; g.strokeStyle = '#5a4632'; g.lineWidth = 3; g.beginPath(); for (let k = 0; k < T.X.length; k += 4) (k ? g.lineTo(T.X[k], T.Z[k]) : g.moveTo(T.X[k], T.Z[k])); g.stroke();
+  g.fillStyle = '#2e5fa8'; for (const pl of [T.platA, T.platB]) g.fillRect(pl.x - 6, pl.z - 6, 12, 12);
+  // nomes
+  g.font = 'bold 34px system-ui, sans-serif'; g.textAlign = 'center'; g.fillStyle = '#1d1d1d';
+  g.fillText('Barra Amarela', B.x, gb.z0 - 14); g.fillText('Oyster River', O.x, O.z + 300);
+  g.font = 'bold 22px system-ui, sans-serif'; g.fillText('Sede do Governo', mundo.SEDE_GOVERNO.x, mundo.SEDE_GOVERNO.z + 110); g.fillText('Aeroporto', -420, -3510); g.fillText('Estação (trem)', TREM_CONT.platA.x - 60, TREM_CONT.platA.z);
 }
 function desenharCentroNoMapa(g) {
   g.fillStyle = '#d8d1c3'; g.fillRect(-METADE, -METADE, TOTAL, TOTAL);
@@ -3053,7 +3084,7 @@ function desenharCentroNoMapa(g) {
   if (contratante) { g.fillStyle = '#ffd23e'; g.beginPath(); g.arc(contratante.x, contratante.z, 5, 0, 7); g.fill(); }
 }
 // ---------------------------------------------------------------- mapa grande e rastreio
-const NOMES_REGIAO = ['Metrópole', 'Vila Serra', 'Porto Sul', 'Aeroporto', 'Bases militares', 'Área 51'];
+const NOMES_REGIAO = ['Metrópole', 'Vila Serra', 'Porto Sul', 'Aeroporto', 'Bases militares', 'Área 51', 'Ponte', 'Continente', 'Barra Amarela', 'Oyster River'];
 let rastreio = null, regiaoMapaG = 0, beacon = null;
 function alvosRastreio() {
   const eu = jogador.perfil?.id, r = [];
@@ -12496,7 +12527,7 @@ const LINHAS = [
         [-160, -2200, '🚧 Pedágio · Estação do Continente', 's'], [-162, -660, 'Rodovia Norte', 's']] },
     { id: 12, nome: 'Linha 12 · Oyster River', curto: 'Oyster River', cor: '#1f8fbf', k: 4, fase: 11, modelos: EXEC, circular: true, inter: true,
       rua: [...ida, ...oyster, ...voltaO, ...fim],
-      paradas: [ROD, [-162, -500, 'Rodovia Norte', 'n'], [-160, -2160, '🚧 Pedágio · Estação do Continente', 'n'], [-170, -3080, '🏛️ Sede do Governo', 'n'], [700, -3676, '🚌 Rodoviária de Oyster River', 'n'],
+      paradas: [ROD, [-162, -500, 'Rodovia Norte', 'n'], [-160, -2160, '🚧 Pedágio · Estação do Continente', 'n'], [-170, -3080, '🏛️ Sede do Governo', 'n'], [-170, -3170, '✈️ Aeroporto de Oyster River (acesso)', 'n'], [700, -3676, '🚌 Rodoviária de Oyster River', 'n'],
         [-170, -3060, '🏛️ Sede do Governo', 's'], [-160, -2200, '🚧 Pedágio · Estação do Continente', 's'], [-162, -660, 'Rodovia Norte', 's']] });
 }
 const V_ONIBUS = 10, ESPERA_PONTO = 6, FOLGA_FILA = 25;
@@ -13940,6 +13971,13 @@ const AEROPORTOS = [
     cerca: { x0: -276, x1: -194, z0: 910, z1: 1108, porta: 1005 }, estrada: [[-86, 1005], [-198, 1005]],
     vaga: { x: -228, z: 1030 }, portao: { x: -216, z: 1016 }, balcao: { x: -200, z: 1012 }, atendente: { x: -203.6, z: 1012, yaw: Math.PI / 2 },
     taxiOut: [{ x: -255, z: 1030 }, { x: -255, z: 1086 }], saida: { x: -255, z: 985 }, taxiIn: [{ x: -230, z: 985 }, { x: -228, z: 1030 }] },
+  // Oyster River (20f): no continente, entre a Sede do Governo e a cidade; pista longa (recebe avião grande). O cenário é
+  // montado com o continente (montarNorte), não aqui: "regiao" faz o montarAeroportos pular este
+  { id: 'oyster', nome: 'Aeroporto de Oyster River', grande: true, regiao: true, eixo: 'x', x0: -700, x1: -140, c: -3480, larg: 30, cab: '09', torreNome: 'Torre Oyster River',
+    cerca: { x0: -720, x1: -120, z0: -3500, z1: -3400 },
+    vaga: { x: -410, z: -3450 }, portao: { x: -410, z: -3441 }, balcao: { x: -450, z: -3405 }, atendente: { x: -450, z: -3407.5, yaw: 0 },
+    taxiOut: [{ x: -410, z: -3460, re: 1 }, { x: -690, z: -3460 }, { x: -696, z: -3480 }], saida: { x: -200, z: -3480 },
+    taxiIn: [{ x: -200, z: -3460 }, { x: -410, z: -3460 }, { x: -410, z: -3450 }] },
 ];
 const AERO = Object.fromEntries(AEROPORTOS.map((a) => [a.id, a]));
 const PORTES = {
@@ -13988,6 +14026,7 @@ function montarAeroportos() {
   };
   const posLuz = [], posTaxi = [];
   for (const a of AEROPORTOS) {
+    if (a.regiao) continue;   // cenário montado com a região (continente)
     const p = pista(a), cx = (p.ini.x + p.fim.x) / 2, cz = (p.ini.z + p.fim.z) / 2, ex = a.eixo === 'x';
     // pista: asfalto, faixa central, cabeceiras zebradas, números e luzes nas bordas
     plano(cx, cz, ex ? p.len + 20 : a.larg, ex ? a.larg : p.len + 20, asf);
@@ -14187,6 +14226,7 @@ function desenharAeroNoMapa(g, a) {
   g.fillStyle = '#34373d';
   if (ex) g.fillRect(p.ini.x - 10, a.c - a.larg / 2, p.len + 20, a.larg); else g.fillRect(a.c - a.larg / 2, Math.min(p.ini.z, p.fim.z) - 10, a.larg, p.len + 20);
   g.fillStyle = '#f2f2f2'; for (let k = 14; k < p.len - 14; k += 24) { if (ex) g.fillRect(p.ini.x + k, a.c - 0.6, 12, 1.2); else g.fillRect(a.c - 0.6, Math.min(p.ini.z, p.fim.z) + k, 1.2, 12); }
+  if (a.regiao) { g.fillStyle = '#a9a59c'; g.fillRect(-480, -3462, 140, 22); g.fillStyle = '#dfe6ec'; g.fillRect(-480, -3438, 100, 28); return; }
   if (ex) {
     g.fillStyle = '#3d4047'; g.fillRect(148, -773, 345, 16); for (const x of [150, 300, 490]) g.fillRect(x - 8, -786, 16, 22);
     g.fillStyle = '#a9a59c'; g.fillRect(195, -757, 300, 43);
@@ -14259,7 +14299,7 @@ function montarTabela(trechos) {
   let t0 = 0; for (const tr of trechos) { tr.ini = t0; t0 += tr.q[tr.q.length - 1].t; }
   return { trechos, ciclo: t0 };
 }
-const VOO_REGULAR = montarTabela([['metro', 'serra'], ['serra', 'metro'], ['metro', 'porto'], ['porto', 'metro']].map(([o, d]) => ({ o, d, q: trechoQuadros(o, d) })));
+const VOO_REGULAR = montarTabela([['metro', 'serra'], ['serra', 'metro'], ['metro', 'porto'], ['porto', 'metro'], ['metro', 'oyster'], ['oyster', 'metro']].map(([o, d]) => ({ o, d, q: trechoQuadros(o, d) })));
 // voo internacional (avião grande): sai da Metrópole para leste, some no horizonte e volta pelo oeste
 const VAGA_INTER = { x: 385, z: -735 };
 const VOO_INTER = montarTabela([{ o: 'metro', d: 'metro', q: trechoQuadros('metro', 'metro', {
@@ -15471,7 +15511,31 @@ function montarNorte() {
     m.scale.setScalar(k); m.position.set(S.x - (b.min.x + b.max.x) / 2 * k, -b.min.y * k + 0.15, S.z - (b.min.z + b.max.z) / 2 * k); g.add(m);
   }).catch(() => { caixa(S.x, 12, S.z, S.w * 0.8, 24, S.d * 0.6, M('#e8e3d6')); });
   { const c = { tipo: 'caixa', x0: S.x - S.w * 0.45, x1: S.x + S.w * 0.45, z0: S.z - S.d * 0.4, z1: S.z + S.d * 0.33 }; colisores.push(c); cols.push(c); }
+  montarAeroOyster(g, M, caixa, sprite);
   montarTremCont(g, M, caixa, sprite);
+}
+// cenário do Aeroporto de Oyster River (20f): pista, pátio, terminal, torre e acesso pela rodovia
+function montarAeroOyster(g, M, caixa, sprite) {
+  const a = AERO.oyster, p = pista(a), cx = (p.ini.x + p.fim.x) / 2, branco = M('#f2f2f2'), amarelo = M('#f2c230');
+  const plano = (x, z, w, d, mat, y) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), mat); m.position.set(x, y, z); m.receiveShadow = true; g.add(m); return m; };
+  plano(cx, a.c, p.len + 20, a.larg, M('#34373d'), 0.09);
+  for (let k = 14; k < p.len - 14; k += 24) plano(p.ini.x + k, a.c, 12, 0.6, branco, 0.1);
+  for (const ponta of [p.ini, p.fim]) for (let k = -4; k <= 4; k++) if (k) plano(ponta.x + Math.sign(cx - ponta.x) * 5, a.c + k * (a.larg / 10), 8, 1.2, branco, 0.1);
+  plano(-420, -3451, 160, 22, M('#a9a59c'), 0.085);                 // pátio
+  plano(-445, -3460, 520, 10, M('#3d4047'), 0.088);                 // taxiway
+  for (let x = -690; x < -200; x += 6) plano(x, -3460, 3, 0.35, amarelo, 0.095);
+  for (const x of [-696, -200]) plano(x, -3470, 10, 12, M('#3d4047'), 0.088);
+  // terminal com fachada de vidro, balcão (atendente fora, do lado da rua) e portão de embarque no pátio
+  caixa(-430, 5, -3424, 100, 10, 28, M('#dfe6ec'), true); caixa(-430, 6, -3438.2, 98, 5, 0.3, M('#7fb2d8', { roughness: 0.05, metalness: 0.5 }));
+  caixa(-430, 10.4, -3424, 102, 0.8, 30, M('#2b5fa8'));
+  sprite('✈️ AEROPORTO DE OYSTER RIVER', -430, 15, -3409, 0.9, 'rgba(43,95,168,.94)');
+  caixa(-450, 0.55, -3405.8, 6, 1.1, 1, M('#2b5fa8'), true); sprite('🎫 Passagens', a.balcao.x, 3, a.balcao.z, 0.45);
+  sprite('✈️ Embarque', a.portao.x, 3, a.portao.z, 0.45);
+  // torre de controle
+  caixa(-300, 13, -3420, 6, 26, 6, M('#e9e6df'), true); caixa(-300, 28, -3420, 10, 4, 10, M('#7fb2d8', { roughness: 0.05, metalness: 0.5 })); caixa(-300, 30.3, -3420, 11, 0.6, 11, M('#2b5fa8'));
+  // acesso: da curva da rodovia (perto da Sede) até a frente do terminal
+  { const x0 = -170, z0 = -3185, x1 = -430, z1 = -3398, L = Math.hypot(x1 - x0, z1 - z0);
+    caixa((x0 + x1) / 2, 0.075, (z0 + z1) / 2, 9, 0.05, L, M('#3d4047'), false, Math.atan2(x1 - x0, z1 - z0)); }
 }
 // ---------------------------------------------------------------- trem intermunicipal (20e): Estação do Continente ↔ Barra Amarela
 // Um trem de ida e volta (locomotiva nas duas pontas) anda pelo relógio do servidor: todos veem o mesmo trem.
@@ -15796,11 +15860,6 @@ function montarOysterRiver(R, C) {
     const c = { tipo: 'circ', x: MX, z: MZ, r: 100 }; colisores.push(c); R.cols.push(c);
     R.modelo('monumento_guardiao', MX, MZ, 52, Math.PI, 55);   // ~50 m de altura em cima do morro
     R.sprite('🗿 Monumento do Guardião', MX, 120, MZ, 0.7); }
-  // aeroporto (só aviões grandes) ao sudoeste e a pista
-  { const AX = C.x - 570, AZ = C.z + 420; R.plano(AX, AZ, 620, 70, 0.08, R.M('#4a4e57'));
-    for (let x = AX - 290; x < AX + 290; x += 30) R.caixa(x, 0.1, AZ, 14, 0.02, 1, R.M('#f2f2f2'));
-    R.predios([[AX - 120, AZ + 80, 120, 40, 16, '#dfe6ec'], [AX + 150, AZ + 80, 12, 12, 34, '#dfe6ec']]);
-    R.sprite('✈️ Aeroporto Internacional de Oyster River · voos em breve', AX - 120, 24, AZ + 80, 0.6); }
 }
 const CIDADES_NOVAS = [
   { def: mundo.BARRA_AMARELA, raio: 650, montar: montarBarraAmarela, R: null },
