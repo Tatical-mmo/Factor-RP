@@ -1522,6 +1522,7 @@ function acaoContexto() {
   if (perto(GUARITA_ALIST, 3.2)) { menuGuarita(); return; }
   if (perto(VEST_AEREA, 2)) { vestiario('Aeronáutica', 'aerea'); return; }
   if (regiaoNorte && perto(PAINEL_GOVERNO, 3)) { painelGoverno(); return; }
+  { const pc = portaCidade(); if (pc) { usarPortaCidade(pc); return; } }
   if (area51 && perto(LAB_A51, 2.5)) { entrarPublico('laboratorio', salaLaboratorio, LAB_A51, '🧪 Laboratório da Área 51: armaduras de tecnologia alienígena.'); return; }
   if (perto(CENTRAL_MISSEIS, 4)) { entrarPublico('comandonaval', salaComandoNaval, CENTRAL_MISSEIS, '⚓ Comando Naval: central de mísseis e controle dos navios.'); return; }
   if ((jogador.embarcado || navioNoPier()) && acaoNavio()) return;
@@ -1666,6 +1667,10 @@ function atualizarPrefeitura(dt) {
     tempoPrefeitura = 60;
     rede.prefeitura.processar().catch(() => {}).finally(() => carregarPrefeitura().catch(() => {}));
     rede.governo.processar().then(() => rede.governo.estado()).then((g) => { governadorAtual = g?.governador || null; if (governadorAtual === jogador.perfil.id) return rede.governo.salario().then((v) => { if (v > 0) aviso(`🏛️ Salário de governador: +${v.toLocaleString('pt-BR')} moedas (do cofre do Estado)`, 4); }); }).catch(() => {});
+    rede.cidades.processar().then(() => Promise.all(['barra', 'oyster'].map((c) => rede.cidades.estado(c)))).then((es) => {   // 129: prefeitos das cidades novas
+      for (const e of es) { if (!e) continue; prefeitosCid[e.cidade] = e.prefeito || null;
+        if (e.prefeito === jogador.perfil.id) rede.cidades.salario(e.cidade).then((v) => { if (v > 0) aviso(`🏛️ Salário de prefeito de ${NOMES_CIDADES[e.cidade]}: +${v.toLocaleString('pt-BR')} moedas`, 4); }).catch(() => {}); }
+    }).catch(() => {});
     if (prefeitoAtual === jogador.perfil.id) rede.prefeitura.salario().then((v) => { if (v > 0) aviso(`Salário de prefeito: +${v.toLocaleString('pt-BR')} moedas`, 4); }).catch(() => {});
   }
   if (tempoCarros <= 0) { tempoCarros = 10; rede.carros.listar().then(sincronizarCarros).catch(() => {}); }
@@ -8792,6 +8797,7 @@ function contexto() {
   { const cn = contextoNavio(); if (cn) return cn; }
   if (perto(VEST_AEREA, 2)) return ['vestiário da Aeronáutica (militares do Exército)', 'Farda'];
   if (regiaoNorte && perto(PAINEL_GOVERNO, 3)) return ['painel do Governo do Estado (eleição e governador)', '🏛️ Governo'];
+  { const pc = portaCidade(); if (pc) return TEXTO_PORTA[pc.tipo]; }
   if (area51 && perto(LAB_A51, 2.5)) return ['entrar no laboratório (armaduras)', '🧪 Entrar'];
   if (perto(CENTRAL_MISSEIS, 4)) return ['entrar no Comando Naval (mísseis e navios)', '⚓ Entrar'];
   if (perto(GUARITA_ALIST, 3.2)) return [militar() ? 'guarita do Exército: pedidos de alistamento' : 'guarita do Exército: alistamento e licitação de rações', 'Guarita'];
@@ -15490,10 +15496,63 @@ function gradeCidade(R, cx, cz, nx, nz, Q, rua, corRua = '#3d4047') {
   for (let j = 0; j <= nz; j++) { const z = z0 + rua / 2 + j * (Q + rua); for (let x = x0 + 6; x < x0 + W - 3; x += 12) R.caixa(x, 0.1, z, 5, 0.02, 0.25, faixa); }
   return { qs, x0, z0, W, D };
 }
-// prédio de serviço com a placa (as corporações ainda não funcionam aqui: vêm nas próximas etapas)
-function predioServico(R, q, nome, cor, h = 12) {
-  R.predios([[q.x, q.z, q.w ?? 30, q.d ?? 26, h, cor]]);
-  R.sprite(`${nome} · em breve`, q.x, h + 4, q.z, 0.55);
+// prédio de serviço com a placa; com tipo, ganha uma porta que funciona (20d)
+function predioServico(R, q, nome, cor, h = 12, tipo = null, cidade = null) {
+  const w = q.w ?? 30, d = q.d ?? 26;
+  R.predios([[q.x, q.z, w, d, h, cor]]);
+  if (!tipo) { R.sprite(`${nome} · em breve`, q.x, h + 4, q.z, 0.55); return; }
+  // porta na frente (lado sul): leva para o interior da corporação; ao sair, o jogador volta para esta porta
+  R.sprite(nome, q.x, h + 4, q.z, 0.55);
+  R.caixa(q.x, 1.6, q.z + d / 2 + 0.06, 3.2, 3.2, 0.12, R.M('#2b2b2b'));
+  const porta = { x: q.x, z: q.z + d / 2 + 1.6, tipo, cidade, nome };
+  if (tipo === 'oficina') porta.oficina = { ...OFICINAS[0], nome: nome.replace(/^\S+\s/, ''), balcao: porta, vaga: { x: q.x + 8, z: q.z + d / 2 + 6 } };
+  (R.portas ||= []).push(porta);
+}
+const NOMES_CIDADES = { barra: 'Barra Amarela', oyster: 'Oyster River' };
+const prefeitosCid = { barra: null, oyster: null };
+// portas das corporações nas cidades novas: o mesmo interior da ilha (o mesmo prédio "por dentro")
+const TEXTO_PORTA = {
+  delegacia: ['entrar na Delegacia', '🚓 Entrar'], prf: ['entrar no Posto da PRF', '🚔 Entrar'], bope: ['entrar na Base do BOPE', '💀 Entrar'],
+  bombeiros: ['entrar no quartel dos Bombeiros', '🚒 Entrar'], hospital: ['entrar no Hospital', '🏥 Entrar'], quartel: ['Quartel do Exército: comando e arsenal', '🎖️ Quartel'],
+  marinha: ['entrar no Comando Naval', '⚓ Entrar'], aerea: ['vestiário da Aeronáutica (militares do Exército)', '✈️ Farda'], oficina: ['oficina: pintura, motor e blindagem', '🔧 Oficina'],
+  prefeitura: ['painel da Prefeitura (eleição e prefeito da cidade)', '🏛️ Prefeitura'],
+};
+function portaCidade() {
+  if (jogador.carro || jogador.dentroCasa || jogador.morto) return null;
+  for (const C of CIDADES_NOVAS) for (const p of C.R?.portas || []) if (Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z) < 3.2) return p;
+  return null;
+}
+function usarPortaCidade(p) {
+  const ent = (chave, sala, texto) => entrarPublico(chave, sala, p, texto);
+  switch (p.tipo) {
+    case 'delegacia': ent('delegacia', () => salaDelegacia('delegacia', 1100, 'Delegacia', '#f1c40f'), `🚓 ${p.nome}: balcão de serviço, procurados, celas e estande de tiro.`); break;
+    case 'prf': ent('prf', () => salaDelegacia('prf', 1000, 'Posto da PRF', '#2b4fa8'), '🚔 Posto da PRF: balcão, procurados e estande de tiro.'); break;
+    case 'bope': ent('sede_bope', () => salaDelegacia('sede_bope', 2800, 'Sede do BOPE · armaria', '#111111'), '💀 Base do BOPE: armaria (kit), quadro tático, treino, celas e estande.'); break;
+    case 'bombeiros': ent('bombeiros', salaBombeiros, '🚒 Quartel dos bombeiros: balcão, quadro de incêndios, vestiário e enfermaria.'); break;
+    case 'hospital': ent('hospital', salaHospital, '🏥 Hospital: recepção, enfermaria, farmácia e consultório.'); break;
+    case 'marinha': ent('comandonaval', salaComandoNaval, '⚓ Comando Naval: central de mísseis e controle dos navios.'); break;
+    case 'aerea': vestiario('Aeronáutica', 'aerea'); break;
+    case 'oficina': menuOficina(p.oficina); break;
+    case 'prefeitura': painelPrefeituraCidade(p.cidade); break;
+    case 'quartel': escolher('🎖️ Quartel do Exército', p.nome, [
+      { rotulo: jogador.perfil?.profissao === 'exercito' ? '🎖️ Comando: ordens e caçadas' : '🎖️ Alistar-se', fn: () => abrirServico(jogador.perfil?.profissao === 'exercito' ? 'trabalho' : 'empregos') },
+      { rotulo: '🔫 Arsenal', fn: () => usarArsenal() }]); break;
+  }
+}
+// painel da prefeitura de cada cidade nova (129): eleição e salário do prefeito da cidade
+async function painelPrefeituraCidade(c) {
+  let e = null, m = null;
+  try { [e, m] = await Promise.all([rede.cidades.estado(c), rede.cidades.campanha(c)]); } catch { aviso('Prefeitura da cidade: rode o SQL 129.', 3); return; }
+  const nome = NOMES_CIDADES[c], ops = [];
+  if (m != null) {
+    ops.push({ rotulo: `🗳️ Candidatar-se a prefeito de ${nome} (5.000)`, fn: () => { const sl = window.prompt('Seu slogan de campanha (até 60 letras):', ''); if (sl === null) return; rede.cidades.candidatar(c, sl).then(() => aviso('🗳️ Candidatura registrada! Peça votos.', 3)).catch((er) => aviso(er.message, 3)); } });
+    ops.push({ rotulo: `🗳️ Votar para prefeito de ${nome}`, fn: async () => {
+      const cs = await rede.cidades.candidatos(c, m).catch(() => []);
+      escolher(`🗳️ Prefeito de ${nome}`, cs.length ? 'Candidatos:' : 'Ninguém se candidatou ainda.', cs.map((k) => ({ rotulo: `${k.perfil?.nome || 'candidato'} · ${k.votos} votos${k.slogan ? ` · "${k.slogan}"` : ''}`, fn: () => rede.cidades.votar(c, k.jogador).then(() => aviso('🗳️ Voto registrado!', 2.5)).catch((er) => aviso(er.message, 3)) })));
+    } });
+  }
+  if (e?.prefeito === jogador.perfil.id) ops.push({ rotulo: '💰 Receber o salário do ciclo', fn: () => rede.cidades.salario(c).then((v) => aviso(v > 0 ? `🏛️ +${v.toLocaleString('pt-BR')} moedas` : 'Salário deste ciclo já recebido (ou cofre do Estado vazio).', 3)).catch((er) => aviso(er.message, 3)) });
+  escolher(`🏛️ Prefeitura de ${nome}`, `Prefeito: ${e?.pref?.nome || 'vago'}${m != null ? ' · 🗳️ campanha aberta' : ' · campanha fechada (abre nos 4 últimos ciclos do mandato)'} · salário até ${c === 'oyster' ? '8.000' : '6.000'} por ciclo (pago pelo Estado)`, ops);
 }
 const PASTEIS = ['#f2d16b', '#e8a87c', '#9fd3c7', '#f7f3e3', '#c8a2c8', '#f4b6b6', '#b5d99c', '#ffe0a3', '#a7c7e7'];
 const CINZAS = ['#9aa3ad', '#7c8794', '#b8bfc6', '#5f6b78', '#c9c2b6', '#8f8a80', '#a9b8c9', '#6e7f8f'];
@@ -15504,11 +15563,11 @@ function montarBarraAmarela(R, C) {
   for (const q of G.qs) {
     const e = especial[`${q.i},${q.j}`];
     if (e === 'praca') continue;
-    if (e === 'delegacia') { predioServico(R, q, '🚓 Delegacia de Barra Amarela', '#4c6fa8'); continue; }
-    if (e === 'prf') { predioServico(R, q, '🚔 Posto da PRF', '#3e6a9a', 10); continue; }
-    if (e === 'bombeiros') { predioServico(R, q, '🚒 Bombeiros', '#c0392b', 10); continue; }
-    if (e === 'hospital') { predioServico(R, q, '🏥 Hospital', '#f0f0f0', 16); continue; }
-    if (e === 'oficina') { predioServico(R, q, '🔧 Oficina', '#8a6d3b', 7); continue; }
+    if (e === 'delegacia') { predioServico(R, q, '🚓 Delegacia de Barra Amarela', '#4c6fa8', 12, 'delegacia', 'barra'); continue; }
+    if (e === 'prf') { predioServico(R, q, '🚔 Posto da PRF', '#3e6a9a', 10, 'prf', 'barra'); continue; }
+    if (e === 'bombeiros') { predioServico(R, q, '🚒 Bombeiros', '#c0392b', 10, 'bombeiros', 'barra'); continue; }
+    if (e === 'hospital') { predioServico(R, q, '🏥 Hospital', '#f0f0f0', 16, 'hospital', 'barra'); continue; }
+    if (e === 'oficina') { predioServico(R, q, '🔧 Oficina de Barra Amarela', '#8a6d3b', 7, 'oficina', 'barra'); continue; }
     if (e === 'estacao') { predioServico(R, q, '🚉 Estação de trem', '#a0522d', 9); continue; }
     if (e === 'empresas') { R.sprite('🏗️ Terrenos para empresas · em breve', q.x, 4, q.z, 0.5); continue; }
     for (const [dx, dz] of [[-10, -10], [10, -10], [-10, 10], [10, 10]]) {   // cidade do interior: casas baixas e coloridas
@@ -15524,6 +15583,7 @@ function montarBarraAmarela(R, C) {
   for (const [sx, sz] of [[-4.5, -4.5], [4.5, -4.5], [-4.5, 4.5], [4.5, 4.5]]) R.caixa(px + sx, 2.4, pz + sz, 0.4, 3.6, 0.4, R.M('#f2f2f2'));
   R.predios([[px, pz - 34, 22, 16, 12, '#f5f0e1'], [px, pz - 40, 6, 6, 26, '#f5f0e1'], [px + 30, pz + 30, 24, 18, 11, '#e9d9a8']]);
   R.sprite('⛪ Igreja Matriz', px, 30, pz - 40, 0.5); R.sprite('🏛️ Prefeitura de Barra Amarela', px + 30, 15, pz + 30, 0.55, 'rgba(110,80,20,.94)');
+  R.caixa(px + 30, 1.6, pz + 39.06, 3.2, 3.2, 0.12, R.M('#2b2b2b')); (R.portas ||= []).push({ x: px + 30, z: pz + 40.6, tipo: 'prefeitura', cidade: 'barra', nome: '🏛️ Prefeitura de Barra Amarela' });
   R.sprite('🟡 Barra Amarela', C.x, 40, C.z, 1.2, 'rgba(170,130,10,.94)');
   // favela a oeste: casinhas coloridas apertadas, umas em cima das outras
   const F = [], fx = G.x0 - 90, fz = C.z;
@@ -15535,12 +15595,13 @@ function montarBarraAmarela(R, C) {
 }
 function montarOysterRiver(R, C) {
   const rnd = rndSeed(9090), G = gradeCidade(R, C.x, C.z, 10, 8, 50, 14), L = [];
-  const servicos = { '0,0': ['🚓 Delegacia de Oyster River', '#4c6fa8', 18], '1,0': ['💀 Base do BOPE', '#1d1d1d', 12], '2,0': ['🚔 Superintendência da PRF', '#3e6a9a', 16],
-    '7,0': ['🚒 Bombeiros', '#c0392b', 12], '8,0': ['🏥 Hospital Central', '#f0f0f0', 30], '9,0': ['🎖️ Quartel do Exército', '#4b5a3a', 12],
-    '9,3': ['⚓ Marinha', '#24467a', 14], '9,4': ['✈️ Aeronáutica', '#3c5a7a', 14], '0,7': ['🔧 Oficina', '#8a6d3b', 8], '4,4': ['🏛️ Prefeitura de Oyster River', '#e9d9a8', 22], '5,7': ['🚌 Rodoviária', '#d9822b', 10] };
+  const servicos = { '0,0': ['🚓 Delegacia de Oyster River', '#4c6fa8', 18, 'delegacia'], '1,0': ['💀 Base do BOPE', '#1d1d1d', 12, 'bope'], '2,0': ['🚔 Superintendência da PRF', '#3e6a9a', 16, 'prf'],
+    '7,0': ['🚒 Bombeiros', '#c0392b', 12, 'bombeiros'], '8,0': ['🏥 Hospital Central', '#f0f0f0', 30, 'hospital'], '9,0': ['🎖️ Quartel do Exército', '#4b5a3a', 12, 'quartel'],
+    '9,3': ['⚓ Marinha', '#24467a', 14, 'marinha'], '9,4': ['✈️ Aeronáutica', '#3c5a7a', 14, 'aerea'], '0,7': ['🔧 Oficina de Oyster River', '#8a6d3b', 8, 'oficina'],
+    '4,4': ['🏛️ Prefeitura de Oyster River', '#e9d9a8', 22, 'prefeitura'], '5,7': ['🚌 Rodoviária', '#d9822b', 10] };
   for (const q of G.qs) {
     const sv = servicos[`${q.i},${q.j}`];
-    if (sv) { predioServico(R, { ...q, w: 40, d: 36 }, sv[0], sv[1], sv[2]); continue; }
+    if (sv) { predioServico(R, { ...q, w: 40, d: 36 }, sv[0], sv[1], sv[2], sv[3] || null, 'oyster'); continue; }
     if ((q.i === 1 || q.i === 8) && q.j >= 5 && q.j <= 6) { R.sprite('🏗️ Terrenos para empresas · em breve', q.x, 4, q.z, 0.5); continue; }
     const centro = Math.max(0, 1 - Math.hypot(q.x - C.x, q.z - C.z) / 330);   // cidade grande: arranha-céus no centro
     for (const [dx, dz] of [[-12, -12], [12, -12], [-12, 12], [12, 12]]) {
