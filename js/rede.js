@@ -209,6 +209,8 @@ function traduzirRpc(m) {
     'so as forcas armadas': 'Só as Forças Armadas pegam armas no Arsenal.',
   'precisa de autorizacao': 'Precisa da autorização de um Tenente para cima (ou do General Supremo), a mesma da arma pesada.',
   'aguarde para pegar o lancador': 'O lançador sai a cada 2 minutos. Aguarde.',
+  'so o governador': 'Só o governador faz isso.',
+  'ja e seguranca': 'Esse jogador já é segurança.',
   'sem autorizacao do laboratorio': 'Só jogadores autorizados pelo General Supremo pegam armadura.',
   'desertor sem liberacao': 'Desertor não entra na corporação sem a liberação de um oficial de patente alta (ou o perdão do administrador).',
   'patente baixa para liberar': 'Só oficial de patente alta libera desertor (Polícia/BOPE e Exército: Tenente para cima; PRF: Inspetor para cima).',
@@ -844,6 +846,16 @@ export const marinha = {
 // governo do estado (127): pedágio da PRF na Ponte do Continente
 export const governo = {
   pagarPedagio: () => rpc('pagar_pedagio'),
+  // 128: governador, eleição estadual, salário e seguranças
+  estado: async () => (await sel(sb.from('governo').select('*, gov:perfis!governo_governador_fkey(nome)')))[0] || null,
+  cofre: async () => (await sel(sb.from('estado_cofre').select('saldo')))[0]?.saldo ?? 0,
+  campanha: () => rpc('campanha_gov'),
+  candidatos: (m) => sel(sb.from('candidatos_gov').select('*, perfil:perfis!candidatos_gov_jogador_fkey(nome)').eq('mandato', m).order('votos', { ascending: false })),
+  candidatar: (slogan) => rpc('candidatar_governador', { p_slogan: slogan }),
+  votar: (id) => rpc('votar_governador', { p_candidato: id }),
+  processar: () => rpc('processar_governo'),
+  salario: () => rpc('salario_governador'),
+  nomear: (vaga, id) => rpc('nomear_seguranca_gov', { p_vaga: vaga, p_jogador: id }),
 };
 // laboratório da Área 51 (124): armaduras e autorização do General Supremo
 export const lab = {

@@ -1521,6 +1521,7 @@ function acaoContexto() {
   if (BANCAS.some((b) => perto(b, 3.2))) { abrirServico('jornal'); return; }
   if (perto(GUARITA_ALIST, 3.2)) { menuGuarita(); return; }
   if (perto(VEST_AEREA, 2)) { vestiario('Aeronáutica', 'aerea'); return; }
+  if (regiaoNorte && perto(PAINEL_GOVERNO, 3)) { painelGoverno(); return; }
   if (area51 && perto(LAB_A51, 2.5)) { entrarPublico('laboratorio', salaLaboratorio, LAB_A51, '🧪 Laboratório da Área 51: armaduras de tecnologia alienígena.'); return; }
   if (perto(CENTRAL_MISSEIS, 4)) { entrarPublico('comandonaval', salaComandoNaval, CENTRAL_MISSEIS, '⚓ Comando Naval: central de mísseis e controle dos navios.'); return; }
   if ((jogador.embarcado || navioNoPier()) && acaoNavio()) return;
@@ -1648,6 +1649,7 @@ async function atenderOcorrencia(o) {
 }
 
 // ---------------------------------------------------------------- prefeitura, outdoors e carros
+let governadorAtual = null;
 let prefeitoAtual = null, segurancas = [], tempoPrefeitura = 3, tempoCarros = 2;
 async function carregarPrefeitura() {
   const [pf, outs] = await Promise.all([rede.prefeitura.estado(), rede.prefeitura.outdoors()]);
@@ -1663,6 +1665,7 @@ function atualizarPrefeitura(dt) {
   if (tempoPrefeitura <= 0) {
     tempoPrefeitura = 60;
     rede.prefeitura.processar().catch(() => {}).finally(() => carregarPrefeitura().catch(() => {}));
+    rede.governo.processar().then(() => rede.governo.estado()).then((g) => { governadorAtual = g?.governador || null; if (governadorAtual === jogador.perfil.id) return rede.governo.salario().then((v) => { if (v > 0) aviso(`🏛️ Salário de governador: +${v.toLocaleString('pt-BR')} moedas (do cofre do Estado)`, 4); }); }).catch(() => {});
     if (prefeitoAtual === jogador.perfil.id) rede.prefeitura.salario().then((v) => { if (v > 0) aviso(`Salário de prefeito: +${v.toLocaleString('pt-BR')} moedas`, 4); }).catch(() => {});
   }
   if (tempoCarros <= 0) { tempoCarros = 10; rede.carros.listar().then(sincronizarCarros).catch(() => {}); }
@@ -8788,6 +8791,7 @@ function contexto() {
   if (perto(CONTRABANDISTA, 3.2)) return ['contrabandista: arma militar e alicate de corte', 'Negociar'];
   { const cn = contextoNavio(); if (cn) return cn; }
   if (perto(VEST_AEREA, 2)) return ['vestiário da Aeronáutica (militares do Exército)', 'Farda'];
+  if (regiaoNorte && perto(PAINEL_GOVERNO, 3)) return ['painel do Governo do Estado (eleição e governador)', '🏛️ Governo'];
   if (area51 && perto(LAB_A51, 2.5)) return ['entrar no laboratório (armaduras)', '🧪 Entrar'];
   if (perto(CENTRAL_MISSEIS, 4)) return ['entrar no Comando Naval (mísseis e navios)', '⚓ Entrar'];
   if (perto(GUARITA_ALIST, 3.2)) return [militar() ? 'guarita do Exército: pedidos de alistamento' : 'guarita do Exército: alistamento e licitação de rações', 'Guarita'];
@@ -15319,6 +15323,30 @@ const holofotesA51 = [];
 // Tudo ao norte da ilha é montado só quando o jogador chega perto (z < -1250) e desmontado quando ele volta (z > -1100):
 // o celular não carrega o que está longe. As cidades novas (Barra Amarela e Oyster River) entram nas próximas etapas.
 const PRECO_PEDAGIO = 30;
+const PAINEL_GOVERNO = { x: mundo.SEDE_GOVERNO.x + 30, z: mundo.SEDE_GOVERNO.z + mundo.SEDE_GOVERNO.d / 2 + 18 };
+// painel do Governo do Estado (128): eleição de governador, salário e seguranças
+async function painelGoverno() {
+  let g = null, cofre = 0, m = null;
+  try { [g, cofre, m] = await Promise.all([rede.governo.estado(), rede.governo.cofre(), rede.governo.campanha()]); } catch { aviso('Governo do Estado: rode o SQL 128.', 3); return; }
+  const eu = jogador.perfil.id, souGov = g?.governador === eu, ops = [];
+  if (m != null) {
+    ops.push({ rotulo: '🗳️ Candidatar-se a governador (10.000)', fn: () => { const sl = window.prompt('Seu slogan de campanha (até 60 letras):', ''); if (sl === null) return; rede.governo.candidatar(sl).then(() => aviso('🗳️ Candidatura registrada! Peça votos.', 3)).catch((e) => aviso(e.message, 3)); } });
+    ops.push({ rotulo: '🗳️ Votar para governador', fn: async () => {
+      const cs = await rede.governo.candidatos(m).catch(() => []);
+      escolher('🗳️ Votar para governador', cs.length ? 'Candidatos:' : 'Ninguém se candidatou ainda.', cs.map((c) => ({ rotulo: `${c.perfil?.nome || 'candidato'} · ${c.votos} votos${c.slogan ? ` · "${c.slogan}"` : ''}`, fn: () => rede.governo.votar(c.jogador).then(() => aviso('🗳️ Voto registrado!', 2.5)).catch((e) => aviso(e.message, 3)) })));
+    } });
+  }
+  if (souGov) {
+    ops.push({ rotulo: '🕴️ Seguranças (até 5)', fn: () => escolher('🕴️ Seguranças do Governador', 'Escolha a vaga:', [1, 2, 3, 4, 5].map((v) => ({ rotulo: `Vaga ${v}${g[`seg${v}`] ? ' (ocupada)' : ''}`, fn: () => {
+      const lista = [...remotos].filter(([, r]) => r.meta?.nome).map(([id, r]) => ({ rotulo: r.meta.nome, fn: () => rede.governo.nomear(v, id).then(() => aviso(`🕴️ ${r.meta.nome} é seu segurança.`, 3)).catch((e) => aviso(e.message, 3)) }));
+      if (g[`seg${v}`]) lista.unshift({ rotulo: '❌ Tirar quem está na vaga', fn: () => rede.governo.nomear(v, null).then(() => aviso('Vaga liberada.', 2.5)).catch((e) => aviso(e.message, 3)) });
+      escolher(`🕴️ Vaga ${v}`, lista.length ? 'Jogadores online:' : 'Ninguém online.', lista);
+    } }))) });
+    ops.push({ rotulo: '🚗🚁 Carro oficial e helicóptero: estão na sua garagem', fn: () => {} });
+  }
+  const segs = [1, 2, 3, 4, 5].map((v) => g?.[`seg${v}`]).filter(Boolean).length;
+  escolher('🏛️ Governo do Estado', `Governador: ${g?.gov?.nome || 'vago'} · seguranças: ${segs}/5 · cofre: ${Number(cofre).toLocaleString('pt-BR')}${m != null ? ' · 🗳️ campanha aberta' : ' · campanha fechada (abre nos 4 últimos ciclos do mandato)'}`, ops);
+}
 let regiaoNorte = null, pedagioPagoAte = 0, cancelaPedagio = null;
 function pertoPedagio() { return Math.hypot(jogador.pos.x - mundo.PEDAGIO.x, jogador.pos.z - mundo.PEDAGIO.z) < 16; }
 function isentoPedagio() { const p = jogador.perfil, c = jogador.carro; return !!(p?.cargo === 'admin' || p?.prf || p?.policial || militar() || c?.servico || c?.voa); }
@@ -15403,6 +15431,7 @@ function montarNorte() {
   caixa(S.x, 0.1, S.z, S.w + 40, 0.1, S.d + 40, M('#cfc8b8'));
   for (const sx of [-1, 1]) caixa(S.x + sx * 22, 9, S.z + S.d / 2 + 14, 0.4, 18, 0.4, branco);
   sprite('🏛️ Sede do Governo do Estado', S.x, 46, S.z + S.d / 2 + 6, 1.1, 'rgba(110,80,20,.94)');
+  caixa(PAINEL_GOVERNO.x, 0.8, PAINEL_GOVERNO.z, 1.6, 1.6, 0.4, M('#3a2e14')); sprite('🗳️ Painel do Governo', PAINEL_GOVERNO.x, 3, PAINEL_GOVERNO.z, 0.5);
   Promise.resolve(carregarGLB('assets/modelos/palacio_governo.glb')).then((gl) => {
     if (regiaoNorte?.g !== g) return;   // já saiu da região
     const m = prepararEstatico(gl.scene), b = new THREE.Box3().setFromObject(m), k = S.w / Math.max(0.01, b.max.x - b.min.x);
