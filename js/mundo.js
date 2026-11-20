@@ -670,20 +670,20 @@ export const ILHA = { x0: -1000, x1: 1100, z0: -1528, z1: 1112 };   // a terra; 
 // Ao norte da ilha, depois do canal: a ponte sai do alto da Serra (x = -160), cruza o mar e chega ao pedágio da PRF.
 // Da praça do pedágio a rodovia vai até a Sede do Governo do Estado e se divide para Barra Amarela (oeste) e
 // Oyster River (litoral, mais ao norte). As cidades ainda estão em obras: a estrada termina numa barreira.
-export const CONTINENTE = { x0: -3600, x1: 1400, z0: -7600, z1: -1960 };
+export const CONTINENTE = { x0: -3000, x1: 1400, z0: -5000, z1: -1960 };   // 20e: as cidades chegaram mais perto da ponte
 export const PONTE = { x: -160, larg: 12, z0: -1528, z1: -1975, alto: 24 };   // tabuleiro alto no meio (navios passam por baixo)
 export const PEDAGIO = { x: -160, z: -2060 };
 export const SEDE_GOVERNO = { x: -300, z: -3070, w: 170, d: 170 };   // o palácio é quase quadrado
-export const BARRA_AMARELA = { nome: 'Barra Amarela', x: -1800, z: -3300 };
-export const OYSTER_RIVER = { nome: 'Oyster River', x: 900, z: -6000 };
+export const BARRA_AMARELA = { nome: 'Barra Amarela', x: -1400, z: -2500 };   // ~1,3 km do pedágio
+export const OYSTER_RIVER = { nome: 'Oyster River', x: 700, z: -3900 };      // ~2 km do pedágio
 // rodovia (pontos do eixo, 12 m de largura): ponte → pedágio → sede; ramais para as duas cidades (até as obras)
 export const RODOVIAS = [
   [[PONTE.x, PONTE.z1], [PEDAGIO.x, PEDAGIO.z], [PONTE.x, -2700], [SEDE_GOVERNO.x + 30, SEDE_GOVERNO.z + SEDE_GOVERNO.d / 2 + 30]],
-  [[PONTE.x, -2700], [-900, -2950], [-1400, -3300], [BARRA_AMARELA.x + 165, BARRA_AMARELA.z]],   // entra pela rua da cidade
-  [[SEDE_GOVERNO.x + 30, SEDE_GOVERNO.z + SEDE_GOVERNO.d / 2 + 30], [SEDE_GOVERNO.x + SEDE_GOVERNO.w / 2 + 45, SEDE_GOVERNO.z + SEDE_GOVERNO.d / 2 + 30], [SEDE_GOVERNO.x + SEDE_GOVERNO.w / 2 + 45, SEDE_GOVERNO.z - SEDE_GOVERNO.d / 2 - 30], [300, -4200], [OYSTER_RIVER.x, -5500], [OYSTER_RIVER.x, OYSTER_RIVER.z + 266]],
+  [[PONTE.x, BARRA_AMARELA.z], [BARRA_AMARELA.x + 165, BARRA_AMARELA.z]],   // entra pela rua da cidade
+  [[SEDE_GOVERNO.x + 30, SEDE_GOVERNO.z + SEDE_GOVERNO.d / 2 + 30], [SEDE_GOVERNO.x + SEDE_GOVERNO.w / 2 + 45, SEDE_GOVERNO.z + SEDE_GOVERNO.d / 2 + 30], [SEDE_GOVERNO.x + SEDE_GOVERNO.w / 2 + 45, SEDE_GOVERNO.z - SEDE_GOVERNO.d / 2 - 30], [OYSTER_RIVER.x, OYSTER_RIVER.z + 400], [OYSTER_RIVER.x, OYSTER_RIVER.z + 266]],
 ];
 export const LARG_RODOVIA = 12;
-export const OYSTER_MAR = { x0: 150, z1: -6420 };   // ao norte daqui (z menor), em Oyster River, é mar
+export const OYSTER_MAR = { x0: OYSTER_RIVER.x - 750, z1: OYSTER_RIVER.z - 420 };   // ao norte daqui (z menor), em Oyster River, é mar
 // altura do tabuleiro da ponte: sobe da praia, fica alta no canal e desce no continente
 export function alturaPonte(z) {
   const a = -z;
@@ -1021,7 +1021,7 @@ function montarChaos() {
   const terreno = new THREE.Mesh(geo, MAT.campo); terreno.position.z = -1340; terreno.receiveShadow = true; ctx.scene.add(terreno);
   const cone = new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0);
   const morros = [];
-  for (let k = 0; k < 22; k++) morros.push([entre(-3400, 1200), -entre(7300, 7550), entre(90, 180), entre(70, 140)]);   // serra de fundo: no fim do continente (20a: antes ficava onde agora passa a rodovia)
+  for (let k = 0; k < 22; k++) morros.push([entre(-2900, -400), -entre(4750, 4950), entre(90, 180), entre(70, 140)]);   // serra de fundo: no fim do continente (20a: antes ficava onde agora passa a rodovia)
   const im = new THREE.InstancedMesh(cone, MAT.morro, morros.length);
   morros.forEach(([x, z, r, h], k) => { _m.compose(_v.set(x, 0, z), _q.identity(), _e.set(r, h, r)); im.setMatrixAt(k, _m); im.setColorAt(k, _c.set(escolher(['#7d8f63', '#6f8259', '#8a9a6c', '#76866a']))); });
   im.receiveShadow = true; ctx.scene.add(im);

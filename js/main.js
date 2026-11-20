@@ -1449,6 +1449,8 @@ function acaoContexto() {
   if (jogador.onibus) { acaoNoOnibus(); return; }
   if (podeSaltarCarona()) { saltarDeCarona(); return; }
   if (jogador.voo) { aviso('Você está voando: desce quando o avião chegar.', 2); return; }
+  if (jogador.tremCont) { aviso('🚆 Você desce quando o trem chegar na estação.', 2); return; }
+  if (naPlataformaTrem()) { acaoTremCont(); return; }
   if (jogador.trem) {
     const est = ferrovia.estadoDe(jogador.trem.li, jogador.trem.k);
     if (est?.parado === jogador.trem.origem) desembarcar(jogador.trem.origem); else aviso(contexto()[0]);
@@ -8074,7 +8076,7 @@ function montarLocais() {
   LOCAIS.push({ nome: 'Avenida Central', x: 0, z: ruaC(2) });
   for (const a of AEROPORTOS) LOCAIS.push({ nome: `✈️ ${a.nome}`, x: a.balcao.x, z: a.balcao.z + (a.eixo === 'x' ? 4 : 0) });
   LOCAIS.push({ nome: '🛸 Área 51 (portão)', x: mundo.AREA51.x1 + 8, z: 0 });
-  LOCAIS.push({ nome: '🌉 Ponte do Continente (pedágio)', x: mundo.PEDAGIO.x, z: mundo.PEDAGIO.z + 30 }, { nome: '🏛️ Sede do Governo do Estado', x: mundo.SEDE_GOVERNO.x + 30, z: mundo.SEDE_GOVERNO.z + mundo.SEDE_GOVERNO.d / 2 + 30 }, { nome: '🟡 Barra Amarela', x: mundo.BARRA_AMARELA.x + 140, z: mundo.BARRA_AMARELA.z }, { nome: '🦪 Oyster River', x: mundo.OYSTER_RIVER.x, z: mundo.OYSTER_RIVER.z + 240 });
+  LOCAIS.push({ nome: '🌉 Ponte do Continente (pedágio)', x: mundo.PEDAGIO.x, z: mundo.PEDAGIO.z + 30 }, { nome: '🏛️ Sede do Governo do Estado', x: mundo.SEDE_GOVERNO.x + 30, z: mundo.SEDE_GOVERNO.z + mundo.SEDE_GOVERNO.d / 2 + 30 }, { nome: '🟡 Barra Amarela', x: mundo.BARRA_AMARELA.x + 140, z: mundo.BARRA_AMARELA.z }, { nome: '🦪 Oyster River', x: mundo.OYSTER_RIVER.x, z: mundo.OYSTER_RIVER.z + 240 }, { nome: '🚆 Estação do Continente (trem para Barra Amarela)', x: -204, z: -2152 });
   LOCAIS.push({ nome: '🪖 Quartel do Exército (portão)', x: mundo.QUARTEL.x0 - 8, z: mundo.QUARTEL.portao.z });
   LOCAIS.push({ nome: '✈️ Base Aérea (portão)', x: mundo.BASE_AEREA.portao.x, z: mundo.BASE_AEREA.z0 - 8 });
   LOCAIS.push({ nome: '⚓ Base Naval (portão)', x: mundo.BASE_NAVAL.portao.x, z: mundo.BASE_NAVAL.z0 - 8 });
@@ -8266,6 +8268,7 @@ function atualizarJogador(dt) {
   if (j.ave) { voarAve(dt, dir, forca); return; }
   if (j.voo) { seguirVoo(); return; }
   if (j.onibus) { seguirOnibus(); av.mixer.update(dt); return; }
+  if (j.tremCont) { seguirTremCont(); av.mixer.update(dt); return; }
   if (j.passageiro) {
     seguirComoPassageiro(); av.mixer.update(dt);
     const rp = j.passageiro && remotos.get(j.passageiro.piloto);
@@ -8575,6 +8578,7 @@ function veiculoDoJogador() {
   if (jogador.carro?.mesh) return jogador.carro.mesh;
   if (jogador.onibus) return onibusNpc.find((b) => b.ativo && b.L === jogador.onibus.L && b.m === jogador.onibus.m)?.mesh || null;
   if (jogador.voo) return npcAvioes[0]?.mesh || null;
+  if (jogador.tremCont) return regiaoNorte?.trem?.carros[1].g || null;
   if (jogador.passageiro) return jogador.passageiro.c?.obj || null;
   return null;
 }
@@ -8736,6 +8740,8 @@ function contexto() {
   if (jogador.onibus) return contextoNoOnibus();
   if (podeSaltarCarona()) return ['saltar de paraquedas (paraquedista)', '🪂 Saltar'];
   if (jogador.voo) return [`em voo para ${AERO[jogador.voo.d].nome}`, 'Voando'];
+  if (jogador.tremCont) { const e = estadoTremCont(agoraServidor() / 1000); return [`🚆 no trem para ${NOME_EST[jogador.tremCont.para]}${e.chega ? ` · chega em ${Math.ceil(e.chega)} s` : ''}`, 'Viajando']; }
+  { const tc = contextoTremCont(); if (tc) return tc; }
   if (jogador.passageiro) return passageiroPodeDescer() ? ['descer do helicóptero', 'Descer'] : ['passageiro no helicóptero', 'Voando'];
   if (jogador.carro?.taxi) return textoTaxi();
   if (aula && jogador.carro?.aula === aula && !aula.voo) return textoAula();
@@ -12475,6 +12481,24 @@ const LINHAS = [
     rua: [[54, 945], [1050, 945], [1050, 1045], [960, 1045], [960, 945], [-27, 945], [-27, 999], [27, 999], [27, 945], [54, 945]],
     paradas: [[54, 945, '🚌 Mini Rodoviária de Porto Sul', 'l'], [600, 945, 'Base Naval', 'l'], [1050, 975, 'Morro do Porto · Entrada'], [1050, 1020, 'Morro do Porto · Meio'], [1005, 1045, 'Morro do Porto · Parte Alta'], [960, 990, 'Morro do Porto · Baixada'], [0, 999, 'Porto Sul · Centro']] },
 ];
+// intermunicipais do continente (20e): saem da frente da Rodoviária (como as circulares), sobem a Rodovia Norte,
+// atravessam a Serra, a ponte e o pedágio (ônibus é isento) e dão a volta no terminal de cada cidade nova
+{ const ida = [[200, -216], [108, -216], [108, -108], [-162, -108], [-162, -1107], [-160, -1380]];
+  const fim = [[-160, -1380], [-162, -1107], [-162, -108], [108, -108], [108, -270], [216, -270], [216, -216], [200, -216]];
+  // Barra Amarela: rodovia em z = -2500 e a volta no quarteirão do terminal; Oyster River: pela Sede e a volta na rodoviária
+  const barra = [[-160, -2500], [-1348, -2500], [-1348, -2552], [-1244, -2552], [-1244, -2500]];
+  const oyster = [[-160, -2700], [-270, -2955], [-170, -2955], [-170, -3185], [700, -3500], [700, -3708], [764, -3708], [764, -3644], [700, -3644]];
+  const voltaB = [[-160, -2500]], voltaO = [[700, -3500], [-170, -3185], [-170, -2955], [-270, -2955], [-160, -2700]];
+  LINHAS.push(
+    { id: 11, nome: 'Linha 11 · Barra Amarela', curto: 'Barra Amarela', cor: '#d4a017', k: 3, fase: 6, modelos: EXEC, circular: true, inter: true,
+      rua: [...ida, ...barra, ...voltaB, ...fim],
+      paradas: [ROD, [-162, -500, 'Rodovia Norte', 'n'], [-160, -2160, '🚧 Pedágio · Estação do Continente', 'n'], [-1322, -2552, '🚌 Terminal de Barra Amarela', 'l'],
+        [-160, -2200, '🚧 Pedágio · Estação do Continente', 's'], [-162, -660, 'Rodovia Norte', 's']] },
+    { id: 12, nome: 'Linha 12 · Oyster River', curto: 'Oyster River', cor: '#1f8fbf', k: 4, fase: 11, modelos: EXEC, circular: true, inter: true,
+      rua: [...ida, ...oyster, ...voltaO, ...fim],
+      paradas: [ROD, [-162, -500, 'Rodovia Norte', 'n'], [-160, -2160, '🚧 Pedágio · Estação do Continente', 'n'], [-170, -3080, '🏛️ Sede do Governo', 'n'], [700, -3676, '🚌 Rodoviária de Oyster River', 'n'],
+        [-170, -3060, '🏛️ Sede do Governo', 's'], [-160, -2200, '🚧 Pedágio · Estação do Continente', 's'], [-162, -660, 'Rodovia Norte', 's']] });
+}
 const V_ONIBUS = 10, ESPERA_PONTO = 6, FOLGA_FILA = 25;
 // caminho de direção (faixa da direita, curvas arredondadas) de uma linha: da plataforma, pela cidade, de volta à fila e à plataforma
 function montarCaminho(L) {
@@ -12624,6 +12648,7 @@ function corpoOnibus(cor, modelo = 'onibus') { return civico.modeloCarro(modelo,
 const PONTOS3D = [], pontosBase = {}, pontosPedidos = new Set();
 let tempoPontos3d = 0;
 function tipoPonto(x, z, nome) {
+  if (z < -1500) return 'ponto_cidade';   // continente
   if (/aeroporto/i.test(nome || '')) return 'ponto_aeroporto';
   if (Math.abs(z) >= 880) return Math.hypot(x, Math.abs(z) - 934) < 95 ? 'ponto_aeroporto' : 'ponto_pichado';   // cidades e morros
   if (/rodovia/i.test(nome || '')) return 'ponto_pichado';
@@ -13527,6 +13552,7 @@ function prepararTransporte() {
   for (const L of LINHAS) mundo.semEstacionar(L.pts);
   for (const k of ['B', 'C', 'D']) mundo.semEstacionar(CATEGORIAS[k].rota.pts);
   for (const [x0, z0, x1, z1] of RODOVIAS) mundo.abrirTrilha([[x0, z0], [x1, z1]], 9);
+  mundo.abrirTrilha([[-162, -945], [-162, -1107], [-160, -1380]], 9);   // intermunicipais subindo a Serra até a ponte
   for (const c of RODO_CIDADES) mundo.abrirTrilha([[c.x0, c.z], [c.x1, c.z]], 4);
   mundo.limparArea(RODO.x0 - 1, RODO.z0 - 1, TERMINAL_RODO.x1 + 1, RODO.z1 + 1);   // terminal inteiro (plataformas, pátio e saguão)
   mundo.limparArea(CENTRAL.x0 - 1, CENTRAL.z0 - 1, CENTRAL.x1 + 1, CENTRAL.z1 + 1); for (const S of SETORES) mundo.semEstacionar(S.cam.pts);
@@ -15372,6 +15398,7 @@ function atualizarRegioes() {
     } }
   if (!regiaoNorte && z < -1250) montarNorte();
   else if (regiaoNorte && z > -1100) desmontarNorte();
+  atualizarTremCont();
   if (cancelaPedagio) {   // a cancela só segura quem está de carro e não pagou (a pé passa pelo lado da cabine)
     const fechada = !!jogador.carro && !jogador.carro.voa && !pedagioLivre();
     cancelaPedagio.col.off = !fechada; cancelaPedagio.braco.rotation.z = THREE.MathUtils.lerp(cancelaPedagio.braco.rotation.z, fechada ? 0 : 1.35, 0.15);
@@ -15444,6 +15471,133 @@ function montarNorte() {
     m.scale.setScalar(k); m.position.set(S.x - (b.min.x + b.max.x) / 2 * k, -b.min.y * k + 0.15, S.z - (b.min.z + b.max.z) / 2 * k); g.add(m);
   }).catch(() => { caixa(S.x, 12, S.z, S.w * 0.8, 24, S.d * 0.6, M('#e8e3d6')); });
   { const c = { tipo: 'caixa', x0: S.x - S.w * 0.45, x1: S.x + S.w * 0.45, z0: S.z - S.d * 0.4, z1: S.z + S.d * 0.33 }; colisores.push(c); cols.push(c); }
+  montarTremCont(g, M, caixa, sprite);
+}
+// ---------------------------------------------------------------- trem intermunicipal (20e): Estação do Continente ↔ Barra Amarela
+// Um trem de ida e volta (locomotiva nas duas pontas) anda pelo relógio do servidor: todos veem o mesmo trem.
+// A Estação do Continente fica ao lado da praça do pedágio (quem vem da ilha atravessa a ponte e embarca ali).
+const TREM_CONT = { pts: [[-200, -2112], [-200, -2200], [-1120, -2330], [-1302, -2330]], parada: 30, v: 22, acel: 12, preco: 5 };
+{ // traçado com as curvas arredondadas e reamostrado a cada metro
+  const P = TREM_CONT.pts, cru = [P[0]];
+  for (let i = 1; i < P.length - 1; i++) {
+    const a = P[i - 1], b = P[i], c = P[i + 1], l1 = Math.hypot(b[0] - a[0], b[1] - a[1]), l2 = Math.hypot(c[0] - b[0], c[1] - b[1]), r = Math.min(120, l1 * 0.4, l2 * 0.4);
+    const q0 = [b[0] + (a[0] - b[0]) / l1 * r, b[1] + (a[1] - b[1]) / l1 * r], q2 = [b[0] + (c[0] - b[0]) / l2 * r, b[1] + (c[1] - b[1]) / l2 * r];
+    for (let k = 0; k <= 24; k++) { const t = k / 24, u = 1 - t; cru.push([u * u * q0[0] + 2 * u * t * b[0] + t * t * q2[0], u * u * q0[1] + 2 * u * t * b[1] + t * t * q2[1]]); }
+  }
+  cru.push(P[P.length - 1]);
+  const ac = [0]; for (let i = 1; i < cru.length; i++) ac.push(ac[i - 1] + Math.hypot(cru[i][0] - cru[i - 1][0], cru[i][1] - cru[i - 1][1]));
+  const L = ac[ac.length - 1], X = [], Z = [];
+  for (let d = 0, j = 0; d <= L; d += 1) { while (ac[j + 1] < d) j++; const f = (d - ac[j]) / ((ac[j + 1] - ac[j]) || 1); X.push(cru[j][0] + (cru[j + 1][0] - cru[j][0]) * f); Z.push(cru[j][1] + (cru[j + 1][1] - cru[j][1]) * f); }
+  Object.assign(TREM_CONT, { L, X, Z, sA: 40, sB: L - 42 });
+  const d = TREM_CONT.sB - TREM_CONT.sA; TREM_CONT.viagem = d / TREM_CONT.v + TREM_CONT.acel; TREM_CONT.ciclo = 2 * (TREM_CONT.parada + TREM_CONT.viagem);
+  // plataformas (retângulos) ao lado do trem parado em cada estação
+  const plat = (s, lado) => { const p = ptTrem(s), n = [Math.cos(p.ang), -Math.sin(p.ang)]; return { x: p.x + n[0] * lado * 3.6, z: p.z + n[1] * lado * 3.6, ang: p.ang }; };
+  TREM_CONT.platA = plat(TREM_CONT.sA, 1); TREM_CONT.platB = plat(TREM_CONT.sB, -1);
+}
+function ptTrem(s) {
+  const T = TREM_CONT, f = THREE.MathUtils.clamp(s, 0, T.L - 1.001), i = Math.floor(f), k = f - i;
+  const x = T.X[i] + (T.X[i + 1] - T.X[i]) * k, z = T.Z[i] + (T.Z[i + 1] - T.Z[i]) * k;
+  return { x, z, ang: Math.atan2(T.X[i + 1] - T.X[i], T.Z[i + 1] - T.Z[i]) };
+}
+// estado do trem no tempo t: s (centro do trem), parado em 'A' (Continente) ou 'B' (Barra Amarela), resta / chega
+function estadoTremCont(t) {
+  const T = TREM_CONT, p = ((t % T.ciclo) + T.ciclo) % T.ciclo, d = T.sB - T.sA;
+  const perfil = (u) => { const v = d / (T.viagem - T.acel), a = v / T.acel; if (u < T.acel) return 0.5 * a * u * u; if (u < T.viagem - T.acel) return 0.5 * v * T.acel + v * (u - T.acel); const r = T.viagem - u; return d - 0.5 * a * r * r; };
+  if (p < T.parada) return { s: T.sA, parado: 'A', resta: T.parada - p };
+  if (p < T.parada + T.viagem) return { s: T.sA + perfil(p - T.parada), vai: 'B', chega: T.parada + T.viagem - p };
+  if (p < 2 * T.parada + T.viagem) return { s: T.sB, parado: 'B', resta: 2 * T.parada + T.viagem - p };
+  return { s: T.sB - perfil(p - 2 * T.parada - T.viagem), vai: 'A', chega: T.ciclo - p };
+}
+const NOME_EST = { A: 'Estação do Continente', B: 'Estação de Barra Amarela' };
+function montarTremCont(g, M, caixa, sprite) {
+  const T = TREM_CONT;
+  // lastro, trilhos (faixas contínuas) e dormentes (uma malha só)
+  const faixa = (larg, y, mat, desl = 0) => {
+    const pts = [], idx = [];
+    for (let k = 0; k < T.X.length; k++) {
+      const k2 = Math.min(k + 1, T.X.length - 1), k1 = Math.max(k2 - 1, 0), ang = Math.atan2(T.X[k2] - T.X[k1], T.Z[k2] - T.Z[k1]), nx = Math.cos(ang), nz = -Math.sin(ang);
+      for (const sx of [-larg / 2, larg / 2]) pts.push(T.X[k] + nx * (sx + desl), y, T.Z[k] + nz * (sx + desl));
+      if (k) { const a = (k - 1) * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, mat); m.material.side = THREE.DoubleSide; m.receiveShadow = true; g.add(m);
+  };
+  faixa(4, 0.1, M('#6f655a', { polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
+  const aco = M('#9aa0a6', { metalness: 0.7, roughness: 0.35 }); faixa(0.12, 0.32, aco, -0.72); faixa(0.12, 0.32, aco, 0.72);
+  { const n = Math.floor(T.L / 1.6), geo = new THREE.BoxGeometry(2.6, 0.14, 0.26), im = new THREE.InstancedMesh(geo, M('#5a4430'), n), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+    for (let k = 0; k < n; k++) { const p = ptTrem(k * 1.6); q.setFromEuler(e.set(0, p.ang, 0)); m4.compose(new THREE.Vector3(p.x, 0.2, p.z), q, new THREE.Vector3(1, 1, 1)); im.setMatrixAt(k, m4); }
+    im.receiveShadow = true; g.add(im); }
+  // plataformas, cobertura e placa
+  for (const [pl, nome] of [[T.platA, NOME_EST.A], [T.platB, NOME_EST.B]]) {
+    caixa(pl.x, 0.55, pl.z, 4.4, 1.1, 64, M('#cfc8b8'), false, pl.ang);
+    const nx = Math.cos(pl.ang), nz = -Math.sin(pl.ang);
+    caixa(pl.x + nx * 1.2, 4.2, pl.z + nz * 1.2, 3.4, 0.25, 40, M('#2e5fa8'), false, pl.ang);
+    for (const d of [-16, 0, 16]) caixa(pl.x + nx * 1.8 + Math.sin(pl.ang) * d, 2.6, pl.z + nz * 1.8 + Math.cos(pl.ang) * d, 0.25, 3.2, 0.25, M('#555'), false, pl.ang);
+    sprite(`🚆 ${nome}`, pl.x, 6.2, pl.z, 0.6, 'rgba(46,95,168,.94)');
+  }
+  // o trem: locomotiva, dois carros de passageiros e locomotiva (vai e volta sem manobrar)
+  const corpo = M('#f2c230', { roughness: 0.4, metalness: 0.2 }), faixaAzul = M('#2e5fa8'), vidro = M('#1d2a36', { roughness: 0.1, metalness: 0.5 }), escuro = M('#2a2d33');
+  const carros = [];
+  for (const [k, tipo] of [[0, 'loco'], [1, 'carro'], [2, 'carro'], [3, 'loco']]) {
+    const c = new THREE.Group(), len = 14.4;
+    const bx = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; c.add(m); return m; };
+    bx(3.1, 0.5, len, escuro, 0, 0.75, 0);
+    bx(3.2, 3.0, len, corpo, 0, 2.5, 0); bx(3.22, 0.35, len, faixaAzul, 0, 1.6, 0);
+    if (tipo === 'carro') for (let z = -5.5; z <= 5.5; z += 2.2) bx(3.26, 1, 1.5, vidro, 0, 2.9, z);
+    else { const fz = k === 0 ? len / 2 : -len / 2; bx(2.6, 1.1, 0.12, vidro, 0, 3.1, fz + (k === 0 ? 0.02 : -0.02)); bx(3.1, 0.6, 0.2, faixaAzul, 0, 1.6, fz); }
+    bx(3.0, 0.2, len - 0.4, M('#c3c8cd'), 0, 4.1, 0);
+    g.add(c); carros.push({ g: c, off: (1.5 - k) * 15 });
+  }
+  const rot = sprite('🚆 Expresso Barra Amarela', 0, 6, 0, 0.5, 'rgba(46,95,168,.94)');
+  regiaoNorte.trem = { carros, rot };
+  // não deixa nada estacionar em cima da linha
+  mundo.semEstacionar(T.pts);
+}
+function atualizarTremCont() {
+  const R = regiaoNorte?.trem; if (!R) return;
+  const e = estadoTremCont(agoraServidor() / 1000);
+  for (const c of R.carros) {
+    const a = ptTrem(e.s + c.off + 5), b = ptTrem(e.s + c.off - 5);
+    c.g.position.set((a.x + b.x) / 2, 0.32, (a.z + b.z) / 2); c.g.rotation.y = Math.atan2(a.x - b.x, a.z - b.z);
+  }
+  R.rot.position.set(R.carros[1].g.position.x, 6, R.carros[1].g.position.z);
+  return e;
+}
+function naPlataformaTrem() {
+  if (jogador.carro || jogador.dentroCasa || jogador.morto || !regiaoNorte) return null;
+  for (const [lado, pl] of [['A', TREM_CONT.platA], ['B', TREM_CONT.platB]]) {
+    const dx = jogador.pos.x - pl.x, dz = jogador.pos.z - pl.z, co = Math.cos(pl.ang), si = Math.sin(pl.ang);
+    const lx = dx * co - dz * si, lz = dx * si + dz * co;
+    if (Math.abs(lx) < 3.2 && Math.abs(lz) < 32) return lado;
+  }
+  return null;
+}
+function contextoTremCont() {
+  const lado = naPlataformaTrem(); if (!lado) return null;
+  const e = estadoTremCont(agoraServidor() / 1000), para = lado === 'A' ? 'B' : 'A';
+  if (e.parado === lado) return [`trem para ${NOME_EST[para]} · sai em ${Math.ceil(e.resta)} s (${TREM_CONT.preco} moedas)`, '🚆 Embarcar'];
+  const espera = e.parado ? e.resta + TREM_CONT.viagem : e.vai === lado ? e.chega : e.chega + TREM_CONT.parada + TREM_CONT.viagem;
+  return [`🚆 ${NOME_EST[lado]}: o próximo trem chega em ${Math.ceil(espera)} s`, 'Trem'];
+}
+async function acaoTremCont() {
+  const lado = naPlataformaTrem(); if (!lado) return false;
+  const e = estadoTremCont(agoraServidor() / 1000);
+  if (e.parado !== lado) { aviso(contextoTremCont()[0], 2.5); return true; }
+  try { await rede.transporte.tarifa(); } catch (er) { aviso(er.message || `Sem moedas para a passagem (${TREM_CONT.preco}).`, 3); return true; }
+  if (jogador.armado) alternarArma();
+  jogador.tremCont = { de: lado, para: lado === 'A' ? 'B' : 'A' }; jogador.alvo = null; jogador.avatar.raiz.visible = false;
+  aviso(`🚆 Embarcou! Destino: ${NOME_EST[jogador.tremCont.para]}. −${TREM_CONT.preco} moedas.`, 3.5);
+  return true;
+}
+function seguirTremCont() {
+  const tc = jogador.tremCont, e = estadoTremCont(agoraServidor() / 1000);
+  if (e.parado === tc.para || !regiaoNorte) {   // chegou: desce na plataforma
+    jogador.tremCont = null; const pl = tc.para === 'A' ? TREM_CONT.platA : TREM_CONT.platB;
+    jogador.pos.set(pl.x, alturaChao(pl.x, pl.z), pl.z); jogador.avatar.raiz.position.copy(jogador.pos); jogador.avatar.raiz.visible = true;
+    aviso(`🚆 ${NOME_EST[tc.para]}! Desembarque.`, 3); return;
+  }
+  const p = ptTrem(e.s);
+  jogador.pos.set(p.x, 0.06, p.z); jogador.yaw = p.ang + (e.vai === 'A' ? Math.PI : 0); jogador.avatar.raiz.position.copy(jogador.pos);
 }
 // ---------------------------------------------------------------- cidades novas (20b/20c): Barra Amarela e Oyster River
 // Por enquanto são a cidade em si (ruas, prédios, praça, favela, praia, morro com bondinho, monumento, aeroporto e
@@ -15500,7 +15654,7 @@ function gradeCidade(R, cx, cz, nx, nz, Q, rua, corRua = '#3d4047') {
 function predioServico(R, q, nome, cor, h = 12, tipo = null, cidade = null) {
   const w = q.w ?? 30, d = q.d ?? 26;
   R.predios([[q.x, q.z, w, d, h, cor]]);
-  if (!tipo) { R.sprite(`${nome} · em breve`, q.x, h + 4, q.z, 0.55); return; }
+  if (!tipo || tipo === 'info') { R.sprite(tipo ? nome : `${nome} · em breve`, q.x, h + 4, q.z, 0.55); return; }
   // porta na frente (lado sul): leva para o interior da corporação; ao sair, o jogador volta para esta porta
   R.sprite(nome, q.x, h + 4, q.z, 0.55);
   R.caixa(q.x, 1.6, q.z + d / 2 + 0.06, 3.2, 3.2, 0.12, R.M('#2b2b2b'));
@@ -15559,7 +15713,7 @@ const CINZAS = ['#9aa3ad', '#7c8794', '#b8bfc6', '#5f6b78', '#c9c2b6', '#8f8a80'
 const rndSeed = (s) => () => ((s = (s * 16807) % 2147483647) / 2147483647);
 function montarBarraAmarela(R, C) {
   const rnd = rndSeed(4242), G = gradeCidade(R, C.x, C.z, 6, 6, 40, 12), L = [];
-  const especial = { '2,2': 'praca', '3,2': 'praca', '2,3': 'praca', '3,3': 'praca', '0,0': 'delegacia', '1,0': 'prf', '4,0': 'bombeiros', '5,0': 'hospital', '0,5': 'oficina', '5,5': 'estacao', '1,5': 'empresas', '4,5': 'empresas' };
+  const especial = { '2,2': 'praca', '3,2': 'praca', '2,3': 'praca', '3,3': 'praca', '0,0': 'delegacia', '1,0': 'prf', '4,0': 'bombeiros', '5,0': 'hospital', '0,5': 'oficina', '5,5': 'estacao', '1,5': 'empresas', '4,5': 'empresas', '4,2': 'terminal' };
   for (const q of G.qs) {
     const e = especial[`${q.i},${q.j}`];
     if (e === 'praca') continue;
@@ -15568,8 +15722,12 @@ function montarBarraAmarela(R, C) {
     if (e === 'bombeiros') { predioServico(R, q, '🚒 Bombeiros', '#c0392b', 10, 'bombeiros', 'barra'); continue; }
     if (e === 'hospital') { predioServico(R, q, '🏥 Hospital', '#f0f0f0', 16, 'hospital', 'barra'); continue; }
     if (e === 'oficina') { predioServico(R, q, '🔧 Oficina de Barra Amarela', '#8a6d3b', 7, 'oficina', 'barra'); continue; }
-    if (e === 'estacao') { predioServico(R, q, '🚉 Estação de trem', '#a0522d', 9); continue; }
+    if (e === 'estacao') { predioServico(R, q, '🚉 Estação de Barra Amarela (trem para o Continente)', '#a0522d', 9, 'info'); continue; }
     if (e === 'empresas') { R.sprite('🏗️ Terrenos para empresas · em breve', q.x, 4, q.z, 0.5); continue; }
+    if (e === 'terminal') {   // terminal dos ônibus intermunicipais (o ponto fica na calçada norte)
+      R.plano(q.x, q.z, 38, 38, 0.2, R.M('#cfc8b8')); R.caixa(q.x, 4.2, q.z - 12, 30, 0.4, 10, R.M('#d4a017'));
+      for (const sx of [-13, 13]) R.caixa(q.x + sx, 2.1, q.z - 12, 0.4, 4.2, 0.4, R.M('#666'));
+      R.sprite('🚌 Terminal Intermunicipal · Linha 11', q.x, 7, q.z - 12, 0.55); continue; }
     for (const [dx, dz] of [[-10, -10], [10, -10], [-10, 10], [10, 10]]) {   // cidade do interior: casas baixas e coloridas
       const h = 4 + rnd() * 5, w = 13 + rnd() * 4, d = 13 + rnd() * 4;
       L.push([q.x + dx, q.z + dz, w, d, h, PASTEIS[(rnd() * PASTEIS.length) | 0]]);
@@ -15598,7 +15756,7 @@ function montarOysterRiver(R, C) {
   const servicos = { '0,0': ['🚓 Delegacia de Oyster River', '#4c6fa8', 18, 'delegacia'], '1,0': ['💀 Base do BOPE', '#1d1d1d', 12, 'bope'], '2,0': ['🚔 Superintendência da PRF', '#3e6a9a', 16, 'prf'],
     '7,0': ['🚒 Bombeiros', '#c0392b', 12, 'bombeiros'], '8,0': ['🏥 Hospital Central', '#f0f0f0', 30, 'hospital'], '9,0': ['🎖️ Quartel do Exército', '#4b5a3a', 12, 'quartel'],
     '9,3': ['⚓ Marinha', '#24467a', 14, 'marinha'], '9,4': ['✈️ Aeronáutica', '#3c5a7a', 14, 'aerea'], '0,7': ['🔧 Oficina de Oyster River', '#8a6d3b', 8, 'oficina'],
-    '4,4': ['🏛️ Prefeitura de Oyster River', '#e9d9a8', 22, 'prefeitura'], '5,7': ['🚌 Rodoviária', '#d9822b', 10] };
+    '4,4': ['🏛️ Prefeitura de Oyster River', '#e9d9a8', 22, 'prefeitura'], '5,7': ['🚌 Rodoviária de Oyster River (Linha 12)', '#d9822b', 10, 'info'] };
   for (const q of G.qs) {
     const sv = servicos[`${q.i},${q.j}`];
     if (sv) { predioServico(R, { ...q, w: 40, d: 36 }, sv[0], sv[1], sv[2], sv[3] || null, 'oyster'); continue; }
@@ -15613,16 +15771,16 @@ function montarOysterRiver(R, C) {
   R.sprite('🦪 Oyster River', C.x, 120, C.z, 1.6, 'rgba(20,90,130,.94)');
   // orla: praia, calçadão em ondas, quiosques, coqueiros e o mar
   const M = mundo.OYSTER_MAR, praiaZ = M.z1 + 45;
-  R.plano(800, M.z1 + 45, 1200, 90, 0.08, R.M('#e9d8a6'));
+  R.plano(C.x - 100, M.z1 + 45, 1200, 90, 0.08, R.M('#e9d8a6'));
   { const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const cg = cv.getContext('2d'); cg.fillStyle = '#f2f2f2'; cg.fillRect(0, 0, 256, 64); cg.strokeStyle = '#222'; cg.lineWidth = 9;
     for (let y = -8; y < 80; y += 22) { cg.beginPath(); for (let x = 0; x <= 256; x += 4) cg.lineTo(x, y + Math.sin(x / 256 * Math.PI * 4) * 8); cg.stroke(); }
     const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(60, 1); t.colorSpace = THREE.SRGBColorSpace;
-    const m = R.M('#ffffff', { map: t }); R.plano(800, praiaZ + 40, 1200, 10, 0.1, m); }
-  for (let x = 260; x < 1380; x += 70) { R.caixa(x, 1.4, praiaZ + 52, 3, 2.8, 3, R.M('#d9822b'), true); R.caixa(x, 3, praiaZ + 52, 4.2, 0.3, 4.2, R.M('#2a7d4f')); }
-  for (let x = 230; x < 1390; x += 26) { const h = 7 + rnd() * 4; R.caixa(x, h / 2, praiaZ + 30, 0.5, h, 0.5, R.M('#8b6b3d')); R.caixa(x, h, praiaZ + 30, 4, 0.6, 4, R.M('#3f8f3a')); }
-  R.plano(800, (M.z1 + mundo.CONTINENTE.z0) / 2, 1300, M.z1 - mundo.CONTINENTE.z0, 0.12, R.M('#3e7ea6', { roughness: 0.25, metalness: 0.1 }));
+    const m = R.M('#ffffff', { map: t }); R.plano(C.x - 100, praiaZ + 40, 1200, 10, 0.1, m); }
+  for (let x = C.x - 640; x < C.x + 480; x += 70) { R.caixa(x, 1.4, praiaZ + 52, 3, 2.8, 3, R.M('#d9822b'), true); R.caixa(x, 3, praiaZ + 52, 4.2, 0.3, 4.2, R.M('#2a7d4f')); }
+  for (let x = C.x - 670; x < C.x + 490; x += 26) { const h = 7 + rnd() * 4; R.caixa(x, h / 2, praiaZ + 30, 0.5, h, 0.5, R.M('#8b6b3d')); R.caixa(x, h, praiaZ + 30, 4, 0.6, 4, R.M('#3f8f3a')); }
+  R.plano((M.x0 + mundo.CONTINENTE.x1) / 2 + 25, (M.z1 + mundo.CONTINENTE.z0) / 2, mundo.CONTINENTE.x1 - M.x0 + 50, M.z1 - mundo.CONTINENTE.z0, 0.12, R.M('#3e7ea6', { roughness: 0.25, metalness: 0.1 }));
   // morro de pedra no mar, com o bondinho saindo da praia
-  const MO = { x: 1120, z: M.z1 - 170 }, EP = { x: 1080, z: M.z1 + 12 };
+  const MO = { x: C.x + 220, z: M.z1 - 170 }, EP = { x: C.x + 180, z: M.z1 + 12 };
   R.modelo('morro_pedra', MO.x, MO.z, 190, 0, 0, (piv, alt) => {
     const topo = new THREE.Vector3(MO.x, alt * 0.97, MO.z);
     R.modelo('bondinho_estacao', EP.x, EP.z, 16, Math.PI); R.modelo('bondinho_estacao', topo.x, topo.z, 14, 0, topo.y - 1);
@@ -15633,13 +15791,13 @@ function montarOysterRiver(R, C) {
     R.sprite('🚡 Bondinho do Morro', EP.x, 16, EP.z, 0.55);
   });
   // monumento num morro gramado a oeste, que se vê de toda a cidade
-  { const MX = 380, MZ = M.z1 + 150, geo = new THREE.CylinderGeometry(32, 110, 55, 24, 1).translate(0, 27.5, 0); R.geos.push(geo);
+  { const MX = C.x - 520, MZ = M.z1 + 150, geo = new THREE.CylinderGeometry(32, 110, 55, 24, 1).translate(0, 27.5, 0); R.geos.push(geo);
     const h = new THREE.Mesh(geo, R.M('#6f8f4f')); h.position.set(MX, 0, MZ); h.receiveShadow = true; R.g.add(h);
     const c = { tipo: 'circ', x: MX, z: MZ, r: 100 }; colisores.push(c); R.cols.push(c);
     R.modelo('monumento_guardiao', MX, MZ, 52, Math.PI, 55);   // ~50 m de altura em cima do morro
     R.sprite('🗿 Monumento do Guardião', MX, 120, MZ, 0.7); }
   // aeroporto (só aviões grandes) ao sudoeste e a pista
-  { const AX = 330, AZ = C.z + 420; R.plano(AX, AZ, 620, 70, 0.08, R.M('#4a4e57'));
+  { const AX = C.x - 570, AZ = C.z + 420; R.plano(AX, AZ, 620, 70, 0.08, R.M('#4a4e57'));
     for (let x = AX - 290; x < AX + 290; x += 30) R.caixa(x, 0.1, AZ, 14, 0.02, 1, R.M('#f2f2f2'));
     R.predios([[AX - 120, AZ + 80, 120, 40, 16, '#dfe6ec'], [AX + 150, AZ + 80, 12, 12, 34, '#dfe6ec']]);
     R.sprite('✈️ Aeroporto Internacional de Oyster River · voos em breve', AX - 120, 24, AZ + 80, 0.6); }
