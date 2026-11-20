@@ -14436,8 +14436,8 @@ function pilotarAviao(c, dt) {
     c.vel = THREE.MathUtils.clamp(c.vel - Math.sin(c.pitch) * 9 * dt, P.vdec * 0.6, P.vmax * 1.1);   // subir gasta velocidade, descer ganha
     c.vs = estol ? Math.min(c.vel * Math.sin(c.pitch), -6) : c.vel * Math.sin(c.pitch);
     jogador.yaw -= c.volante * P.giro * dt;
-    jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, -1300, 1300);
-    jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, -1400, 1400);
+    jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, jogador.pos.z < -1500 ? mundo.CONTINENTE.x0 : -1300, 1300);
+    jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, mundo.CONTINENTE.z0, 1400);   // 19z: voa até o continente
     c.alt = Math.min(320, c.alt + c.vs * dt); c.altRec = Math.max(c.alt, (c.altRec || 0) - 4 * dt);
     { const ch = alturaChao(jogador.pos.x, jogador.pos.z); if (aeronaveEmPredio(c, ch)) return; alertaPredio(c, ch); }
     if (c.pousar && !c.pedidoPouso) { c.pedidoPouso = true; pedirTorre(c, 'pouso'); }
@@ -14502,8 +14502,8 @@ function pilotarHeli(c, dt, max) {
   c.vel += THREE.MathUtils.clamp(alvoV - c.vel, -(ufo ? 30 : 5) * dt, (ufo ? 22 : 4) * dt);
   c.volante = (c.volante || 0) + (lado - (c.volante || 0)) * Math.min(1, dt * (ufo ? 16 : 5));
   if (noAr) jogador.yaw -= c.volante * (ufo ? 2.4 : 1.3) * dt;
-  jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * dt, -1500, 1600);
-  jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * dt, -2000, 1900);
+  jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * dt, mundo.CONTINENTE.x0, 1600);   // 19z: voa até o continente
+  jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * dt, mundo.CONTINENTE.z0, 1900);
   // prédios: alarme e batida
   if (noAr && aeronaveEmPredio(c, chao)) return;
   if (noAr) alertaPredio(c, chao);
@@ -16225,8 +16225,8 @@ function pilotarJato(c, dt) {
     }
     c.vs = estol && !c.auto ? Math.min(c.vel * Math.sin(c.pitch), -8) : c.vel * Math.sin(c.pitch);
     jogador.yaw -= c.volante * J.giro * dt;
-    jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, -1300, 1300);
-    jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, -1400, 1400);
+    jogador.pos.x = THREE.MathUtils.clamp(jogador.pos.x + Math.sin(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, jogador.pos.z < -1500 ? mundo.CONTINENTE.x0 : -1300, 1300);
+    jogador.pos.z = THREE.MathUtils.clamp(jogador.pos.z + Math.cos(jogador.yaw) * c.vel * Math.cos(c.pitch) * dt, mundo.CONTINENTE.z0, 1400);   // 19z: voa até o continente
     c.alt = Math.min(420, c.alt + c.vs * dt);
     { const ch = alturaChao(jogador.pos.x, jogador.pos.z); if (aeronaveEmPredio(c, ch)) return; alertaPredio(c, ch); }
     const piso = noConves(jogador.pos.x, jogador.pos.z) ?? 0;
