@@ -172,7 +172,10 @@ function alturaNaCalcada(x, z) {
 export const AREAS_NAVIO = [{ x0: 43.6, x1: 52.4, z0: 1100, z1: 1182 }, { x0: 52, x1: 60, z0: 1149.5, z1: 1153.5 }, { x0: 59.4, x1: 72.6, z0: 1131, z1: 1189 }];
 export function limitar(p) {
   if (p.x > 1500) return;                                   // interiores das casas
-  if (p.z < -1380 && (noCorredorNorte(p.x, p.z) || naPonte(p.x, p.z) || naPracaPedagio(p.x, p.z) || noContinente(p.x, p.z))) return;   // caminho do continente
+  if (p.z < -1380 && (noCorredorNorte(p.x, p.z) || naPonte(p.x, p.z) || naPracaPedagio(p.x, p.z) || noContinente(p.x, p.z))) {   // caminho do continente
+    if (p.x > OYSTER_MAR.x0 && p.z < OYSTER_MAR.z1) p.z = OYSTER_MAR.z1;   // praia de Oyster River: o mar começa aqui
+    return;
+  }
   if (p.z < -1528) {   // fora do caminho, ao norte: volta para o lugar permitido mais perto
     const cands = [[THREE.MathUtils.clamp(p.x, PONTE.x - PONTE.larg / 2, PONTE.x + PONTE.larg / 2), THREE.MathUtils.clamp(p.z, -1975, -1529)],
       [THREE.MathUtils.clamp(p.x, PEDAGIO.x - 9, PEDAGIO.x + 9), THREE.MathUtils.clamp(p.z, -2100, -1975)],
@@ -676,10 +679,11 @@ export const OYSTER_RIVER = { nome: 'Oyster River', x: 900, z: -6000 };
 // rodovia (pontos do eixo, 12 m de largura): ponte → pedágio → sede; ramais para as duas cidades (até as obras)
 export const RODOVIAS = [
   [[PONTE.x, PONTE.z1], [PEDAGIO.x, PEDAGIO.z], [PONTE.x, -2700], [SEDE_GOVERNO.x + 30, SEDE_GOVERNO.z + SEDE_GOVERNO.d / 2 + 30]],
-  [[PONTE.x, -2700], [-900, -2950], [BARRA_AMARELA.x + 420, BARRA_AMARELA.z + 120]],
-  [[SEDE_GOVERNO.x + 30, SEDE_GOVERNO.z + SEDE_GOVERNO.d / 2 + 30], [SEDE_GOVERNO.x + SEDE_GOVERNO.w / 2 + 45, SEDE_GOVERNO.z + SEDE_GOVERNO.d / 2 + 30], [SEDE_GOVERNO.x + SEDE_GOVERNO.w / 2 + 45, SEDE_GOVERNO.z - SEDE_GOVERNO.d / 2 - 30], [300, -4200], [OYSTER_RIVER.x - 120, OYSTER_RIVER.z + 520]],
+  [[PONTE.x, -2700], [-900, -2950], [-1400, -3300], [BARRA_AMARELA.x + 165, BARRA_AMARELA.z]],   // entra pela rua da cidade
+  [[SEDE_GOVERNO.x + 30, SEDE_GOVERNO.z + SEDE_GOVERNO.d / 2 + 30], [SEDE_GOVERNO.x + SEDE_GOVERNO.w / 2 + 45, SEDE_GOVERNO.z + SEDE_GOVERNO.d / 2 + 30], [SEDE_GOVERNO.x + SEDE_GOVERNO.w / 2 + 45, SEDE_GOVERNO.z - SEDE_GOVERNO.d / 2 - 30], [300, -4200], [OYSTER_RIVER.x, -5500], [OYSTER_RIVER.x, OYSTER_RIVER.z + 266]],
 ];
 export const LARG_RODOVIA = 12;
+export const OYSTER_MAR = { x0: 150, z1: -6420 };   // ao norte daqui (z menor), em Oyster River, é mar
 // altura do tabuleiro da ponte: sobe da praia, fica alta no canal e desce no continente
 export function alturaPonte(z) {
   const a = -z;

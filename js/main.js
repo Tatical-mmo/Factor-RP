@@ -8066,7 +8066,7 @@ function montarLocais() {
   LOCAIS.push({ nome: 'Avenida Central', x: 0, z: ruaC(2) });
   for (const a of AEROPORTOS) LOCAIS.push({ nome: `✈️ ${a.nome}`, x: a.balcao.x, z: a.balcao.z + (a.eixo === 'x' ? 4 : 0) });
   LOCAIS.push({ nome: '🛸 Área 51 (portão)', x: mundo.AREA51.x1 + 8, z: 0 });
-  LOCAIS.push({ nome: '🌉 Ponte do Continente (pedágio)', x: mundo.PEDAGIO.x, z: mundo.PEDAGIO.z + 30 }, { nome: '🏛️ Sede do Governo do Estado', x: mundo.SEDE_GOVERNO.x + 30, z: mundo.SEDE_GOVERNO.z + mundo.SEDE_GOVERNO.d / 2 + 30 });
+  LOCAIS.push({ nome: '🌉 Ponte do Continente (pedágio)', x: mundo.PEDAGIO.x, z: mundo.PEDAGIO.z + 30 }, { nome: '🏛️ Sede do Governo do Estado', x: mundo.SEDE_GOVERNO.x + 30, z: mundo.SEDE_GOVERNO.z + mundo.SEDE_GOVERNO.d / 2 + 30 }, { nome: '🟡 Barra Amarela', x: mundo.BARRA_AMARELA.x + 140, z: mundo.BARRA_AMARELA.z }, { nome: '🦪 Oyster River', x: mundo.OYSTER_RIVER.x, z: mundo.OYSTER_RIVER.z + 240 });
   LOCAIS.push({ nome: '🪖 Quartel do Exército (portão)', x: mundo.QUARTEL.x0 - 8, z: mundo.QUARTEL.portao.z });
   LOCAIS.push({ nome: '✈️ Base Aérea (portão)', x: mundo.BASE_AEREA.portao.x, z: mundo.BASE_AEREA.z0 - 8 });
   LOCAIS.push({ nome: '⚓ Base Naval (portão)', x: mundo.BASE_NAVAL.portao.x, z: mundo.BASE_NAVAL.z0 - 8 });
@@ -15329,6 +15329,13 @@ async function pagarPedagio() {
 }
 function atualizarRegioes() {
   const z = jogador.carro?.mesh ? jogador.carro.mesh.position.z : jogador.pos.z;
+  { const x = jogador.carro?.mesh ? jogador.carro.mesh.position.x : jogador.pos.x;
+    for (const C of CIDADES_NOVAS) {   // cada cidade nova só existe na tela de quem está perto dela
+      const d = Math.hypot(x - C.def.x, z - C.def.z);
+      if (!C.R && d < C.raio) { C.R = novaRegiao(); C.montar(C.R, C.def); }
+      else if (C.R && d > C.raio + 300) { desmontarRegiao(C.R); C.R = null; }
+      if (C.R?.tick) C.R.tick();
+    } }
   if (!regiaoNorte && z < -1250) montarNorte();
   else if (regiaoNorte && z > -1100) desmontarNorte();
   if (cancelaPedagio) {   // a cancela só segura quem está de carro e não pagou (a pé passa pelo lado da cabine)
@@ -15402,13 +15409,155 @@ function montarNorte() {
     m.scale.setScalar(k); m.position.set(S.x - (b.min.x + b.max.x) / 2 * k, -b.min.y * k + 0.15, S.z - (b.min.z + b.max.z) / 2 * k); g.add(m);
   }).catch(() => { caixa(S.x, 12, S.z, S.w * 0.8, 24, S.d * 0.6, M('#e8e3d6')); });
   { const c = { tipo: 'caixa', x0: S.x - S.w * 0.45, x1: S.x + S.w * 0.45, z0: S.z - S.d * 0.4, z1: S.z + S.d * 0.33 }; colisores.push(c); cols.push(c); }
-  // obras no fim dos ramais
-  for (const [cid, r] of [[mundo.BARRA_AMARELA, mundo.RODOVIAS[1]], [mundo.OYSTER_RIVER, mundo.RODOVIAS[2]]]) {
-    const [x, z] = r[r.length - 1], [xa, za] = r[r.length - 2], ang = Math.atan2(x - xa, z - za);
-    for (let k = -2; k <= 2; k++) caixa(x + Math.cos(ang) * k * 2.6, 0.6, z - Math.sin(ang) * k * 2.6, 2.2, 1.2, 0.5, M(k % 2 ? '#f2f2f2' : '#e06a1a'), true, ang);
-    sprite(`🚧 ${cid.nome} · em obras`, x, 5, z, 0.7, 'rgba(160,80,20,.94)');
-  }
 }
+// ---------------------------------------------------------------- cidades novas (20b/20c): Barra Amarela e Oyster River
+// Por enquanto são a cidade em si (ruas, prédios, praça, favela, praia, morro com bondinho, monumento, aeroporto e
+// rodoviária) e os prédios das corporações com placa; o funcionamento (serviços, trem, voos, ônibus) vem nas próximas etapas.
+function novaRegiao() {
+  const g = new THREE.Group(), cols = [], mats = new Set(), geos = []; scene.add(g);
+  const M = (c, x = {}) => { const m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, ...x }); mats.add(m); return m; };
+  const caixa = (x, y, z, w, h, d, mat, col = false, rotY = 0) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.rotation.y = rotY; m.castShadow = h > 2; m.receiveShadow = true; g.add(m);
+    if (col) { const c = { tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, top: y + h / 2 }; colisores.push(c); cols.push(c); }
+    return m;
+  };
+  const plano = (x, z, w, d, y, mat) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), mat); m.position.set(x, y, z); m.receiveShadow = true; g.add(m); return m; };
+  const sprite = (txt, x, y, z, esc = 0.6, fundo = 'rgba(20,40,70,.92)') => { const s2 = textoSprite(txt, { escala: esc, fundo }); s2.position.set(x, y, z); g.add(s2); return s2; };
+  // muitos prédios de uma vez (uma malha só): [x, z, w, d, h, cor]
+  const predios = (lista, comCol = true) => {
+    if (!lista.length) return;
+    const geo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0); geos.push(geo);
+    const mat = M('#ffffff'), im = new THREE.InstancedMesh(geo, mat, lista.length), m4 = new THREE.Matrix4(), cor = new THREE.Color();
+    lista.forEach(([x, z, w, d, h, c], k) => {
+      m4.compose(new THREE.Vector3(x, 0.05, z), new THREE.Quaternion(), new THREE.Vector3(w, h, d)); im.setMatrixAt(k, m4); im.setColorAt(k, cor.set(c));
+      if (comCol) { const cc = { tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, top: h }; colisores.push(cc); cols.push(cc); }
+    });
+    im.castShadow = true; im.receiveShadow = true; g.add(im);
+  };
+  const modelo = (arq, x, z, larg, rotY = 0, y = 0, fim) => Promise.resolve(carregarGLB(`assets/modelos/${arq}.glb`)).then((gl) => {
+    if (!g.parent) return null;
+    const m = prepararEstatico(gl.scene), b = new THREE.Box3().setFromObject(m), k = larg / Math.max(0.01, b.max.x - b.min.x, b.max.z - b.min.z);
+    const piv = new THREE.Group(); m.scale.setScalar(k); m.position.set(-(b.min.x + b.max.x) / 2 * k, -b.min.y * k, -(b.min.z + b.max.z) / 2 * k); piv.add(m);
+    piv.position.set(x, y, z); piv.rotation.y = rotY; g.add(piv); fim?.(piv, (b.max.y - b.min.y) * k); return piv;
+  }).catch(() => null);
+  return { g, cols, mats, geos, M, caixa, plano, sprite, predios, modelo };
+}
+function desmontarRegiao(R) {
+  scene.remove(R.g);
+  R.g.traverse((o) => { if ((o.isMesh || o.isInstancedMesh) && !o.userData.compartilhado) { o.geometry?.dispose(); } if (o.isSprite) o.material?.map?.dispose?.(); });
+  for (const m of R.mats) m.dispose(); for (const gg of R.geos) gg.dispose();
+  for (const c of R.cols) { const k = colisores.indexOf(c); if (k >= 0) colisores.splice(k, 1); }
+}
+// grade de ruas e quarteirões: devolve os quarteirões (centro e tamanho) para cada cidade preencher
+function gradeCidade(R, cx, cz, nx, nz, Q, rua, corRua = '#3d4047') {
+  const W = nx * (Q + rua) + rua, D = nz * (Q + rua) + rua, x0 = cx - W / 2, z0 = cz - D / 2, asf = R.M(corRua), calc = R.M('#cfc8b8'), faixa = R.M('#e8c23a');
+  R.plano(cx, cz, W, D, 0.07, asf);
+  const qs = [];
+  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+    const x = x0 + rua + Q / 2 + i * (Q + rua), z = z0 + rua + Q / 2 + j * (Q + rua);
+    R.caixa(x, 0.1, z, Q, 0.18, Q, calc); qs.push({ i, j, x, z });
+  }
+  for (let i = 0; i <= nx; i++) { const x = x0 + rua / 2 + i * (Q + rua); for (let z = z0 + 6; z < z0 + D - 3; z += 12) R.caixa(x, 0.1, z, 0.25, 0.02, 5, faixa); }
+  for (let j = 0; j <= nz; j++) { const z = z0 + rua / 2 + j * (Q + rua); for (let x = x0 + 6; x < x0 + W - 3; x += 12) R.caixa(x, 0.1, z, 5, 0.02, 0.25, faixa); }
+  return { qs, x0, z0, W, D };
+}
+// prédio de serviço com a placa (as corporações ainda não funcionam aqui: vêm nas próximas etapas)
+function predioServico(R, q, nome, cor, h = 12) {
+  R.predios([[q.x, q.z, q.w ?? 30, q.d ?? 26, h, cor]]);
+  R.sprite(`${nome} · em breve`, q.x, h + 4, q.z, 0.55);
+}
+const PASTEIS = ['#f2d16b', '#e8a87c', '#9fd3c7', '#f7f3e3', '#c8a2c8', '#f4b6b6', '#b5d99c', '#ffe0a3', '#a7c7e7'];
+const CINZAS = ['#9aa3ad', '#7c8794', '#b8bfc6', '#5f6b78', '#c9c2b6', '#8f8a80', '#a9b8c9', '#6e7f8f'];
+const rndSeed = (s) => () => ((s = (s * 16807) % 2147483647) / 2147483647);
+function montarBarraAmarela(R, C) {
+  const rnd = rndSeed(4242), G = gradeCidade(R, C.x, C.z, 6, 6, 40, 12), L = [];
+  const especial = { '2,2': 'praca', '3,2': 'praca', '2,3': 'praca', '3,3': 'praca', '0,0': 'delegacia', '1,0': 'prf', '4,0': 'bombeiros', '5,0': 'hospital', '0,5': 'oficina', '5,5': 'estacao', '1,5': 'empresas', '4,5': 'empresas' };
+  for (const q of G.qs) {
+    const e = especial[`${q.i},${q.j}`];
+    if (e === 'praca') continue;
+    if (e === 'delegacia') { predioServico(R, q, '🚓 Delegacia de Barra Amarela', '#4c6fa8'); continue; }
+    if (e === 'prf') { predioServico(R, q, '🚔 Posto da PRF', '#3e6a9a', 10); continue; }
+    if (e === 'bombeiros') { predioServico(R, q, '🚒 Bombeiros', '#c0392b', 10); continue; }
+    if (e === 'hospital') { predioServico(R, q, '🏥 Hospital', '#f0f0f0', 16); continue; }
+    if (e === 'oficina') { predioServico(R, q, '🔧 Oficina', '#8a6d3b', 7); continue; }
+    if (e === 'estacao') { predioServico(R, q, '🚉 Estação de trem', '#a0522d', 9); continue; }
+    if (e === 'empresas') { R.sprite('🏗️ Terrenos para empresas · em breve', q.x, 4, q.z, 0.5); continue; }
+    for (const [dx, dz] of [[-10, -10], [10, -10], [-10, 10], [10, 10]]) {   // cidade do interior: casas baixas e coloridas
+      const h = 4 + rnd() * 5, w = 13 + rnd() * 4, d = 13 + rnd() * 4;
+      L.push([q.x + dx, q.z + dz, w, d, h, PASTEIS[(rnd() * PASTEIS.length) | 0]]);
+    }
+  }
+  R.predios(L);
+  // praça central: gramado, coreto, igreja e a prefeitura
+  const pr = G.qs.filter((q) => especial[`${q.i},${q.j}`] === 'praca'), px = pr.reduce((a, q) => a + q.x, 0) / 4, pz = pr.reduce((a, q) => a + q.z, 0) / 4;
+  R.plano(px, pz, 92, 92, 0.2, R.M('#7fae5a'));
+  R.caixa(px, 0.5, pz, 10, 0.8, 10, R.M('#d8d1c3')); R.caixa(px, 4.2, pz, 11, 0.4, 11, R.M('#b0453a'));
+  for (const [sx, sz] of [[-4.5, -4.5], [4.5, -4.5], [-4.5, 4.5], [4.5, 4.5]]) R.caixa(px + sx, 2.4, pz + sz, 0.4, 3.6, 0.4, R.M('#f2f2f2'));
+  R.predios([[px, pz - 34, 22, 16, 12, '#f5f0e1'], [px, pz - 40, 6, 6, 26, '#f5f0e1'], [px + 30, pz + 30, 24, 18, 11, '#e9d9a8']]);
+  R.sprite('⛪ Igreja Matriz', px, 30, pz - 40, 0.5); R.sprite('🏛️ Prefeitura de Barra Amarela', px + 30, 15, pz + 30, 0.55, 'rgba(110,80,20,.94)');
+  R.sprite('🟡 Barra Amarela', C.x, 40, C.z, 1.2, 'rgba(170,130,10,.94)');
+  // favela a oeste: casinhas coloridas apertadas, umas em cima das outras
+  const F = [], fx = G.x0 - 90, fz = C.z;
+  for (let k = 0; k < 140; k++) {
+    const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 70, x = fx + Math.cos(a) * r, z = fz + Math.sin(a) * r * 1.4, w = 4 + rnd() * 3, h = 3 + rnd() * (r < 35 ? 7 : 4);
+    F.push([x, z, w, w * (0.8 + rnd() * 0.4), h, ['#b9774c', '#d9a066', '#c75b4a', '#8fb3c8', '#e3c565', '#9c9c9c'][(rnd() * 6) | 0]]);
+  }
+  R.predios(F, false); R.sprite('🏘️ Favela da Barra', fx, 18, fz, 0.6);
+}
+function montarOysterRiver(R, C) {
+  const rnd = rndSeed(9090), G = gradeCidade(R, C.x, C.z, 10, 8, 50, 14), L = [];
+  const servicos = { '0,0': ['🚓 Delegacia de Oyster River', '#4c6fa8', 18], '1,0': ['💀 Base do BOPE', '#1d1d1d', 12], '2,0': ['🚔 Superintendência da PRF', '#3e6a9a', 16],
+    '7,0': ['🚒 Bombeiros', '#c0392b', 12], '8,0': ['🏥 Hospital Central', '#f0f0f0', 30], '9,0': ['🎖️ Quartel do Exército', '#4b5a3a', 12],
+    '9,3': ['⚓ Marinha', '#24467a', 14], '9,4': ['✈️ Aeronáutica', '#3c5a7a', 14], '0,7': ['🔧 Oficina', '#8a6d3b', 8], '4,4': ['🏛️ Prefeitura de Oyster River', '#e9d9a8', 22], '5,7': ['🚌 Rodoviária', '#d9822b', 10] };
+  for (const q of G.qs) {
+    const sv = servicos[`${q.i},${q.j}`];
+    if (sv) { predioServico(R, { ...q, w: 40, d: 36 }, sv[0], sv[1], sv[2]); continue; }
+    if ((q.i === 1 || q.i === 8) && q.j >= 5 && q.j <= 6) { R.sprite('🏗️ Terrenos para empresas · em breve', q.x, 4, q.z, 0.5); continue; }
+    const centro = Math.max(0, 1 - Math.hypot(q.x - C.x, q.z - C.z) / 330);   // cidade grande: arranha-céus no centro
+    for (const [dx, dz] of [[-12, -12], [12, -12], [-12, 12], [12, 12]]) {
+      const h = 10 + rnd() * 18 + centro * centro * (40 + rnd() * 60);
+      L.push([q.x + dx, q.z + dz, 18 + rnd() * 4, 18 + rnd() * 4, h, CINZAS[(rnd() * CINZAS.length) | 0]]);
+    }
+  }
+  R.predios(L);
+  R.sprite('🦪 Oyster River', C.x, 120, C.z, 1.6, 'rgba(20,90,130,.94)');
+  // orla: praia, calçadão em ondas, quiosques, coqueiros e o mar
+  const M = mundo.OYSTER_MAR, praiaZ = M.z1 + 45;
+  R.plano(800, M.z1 + 45, 1200, 90, 0.08, R.M('#e9d8a6'));
+  { const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const cg = cv.getContext('2d'); cg.fillStyle = '#f2f2f2'; cg.fillRect(0, 0, 256, 64); cg.strokeStyle = '#222'; cg.lineWidth = 9;
+    for (let y = -8; y < 80; y += 22) { cg.beginPath(); for (let x = 0; x <= 256; x += 4) cg.lineTo(x, y + Math.sin(x / 256 * Math.PI * 4) * 8); cg.stroke(); }
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(60, 1); t.colorSpace = THREE.SRGBColorSpace;
+    const m = R.M('#ffffff', { map: t }); R.plano(800, praiaZ + 40, 1200, 10, 0.1, m); }
+  for (let x = 260; x < 1380; x += 70) { R.caixa(x, 1.4, praiaZ + 52, 3, 2.8, 3, R.M('#d9822b'), true); R.caixa(x, 3, praiaZ + 52, 4.2, 0.3, 4.2, R.M('#2a7d4f')); }
+  for (let x = 230; x < 1390; x += 26) { const h = 7 + rnd() * 4; R.caixa(x, h / 2, praiaZ + 30, 0.5, h, 0.5, R.M('#8b6b3d')); R.caixa(x, h, praiaZ + 30, 4, 0.6, 4, R.M('#3f8f3a')); }
+  R.plano(800, (M.z1 + mundo.CONTINENTE.z0) / 2, 1300, M.z1 - mundo.CONTINENTE.z0, 0.12, R.M('#3e7ea6', { roughness: 0.25, metalness: 0.1 }));
+  // morro de pedra no mar, com o bondinho saindo da praia
+  const MO = { x: 1120, z: M.z1 - 170 }, EP = { x: 1080, z: M.z1 + 12 };
+  R.modelo('morro_pedra', MO.x, MO.z, 190, 0, 0, (piv, alt) => {
+    const topo = new THREE.Vector3(MO.x, alt * 0.97, MO.z);
+    R.modelo('bondinho_estacao', EP.x, EP.z, 16, Math.PI); R.modelo('bondinho_estacao', topo.x, topo.z, 14, 0, topo.y - 1);
+    const a = new THREE.Vector3(EP.x, 9, EP.z), b = topo.clone().setY(topo.y + 8);
+    const cabo = new THREE.BufferGeometry().setFromPoints([a, b]); R.geos.push(cabo); const lm = new THREE.LineBasicMaterial({ color: '#222' }); R.mats.add(lm);
+    for (const o of [-1.2, 1.2]) { const l = new THREE.Line(cabo, lm); l.position.x = o; R.g.add(l); }
+    R.modelo('bondinho_cabine', a.x, a.z, 4, 0, a.y - 4.6, (cab) => { R.tick = () => { const t = (Math.sin(performance.now() / 1000 * Math.PI * 2 / 90) + 1) / 2; cab.position.lerpVectors(a, b, t); cab.position.y -= 4.6; }; });
+    R.sprite('🚡 Bondinho do Morro', EP.x, 16, EP.z, 0.55);
+  });
+  // monumento num morro gramado a oeste, que se vê de toda a cidade
+  { const MX = 380, MZ = M.z1 + 150, geo = new THREE.CylinderGeometry(32, 110, 55, 24, 1).translate(0, 27.5, 0); R.geos.push(geo);
+    const h = new THREE.Mesh(geo, R.M('#6f8f4f')); h.position.set(MX, 0, MZ); h.receiveShadow = true; R.g.add(h);
+    const c = { tipo: 'circ', x: MX, z: MZ, r: 100 }; colisores.push(c); R.cols.push(c);
+    R.modelo('monumento_guardiao', MX, MZ, 52, Math.PI, 55);   // ~50 m de altura em cima do morro
+    R.sprite('🗿 Monumento do Guardião', MX, 120, MZ, 0.7); }
+  // aeroporto (só aviões grandes) ao sudoeste e a pista
+  { const AX = 330, AZ = C.z + 420; R.plano(AX, AZ, 620, 70, 0.08, R.M('#4a4e57'));
+    for (let x = AX - 290; x < AX + 290; x += 30) R.caixa(x, 0.1, AZ, 14, 0.02, 1, R.M('#f2f2f2'));
+    R.predios([[AX - 120, AZ + 80, 120, 40, 16, '#dfe6ec'], [AX + 150, AZ + 80, 12, 12, 34, '#dfe6ec']]);
+    R.sprite('✈️ Aeroporto Internacional de Oyster River · voos em breve', AX - 120, 24, AZ + 80, 0.6); }
+}
+const CIDADES_NOVAS = [
+  { def: mundo.BARRA_AMARELA, raio: 650, montar: montarBarraAmarela, R: null },
+  { def: mundo.OYSTER_RIVER, raio: 900, montar: montarOysterRiver, R: null },
+];
 const LAB_A51 = { x: -737, z: 34 };   // porta do laboratório (19p)
 function montarArea51() {
   if (area51) return;
