@@ -3422,6 +3422,7 @@ async function iniciarJogo(perfil) {
   mundo.finalizar();
   { const M = mundo.materiais(); imagemReal(M?.asfalto?.map, 'assets/texturas/asfalto.jpg'); imagemReal(M?.calcada?.map, 'assets/texturas/calcada.jpg'); imagemReal(M?.grama?.map, 'assets/texturas/grama.jpg'); }
   semaforos.iniciar(scene, mundo.CRUZAMENTOS, (x, z) => mundo.alturaCalcada(x, z), () => agoraServidor() / 1000);
+  semaforosCidades();
   // objetos de rua em 3D (leves): bancos de praça, hidrantes e semáforos — carregam em segundo plano
   for (const n of ['banco', 'hidrante']) Promise.resolve(carregarGLB(`assets/modelos/prop_${n}.glb`)).then((g) => { if (g?.scene) mundo.montarProps(n, g.scene, scene); }).catch(() => {});
   // prédios 3D (perto do jogador): carregam em segundo plano
@@ -6610,7 +6611,7 @@ async function morrerLocal(pd = false) {
   clearTimeout(j.timerHospital);
   // ambulância NPC vem até você (fora de casa); um médico jogador pode chegar antes
   const medico = medicoOnline();
-  const seg = j.pos.x < 1500 && !j.trem ? servicos.chamarAmbulancia('eu', { x: j.pos.x, z: j.pos.z }, atendidoPeloNpc, medico ? 40 : 1.5) : null;
+  const seg = j.pos.x < 1500 && j.pos.z > -1500 && !j.trem ? servicos.chamarAmbulancia('eu', { x: j.pos.x, z: j.pos.z }, atendidoPeloNpc, medico ? 40 : 1.5) : null;
   // sem atendimento, renasce no hospital depois do tempo do admin (padrão 90 s); a ambulância ou um médico antes levantam aqui mesmo
   const espera = THREE.MathUtils.clamp(Number(configJogo.respawn_seg) || 90, 15, 300);
   j.renasceEm = performance.now() + espera * 1000;
@@ -6659,8 +6660,20 @@ function levantar(vida, socorrido = false) {
   }
 }
 // sem socorro: acorda no hospital e paga a conta (até 100)
+// hospital de cada cidade nova (a porta da frente; sai um pouco para a calçada)
+function hospitalCidade(nome) {
+  const G = gradeDe(nome), B = nome === 'Barra Amarela', i = B ? 5 : 8, d = B ? 26 : 36, x = G.x0 + G.rua + G.Q / 2 + i * (G.Q + G.rua), z = G.z0 + G.rua + G.Q / 2;
+  return { x, z: z + d / 2 + 3.5 };
+}
 function renascer() {
   if (!jogador.morto) return;
+  { const dist = (n) => { const h = hospitalCidade(n); return Math.hypot(h.x - jogador.pos.x, h.z - jogador.pos.z); };
+    const cid = jogador.pos.z < -1500 && !jogador.dentroCasa ? (dist('Barra Amarela') < dist('Oyster River') ? 'Barra Amarela' : 'Oyster River') : null;
+    if (cid) {   // morreu no continente (ou na ponte): acorda no hospital da cidade de lá
+      const h = hospitalCidade(cid); teleportar(h.x, h.z); levantar(100);
+      rede.saude.alta().then((v) => aviso(v > 0 ? `Você acordou no hospital de ${cid}. Conta: ${v} moedas.` : `Você acordou no hospital de ${cid}.`, 4)).catch(() => aviso(`Você acordou no hospital de ${cid}.`));
+      return;
+    } }
   teleportar(civico.HOSPITAL.saida.x, civico.HOSPITAL.saida.z);
   levantar(100);
   rede.saude.alta().then((v) => aviso(v > 0 ? `Você acordou no hospital. Conta: ${v} moedas.` : 'Você acordou no hospital.', 4)).catch(() => aviso('Você acordou no hospital.'));
@@ -7567,6 +7580,11 @@ function atualizarViaturas(dt) {
   const cacado = ((j.perfil?.recompensa || 0) > 0 || atacou) && !j.morto && !(j.pena > 0) && !j.dentroCasa && !j.trem;
   for (const v of viaturas) {
     const o = v.obj;
+    if (v.cid && !v.roubada) {   // viatura das cidades novas: só existe na tela com a cidade montada
+      const on = CIDADES_NOVAS.some((C) => C.def.nome === v.cid && C.R);
+      if (o.visible !== on) o.visible = on;
+      if (!on) { v.perseguindo = false; continue; }
+    }
     civico.atualizarSirenes(v.perseguindo || remotoAtivo(v) ? t : 0, o);
     if (v.roubada) { if (jogador.carro?.viatura !== v) atualizarViaturaRoubada(v); if (v.pe) atualizarViaturaAPe(v, dt); continue; }
     if (v.pe) { atualizarViaturaAPe(v, dt); if (v.pe && !v.pe.volta) { v.perseguindo = true; publicarRobo(v, dt, o); v.perseguindo = false; } continue; }
@@ -7584,7 +7602,7 @@ function atualizarViaturas(dt) {
         const vel = j.carro ? 12 : 8.5;
         // segue pelas ruas (refaz o caminho a cada 2 s); no fim do caminho vai direto até você
         v.recalc = (v.recalc || 0) - dt;
-        if (v.recalc <= 0 || !v.rota) { v.recalc = 2; v.rota = servicos.rotaRuas({ x: o.position.x, z: o.position.z }, { x: j.pos.x, z: j.pos.z }, 4); v.s = 0; }
+        if (v.recalc <= 0 || !v.rota) { v.recalc = 2; v.rota = v.cid ? rotaCidade(v.cid, { x: o.position.x, z: o.position.z }, { x: j.pos.x, z: j.pos.z }) : servicos.rotaRuas({ x: o.position.x, z: o.position.z }, { x: j.pos.x, z: j.pos.z }, 4); v.s = 0; }
         if (d > 5) {
           v.s += vel * dt;
           const p = servicos.pontoNaRota(v.rota, v.s);
@@ -15713,13 +15731,37 @@ function seguirTremCont() {
 // ---------------------------------------------------------------- cidades novas (20b/20c): Barra Amarela e Oyster River
 // Por enquanto são a cidade em si (ruas, prédios, praça, favela, praia, morro com bondinho, monumento, aeroporto e
 // rodoviária) e os prédios das corporações com placa; o funcionamento (serviços, trem, voos, ônibus) vem nas próximas etapas.
+// grade de ruas de cada cidade nova (a mesma que o gradeCidade monta), para quem precisa dela sem a cidade montada
+function gradeDe(nome) {
+  const B = nome === 'Barra Amarela', C = B ? mundo.BARRA_AMARELA : mundo.OYSTER_RIVER, nx = B ? 6 : 10, nz = B ? 6 : 8, Q = B ? 40 : 50, rua = B ? 12 : 14;
+  const W = nx * (Q + rua) + rua, D = nz * (Q + rua) + rua;
+  return { x0: C.x - W / 2, z0: C.z - D / 2, nx, nz, Q, rua, rx: (i) => C.x - W / 2 + rua / 2 + i * (Q + rua), rz: (j) => C.z - D / 2 + rua / 2 + j * (Q + rua) };
+}
+// semáforos nos cruzamentos de dentro das duas cidades (20k); em Barra Amarela, menos o do meio da praça (coreto)
+function semaforosCidades() {
+  for (const nome of ['Barra Amarela', 'Oyster River']) {
+    const G = gradeDe(nome), L = [];
+    for (let i = 1; i < G.nx; i++) for (let j = 1; j < G.nz; j++) {
+      if (nome === 'Barra Amarela' && i === 3 && j === 3) continue;
+      L.push({ x: G.rx(i), z: G.rz(j), y: 0.19 });
+    }
+    semaforos.adicionar(L, G.rua / 2 + 0.9);
+  }
+}
+// caminho de viatura dentro da cidade (perseguição): pela linha de rua mais perto, depois pela coluna até o alvo
+function rotaCidade(nome, a, b) {
+  const G = gradeDe(nome), perto = (v, f, n) => { let m = f(0); for (let i = 1; i <= n; i++) if (Math.abs(f(i) - v) < Math.abs(m - v)) m = f(i); return m; };
+  const ax = perto(a.x, G.rx, G.nx), az = perto(a.z, G.rz, G.nz), bx = perto(b.x, G.rx, G.nx), bz = perto(b.z, G.rz, G.nz);
+  const pts = [{ x: a.x, z: a.z }, { x: ax, z: az }, { x: bx, z: az }, { x: bx, z: bz }, { x: b.x, z: b.z }].filter((p, i, l) => !i || Math.hypot(p.x - l[i - 1].x, p.z - l[i - 1].z) > 0.5);
+  return { pts: pts.length > 2 ? servicos.faixaDireita(pts) : pts };
+}
 // gente e carros nas ruas das cidades novas (20i): moradores dando a volta nos quarteirões (os mesmos NPCs da ilha:
 // dá para conversar, assaltar etc.) e carros rodando pelas ruas na mão certa. São criados aos poucos na primeira vez que
 // você chega na cidade e ficam escondidos quando a cidade não está montada.
-const POVO_CID = { 'Barra Amarela': { gente: 10, carros: 6 }, 'Oyster River': { gente: 16, carros: 10 } }, povoCid = {};
+const POVO_CID = { 'Barra Amarela': { gente: 10, carros: 6, policia: 4, viaturas: 2 }, 'Oyster River': { gente: 16, carros: 10, policia: 6, viaturas: 3 } }, povoCid = {};
 const carrosCid = [];
 function povoarCidade(C) {
-  const nome = C.def.nome, P = povoCid[nome] ||= { gente: 0, carros: 0, criando: false }, alvo = POVO_CID[nome], G = C.R.grade;
+  const nome = C.def.nome, P = povoCid[nome] ||= { gente: 0, carros: 0, policia: 0, viaturas: 0, criando: false }, alvo = POVO_CID[nome], G = C.R.grade;
   if (!alvo) return;
   if (P.carros < alvo.carros) {   // carros: retângulos de 1 a 3 quarteirões, horário de quem anda na mão direita
     const k = P.carros++, rnd = rndSeed(777 + k * 31 + nome.length), rx = (i) => G.x0 + G.rua / 2 + i * (G.Q + G.rua), rz = (j) => G.z0 + G.rua / 2 + j * (G.Q + G.rua);
@@ -15734,12 +15776,35 @@ function povoarCidade(C) {
     if (!pts) return;
     const modelo = ['popular', 'popular', 'suv', 'esportivo', 'popular', 'suv'][k % 6], cor = ['#c9302c', '#2d5fa8', '#f2f2ee', '#1d1d1d', '#e3c565', '#3a7d44', '#8a8f96'][(k * 3) % 7];
     const obj = civico.modeloCarro(modelo, cor); obj.visible = false; scene.add(obj);
-    carrosCid.push({ cid: nome, obj, laco: laco(pts, true, civico.entreEixos(modelo)), vel: 6.5 + (k % 3), fase: k * 131 + 17 });
+    carrosCid.push({ cid: nome, obj, modelo, laco: laco(pts, true, civico.entreEixos(modelo)), vel: 6.5 + (k % 3), fase: k * 131 + 17 });
+  }
+  if (P.viaturas < alvo.viaturas) {   // viaturas (robôs 221+): rondam um retângulo de ruas; perseguem quem é procurado
+    const k = P.viaturas++, base = nome === 'Barra Amarela' ? 0 : 3, f = 2.5, Gd = gradeDe(nome);
+    const a0 = [[1, 1, 4, 4], [0, 0, 2, 2], [2, 0, 5, 3], [1, 1, 5, 4], [3, 2, 8, 6], [5, 0, 9, 4]][base + k] || [0, 0, 2, 2];
+    const [i0, j0, i1, j1] = a0, pts = [[Gd.rx(i0) + f, Gd.rz(j0) + f], [Gd.rx(i1) - f, Gd.rz(j0) + f], [Gd.rx(i1) - f, Gd.rz(j1) - f], [Gd.rx(i0) + f, Gd.rz(j1) - f]];
+    const obj = civico.modeloCarro('viatura', '#ffffff'); scene.add(obj);
+    viaturas.push({ id: 221 + base + k, cid: nome, obj, laco: laco(pts, true, civico.entreEixos('viatura')), vel: 7, fase: k * 120 + 40, perseguindo: false });
+  }
+  if (P.policia < alvo.policia && !P.criando) {   // policiais a pé (robôs 201+), um de cada vez
+    P.criando = true; const k = P.policia++;
+    criarPoliciaCid(nome, G, k).catch(() => {}).finally(() => { P.criando = false; });
+    return;
   }
   if (P.gente < alvo.gente && !P.criando) {   // um morador de cada vez (cada um carrega um personagem)
     P.criando = true; const k = P.gente++;
     criarNpcCid(nome, G, k).catch(() => {}).finally(() => { P.criando = false; });
   }
+}
+async function criarPoliciaCid(nome, G, k) {
+  const q = G.qs[(k * 5 + 2) % G.qs.length], d = G.Q / 2 - 1.1;
+  let rota = [[q.x - d, q.z + d], [q.x + d, q.z + d], [q.x + d, q.z - d], [q.x - d, q.z - d]];
+  if (k % 2) rota = rota.reverse();
+  const av = await npcFardado('policia', k + 20, 'policia');
+  scene.add(av.raiz); av.tocar('walk', { velocidade: 0.85 }); av.raiz.visible = false;
+  const et = textoSprite('Polícia', { escala: 0.6, fundo: 'rgba(30,70,160,.92)' }); et.position.y = 2.2; av.raiz.add(et);
+  const id = 201 + (nome === 'Barra Amarela' ? 0 : 6) + k;
+  const n = { id, policia: true, ordem: k, cid: nome, av, rota, laco: laco(rota), vel: 1.5, fase: k * 43 + 9, vida: 100, caido: 0, hostil: 0, tiro: 0 };
+  npcs.push(n); const p = patrulha(n); av.raiz.position.set(p.x, 0.19, p.z);
 }
 async function criarNpcCid(nome, G, k) {
   const lista = PERSONAGENS.map((p) => p.id).filter((id) => id !== excluirNpc);
@@ -15753,8 +15818,10 @@ async function criarNpcCid(nome, G, k) {
 function atualizarCarrosCid(dt) {
   for (const c of carrosCid) {
     const o = c.obj, vis = CIDADES_NOVAS.some((C) => C.def.nome === c.cid && C.R) && Math.hypot(o.position.x - jogador.pos.x, o.position.z - jogador.pos.z) < 260;
-    const p = pontoNoLaco(c.laco, agoraServidor() / 1000 * c.vel + c.fase);
-    if (!vis) { o.visible = false; o.position.set(p.x, 0.07, p.z); continue; }
+    c.st ||= { atraso: 0 };
+    if (!vis) { const p0 = pontoNoLaco(c.laco, (agoraServidor() / 1000 - c.st.atraso) * c.vel + c.fase); o.visible = false; o.position.set(p0.x, 0.07, p0.z); o.rotation.y = p0.ang; continue; }
+    frearAtras(c.st, o, dt, 7.5);   // para no sinal vermelho e atrás de outro carro
+    const p = desvioUltra(c.st, pontoNoLaco(c.laco, arrancarLaco(c.st, (agoraServidor() / 1000 - c.st.atraso) * c.vel + c.fase, c.vel, c.modelo, dt)));
     if (!o.visible || Math.hypot(p.x - o.position.x, p.z - o.position.z) > 25) { o.visible = true; o.position.set(p.x, 0.07, p.z); o.rotation.y = p.ang; }
     else { o.position.x += (p.x - o.position.x) * Math.min(1, dt * 4); o.position.z += (p.z - o.position.z) * Math.min(1, dt * 4); o.rotation.y = suavizarAngulo(o.rotation.y, p.ang, dt * 5); }
   }
@@ -15927,7 +15994,7 @@ function gradeCidade(R, cx, cz, nx, nz, Q, rua, { arv = 'meio', pular = null, va
   const h = Q / 2 - 1, A = [], P = [];
   for (const q of qs) {
     if (pular?.(q.i, q.j) || vazio?.(q.i, q.j)) continue;
-    const meio = [[0, -h, Math.PI], [0, h, 0], [-h, 0, -Math.PI / 2], [h, 0, Math.PI / 2]], cantos = [[-h, -h, Math.PI * 1.25], [h, -h, Math.PI * 0.75], [-h, h, -Math.PI / 4], [h, h, Math.PI / 4]];
+    const hc = h - 1.5, meio = [[0, -h, Math.PI], [0, h, 0], [-h, 0, -Math.PI / 2], [h, 0, Math.PI / 2]], cantos = [[-hc, -hc, Math.PI * 1.25], [hc, -hc, Math.PI * 0.75], [-hc, hc, -Math.PI / 4], [hc, hc, Math.PI / 4]];   // canto: um pouco para dentro (o semáforo fica na esquina)
     for (const [dx, dz] of arv === 'meio' ? meio : cantos) A.push([q.x + dx, q.z + dz, 0.9]);
     for (const [dx, dz, a] of arv === 'meio' ? cantos : meio.slice(0, 2)) P.push([q.x + dx, q.z + dz, a]);
   }
