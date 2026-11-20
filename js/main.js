@@ -15357,7 +15357,15 @@ function montarNorte() {
   // chão do continente
   { const m = new THREE.Mesh(new THREE.PlaneGeometry(C.x1 - C.x0, C.z1 - C.z0 + 40).rotateX(-Math.PI / 2), grama); m.position.set((C.x0 + C.x1) / 2, 0.04, (C.z0 + C.z1) / 2 - 20); m.receiveShadow = true; g.add(m); }
   // estrada de terra que desce a Serra até a praia da ponte
-  for (let z = -1382; z > -1530; z -= 4) { const h = mundo.altura(P.x, z - 2) ?? 0; caixa(P.x, h + 0.06, z - 2, 9, 0.12, 4.4, M('#7d6a4f')); }
+  { // uma faixa contínua que acompanha o relevo (antes eram blocos retos: parecia uma escada)
+    const pts = [], idx = [], L = 4.5;
+    for (let z = -1378, k = 0; z >= -1530; z -= 2, k++) {
+      for (const sx of [-L, L]) { const x = P.x + sx; pts.push(x, (mundo.altura(x, z) ?? 0) + 0.12, z); }
+      if (k) { const a = (k - 1) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, M('#7d6a4f', { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })); m.receiveShadow = true; g.add(m);
+  }
   // ponte: tabuleiro em gomos que seguem a altura, guarda-corpos e pilares (o vão do canal fica livre para os navios)
   for (let z = P.z0; z > P.z1; z -= 6) {
     const zc = z - 3, h = mundo.alturaPonte(zc) ?? 0.3, h2 = mundo.alturaPonte(zc - 3) ?? h, h1 = mundo.alturaPonte(zc + 3) ?? h;
