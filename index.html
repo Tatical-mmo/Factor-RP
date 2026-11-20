@@ -198,7 +198,11 @@
   body.dirigindo #volante { display:block; }
   #vEjetar { display:none; width:70px; height:70px; border-radius:50%; font-size:11px; background:rgba(200,40,40,.85); color:#fff; } body.ejetar #vEjetar { display:block; }
   #vPairar { display:none; width:78px; height:78px; border-radius:50%; font-size:12px; } body.voando #vPairar { display:block; } #vPairar.ativo { background:rgba(242,163,58,.85); color:#111; }
-  body.dirigindo #joy, body.dirigindo #btSoco, body.dirigindo #btArma, body.dirigindo #btTiro { display:none; }
+  body.dirigindo #joy, body.dirigindo #btSoco, body.dirigindo #btArma, body.dirigindo #btTiro, body.dirigindo #btRecarregar, body.dirigindo #municao { display:none; }
+  #municao { display:none; position:fixed; right:calc(170px + env(safe-area-inset-right)); bottom:calc(150px + env(safe-area-inset-bottom)); z-index:6; pointer-events:none;
+    font:bold 15px system-ui, sans-serif; color:#fff; background:rgba(0,0,0,.55); padding:4px 9px; border-radius:10px; text-shadow:0 1px 2px #000; }
+  body:not(.toque) #municao { right:auto; left:50%; transform:translateX(-50%); bottom:calc(70px + env(safe-area-inset-bottom)); }
+  body.passageiro #btRecarregar { display:none; }
   body.dirigindo #btPular, body.passageiro #btPular, body.dirigindo #btRender, body.passageiro #btRender { display:none !important; }
   #btRender { position:absolute; left:50%; transform:translateX(-50%); bottom:calc(150px + env(safe-area-inset-bottom)); width:auto; height:auto; min-width:150px; padding:12px 18px;
     border-radius:24px; background:rgba(200,30,30,.92); border:2px solid #ffb3b3; color:#fff; font-size:15px; pointer-events:auto; box-shadow:0 0 14px rgba(255,60,60,.6); }
@@ -315,35 +319,35 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261119zm",
-  "./js/mundo.js": "./js/mundo.js?v=20261119zm",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261119zm",
-  "./js/cla.js": "./js/cla.js?v=20261119zm",
-  "./js/config.js": "./js/config.js?v=20261119zm",
-  "./js/empresa.js": "./js/empresa.js?v=20261119zm",
-  "./js/loja.js": "./js/loja.js?v=20261119zm",
-  "./js/painel.js": "./js/painel.js?v=20261119zm",
-  "./js/rede.js": "./js/rede.js?v=20261119zm",
-  "./js/sedes.js": "./js/sedes.js?v=20261119zm",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261119zm",
-  "./js/civico.js": "./js/civico.js?v=20261119zm",
-  "./js/ovni.js": "./js/ovni.js?v=20261119zm",
-  "./js/jato.js": "./js/jato.js?v=20261119zm",
-  "./js/governo.js": "./js/governo.js?v=20261119zm",
-  "./js/servicos.js": "./js/servicos.js?v=20261119zm",
-  "./js/sons.js": "./js/sons.js?v=20261119zm",
-  "./js/voz.js": "./js/voz.js?v=20261119zm",
-  "./js/clima.js": "./js/clima.js?v=20261119zm",
-  "./js/ceu.js": "./js/ceu.js?v=20261119zm",
-  "./js/semaforos.js": "./js/semaforos.js?v=20261119zm",
-  "./js/cabine.js": "./js/cabine.js?v=20261119zm",
-  "./js/eixos.js": "./js/eixos.js?v=20261119zm",
-  "./js/racoes.js": "./js/racoes.js?v=20261119zm",
-  "./js/logos.js": "./js/logos.js?v=20261119zm",
-  "./js/celular.js": "./js/celular.js?v=20261119zm",
-  "./js/jornal.js": "./js/jornal.js?v=20261119zm",
-  "./js/visual.js": "./js/visual.js?v=20261119zm",
-  "./js/tutorial.js": "./js/tutorial.js?v=20261119zm"
+  "./js/main.js": "./js/main.js?v=20261119zn",
+  "./js/mundo.js": "./js/mundo.js?v=20261119zn",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261119zn",
+  "./js/cla.js": "./js/cla.js?v=20261119zn",
+  "./js/config.js": "./js/config.js?v=20261119zn",
+  "./js/empresa.js": "./js/empresa.js?v=20261119zn",
+  "./js/loja.js": "./js/loja.js?v=20261119zn",
+  "./js/painel.js": "./js/painel.js?v=20261119zn",
+  "./js/rede.js": "./js/rede.js?v=20261119zn",
+  "./js/sedes.js": "./js/sedes.js?v=20261119zn",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261119zn",
+  "./js/civico.js": "./js/civico.js?v=20261119zn",
+  "./js/ovni.js": "./js/ovni.js?v=20261119zn",
+  "./js/jato.js": "./js/jato.js?v=20261119zn",
+  "./js/governo.js": "./js/governo.js?v=20261119zn",
+  "./js/servicos.js": "./js/servicos.js?v=20261119zn",
+  "./js/sons.js": "./js/sons.js?v=20261119zn",
+  "./js/voz.js": "./js/voz.js?v=20261119zn",
+  "./js/clima.js": "./js/clima.js?v=20261119zn",
+  "./js/ceu.js": "./js/ceu.js?v=20261119zn",
+  "./js/semaforos.js": "./js/semaforos.js?v=20261119zn",
+  "./js/cabine.js": "./js/cabine.js?v=20261119zn",
+  "./js/eixos.js": "./js/eixos.js?v=20261119zn",
+  "./js/racoes.js": "./js/racoes.js?v=20261119zn",
+  "./js/logos.js": "./js/logos.js?v=20261119zn",
+  "./js/celular.js": "./js/celular.js?v=20261119zn",
+  "./js/jornal.js": "./js/jornal.js?v=20261119zn",
+  "./js/visual.js": "./js/visual.js?v=20261119zn",
+  "./js/tutorial.js": "./js/tutorial.js?v=20261119zn"
 } }
 </script>
 </head>
@@ -523,6 +527,7 @@
   <div id="janelaMsg" class="msg"></div>
 </div>
 
+<div id="municao"></div>
 <div id="toque" class="oculto">
   <div id="joy"><i></i></div>
   <div id="botoes">
@@ -530,6 +535,7 @@
     <button class="bt" id="btSoco">Soco</button>
     <button class="bt" id="btArma">Armas</button>
     <button class="bt" id="btTiro">Atirar</button>
+    <button class="bt oculto" id="btRecarregar">🔄 Pente</button>
     <button class="bt oculto" id="btAlgema">🔗 Algemar</button>
     <button class="bt oculto" id="btCrime">🔥 Incendiar</button>
     <button class="bt" id="btPular">🦘 Pular</button>
@@ -545,7 +551,7 @@
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
 <div id="telaFim"><b></b></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 19/11 · laser em rajada e faíscas na armadura (19zm)</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 19/11 · pentes e rajada nas armas (19zn)</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

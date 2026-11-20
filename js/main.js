@@ -1299,6 +1299,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'q') { if ($('rodaArmas')?.style.display === 'block') fecharRoda(); else botaoArma(); }
   if (k === ' ') pular();
   if (k === 'r') renderSe();
+  if (k === 'b') trocarPente();   // 🔄 trocar o pente antes de acabar
   if (k === 'z') girarCamera(-1);
   if (k === 'x') girarCamera(1);
   if (k === 'm') abrirJanela('mochila');
@@ -1420,6 +1421,7 @@ function configurarJoystick() {
   }
   toque('btAcao', acaoContexto); toque('btSoco', socar); toque('btArma', botaoArma); toque('btAlgema', acaoAlgema); toque('btCrime', acaoCrime);
   toque('btPular', pular); toque('btRender', renderSe);
+  toque('btRecarregar', () => trocarPente());
   toque('btTiro', () => { gatilho.segurando = true; gatilho.alvo = null; atirar(null); });
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('btTiro').addEventListener(ev, () => { gatilho.segurando = false; }); toque('btGiraE', () => girarCamera(-1)); toque('btGiraD', () => girarCamera(1));
 }
@@ -2087,7 +2089,7 @@ function opcoesRoda() {
   r.push({ id: 'padrao', ic, nome });
   for (const [it, ic2] of [['espingarda', '🔫'], ['fuzil', '🔫'], ['rpg', '🚀'], ['bazuca', '🚀']]) if (qtdItem(it) > 0) r.push({ id: it, ic: ic2, nome: NOME_ITEM_T[it], qtd: it === 'rpg' || it === 'bazuca' ? `${qtdItem('foguete')} foguetes` : null });
   if (jogador.armadura) for (const it of ['laser_azul', 'laser_roxo', 'laser_vermelho', 'laser_energia']) if (qtdItem(it) > 0) {   // lasers: só com a armadura vestida
-    const pe = jogador.pente; r.push({ id: it, ic: '🔋', nome: NOME_ITEM_T[it], qtd: jogador.armaEspecial === it && pe ? (pe.ate ? '⏳' : `${pe.balas}/10`) : '10/10' });
+    const pe = jogador.pentes?.[it]; r.push({ id: it, ic: '🔋', nome: NOME_ITEM_T[it], qtd: pe ? (pe.ate ? '⏳' : `${pe.balas}/10`) : '10/10' });
   }
   if (qtdItem('granada') > 0) r.push({ id: 'granada', ic: '💣', nome: 'Granada', qtd: `${qtdItem('granada')}` });
   return r;
@@ -2144,22 +2146,23 @@ function alturaNome(av) { return Math.max(2.45, (av?.altura || 1.8) + 0.65); }  
 // armas: a básica de todos e as das corporações (só em serviço), a militar dos clãs e a pesada do Exército
 const ARMAS = {
   basica: { cod: 1, alc: 40, grav: 1, modelo: 'arma_paintball', dano: 20, recarga: 0.28, vel: 24, cor: null, pega: [0, 0.1, -0.11], boca: [0, 0.22, 0.3] },
-  policia: { cod: 2, alc: 60, grav: 0.55, modelo: 'arma_policia', dano: 27, recarga: 0.19, vel: 28, cor: '#ffd23e', pega: [0, 0.07, -0.1], boca: [0, 0.14, 0.3] },
-  prf: { cod: 3, alc: 60, grav: 0.55, modelo: 'arma_prf', dano: 27, recarga: 0.19, vel: 28, cor: '#3e8cff', pega: [0, 0.15, -0.2], boca: [0, 0.33, 0.3] },
-  exercito: { cod: 4, alc: 80, grav: 0.4, modelo: 'arma_exercito', dano: 32, recarga: 0.16, vel: 30, cor: '#2fbf5a', pega: [0, 0.15, -0.25], boca: [0, 0.3, 0.4] },
-  militar: { cod: 5, alc: 75, grav: 0.4, modelo: 'arma_militar', dano: 30, recarga: 0.16, vel: 30, cor: null, pega: [0, 0.12, -0.21], boca: [0, 0.22, 0.45] },
-  pesada: { cod: 6, alc: 95, grav: 0.35, modelo: 'arma_grande_porte', dano: 55, recarga: 0.45, vel: 34, cor: '#1f9e46', pega: [0, 0.15, -0.18], boca: [0, 0.25, 0.58], bola: 2.2 },
-  espingarda: { cod: 7, grav: 1.2, modelo: 'arma_espingarda', comp: 0.9, reserva: 'arma_grande_porte', dano: 11, recarga: 0.85, vel: 23, cor: '#ff7a1a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.58], chumbos: 7, espalha: 0.13, alcance: 0.6 },
+  policia: { cod: 2, alc: 60, grav: 0.55, modelo: 'arma_policia', dano: 27, recarga: 0.14, pente: 18, troca: 1.8, rajada: true, vel: 28, cor: '#ffd23e', pega: [0, 0.07, -0.1], boca: [0, 0.14, 0.3] },
+  prf: { cod: 3, alc: 60, grav: 0.55, modelo: 'arma_prf', dano: 27, recarga: 0.14, pente: 18, troca: 1.8, rajada: true, vel: 28, cor: '#3e8cff', pega: [0, 0.15, -0.2], boca: [0, 0.33, 0.3] },
+  exercito: { cod: 4, alc: 80, grav: 0.4, modelo: 'arma_exercito', dano: 32, recarga: 0.125, pente: 30, troca: 2.5, rajada: true, vel: 30, cor: '#2fbf5a', pega: [0, 0.15, -0.25], boca: [0, 0.3, 0.4] },
+  militar: { cod: 5, alc: 75, grav: 0.4, modelo: 'arma_militar', dano: 30, recarga: 0.11, pente: 25, troca: 2, rajada: true, vel: 30, cor: null, pega: [0, 0.12, -0.21], boca: [0, 0.22, 0.45] },
+  pesada: { cod: 6, alc: 95, grav: 0.35, modelo: 'arma_grande_porte', dano: 55, recarga: 0.2, pente: 100, troca: 5, rajada: true, vel: 34, cor: '#1f9e46', pega: [0, 0.15, -0.18], boca: [0, 0.25, 0.58], bola: 2.2 },
+  espingarda: { cod: 7, grav: 1.2, modelo: 'arma_espingarda', comp: 0.9, reserva: 'arma_grande_porte', dano: 11, recarga: 0.85, pente: 8, troca: 3.5, vel: 23, cor: '#ff7a1a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.58], chumbos: 7, espalha: 0.13, alcance: 0.6 },
   rpg: { cod: 9, lanca: 'rpg', modelo: 'arma_rpg', comp: 1.0, reserva: 'arma_militar', dano: 55, recarga: 3, vel: 45, cor: '#7a8a4a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.55] },
   bazuca: { cod: 10, lanca: 'baz', modelo: 'arma_bazuca', comp: 1.3, reserva: 'arma_militar', dano: 90, recarga: 5, vel: 60, cor: '#3f5233', pega: [0, 0.02, 0], boca: [0, 0.02, 0.75] },
   // armas laser do laboratório (19q): só com a armadura vestida; pente de 10 em rajada (segurando o gatilho) e 5 s de recarga (20m); o cano do modelo vem em -x
-  laser_azul: { cod: 12, laser: true, alc: 140, grav: 0.03, modelo: 'laser_azul', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 30, recarga: 0.11, rajada: true, vel: 70, cor: '#3ec8ff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
-  laser_roxo: { cod: 13, laser: true, alc: 140, grav: 0.03, modelo: 'laser_roxo', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 34, recarga: 0.11, rajada: true, vel: 70, cor: '#b14bff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
-  laser_vermelho: { cod: 14, laser: true, alc: 140, grav: 0.03, modelo: 'laser_vermelho', comp: 1.1, vira: true, reserva: 'arma_militar', dano: 40, recarga: 0.11, rajada: true, vel: 66, cor: '#ff3b3b', pega: [0, 0.02, 0], boca: [0, 0.02, 0.74], bola: 1.5 },
-  laser_energia: { cod: 15, laser: true, alc: 140, grav: 0.03, modelo: 'laser_energia', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 36, recarga: 0.11, rajada: true, vel: 72, cor: '#7dff5a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
+  laser_azul: { cod: 12, laser: true, alc: 140, grav: 0.03, modelo: 'laser_azul', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 30, recarga: 0.11, pente: 10, troca: 5, rajada: true, vel: 70, cor: '#3ec8ff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
+  laser_roxo: { cod: 13, laser: true, alc: 140, grav: 0.03, modelo: 'laser_roxo', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 34, recarga: 0.11, pente: 10, troca: 5, rajada: true, vel: 70, cor: '#b14bff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
+  laser_vermelho: { cod: 14, laser: true, alc: 140, grav: 0.03, modelo: 'laser_vermelho', comp: 1.1, vira: true, reserva: 'arma_militar', dano: 40, recarga: 0.11, pente: 10, troca: 5, rajada: true, vel: 66, cor: '#ff3b3b', pega: [0, 0.02, 0], boca: [0, 0.02, 0.74], bola: 1.5 },
+  laser_energia: { cod: 15, laser: true, alc: 140, grav: 0.03, modelo: 'laser_energia', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 36, recarga: 0.11, pente: 10, troca: 5, rajada: true, vel: 72, cor: '#7dff5a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
   ponto50: { cod: 11, alc: 220, grav: 0.1, modelo: 'arma_ponto50', dano: 34, recarga: 0.12, vel: 90, cor: '#ffcc33' },
-  fuzil: { cod: 8, alc: 130, grav: 0.18, modelo: 'arma_fuzil', comp: 0.95, vira: true, reserva: 'arma_militar', dano: 26, recarga: 0.11, vel: 42, cor: '#d9dde3', pega: [0, 0.02, 0], boca: [0, 0.02, 0.62] },
+  fuzil: { cod: 8, alc: 130, grav: 0.18, modelo: 'arma_fuzil', comp: 0.95, vira: true, reserva: 'arma_militar', dano: 26, recarga: 0.1, pente: 30, troca: 2.5, rajada: true, vel: 42, cor: '#d9dde3', pega: [0, 0.02, 0], boca: [0, 0.02, 0.62] },
 };
+// pente (20n): balas no pente e troca (s) — vazio, troca sozinho; rajada: segurando o Atirar continua atirando.
 // alcance (alc, em metros) e queda da bala (grav, 1 = tinta de paintball): arma melhor vai mais longe e cai menos.
 // Antes todas caíam com a gravidade inteira e batiam no chão a uns 15–20 m, qualquer que fosse a arma.
 function balistica(b, A) { if (!b || !A) return; b.g = 9.8 * (A.grav ?? 1); if (A.alc) b.vida = A.alc / A.vel; }
@@ -2241,6 +2244,29 @@ function conferirArma() {
 
 // tiros de paintball
 const bolas = []; const manchas = []; const _vf = new THREE.Vector3();
+// pentes (20n): um por arma, só na memória (a munição não acaba de vez). jogador.pentes[tipo] = { balas, ate }
+function penteDe(tipo) {
+  const A = ARMAS[tipo], ps = jogador.pentes ||= {}, pe = ps[tipo] ||= { balas: A?.pente || 0, ate: 0 };
+  if (pe.ate && performance.now() >= pe.ate) { pe.balas = A.pente; pe.ate = 0; desenharMunicao(); }
+  return pe;
+}
+function trocarPente() {
+  const tipo = jogador.armaTipo || 'basica', A = ARMAS[tipo]; if (!A?.pente || !jogador.armado) return;
+  const pe = penteDe(tipo); if (pe.ate || pe.balas >= A.pente) return;
+  pe.balas = 0; pe.ate = performance.now() + A.troca * 1000;
+  aviso(`🔄 Trocando o pente (${A.troca} s)…`, 1.5); desenharMunicao();
+}
+// contador de balas ao lado do Atirar (celular) / embaixo no meio (PC); botão 🔄 para trocar antes de acabar
+let municaoTxt = '';
+function desenharMunicao() {
+  const el = $('municao'); if (!el) return;
+  const tipo = jogador.armaTipo || 'basica', A = ARMAS[tipo];
+  let t = '';
+  if (jogador.armado && A?.pente && !tenhoArmaPd() && !jogador.carro) { const pe = penteDe(tipo); t = pe.ate ? `🔄 ${Math.ceil((pe.ate - performance.now()) / 1000)} s` : `${A.laser ? '🔋' : '🔫'} ${pe.balas}/${A.pente}`; }
+  if (t === municaoTxt) return; municaoTxt = t;
+  el.textContent = t; el.style.display = t ? 'block' : 'none';
+  const bt = $('btRecarregar'); if (bt) bt.classList.toggle('oculto', !t || t.startsWith('🔄') || penteDe(tipo).balas >= A.pente);
+}
 // feixe do laser: caixa fina de 2,5 m com a ponta na frente (o centro fica 1,25 m atrás da posição da "bala")
 const geoFeixe = new THREE.BoxGeometry(0.07, 0.07, 2.5).translate(0, 0, -1.25), EIXO_Z = new THREE.Vector3(0, 0, 1);
 // gatilho segurado (20m): arma de rajada (laser) continua atirando enquanto o botão / clique estiver apertado
@@ -2261,11 +2287,10 @@ function atirar(alvo) {
   const A = ARMAS[jogador.armaTipo || 'basica'];
   jogador.alvo = null;
   if (A.lanca) { dispararFoguete(A, alvo); return; }
-  if (A.laser) {   // pente de 10; vazio, recarrega sozinho em 5 s
-    const pe = jogador.pente ||= { balas: 10, ate: 0 }, t = performance.now();
-    if (pe.ate && t >= pe.ate) { pe.balas = 10; pe.ate = 0; }
-    if (pe.balas <= 0) { if (!gatilho.segurando || t > (gatilho.avisou || 0)) { gatilho.avisou = t + 1500; aviso(`🔋 Recarregando o laser… ${Math.ceil((pe.ate - t) / 1000)} s`, 1.2); } return; }
-    pe.balas--; if (pe.balas <= 0) { pe.ate = t + 5000; aviso('🔋 Pente vazio: o laser recarrega em 5 s.', 2.5); }
+  if (A.pente && !tenhoArmaPd()) {   // pente (20n): vazio, troca sozinho; enquanto troca, não atira
+    const pe = penteDe(jogador.armaTipo || 'basica'), t = performance.now();
+    if (pe.ate) { if (!gatilho.segurando || t > (gatilho.avisou || 0)) { gatilho.avisou = t + 1500; aviso(`🔄 Trocando o pente… ${Math.ceil((pe.ate - t) / 1000)} s`, 1.2); } return; }
+    pe.balas--; if (pe.balas <= 0) trocarPente(); desenharMunicao();
   }
   const manual = miraM.ativo && podeMiraManual();
   if (manual) { /* mira manual: vai exatamente pelos pontinhos */ } else if (modoCam === 'p1' && !jogador.carro) jogador.yaw = olhar.yaw;
@@ -3480,6 +3505,7 @@ async function iniciarJogo(perfil) {
   desenharFundoMapa();
   montarLocais();
   atualizarInfo();
+  document.body.classList.toggle('toque', !!TOQUE);
   if (TOQUE) { $('toque').classList.remove('oculto'); configurarJoystick(); $('btTiro').classList.add('oculto'); }
   else { $('ajuda').innerHTML = CONTROLES_PC.map(([k, t]) => `<kbd>${k}</kbd> ${t}`).join('<br>'); $('ajuda').classList.remove('oculto'); setTimeout(() => $('ajuda').classList.add('oculto'), 15000); }
   $('hud').classList.remove('oculto');
@@ -8268,6 +8294,7 @@ function atualizarJogador(dt) {
   const j = jogador, av = j.avatar;
   for (let i = j.eventos.length - 1; i >= 0; i--) { j.eventos[i].t -= dt; if (j.eventos[i].t <= 0) { j.eventos[i].fn(); j.eventos.splice(i, 1); } }
   j.recarga = Math.max(0, j.recarga - dt);
+  desenharMunicao();
   if (gatilho.segurando && j.recarga <= 0 && j.armado && ARMAS[j.armaTipo || 'basica']?.rajada) atirar(gatilho.alvo || null);   // rajada: segurando o gatilho
   if (j.abducao) { seguirAbducao(dt); return; }
   if (j.trem && seguirTrem()) {
@@ -17516,7 +17543,7 @@ async function desenharTatica() {
       <div class="botoes">${jogador.armadura ? '<button id="tArmTirar">🤖 Guardar a armadura</button>' : '<button id="tArmVestir">🤖 Vestir a armadura</button>'}<button id="tArmVender">💰 Vender a armadura</button></div>`;
   }
   { const ls = Object.keys(ARMAS).filter((k) => ARMAS[k].laser && qtdItem(k) > 0);
-    if (ls.length) h += `<div class="sub">🔋 Armas laser</div><p class="dica">Só funcionam com a armadura vestida. Pente de 10 tiros em rajada (segure o Atirar); vazio, recarrega sozinho em 5 s.${jogador.pente?.ate ? ' <b>Recarregando…</b>' : jogador.pente ? ` Pente: <b>${jogador.pente.balas}/10</b>.` : ''}</p>
+    if (ls.length) h += `<div class="sub">🔋 Armas laser</div><p class="dica">Só funcionam com a armadura vestida. Pente de 10 tiros em rajada (segure o Atirar); vazio, recarrega sozinho em 5 s.</p>
       <div class="botoes">${ls.map((k) => `<button data-eq="${k}" ${jogador.armadura ? '' : 'disabled'}>${jogador.armaEspecial === k ? '✔️ ' : ''}🔋 ${NOME_ITEM_T[k]}</button>`).join('')}</div>`; }
   try { const of = await rede.lab.ofertas(); const pra = (of || []).filter((o) => o.comprador === eu && Date.parse(o.em) > agoraServidor() - 600000);
     if (pra.length) h += `<div class="sub">🤖 Ofertas de armadura</div><p class="dica">Comprar armadura de outro jogador é negócio do mercado negro: quem vende comete crime (e vira desertor se for de corporação).</p>
