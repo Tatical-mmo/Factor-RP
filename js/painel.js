@@ -403,6 +403,27 @@ function abaTempo() {
   $('tSalvar').onclick = () => depois(() => rede.clima.auto($('tAuto').checked, Math.floor(Number($('tChuva').value) || 0), Math.floor(Number($('tTemp').value) || 0), Math.floor(Number($('tNeve').value) || 0)), 'Programação salva.');
 }
 // ------------------------------------------------------------ eu
+// caça ao tesouro (20q): monta o conteúdo do baú e esconde
+function blocoTesouro() {
+  const itens = {}; let nomes = {};
+  const desenharItens = () => { const l = Object.entries(itens); $('pBauItens').innerHTML = l.length ? l.map(([k, q]) => `<button data-bautira="${k}">${q}× ${esc(nomes[k] || k)} ✕</button>`).join(' ') : 'Nenhum item.';
+    $('pBauItens').querySelectorAll('[data-bautira]').forEach((b) => { b.onclick = () => { delete itens[b.dataset.bautira]; desenharItens(); }; }); };
+  desenharItens();
+  rede.tesouro.itens().then((l) => { nomes = Object.fromEntries(l.map((x) => [x.item, x.nome])); const s = $('pBauItem'); if (s) s.innerHTML = l.map((x) => `<option value="${x.item}">${esc(x.nome)}</option>`).join(''); }).catch(() => {});
+  const b0 = ctx.estadoBau(); $('pBauAtual').innerHTML = b0?.ativo ? `<b>Baú ativo</b> até ${new Date(b0.expira_em).toLocaleString('pt-BR').slice(0, 17)}.` : b0?.aberto_nome ? `Último baú: aberto por <b>${esc(b0.aberto_nome)}</b>.` : 'Nenhum baú ativo.';
+  $('pBauAddItem').onclick = () => { const k = $('pBauItem').value, q = Math.max(1, Math.round(Number($('pBauQtd').value) || 1)); if (!k) return; itens[k] = (itens[k] || 0) + q; desenharItens(); };
+  const montar = () => {
+    const r = {}, m = Math.max(0, Math.round(Number($('pBauMoedas').value) || 0)); if (m) r.moedas = m;
+    if (Object.keys(itens).length) r.itens = { ...itens };
+    const ps = [...document.querySelectorAll('[data-baup]:checked')].map((x) => x.dataset.baup); if (ps.length) r.personagens = ps;
+    return r;
+  };
+  const esconder = (aqui) => { const r = montar(); if (!Object.keys(r).length) { msg('Coloque alguma coisa dentro do baú.', false); return; } executar(() => ctx.criarBau(r, Number($('pBauTempo').value), aqui), aqui ? 'Baú escondido aqui. Todos foram avisados.' : 'Baú escondido num lugar sorteado. Todos foram avisados.'); };
+  $('pBauSortear').onclick = () => esconder(false);
+  $('pBauAqui').onclick = () => esconder(true);
+  $('pBauCancelar').onclick = () => executar(() => ctx.cancelarBau(), 'Caça ao tesouro encerrada.');
+  $('pSirenes').onclick = () => { ctx.testarSirenes(); msg('Sirenes tocando por 15 s para todos.'); };
+}
 async function blocoBueiro() {
   const c = $('pBueiro'); if (!c) return;
   let k; try { k = await rede.painel.bueiroSecreto(); } catch (e) { c.textContent = e.message; return; }
@@ -420,6 +441,19 @@ function abaEu() {
   if (pode('invisivel')) h += `<div class="sub">Modo invisível</div><p class="dica">Os jogadores não veem você (nem no minimapa). A equipe continua vendo.</p><div class="botoes"><button id="pInvis" class="${eu.invisivel ? 'ativo' : ''}">${eu.invisivel ? '👻 Invisível: ligado' : '👻 Invisível: desligado'}</button></div>`;
   if (eu.cargo === 'admin' || eu.cargo === 'moderador') h += '<div class="sub">🔊 Som das Saveiros (últimos links)</div><div id="pSons" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') h += '<div class="sub">Evento: arma dourada</div><p class="dica">Esconde a arma dourada (2 balas) exatamente onde você está. Quem achar pega; depois dos 2 tiros ela some.</p><div class="botoes"><button id="pArmaPd">✨ Esconder a arma dourada aqui</button></div><div class="sub">Evento: pedra do Bruxo</div><p class="dica">Esconde a pedra preciosa exatamente onde você está. Quem achar invoca o Bruxo e faz UM pedido: virar pássaro por um ciclo, perdão de todos os crimes, 1 a 10 milhões ou a arma dourada.</p><div class="botoes"><button id="pPedra">💎 Esconder a pedra do Bruxo aqui</button></div>';
+  if (eu.cargo === 'admin' && ctx.criarBau) {   // 20q: caça ao tesouro e teste das sirenes
+    const todos = [...PERSONAGENS, ...PERSONAGENS_EVENTO];
+    h += `<div class="sub">🗝️ Caça ao tesouro</div><p class="dica">Monte o baú: moedas, itens da mochila e personagens (qualquer um, inclusive os 🗝️ só do baú). O primeiro que abrir leva tudo. Todos veem só o círculo de busca no minimapa.</p>
+      <div id="pBauAtual" class="dica"></div>
+      <div class="botoes"><label>💰 Moedas <input id="pBauMoedas" type="number" min="0" step="100" value="0" style="width:110px"></label></div>
+      <div class="botoes"><select id="pBauItem"><option value="">Carregando itens…</option></select><input id="pBauQtd" type="number" min="1" value="1" style="width:64px"><button id="pBauAddItem">➕ Item</button></div>
+      <div id="pBauItens" class="dica"></div>
+      <div class="poderes" style="max-height:180px;overflow:auto">${todos.map((x) => `<label><input type="checkbox" data-baup="${x.id}"> ${x.bau ? '🗝️ ' : ''}${esc(x.nome)}</label>`).join('')}</div>
+      <div class="botoes"><select id="pBauTempo">${[[30, '30 min'], [60, '1 h'], [180, '3 h'], [720, '12 h'], [1440, '1 dia'], [4320, '3 dias']].map(([m, t]) => `<option value="${m}" ${m === 180 ? 'selected' : ''}>${t}</option>`).join('')}</select>
+        <button id="pBauSortear">🎲 Esconder em lugar sorteado</button><button id="pBauAqui">📍 Esconder aqui</button><button id="pBauCancelar" class="perigo">Encerrar caça</button></div>
+      <div class="sub">📢 Sirenes de alarme</div><p class="dica">Tocam sozinhas quando a Marinha lança o míssil de cruzeiro. O teste toca 15 s para todos os jogadores.</p>
+      <div class="botoes"><button id="pSirenes">📢 Testar sirenes</button></div>`;
+  }
   if (eu.cargo === 'admin') h += '<div class="sub">🐀 Bueiro secreto dos Lixeiros</div><div id="pBueiro" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') h += '<div class="sub">⚖️ Perdoar crimes</div><div id="pPerdao" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') h += '<div class="sub">Prefeitura</div><div id="pPref" class="dica">Carregando…</div>';
@@ -451,6 +485,7 @@ function abaEu() {
     .map((p) => `<button class="skin ${p.id === eu.personagem ? 'sel' : ''}" data-skin="${p.id}"><img src="assets/miniaturas/${p.id}.webp" alt=""><span>${esc(p.nome)}</span></button>`).join('')}</div>`;
   c.innerHTML = h;
   if ($('pBueiro')) blocoBueiro();
+  if ($('pBauSortear')) blocoTesouro();
   const apd = $('pArmaPd'); if (apd) apd.onclick = () => executar(() => ctx.esconderArmaPd(), 'Arma dourada escondida aqui. Todos foram avisados do evento.');
   const ppd = $('pPedra'); if (ppd) ppd.onclick = () => executar(() => ctx.esconderPedra(), 'Pedra do Bruxo escondida aqui. Todos foram avisados do evento.');
   const b = $('pImortal'); if (b) b.onclick = () => executar(() => rede.painel.imortal(!eu.imortal), eu.imortal ? 'Modo imortal desligado.' : 'Modo imortal ligado.');

@@ -109,6 +109,8 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'reset' }, ({ payload }) => eventos.reset?.(payload));
   canal.on('broadcast', { event: 'navio' }, ({ payload }) => eventos.navio?.(payload));
   canal.on('broadcast', { event: 'cruzeiro' }, ({ payload }) => eventos.cruzeiro?.(payload));
+  canal.on('broadcast', { event: 'sirene' }, ({ payload }) => eventos.sirene?.(payload));
+  canal.on('broadcast', { event: 'bau' }, ({ payload }) => eventos.bau?.(payload));
   canal.on('broadcast', { event: 'missil' }, ({ payload }) => eventos.missil?.(payload));
   canal.on('broadcast', { event: 'travado' }, ({ payload }) => eventos.travado?.(payload));
   canal.on('broadcast', { event: 'missilAcerto' }, ({ payload }) => eventos.missilAcerto?.(payload));
@@ -166,6 +168,7 @@ function traduzirRpc(m) {
     'adicional de 0 a 100 por cento': 'O adicional vai de 0 a 100%.',
     'esse terreno ja tem obra': 'Esse terreno já tem obra.',
     'a pedra ja foi achada': 'Alguém já achou a pedra preciosa.',
+    'alguem ja abriu o bau': 'Alguém já abriu o baú do tesouro.', 'o bau sumiu': 'O baú do tesouro não está mais lá.', 'bau vazio': 'Coloque alguma coisa dentro do baú.',
     'o bruxo nao atende voce': 'O Bruxo só atende quem achou a pedra.',
     'valor de 1 a 10.000.000 por jogador': 'O valor vai de 1 a 10.000.000 por jogador.',
     'escolha quem recebe': 'Escolha quem recebe.',
@@ -888,6 +891,15 @@ export const pd = {
   disparar: () => rpc('disparar_pd'),
   acertar: (alvo) => rpc('acertar_pd', { p_alvo: alvo }),
   soltar: (x, z) => rpc('soltar_arma_pd', { p_x: x, p_z: z }),
+};
+// caça ao tesouro (132): o baú do admin. A posição exata não é pública: o radar pergunta ao banco quando você chega perto
+export const tesouro = {
+  estado: () => rpc('bau_estado'),
+  radar: (x, z) => rpc('bau_radar', { p_x: x, p_z: z }),
+  abrir: (id, x, z) => rpc('abrir_bau', { p_id: id, p_x: x, p_z: z }),
+  criar: (x, z, recompensas, minutos) => rpc('admin_criar_bau', { p_x: x, p_z: z, p_recompensas: recompensas, p_minutos: minutos }),
+  cancelar: () => rpc('admin_cancelar_bau'),
+  itens: () => sel(sb.from('precos').select('item, nome').order('nome')),
 };
 export const bruxo = {
   estado: () => sel(sb.from('pedra_bruxo').select('*').eq('id', 1).maybeSingle()),

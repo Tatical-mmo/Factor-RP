@@ -7,7 +7,7 @@ import { FERRO_VELHOS, FABRICAS, PRODUTOS, FOME_POR_SEGUNDO, LOTES_VENDA, DESTIN
 import { iniciarCla, atualizarCla } from './cla.js';
 import { iniciarEmpresa, abrirCompra, abrirMissoes, atualizar as atualizarJanelaEmpresa } from './empresa.js';
 import { iniciarLoja, abrir as abrirJanela, recarregarInventario, qtdItem, inventarioCarregado } from './loja.js';
-import { MASCARAS, PERSONAGENS, PERSONAGENS_GRATIS, ROBOS, MODELOS, CIDADE, RUAS_HORIZONTAIS, RUAS_VERTICAIS, QUARTEIROES_ESPECIAIS, VELOCIDADE, CONTROLES_PC } from './config.js';
+import { MASCARAS, PERSONAGENS, PERSONAGENS_EVENTO, PERSONAGENS_GRATIS, ROBOS, MODELOS, CIDADE, RUAS_HORIZONTAIS, RUAS_VERTICAIS, QUARTEIROES_ESPECIAIS, VELOCIDADE, CONTROLES_PC } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const TOQUE = window.matchMedia('(pointer: coarse)').matches;
@@ -1492,6 +1492,7 @@ function acaoContexto() {
   if (pertoDelegacia()) { entrarPublico('delegacia', () => salaDelegacia('delegacia', 1100 + 0, 'Delegacia', '#f1c40f'), pontos.delegacia, '🚓 Delegacia: balcão de serviço, procurados, celas e estande de tiro.'); return; }
   if (pertoContratante()) { abrirMissoes(); return; }
   if (pedraPerto()) { pegarPedra(); return; }
+  if (bauPerto()) { comecarAbrirBau(); return; }
   if (bruxoPerto()) { falarBruxo(); return; }
   if (jogador.perfil.prf) { const alvo = eleitoralProximo(2.4); if (alvo) { prenderEleitoral(alvo); return; } }
   if (jogador.perfil.profissao === 'medico') { const fer = feridoProximo(2.8); if (fer) { socorrerFerido(fer); return; } }
@@ -3345,7 +3346,11 @@ function desenharMapa() {
   }
   { const telaMini = (x, z) => [((x - px) / MAPA_R * 0.5 + 0.5) * w, ((z - pz) / MAPA_R * 0.5 + 0.5) * w];
     desenharBasesNoMapa(g, telaMini, w / (MAPA_R * 2), false);
-    desenharRotaGps(g, telaMini, 4); }   // rota do rastreio pelas ruas (roxa, como o GPS do GTA)
+    desenharRotaGps(g, telaMini, 4);
+    if (bau?.ativo) {   // caça ao tesouro: o círculo de busca (dourado, tracejado)
+      const [cx, cz] = telaMini(bau.cx, bau.cz), rr = bau.raio * w / (MAPA_R * 2);
+      g.save(); g.strokeStyle = '#ffd23e'; g.lineWidth = 3; g.setLineDash([7, 5]); g.fillStyle = 'rgba(255,210,62,.14)'; g.beginPath(); g.arc(cx, cz, rr, 0, 7); g.fill(); g.stroke(); g.restore();
+    } }   // rota do rastreio pelas ruas (roxa, como o GPS do GTA)
   const desenhar = (x, z, cor, raio) => {
     const mx = ((x - px) / MAPA_R * 0.5 + 0.5) * w, mz = ((z - pz) / MAPA_R * 0.5 + 0.5) * w;
     if (mx < -8 || mz < -8 || mx > w + 8 || mz > w + 8) return;
@@ -3551,6 +3556,7 @@ async function iniciarJogo(perfil) {
   if ($('btCelular')) $('btCelular').onclick = () => abrirCelular();
   try { montarEstacionamentos(); } catch (e) { console.warn('estacionamentos:', e); }
   try { montarOficinas(); } catch (e) { console.warn('oficinas:', e); }
+  try { montarSirenes(); } catch (e) { console.warn('sirenes', e); } atualizarEstadoBau();
   desenharFundoMapa(); try { montarLocais(); } catch { /* sem locais */ }   // as oficinas e os estacionamentos entram no mapa e no teleporte
   servicos.iniciar({ ultra: () => visual.nivelAtual() === 'ultra', socorrista: socorristaNpc,
     scene, textoSprite, altura: alturaChao, jogador: () => jogador, perfil: () => jogador.perfil, aviso, agora: agoraServidor,
@@ -3644,6 +3650,8 @@ async function iniciarJogo(perfil) {
     teleportar,
     esconderArmaPd: () => rede.pd.esconder(jogador.pos.x, jogador.pos.z),
     esconderPedra: () => rede.bruxo.esconder(jogador.pos.x, jogador.pos.z),
+    criarBau: (rec, minutos, aqui) => criarBau(rec, minutos, aqui), cancelarBau: async () => { await rede.tesouro.cancelar(); conexao?.enviar('bau', { tipo: 'cancelado' }); receberBau({ tipo: 'cancelado' }); },
+    estadoBau: () => bau, testarSirenes: () => { conexao?.enviar('sirene', { seg: 15 }); tocarSirenes(15, true); },
     locais: () => LOCAIS,
     objetosNaRua: () => objetosNaRua(),
     testeDefesa: (base, tipo) => testeDefesa(base, tipo),
@@ -3716,7 +3724,7 @@ function conectarMultiplayer(perfil) {
     explosao: (e) => receberExplosao(e),
     voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, dm: (m) => { if (m?.para === jogador.perfil?.id && amigosIds.has(m.de)) celular.mensagemChegou(m.de, remotos.get(m.de)?.meta?.nome); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
-    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), navio: (e) => receberNavio(e),
+    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), navio: (e) => receberNavio(e),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -6259,6 +6267,138 @@ function falarBruxo() {
     { rotulo: '✨ A arma amarela (dourada), com 2 balas', fn: pedir('arma', () => '✨ A ARMA DOURADA é sua: 2 balas. Saque a arma para usar.') },
     { rotulo: '🤔 Pensar mais um pouco', fn: () => aviso('🧙 “Estarei aqui esperando o seu pedido…”', 3) },
   ]);
+}
+
+// ================================================================= SIRENES DE ALARME (20q)
+// Mastros com megafone em pontos estratégicos. Tocam juntas quando a Marinha lança o míssil de cruzeiro (e no teste do
+// admin). Cada uma toca do lugar dela: mais longe = mais baixa e atrasada (o som anda ~340 m/s), então duas perto uma da
+// outra soam como uma e um eco.
+const SIRENES = [];
+let alarmeAte = 0, alarmeLigado = false;
+function montarSirenes() {
+  if (SIRENES.length) return;
+  const cands = [
+    [PRACAS[0][0] + 9, PRACAS[0][1] + 9, 'Praça Oeste'], [PRACAS[1][0] - 9, PRACAS[1][1] - 9, 'Praça Leste'],
+    contratante ? [contratante.x + 9, contratante.z - 9, 'Praça do Contratante'] : null,
+    [mundo.QUARTEL.portao.x - 8, mundo.QUARTEL.portao.z + 12, 'Quartel'], [mundo.BASE_AEREA.portao.x + 14, mundo.BASE_AEREA.z0 - 7, 'Base Aérea'],
+    [mundo.BASE_NAVAL.portao.x + 14, mundo.BASE_NAVAL.z0 - 7, 'Base Naval'], [mundo.AREA51.x1 + 7, 16, 'Área 51'],
+    ...AEROPORTOS.map((a) => [a.balcao.x + 10, a.balcao.z + (a.eixo === 'x' ? 6 : 0), a.nome]),
+    ...ferrovia.linhas.map((l) => { const p = l.plataformas.destino; return [12, p.zSaida, p.nome]; }),
+  ].filter(Boolean);
+  const livre = (x, z) => { const p = { x, z }; mundo.limitar(p); return Math.hypot(p.x - x, p.z - z) < 0.3 && !bloqueado(x, z) && !mundo.naRua(x, z, 1); };
+  for (const [x0, z0, nome] of cands) {
+    let pos = null;
+    for (let r = 0; r <= 24 && !pos; r += 3) for (let k = 0; k < (r ? 12 : 1) && !pos; k++) { const a = k / 12 * Math.PI * 2, x = x0 + Math.cos(a) * r, z = z0 + Math.sin(a) * r; if (livre(x, z)) pos = { x, z }; }
+    if (!pos || SIRENES.some((s) => Math.hypot(s.x - pos.x, s.z - pos.z) < 40)) continue;
+    const g = new THREE.Group(); g.position.set(pos.x, alturaChao(pos.x, pos.z), pos.z); scene.add(g);
+    const luz = textoSprite('🔴', { escala: 0.9, fundo: 'rgba(0,0,0,0)' }); luz.position.y = 7.6; luz.visible = false; g.add(luz);
+    SIRENES.push({ x: pos.x, z: pos.z, nome, g, luz });
+    colisores.push({ tipo: 'circ', x: pos.x, z: pos.z, r: 0.35 });
+  }
+  Promise.resolve(carregarGLB('assets/modelos/sirene_alarme.glb')).then((gl) => {
+    for (const s0 of SIRENES) {
+      const m = prepararEstatico(gl.scene.clone(true)), b = new THREE.Box3().setFromObject(m), k = 7.2 / Math.max(0.01, b.max.y - b.min.y);
+      m.scale.setScalar(k); m.position.y = -b.min.y * k; m.rotation.y = (s0.x * 0.37) % 6.28; s0.g.add(m);
+    }
+  }).catch(() => {});
+}
+function tocarSirenes(seg, teste = false) {
+  alarmeAte = Math.max(alarmeAte, performance.now() + seg * 1000);
+  if (!alarmeLigado) { alarmeLigado = true; sons.alarmeLigar(SIRENES.length); }
+  aviso(teste ? '📢 Teste das sirenes de alarme.' : '🚨 ALERTA: míssil de cruzeiro no ar! Procure abrigo.', 4);
+}
+function atualizarSirenes() {
+  if (!alarmeLigado) return;
+  const t = performance.now();
+  if (t > alarmeAte) { alarmeLigado = false; sons.alarmeDesligar(); for (const s0 of SIRENES) s0.luz.visible = false; return; }
+  const pisca = Math.sin(t / 180) > 0;
+  SIRENES.forEach((s0, i) => {
+    const d = Math.hypot(s0.x - jogador.pos.x, s0.z - jogador.pos.z), vol = Math.pow(Math.max(0, 1 - d / 950), 1.6) * 0.55 * (jogador.dentroCasa ? 0.35 : 1);
+    sons.alarmeVol(i, vol, d / 343);
+    s0.luz.visible = pisca && d < 400;
+  });
+}
+
+// ================================================================= CAÇA AO TESOURO (20q)
+// O admin monta o baú; o banco guarda a posição exata. Todos veem o círculo de busca no minimapa; dentro dele o radar
+// pergunta ao banco a distância e, bem perto, a posição (aí o baú aparece). Abrir: 5 s parado do lado; o primeiro leva tudo.
+let bau = null, bauRadar = null, bauObj = null, tRadarBau = 0, tEstadoBau = 0, abrindoBau = null;
+async function atualizarEstadoBau() { try { bau = await rede.tesouro.estado(); } catch { bau = null; } if (!bau?.ativo) tirarBau(); }
+function tirarBau() { if (bauObj) { scene.remove(bauObj); bauObj = null; } bauRadar = null; abrindoBau = null; }
+function receberBau(e) {
+  atualizarEstadoBau();
+  if (e.tipo === 'novo') aviso(`🗝️ CAÇA AO TESOURO! Um baú apareceu perto de: ${e.regiao}. Veja o círculo dourado no minimapa.`, 7);
+  else if (e.tipo === 'aberto') aviso(`🗝️ ${e.nome} encontrou e abriu o baú do tesouro!`, 6);
+  else if (e.tipo === 'cancelado') aviso('🗝️ A caça ao tesouro foi encerrada.', 4);
+}
+function textoRecompensas(r) {
+  const p = [];
+  if (r?.moedas > 0) p.push(`${num(r.moedas)} moedas`);
+  for (const [k, q] of Object.entries(r?.itens || {})) if (q > 0) p.push(`${q}× ${NOME_ITEM_T[k] || k}`);
+  for (const id of r?.personagens || []) p.push(`personagem ${[...PERSONAGENS, ...PERSONAGENS_EVENTO].find((x) => x.id === id)?.nome || id}`);
+  return p.join(', ') || 'surpresa';
+}
+function tickBau(dt) {
+  const el = $('radarBau');
+  if ((tEstadoBau -= dt) <= 0) { tEstadoBau = 45; atualizarEstadoBau(); }
+  const ativo = bau?.ativo && new Date(bau.expira_em).getTime() > agoraServidor();
+  const dentro = ativo && Math.hypot(jogador.pos.x - bau.cx, jogador.pos.z - bau.cz) < bau.raio + 25;
+  if (!ativo && bauObj) tirarBau();
+  if (dentro && (tRadarBau -= dt) <= 0) {
+    tRadarBau = 1.5;
+    rede.tesouro.radar(jogador.pos.x, jogador.pos.z).then((r) => {
+      bauRadar = r;
+      if (r?.x != null && !bauObj) {
+        bauObj = new THREE.Group(); bauObj.position.set(r.x, alturaChao(r.x, r.z), r.z); scene.add(bauObj);
+        const brilho = textoSprite('✨', { escala: 1.1, fundo: 'rgba(0,0,0,0)' }); brilho.position.y = 1.7; bauObj.add(brilho);
+        Promise.resolve(carregarGLB('assets/modelos/bau_tesouro.glb')).then((gl) => { if (!bauObj) return; const m = prepararEstatico(gl.scene.clone(true)), b = new THREE.Box3().setFromObject(m), k = 0.95 / Math.max(0.01, b.max.y - b.min.y); m.scale.setScalar(k); m.position.y = -b.min.y * k; bauObj.add(m); }).catch(() => {});
+      } else if (r?.x == null && bauObj) tirarBau();
+    }).catch(() => {});
+  }
+  if (bauObj) bauObj.children[0].position.y = 1.6 + Math.sin(performance.now() / 300) * 0.12;
+  // radar quente / frio
+  let t = '';
+  if (dentro) {
+    const d = bauRadar?.d;
+    t = d == null ? '🗝️ Baú: procure dentro do círculo dourado' : d <= 10 ? `🔥🔥 MUITO QUENTE! ~${d} m` : d <= 25 ? `🔥 Quente · ~${d} m` : d <= 45 ? `🌤️ Morno · ~${d} m` : `❄️ Frio · ~${d} m`;
+  }
+  if (el && el.dataset.t !== t) { el.dataset.t = t; el.textContent = t; el.style.display = t ? 'block' : 'none'; }
+  // abrindo: 5 s parado do lado
+  if (abrindoBau) {
+    const a = abrindoBau;
+    if (!bauObj || jogador.carro || jogador.morto || Math.hypot(jogador.pos.x - a.x, jogador.pos.z - a.z) > 1.5) { abrindoBau = null; aviso('🗝️ Você se afastou: a abertura do baú parou.', 2); return; }
+    a.t += dt; const resta = Math.ceil(5 - a.t);
+    if (resta !== a.ult) { a.ult = resta; if (resta > 0) aviso(`🗝️ Abrindo o baú… ${resta} s`, 1.1); }
+    if (a.t >= 5) {
+      abrindoBau = null;
+      rede.tesouro.abrir(bau.id, jogador.pos.x, jogador.pos.z).then((r) => {
+        aviso(`🗝️ VOCÊ ABRIU O BAÚ! Ganhou: ${textoRecompensas(r)}.`, 8);
+        conexao?.enviar('bau', { tipo: 'aberto', nome: jogador.perfil.nome });
+        bau = { ...bau, ativo: false }; tirarBau(); recarregarInventario?.();
+      }).catch((e2) => { aviso(e2.message, 3); atualizarEstadoBau(); });
+    }
+  }
+}
+const bauPerto = () => !!(bauObj && bau?.ativo && !abrindoBau && !jogador.carro && !jogador.ave && Math.hypot(bauObj.position.x - jogador.pos.x, bauObj.position.z - jogador.pos.z) < 3);
+function comecarAbrirBau() { abrindoBau = { t: 0, x: jogador.pos.x, z: jogador.pos.z, ult: 0 }; jogador.alvo = null; jogador.avatar.tocar('pegar', { umaVez: true, velocidade: 0.6, fade: 0.15 }); }
+// lugar sorteado para o baú: chão livre da ilha, fora das bases militares, das casas e da água
+function sortearLugarBau() {
+  const fora = [mundo.QUARTEL, mundo.BASE_AEREA, mundo.BASE_NAVAL, mundo.AREA51.deserto];
+  for (let k = 0; k < 400; k++) {
+    const x = mundo.ILHA.x0 + 40 + Math.random() * (mundo.ILHA.x1 - mundo.ILHA.x0 - 80), z = mundo.ILHA.z0 + 120 + Math.random() * (mundo.ILHA.z1 - mundo.ILHA.z0 - 160);
+    if (fora.some((r) => x > r.x0 - 15 && x < r.x1 + 15 && z > r.z0 - 15 && z < r.z1 + 15)) continue;
+    const p = { x, z }; mundo.limitar(p); if (Math.hypot(p.x - x, p.z - z) > 0.3 || bloqueado(x, z) || alturaChao(x, z) < 0) continue;
+    return { x, z };
+  }
+  return { x: jogador.pos.x, z: jogador.pos.z };
+}
+async function criarBau(recompensas, minutos, aqui) {
+  const p = aqui ? { x: jogador.pos.x, z: jogador.pos.z } : sortearLugarBau();
+  await rede.tesouro.criar(p.x, p.z, recompensas, minutos);
+  await atualizarEstadoBau();
+  const regiao = bau ? regiaoDe(bau.cx, bau.cz) : 'algum lugar';
+  conexao?.enviar('bau', { tipo: 'novo', regiao }); receberBau({ tipo: 'novo', regiao });
+  return p;
 }
 function criarBruxo() {
   const g = new THREE.Group(), glb = modelos.npc_bruxo;
@@ -8838,6 +8978,7 @@ function contexto() {
   }
   if (jogador.perfil?.policial && procuradoProximo(2.4)) return ['algemar e prender o procurado', 'Prender'];
   if (pedraPerto()) return ['pegar a pedra preciosa e invocar o Bruxo', '💎 Pegar'];
+  if (bauPerto()) return ['abrir o baú do tesouro (5 s parado do lado)', '🗝️ Abrir'];
   if (bruxoPerto()) return ['falar com o Bruxo: faça o seu pedido', '🧙 Falar'];
   if (jogador.perfil?.prf && eleitoralProximo(2.4)) return ['prender por crime eleitoral (PRF)', 'Prender'];
   if (jogador.perfil?.profissao === 'medico' && feridoProximo(2.8)) return ['salvar o ferido (+250)', '✚ Salvar'];
@@ -9064,7 +9205,7 @@ function quadroJogo() {
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
-  atualizarBolas(dt);
+  atualizarBolas(dt); atualizarSirenes(); tickBau(dt);
   diag('câmera/oclusão');
   atualizarCamera(dt);
   mundo.atualizarOclusao(dt, foco(), modo3D() ? new THREE.Vector3(0, 1, 0) : offsetCamera(anguloCamSuave));
@@ -16771,6 +16912,7 @@ function dispararCruzeiro(x, z, autor) {
 }
 const cruzeiros = [];
 function receberCruzeiro(e) {
+  tocarSirenes(Math.max(12, (e.t + 20000 - agoraServidor()) / 1000 + 12));   // 20q: sirenes durante o voo e mais um pouco
   const N = mundo.BASE_NAVAL, d0 = NAVIOS[Math.abs(Math.round(e.x)) % 2 ? 'd2' : 'd1'] || N.destroieres[0];
   const mesh = jato.criarMissil(modelos.missil_cruzeiro); mesh.scale.setScalar(1.8); scene.add(mesh);
   cruzeiros.push({ ...e, de: new THREE.Vector3(d0.x, 14, d0.z), mesh, fum: 0, avisado: 0 });

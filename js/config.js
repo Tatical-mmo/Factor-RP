@@ -45,6 +45,13 @@ export const PERSONAGENS_EVENTO = [   // limitados (Meshy): só o admin dá de p
   { id: 'Mascarado', nome: 'Mascarado do Morro' },
   { id: 'Dono_Morro', nome: 'Dono do Morro' },
   { id: 'Doutor_Peste', nome: 'Doutor da Peste', soPresente: true },   // 19p: só o admin usa e presenteia; nunca à venda
+  // 20q: só no baú da caça ao tesouro (ou de presente do admin); nunca à venda nem na vitrine
+  { id: 'Agente_Secreta', nome: 'Agente Secreta', soPresente: true, bau: true },
+  { id: 'Sentinela_Obsidiana', nome: 'Sentinela de Obsidiana', soPresente: true, bau: true },
+  { id: 'Torcedor_Organizado', nome: 'Torcedor Organizado', soPresente: true, bau: true },
+  { id: 'Intruso_Mascarado', nome: 'Intruso Mascarado', soPresente: true, bau: true },
+  { id: 'Androide_Moletom', nome: 'Androide de Moletom', soPresente: true, bau: true },
+  { id: 'Bandido_Balaclava', nome: 'Bandido de Balaclava', soPresente: true, bau: true },
 ];
 
 // grátis ao criar a conta; os outros custam 8.000 na loja de personagens (mesma lista do banco)

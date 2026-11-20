@@ -110,6 +110,33 @@ export function radio() {
 
 // óvni: zumbido grave que pulsa (gerado na hora, sem arquivo). O jogo pede o volume a cada quadro.
 let zum = null, zumVol = 0;
+// sirenes de alarme antiaéreo (20q): uma voz por sirene, sintetizada (uivo que sobe e desce). O jogo ajusta o volume e o
+// atraso de cada uma pela distância (o som anda ~340 m/s: a mais longe chega depois e mais fraca, como um eco)
+let alarme = null;
+export function alarmeLigar(n) {
+  if (!ac || alarme) return;
+  const t = ac.currentTime, filtro = ac.createBiquadFilter(), saida = ac.createGain();
+  filtro.type = 'lowpass'; filtro.frequency.value = 1900; filtro.Q.value = 0.7; saida.gain.value = 1; filtro.connect(saida); saida.connect(mestre);
+  const vozes = [];
+  for (let i = 0; i < n; i++) {
+    const g = ac.createGain(), atraso = ac.createDelay(4), lfo = ac.createOscillator(), prof = ac.createGain();
+    g.gain.value = 0; atraso.delayTime.value = 0; g.connect(atraso); atraso.connect(filtro);
+    lfo.type = 'sine'; lfo.frequency.value = 0.075 + Math.random() * 0.012; prof.gain.value = 230; lfo.connect(prof);   // cada motor gira num ritmo um pouco diferente
+    const oscs = [['sawtooth', 0], ['square', 4]].map(([tipo, det]) => { const o = ac.createOscillator(); o.type = tipo; o.frequency.value = 480; o.detune.value = det; prof.connect(o.frequency); const go = ac.createGain(); go.gain.value = tipo === 'square' ? 0.35 : 0.6; o.connect(go); go.connect(g); o.start(t); return o; });
+    lfo.start(t, Math.random() * 3);
+    vozes.push({ g, atraso, lfo, oscs });
+  }
+  alarme = { vozes, saida };
+}
+export function alarmeVol(i, vol, atrasoSeg) {
+  const v = alarme?.vozes[i]; if (!v) return;
+  const t = ac.currentTime; v.g.gain.setTargetAtTime(Math.max(0, vol), t, 0.4); v.atraso.delayTime.setTargetAtTime(Math.min(3.9, Math.max(0, atrasoSeg)), t, 0.6);
+}
+export function alarmeDesligar() {
+  if (!alarme) return; const a = alarme; alarme = null; const t = ac.currentTime;
+  a.saida.gain.setTargetAtTime(0, t, 0.8);
+  setTimeout(() => { for (const v of a.vozes) { for (const o of v.oscs) { try { o.stop(); } catch { /* já parou */ } } try { v.lfo.stop(); } catch { /* já parou */ } } a.saida.disconnect(); }, 4500);
+}
 // tiro batendo em armadura (20m): "tlim" metálico sintetizado (dois tons agudos que somem rápido + um estalo de ruído)
 export function metal({ vol = 1, dist = 0, raio = 45 } = {}) {
   if (!ac || !ligado || ac.state !== 'running') return;
