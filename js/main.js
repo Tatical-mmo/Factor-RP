@@ -15480,6 +15480,7 @@ function atualizarRegioes() {
       if (!C.R && d < C.raio) { C.R = novaRegiao(); C.montar(C.R, C.def); }
       else if (C.R && d > C.raio + 300) { desmontarRegiao(C.R); C.R = null; }
       if (C.R?.tick) C.R.tick();
+      C.R?.tick3d?.(x, z);
     } }
   if (!regiaoNorte && z < -1250) montarNorte();
   else if (regiaoNorte && z > -1100) desmontarNorte();
@@ -15711,6 +15712,26 @@ function seguirTremCont() {
 // ---------------------------------------------------------------- cidades novas (20b/20c): Barra Amarela e Oyster River
 // Por enquanto são a cidade em si (ruas, prédios, praça, favela, praia, morro com bondinho, monumento, aeroporto e
 // rodoviária) e os prédios das corporações com placa; o funcionamento (serviços, trem, voos, ônibus) vem nas próximas etapas.
+// modelos 3D das cidades novas (20h): carregados uma vez e normalizados (base no chão, caixa 1 × 1 × 1, frente para +Z).
+// "gira": quanto girar o modelo original para a frente ficar em +Z (os do Meshy vieram com a frente em +X)
+const MODELOS_CID = {}, GIRO_CID = { cid_casa: -Math.PI / 2, cid_sobrado: -Math.PI / 2, cid_orla: -Math.PI / 2, cid_residencial: 0 };
+function carregarModeloCid(nome) {
+  if (MODELOS_CID[nome]) return; MODELOS_CID[nome] = {};
+  Promise.resolve(carregarGLB(`assets/modelos/${nome}.glb`)).then((gl) => {
+    let malha = null; gl.scene.updateMatrixWorld(true); gl.scene.traverse((o) => { if (o.isMesh && !malha) malha = o; }); if (!malha) return;
+    const geo = malha.geometry.clone();
+    for (const k of Object.keys(geo.attributes)) {   // posição quantizada (inteiros) vira float antes de transformar
+      const at = geo.attributes[k]; if (at.array instanceof Float32Array) continue;
+      const f = new Float32Array(at.count * at.itemSize), get = ['getX', 'getY', 'getZ', 'getW']; for (let i = 0; i < at.count; i++) for (let c = 0; c < at.itemSize; c++) f[i * at.itemSize + c] = at[get[c]](i);
+      geo.setAttribute(k, new THREE.BufferAttribute(f, at.itemSize));
+    }
+    geo.applyMatrix4(malha.matrixWorld); geo.rotateY(GIRO_CID[nome] || 0); geo.computeBoundingBox();
+    const bb = geo.boundingBox, sx = (bb.max.x - bb.min.x) || 1, sy = (bb.max.y - bb.min.y) || 1, sz = (bb.max.z - bb.min.z) || 1;
+    geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2); geo.scale(1 / sx, 1 / sy, 1 / sz);
+    if (!geo.attributes.normal) geo.computeVertexNormals(); geo.computeBoundingBox(); geo.computeBoundingSphere();
+    Object.assign(MODELOS_CID[nome], { geo, mat: [].concat(malha.material)[0], asp: { w: sx, h: sy, d: sz } });
+  }).catch(() => {});
+}
 function novaRegiao() {
   const g = new THREE.Group(), cols = [], mats = new Set(), geos = []; scene.add(g);
   const M = (c, x = {}) => { const m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, ...x }); mats.add(m); return m; };
@@ -15735,6 +15756,7 @@ function novaRegiao() {
     });
     im.castShadow = true; im.receiveShadow = true; g.add(im); return im;
   };
+  const matrizDe = (im, k) => { const m = new THREE.Matrix4(); im.getMatrixAt(k, m); return m; };
   const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
   // telhados de duas águas (prisma) em cima das casas: [x, z, w, d, h, cor]
   const telhados = (lista) => {
@@ -15744,7 +15766,7 @@ function novaRegiao() {
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); geo.computeVertexNormals(); geos.push(geo);
     const im = new THREE.InstancedMesh(geo, M('#ffffff', { roughness: 0.8, side: THREE.DoubleSide }), lista.length);
     lista.forEach(([x, z, w, d, h, c], k) => { _m4.compose(_v.set(x, h + 0.05, z), _q.identity(), _s.set(w + 0.8, Math.min(3, 1.2 + w * 0.12), d + 0.8)); im.setMatrixAt(k, _m4); im.setColorAt(k, _c.set(c)); });
-    im.castShadow = true; g.add(im);
+    im.castShadow = true; g.add(im); return im;
   };
   // árvores de rua (tronco + copa, duas malhas): [x, z, escala]
   const arvores = (lista, comCol = true) => {
@@ -15778,6 +15800,32 @@ function novaRegiao() {
       if (col) { const cc = { tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, top: y + h / 2 }; colisores.push(cc); cols.push(cc); } });
     im.castShadow = true; im.receiveShadow = true; g.add(im);
   };
+  // casas e prédios em 3D perto do jogador (20h): igual à ilha, os mais perto trocam a caixa pelo modelo; o resto continua caixa
+  // com janelas. Cada item: { x, z, w, d, h, rot, tipo, esconder: [[malha, índice], ...], alto } (alto: o modelo estica até h)
+  const trocas = [], ims3d = {}; let em3d = new Set(), prox3d = 0;
+  const tick3d = (px, pz) => {
+    const agora = performance.now(); if (agora < prox3d || !trocas.length) return; prox3d = agora + 700;
+    const q = visual.nivelAtual?.() || 'medio', max = q === 'ultra' ? 64 : q === 'alto' ? 40 : q === 'medio' ? 16 : 6, raio = q === 'ultra' ? 240 : q === 'alto' ? 190 : q === 'medio' ? 110 : 70;
+    const perto = [];
+    trocas.forEach((t, i) => { if (!MODELOS_CID[t.tipo]?.geo) return; const d = Math.hypot(t.x - px, t.z - pz) - (em3d.has(i) ? 20 : 0); if (d < raio) perto.push([d, i]); });
+    perto.sort((a2, b2) => a2[0] - b2[0]);
+    const novo = new Set(perto.slice(0, max).map((e) => e[1]));
+    const mostrar = (t, vis) => { for (const [im, k, m] of t.esconder) { im.setMatrixAt(k, vis ? m : _m4.makeScale(0, 0, 0)); im.instanceMatrix.needsUpdate = true; } };
+    for (const i of em3d) if (!novo.has(i)) mostrar(trocas[i], true);
+    for (const i of novo) if (!em3d.has(i)) mostrar(trocas[i], false);
+    em3d = novo;
+    const n = {};
+    for (const i of em3d) {
+      const t = trocas[i], M3 = MODELOS_CID[t.tipo];
+      if (!ims3d[t.tipo]) { const im = new THREE.InstancedMesh(M3.geo, M3.mat, 64); im.userData.compartilhado = true; im.castShadow = im.receiveShadow = true; im.frustumCulled = false; g.add(im); ims3d[t.tipo] = im; }
+      const lado = Math.abs(Math.sin(t.rot)) > 0.5, w = lado ? t.d : t.w, d = lado ? t.w : t.d;
+      const h = t.alto ? t.h : ((w / M3.asp.w + d / M3.asp.d) / 2) * M3.asp.h;   // casa: altura proporcional ao modelo
+      _m4.compose(_v.set(t.x, 0.18, t.z), _q.setFromAxisAngle(_s.set(0, 1, 0), t.rot), _s.set(lado ? d : w, h, lado ? w : d));
+      ims3d[t.tipo].setMatrixAt(n[t.tipo] = (n[t.tipo] ?? -1) + 1, _m4);
+    }
+    for (const [tp, im] of Object.entries(ims3d)) { im.count = (n[tp] ?? -1) + 1; im.instanceMatrix.needsUpdate = true; }
+  };
+  const casas3d = (lista) => { for (const t of lista) { trocas.push(t); carregarModeloCid(t.tipo); } };
   // modelo GLB repetido (instâncias): cada malha do modelo vira uma InstancedMesh. lista: [x, z, altura, rotY]
   const instGLB = (arq, lista) => {
     if (!lista.length) return;
@@ -15801,7 +15849,7 @@ function novaRegiao() {
     m.traverse((o) => { if (o.isMesh) o.userData.compartilhado = true; });   // geometria do cache: não descarta ao sair
     piv.position.set(x, y, z); piv.rotation.y = rotY; g.add(piv); fim?.(piv, (b.max.y - b.min.y) * k); return piv;
   }).catch(() => null);
-  return { g, cols, mats, geos, M, caixa, caixas, plano, sprite, predios, telhados, arvores, postes, instGLB, modelo, MATS };
+  return { g, cols, mats, geos, M, caixa, caixas, plano, sprite, predios, telhados, arvores, postes, instGLB, modelo, MATS, casas3d, tick3d, matrizDe };
 }
 function desmontarRegiao(R) {
   scene.remove(R.g);
@@ -15927,17 +15975,20 @@ function montarBarraAmarela(R, C) {
       L.push([q.x + dx, q.z + dz, w, d, h, PASTEIS[(rnd() * PASTEIS.length) | 0]]);
     }
   }
-  R.predios(L); R.telhados(L.map((e) => [...e.slice(0, 5), TELHAS[(Math.abs(e[0] * 7 + e[1] * 3) | 0) % TELHAS.length]]));
+  { const imC = R.predios(L), imT = R.telhados(L.map((e) => [...e.slice(0, 5), TELHAS[(Math.abs(e[0] * 7 + e[1] * 3) | 0) % TELHAS.length]]));
+    // perto do jogador viram casa térrea ou sobrado 3D, com a frente para a rua mais perto
+    R.casas3d(L.map((e, k) => ({ x: e[0], z: e[1], w: e[2], d: e[3], h: e[4], rot: e[1] > G.z0 + 32 + Math.round((e[1] - G.z0 - 32) / 52) * 52 ? 0 : Math.PI,
+      tipo: e[4] > 6.5 ? 'cid_sobrado' : 'cid_casa', esconder: [[imC, k, R.matrizDe(imC, k)], [imT, k, R.matrizDe(imT, k)]] }))); }
   // praça central: gramado, coreto, igreja e a prefeitura
   const pr = G.qs.filter((q) => especial[`${q.i},${q.j}`] === 'praca'), px = pr.reduce((a, q) => a + q.x, 0) / 4, pz = pr.reduce((a, q) => a + q.z, 0) / 4;
   R.plano(px, pz, 92, 92, 0.2, R.MATS?.grama || R.M('#7fae5a'));
   R.arvores([[px - 30, pz + 30, 1.3], [px - 38, pz + 10, 1.1], [px + 38, pz - 12, 1.2], [px - 12, pz + 40, 1], [px + 12, pz - 20, 1.1], [px - 25, pz - 15, 1.2]]);
-  R.caixa(px, 0.5, pz, 10, 0.8, 10, R.M('#d8d1c3')); R.caixa(px, 4.2, pz, 11, 0.4, 11, R.M('#b0453a'));
-  for (const [sx, sz] of [[-4.5, -4.5], [4.5, -4.5], [-4.5, 4.5], [4.5, 4.5]]) R.caixa(px + sx, 2.4, pz + sz, 0.4, 3.6, 0.4, R.M('#f2f2f2'));
-  R.predios([[px, pz - 34, 22, 16, 12, '#f5f0e1'], [px, pz - 40, 6, 6, 26, '#f5f0e1']]);
-  R.telhados([[px, pz - 34, 22, 16, 12, '#a0522d']]); R.caixas([[px, 27.5, pz - 40, 4, 3, 4]], '#a0522d');   // telhado da igreja e da torre
+  // coreto e igreja: modelos 3D (a igreja com a frente para a praça); a colisão fica nas caixas de antes, invisíveis
+  R.modelo('cid_coreto', px, pz, 13, 0, 0.2);
+  { const cc = { tipo: 'circ', x: px, z: pz, r: 5.5 }; colisores.push(cc); R.cols.push(cc); }
+  { const ig = R.predios([[px, pz - 34, 22, 16, 12, '#f5f0e1'], [px, pz - 40, 6, 6, 26, '#f5f0e1']]); R.modelo('cid_igreja', px, pz - 36, 30, -Math.PI / 2, 0.2, () => { ig.visible = false; }); }
   { const pi = R.predios([[px + 30, pz + 30, 24, 18, 11, '#e9d9a8']]); R.modelo('predio_prefeitura', px + 30, pz + 30, 24, 0, 0.2, () => { pi.visible = false; }); }
-  R.sprite('⛪ Igreja Matriz', px, 30, pz - 40, 0.5); R.sprite('🏛️ Prefeitura de Barra Amarela', px + 30, 15, pz + 30, 0.55, 'rgba(110,80,20,.94)');
+  R.sprite('⛪ Igreja Matriz', px, 26, pz - 36, 0.5); R.sprite('🏛️ Prefeitura de Barra Amarela', px + 30, 15, pz + 30, 0.55, 'rgba(110,80,20,.94)');
   R.caixa(px + 30, 1.6, pz + 39.06, 3.2, 3.2, 0.12, R.M('#2b2b2b')); (R.portas ||= []).push({ x: px + 30, z: pz + 40.6, tipo: 'prefeitura', cidade: 'barra', nome: '🏛️ Prefeitura de Barra Amarela' });
   R.sprite('🟡 Barra Amarela', C.x, 40, C.z, 1.2, 'rgba(170,130,10,.94)');
   // favela a oeste: casinhas coloridas apertadas, umas em cima das outras
@@ -15968,7 +16019,11 @@ function montarOysterRiver(R, C) {
       else if (h > 50) topo.push([q.x + dx, h + 6, q.z + dz, 0.3, 12, 0.3]);
     }
   }
-  R.predios(L); R.caixas(topo, '#8d939a');
+  { const imP = R.predios(L); R.caixas(topo, '#8d939a');
+    // perto do jogador: prédio da orla (até 30 m) ou residencial (até 70 m), esticados até a altura da caixa; os mais altos
+    // continuam caixa com janelas (o modelo de arranha-céu comercial ainda não chegou)
+    R.casas3d(L.map((e, k) => (e[4] > 70 ? null : { x: e[0], z: e[1], w: e[2], d: e[3], h: e[4], alto: true, tipo: e[4] <= 30 ? 'cid_orla' : 'cid_residencial',
+      rot: e[1] > G.z0 + 39 + Math.round((e[1] - G.z0 - 39) / 64) * 64 ? 0 : Math.PI, esconder: [[imP, k, R.matrizDe(imP, k)]] })).filter(Boolean)); }
   R.sprite('🦪 Oyster River', C.x, 120, C.z, 1.6, 'rgba(20,90,130,.94)');
   // orla: praia, calçadão em ondas, quiosques, coqueiros e o mar
   const M = mundo.OYSTER_MAR, praiaZ = M.z1 + 45;
