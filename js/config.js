@@ -151,6 +151,19 @@ export const LOTES_VENDA = [
   { id: 30, c: { x: 937, z: 927.5 }, portao: { x: 937, z: 941 } },
   { id: 31, c: { x: 959, z: 927.5 }, portao: { x: 959, z: 941 } },
   { id: 32, c: { x: 981, z: 927.5 }, portao: { x: 981, z: 941 } },
+  // cidades novas do continente (130): Barra Amarela (33–36) e Oyster River (37–44)
+  { id: 33, c: { x: -1488, z: -2360 }, portao: { x: -1488, z: -2346.5 }, preco: 15000, cidade: 'Barra Amarela' },
+  { id: 34, c: { x: -1468, z: -2360 }, portao: { x: -1468, z: -2346.5 }, preco: 15000, cidade: 'Barra Amarela' },
+  { id: 35, c: { x: -1332, z: -2360 }, portao: { x: -1332, z: -2346.5 }, preco: 15000, cidade: 'Barra Amarela' },
+  { id: 36, c: { x: -1312, z: -2360 }, portao: { x: -1312, z: -2346.5 }, preco: 15000, cidade: 'Barra Amarela' },
+  { id: 37, c: { x: 463.5, z: -3789 }, portao: { x: 463.5, z: -3775.5 }, preco: 25000, cidade: 'Oyster River' },
+  { id: 38, c: { x: 488.5, z: -3789 }, portao: { x: 488.5, z: -3775.5 }, preco: 25000, cidade: 'Oyster River' },
+  { id: 39, c: { x: 463.5, z: -3725 }, portao: { x: 463.5, z: -3711.5 }, preco: 25000, cidade: 'Oyster River' },
+  { id: 40, c: { x: 488.5, z: -3725 }, portao: { x: 488.5, z: -3711.5 }, preco: 25000, cidade: 'Oyster River' },
+  { id: 41, c: { x: 911.5, z: -3789 }, portao: { x: 911.5, z: -3775.5 }, preco: 25000, cidade: 'Oyster River' },
+  { id: 42, c: { x: 936.5, z: -3789 }, portao: { x: 936.5, z: -3775.5 }, preco: 25000, cidade: 'Oyster River' },
+  { id: 43, c: { x: 911.5, z: -3725 }, portao: { x: 911.5, z: -3711.5 }, preco: 25000, cidade: 'Oyster River' },
+  { id: 44, c: { x: 936.5, z: -3725 }, portao: { x: 936.5, z: -3711.5 }, preco: 25000, cidade: 'Oyster River' },
 ];
 export const DESTINOS = {
   loja: { nome: 'Mercado (Loja da Rua do Comércio)', x: -17.5, z: -4 },

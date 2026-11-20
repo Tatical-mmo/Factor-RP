@@ -3873,7 +3873,7 @@ function desenharLote(l) {
   if (!e) {
     const chao = new THREE.Mesh(new THREE.PlaneGeometry(LOTE_L - 1, LOTE_L - 1), new THREE.MeshStandardMaterial({ color: '#9b8766', roughness: 1 }));
     chao.rotation.x = -Math.PI / 2; chao.position.set(x, 0.19, z); chao.receiveShadow = true; scene.add(chao); v.objs.push(chao);
-    const placa = textoSprite('Lote à venda · 20.000', { escala: 0.75, fundo: 'rgba(30,90,50,.9)' }); placa.position.set(x, 2.4, z + 6.5); scene.add(placa); v.objs.push(placa);
+    const placa = textoSprite(`Lote à venda · ${(l.preco || 20000).toLocaleString('pt-BR')}`, { escala: 0.75, fundo: 'rgba(30,90,50,.9)' }); placa.position.set(x, 2.4, z + 6.5); scene.add(placa); v.objs.push(placa);
     pontos.lotes.push({ x, z: z + 7.5, lote: l.id });
     return;
   }
@@ -4056,6 +4056,27 @@ function limitarInterior(p) {
 
 // ---------------------------------------------------------------- caminhões dos jogadores
 // rota pela grade de ruas: sai do ponto, entra na rua mais próxima, segue em L pelos cruzamentos
+// caminho dos caminhões para os lotes do continente (130): sai da grade da ilha pela rodovia x = -162, sobe a Serra,
+// atravessa a ponte e o pedágio e segue a rodovia até a rua do lote na cidade (Barra Amarela ou Oyster River)
+const noCont = (p) => p.z < -1975;
+function pernaContinente(p) {
+  const perto = (v, v0, passo) => v0 + Math.round((v - v0) / passo) * passo;
+  const base = [{ x: -162, z: -1107 }, { x: -160, z: -1380 }, { x: -160, z: -2060 }];
+  if (p.x < -900) {   // Barra Amarela: ruas x = -1556 + 52i, z = -2656 + 52j
+    const zs = perto(p.z, -2656, 52);
+    return [...base, { x: -160, z: -2500 }, { x: -1244, z: -2500 }, { x: -1244, z: zs }, { x: p.x, z: zs }, { x: p.x, z: p.z }];
+  }
+  const xs = perto(p.x - 20, 380, 64), zs = perto(p.z, -4156, 64);   // Oyster River: ruas x = 380 + 64i, z = -4156 + 64j
+  return [...base, { x: -160, z: -2700 }, { x: -270, z: -2955 }, { x: -170, z: -2955 }, { x: -170, z: -3185 }, { x: 700, z: -3500 }, { x: 700, z: -3644 }, { x: xs, z: -3644 }, { x: xs, z: zs }, { x: p.x, z: zs }, { x: p.x, z: p.z }];
+}
+function rotaGradeX(a, b) {
+  const ca = noCont(a), cb = noCont(b);
+  if (!ca && !cb) return rotaGrade(a, b);
+  const E = { x: -162, z: -METADE };   // saída da cidade pela rodovia norte
+  if (ca && cb) return [...pernaContinente(a).reverse().slice(0, -3), ...pernaContinente(b).slice(3)];   // os dois no continente: passam pelo pedágio
+  if (cb) return [...rotaGrade(a, E), ...pernaContinente(b)];
+  return [...pernaContinente(a).reverse(), ...rotaGrade(E, b)];
+}
 function rotaGrade(a, b) {
   const R = []; for (let i = 0; i <= N; i++) R.push(ruaC(i));
   const prox = (v) => R.reduce((m, r) => (Math.abs(r - v) < Math.abs(m - v) ? r : m), R[0]);
@@ -4127,9 +4148,9 @@ function pernas(c) {
     return p;
   }
   const p = [
-    { pts: servicos.faixaDireita(rotaGrade(T, F)), dur: r.d1 }, { parado: true, dur: r.carga },
-    { pts: servicos.faixaDireita(rotaGrade(F, D)), dur: r.d2 }, { parado: true, dur: r.descarga },
-    { pts: servicos.faixaDireita(rotaGrade(D, T)), dur: r.d3 },
+    { pts: servicos.faixaDireita(rotaGradeX(T, F)), dur: r.d1 }, { parado: true, dur: r.carga },
+    { pts: servicos.faixaDireita(rotaGradeX(F, D)), dur: r.d2 }, { parado: true, dur: r.descarga },
+    { pts: servicos.faixaDireita(rotaGradeX(D, T)), dur: r.d3 },
   ];
   c.rotaCache = { id: c.d.partida, pernas: p };
   return p;
@@ -15789,7 +15810,7 @@ function desmontarRegiao(R) {
   for (const c of R.cols) { const k = colisores.indexOf(c); if (k >= 0) colisores.splice(k, 1); }
 }
 // grade de ruas e quarteirões: devolve os quarteirões (centro e tamanho) para cada cidade preencher
-function gradeCidade(R, cx, cz, nx, nz, Q, rua, { arv = 'meio', pular = null } = {}) {
+function gradeCidade(R, cx, cz, nx, nz, Q, rua, { arv = 'meio', pular = null, vazio = null } = {}) {
   // asfalto e calçadas com as texturas da ilha; quarteirões, faixas, árvores e postes em malhas instanciadas (poucas
   // chamadas de desenho: antes eram centenas de caixas soltas)
   const W = nx * (Q + rua) + rua, D = nz * (Q + rua) + rua, x0 = cx - W / 2, z0 = cz - D / 2, MT = R.MATS;
@@ -15799,7 +15820,7 @@ function gradeCidade(R, cx, cz, nx, nz, Q, rua, { arv = 'meio', pular = null } =
   const blocos = new THREE.InstancedMesh(geoB, MT?.calcada || R.M('#cfc8b8'), nx * nz); let k = 0;
   for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
     const x = x0 + rua + Q / 2 + i * (Q + rua), z = z0 + rua + Q / 2 + j * (Q + rua);
-    m4.compose(v.set(x, 0.1, z), q0, sc.set(Q, 0.18, Q)); blocos.setMatrixAt(k++, m4); qs.push({ i, j, x, z });
+    m4.compose(v.set(x, 0.1, z), q0, sc.set(vazio?.(i, j) ? 0 : Q, 0.18, Q)); blocos.setMatrixAt(k++, m4); qs.push({ i, j, x, z });   // terreno de empresa: o lote desenha o chão
   }
   blocos.receiveShadow = true; R.g.add(blocos);
   const fx = [];
@@ -15810,7 +15831,7 @@ function gradeCidade(R, cx, cz, nx, nz, Q, rua, { arv = 'meio', pular = null } =
   // árvores (no meio de cada lado do quarteirão ou nos cantos) e postes (o contrário), fora dos quarteirões pulados
   const h = Q / 2 - 1, A = [], P = [];
   for (const q of qs) {
-    if (pular?.(q.i, q.j)) continue;
+    if (pular?.(q.i, q.j) || vazio?.(q.i, q.j)) continue;
     const meio = [[0, -h, Math.PI], [0, h, 0], [-h, 0, -Math.PI / 2], [h, 0, Math.PI / 2]], cantos = [[-h, -h, Math.PI * 1.25], [h, -h, Math.PI * 0.75], [-h, h, -Math.PI / 4], [h, h, Math.PI / 4]];
     for (const [dx, dz] of arv === 'meio' ? meio : cantos) A.push([q.x + dx, q.z + dz, 0.9]);
     for (const [dx, dz, a] of arv === 'meio' ? cantos : meio.slice(0, 2)) P.push([q.x + dx, q.z + dz, a]);
@@ -15885,7 +15906,7 @@ const CINZAS = ['#9aa3ad', '#7c8794', '#b8bfc6', '#5f6b78', '#c9c2b6', '#8f8a80'
 const TELHAS = ['#a0522d', '#b5562f', '#8e3b2a', '#7a4a3a', '#c06a3e'];
 const rndSeed = (s) => () => ((s = (s * 16807) % 2147483647) / 2147483647);
 function montarBarraAmarela(R, C) {
-  const rnd = rndSeed(4242), G = gradeCidade(R, C.x, C.z, 6, 6, 40, 12, { arv: 'meio', pular: (i, j) => (i >= 2 && i <= 3 && j >= 2 && j <= 3) || (i === 4 && j === 2) }), L = [];
+  const rnd = rndSeed(4242), G = gradeCidade(R, C.x, C.z, 6, 6, 40, 12, { arv: 'meio', pular: (i, j) => (i >= 2 && i <= 3 && j >= 2 && j <= 3) || (i === 4 && j === 2), vazio: (i, j) => j === 5 && (i === 1 || i === 4) }), L = [];
   const especial = { '2,2': 'praca', '3,2': 'praca', '2,3': 'praca', '3,3': 'praca', '0,0': 'delegacia', '1,0': 'prf', '4,0': 'bombeiros', '5,0': 'hospital', '0,5': 'oficina', '5,5': 'estacao', '1,5': 'empresas', '4,5': 'empresas', '4,2': 'terminal' };
   for (const q of G.qs) {
     const e = especial[`${q.i},${q.j}`];
@@ -15896,7 +15917,7 @@ function montarBarraAmarela(R, C) {
     if (e === 'hospital') { predioServico(R, q, '🏥 Hospital', '#f0f0f0', 16, 'hospital', 'barra'); continue; }
     if (e === 'oficina') { predioServico(R, q, '🔧 Oficina de Barra Amarela', '#8a6d3b', 7, 'oficina', 'barra'); continue; }
     if (e === 'estacao') { predioServico(R, q, '🚉 Estação de Barra Amarela (trem para o Continente)', '#a0522d', 9, 'info'); continue; }
-    if (e === 'empresas') { R.sprite('🏗️ Terrenos para empresas · em breve', q.x, 4, q.z, 0.5); continue; }
+    if (e === 'empresas') { R.plano(q.x, q.z, 40, 40, 0.1, R.M('#8f8a7c')); continue; }   // terrenos de empresa (lotes 33–36)
     if (e === 'terminal') {   // terminal dos ônibus intermunicipais (o ponto fica na calçada norte)
       R.plano(q.x, q.z, 38, 38, 0.2, R.M('#cfc8b8')); R.caixa(q.x, 4.2, q.z - 12, 30, 0.4, 10, R.M('#d4a017'));
       for (const sx of [-13, 13]) R.caixa(q.x + sx, 2.1, q.z - 12, 0.4, 4.2, 0.4, R.M('#666'));
@@ -15928,7 +15949,7 @@ function montarBarraAmarela(R, C) {
   R.predios(F, false); R.sprite('🏘️ Favela da Barra', fx, 18, fz, 0.6);
 }
 function montarOysterRiver(R, C) {
-  const rnd = rndSeed(9090), G = gradeCidade(R, C.x, C.z, 10, 8, 50, 14, { arv: 'cantos' }), L = [], topo = [];
+  const rnd = rndSeed(9090), G = gradeCidade(R, C.x, C.z, 10, 8, 50, 14, { arv: 'cantos', vazio: (i, j) => (i === 1 || i === 8) && j >= 5 && j <= 6 }), L = [], topo = [];
   const servicos = { '0,0': ['🚓 Delegacia de Oyster River', '#4c6fa8', 18, 'delegacia'], '1,0': ['💀 Base do BOPE', '#1d1d1d', 12, 'bope'], '2,0': ['🚔 Superintendência da PRF', '#3e6a9a', 16, 'prf'],
     '7,0': ['🚒 Bombeiros', '#c0392b', 12, 'bombeiros'], '8,0': ['🏥 Hospital Central', '#f0f0f0', 30, 'hospital'], '9,0': ['🎖️ Quartel do Exército', '#4b5a3a', 12, 'quartel'],
     '9,3': ['⚓ Marinha', '#24467a', 14, 'marinha'], '9,4': ['✈️ Aeronáutica', '#3c5a7a', 14, 'aerea'], '0,7': ['🔧 Oficina de Oyster River', '#8a6d3b', 8, 'oficina'],
@@ -15936,7 +15957,7 @@ function montarOysterRiver(R, C) {
   for (const q of G.qs) {
     const sv = servicos[`${q.i},${q.j}`];
     if (sv) { predioServico(R, { ...q, w: 40, d: 36 }, sv[0], sv[1], sv[2], sv[3] || null, 'oyster', sv[4] ?? GLB_SERVICO[sv[3]]); continue; }
-    if ((q.i === 1 || q.i === 8) && q.j >= 5 && q.j <= 6) { R.sprite('🏗️ Terrenos para empresas · em breve', q.x, 4, q.z, 0.5); continue; }
+    if ((q.i === 1 || q.i === 8) && q.j >= 5 && q.j <= 6) { R.plano(q.x, q.z, 50, 50, 0.1, R.M('#8f8a7c')); continue; }   // terrenos de empresa (lotes 37–44)
     const centro = Math.max(0, 1 - Math.hypot(q.x - C.x, q.z - C.z) / 330);   // cidade grande: arranha-céus no centro
     for (const [dx, dz] of [[-12, -12], [12, -12], [-12, 12], [12, 12]]) {
       const h = 10 + rnd() * 18 + centro * centro * (40 + rnd() * 60), w = 17 + rnd() * 3, d = 17 + rnd() * 3;
