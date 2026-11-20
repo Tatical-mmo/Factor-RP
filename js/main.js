@@ -2946,8 +2946,8 @@ function atualizarNPCs(dt) {
   for (const n of npcs) {
     if (n.bope) continue;   // BOPE: passoBot
     if (n.abduzido) { npcAbduzido(n, dt); continue; }
-    if (n.rua !== undefined && !n.conversa && !n.algemado && !(n.fugindoT > 0)) {   // morador desligado no painel ou longe: escondido e parado
-      const q = n.av.raiz.position, fora = n.desligado || Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z) > 160;
+    if ((n.rua !== undefined || n.cid) && !n.conversa && !n.algemado && !(n.fugindoT > 0)) {   // morador desligado no painel ou longe: escondido e parado
+      const q = n.av.raiz.position, fora = n.desligado || (n.cid && !CIDADES_NOVAS.some((C) => C.def.nome === n.cid && C.R)) || Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z) > 160;
       if (fora) { if (n.av.raiz.visible) n.av.raiz.visible = false; const p2 = patrulha(n); q.set(p2.x, 0.18, p2.z); continue; }
       if (!n.av.raiz.visible) n.av.raiz.visible = true;
     }
@@ -2978,7 +2978,7 @@ function atualizarNPCs(dt) {
     n.av.raiz.rotation.y = suavizarAngulo(n.av.raiz.rotation.y, alvo.ang, dt * 6);
     n.av.mixer.update(dt);
   }
-  atualizarViaturas(dt); atualizarRondasBombeiros(dt); atualizarVansNpc(dt);
+  atualizarViaturas(dt); atualizarRondasBombeiros(dt); atualizarVansNpc(dt); atualizarCarrosCid(dt);
 }
 
 let caminhaoMovel = null;
@@ -6071,7 +6071,7 @@ function voarAve(dt, dir, forca) {
   const vmax = noAr ? (a.tipo === 'corvo' ? 17 : 14) : 2.2;   // pousado: só dá pulinhos
   a.vel += ((forca > 0.05 ? forca * vmax : 0) - a.vel) * Math.min(1, dt * (noAr ? 2.5 : 8));
   if (forca > 0.05) j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 6);
-  let nx = THREE.MathUtils.clamp(j.pos.x + Math.sin(j.yaw) * a.vel * dt, -1500, 1600), nz = THREE.MathUtils.clamp(j.pos.z + Math.cos(j.yaw) * a.vel * dt, -2000, 1900);
+  let nx = THREE.MathUtils.clamp(j.pos.x + Math.sin(j.yaw) * a.vel * dt, j.pos.z < -1500 ? mundo.CONTINENTE.x0 : -1500, 1600), nz = THREE.MathUtils.clamp(j.pos.z + Math.cos(j.yaw) * a.vel * dt, mundo.CONTINENTE.z0, 1900);
   const t = tetoGeral(nx, nz);
   if (t && a.y < t.h - 0.3) { nx = j.pos.x; nz = j.pos.z; a.vel *= 0.3; }   // parede de prédio: não atravessa
   const vy = sobe ? 6 : desce ? -6 : 0;
@@ -15481,6 +15481,7 @@ function atualizarRegioes() {
       else if (C.R && d > C.raio + 300) { desmontarRegiao(C.R); C.R = null; }
       if (C.R?.tick) C.R.tick();
       C.R?.tick3d?.(x, z);
+      if (C.R?.grade) povoarCidade(C);
     } }
   if (!regiaoNorte && z < -1250) montarNorte();
   else if (regiaoNorte && z > -1100) desmontarNorte();
@@ -15712,6 +15713,52 @@ function seguirTremCont() {
 // ---------------------------------------------------------------- cidades novas (20b/20c): Barra Amarela e Oyster River
 // Por enquanto são a cidade em si (ruas, prédios, praça, favela, praia, morro com bondinho, monumento, aeroporto e
 // rodoviária) e os prédios das corporações com placa; o funcionamento (serviços, trem, voos, ônibus) vem nas próximas etapas.
+// gente e carros nas ruas das cidades novas (20i): moradores dando a volta nos quarteirões (os mesmos NPCs da ilha:
+// dá para conversar, assaltar etc.) e carros rodando pelas ruas na mão certa. São criados aos poucos na primeira vez que
+// você chega na cidade e ficam escondidos quando a cidade não está montada.
+const POVO_CID = { 'Barra Amarela': { gente: 10, carros: 6 }, 'Oyster River': { gente: 16, carros: 10 } }, povoCid = {};
+const carrosCid = [];
+function povoarCidade(C) {
+  const nome = C.def.nome, P = povoCid[nome] ||= { gente: 0, carros: 0, criando: false }, alvo = POVO_CID[nome], G = C.R.grade;
+  if (!alvo) return;
+  if (P.carros < alvo.carros) {   // carros: retângulos de 1 a 3 quarteirões, horário de quem anda na mão direita
+    const k = P.carros++, rnd = rndSeed(777 + k * 31 + nome.length), rx = (i) => G.x0 + G.rua / 2 + i * (G.Q + G.rua), rz = (j) => G.z0 + G.rua / 2 + j * (G.Q + G.rua);
+    const f = 2.5, E = G.evitar;   // evita a praça (coreto e igreja ficam no meio das ruas de lá)
+    let pts = null;
+    for (let t = 0; t < 20 && !pts; t++) {
+      const i0 = (rnd() * (G.nx - 1)) | 0, j0 = (rnd() * (G.nz - 1)) | 0, i1 = Math.min(G.nx, i0 + 1 + ((rnd() * 3) | 0)), j1 = Math.min(G.nz, j0 + 1 + ((rnd() * 3) | 0));
+      const c = [[rx(i0) + f, rz(j0) + f], [rx(i1) - f, rz(j0) + f], [rx(i1) - f, rz(j1) - f], [rx(i0) + f, rz(j1) - f]];
+      const corta = E && c.some((a2, n) => { const b2 = c[(n + 1) % 4]; return Math.max(a2[0], b2[0]) > E.x0 && Math.min(a2[0], b2[0]) < E.x1 && Math.max(a2[1], b2[1]) > E.z0 && Math.min(a2[1], b2[1]) < E.z1; });
+      if (!corta) pts = c;
+    }
+    if (!pts) return;
+    const modelo = ['popular', 'popular', 'suv', 'esportivo', 'popular', 'suv'][k % 6], cor = ['#c9302c', '#2d5fa8', '#f2f2ee', '#1d1d1d', '#e3c565', '#3a7d44', '#8a8f96'][(k * 3) % 7];
+    const obj = civico.modeloCarro(modelo, cor); obj.visible = false; scene.add(obj);
+    carrosCid.push({ cid: nome, obj, laco: laco(pts, true, civico.entreEixos(modelo)), vel: 6.5 + (k % 3), fase: k * 131 + 17 });
+  }
+  if (P.gente < alvo.gente && !P.criando) {   // um morador de cada vez (cada um carrega um personagem)
+    P.criando = true; const k = P.gente++;
+    criarNpcCid(nome, G, k).catch(() => {}).finally(() => { P.criando = false; });
+  }
+}
+async function criarNpcCid(nome, G, k) {
+  const lista = PERSONAGENS.map((p) => p.id).filter((id) => id !== excluirNpc);
+  const av = await criarAvatar('personagens', lista[(k * 11 + nome.length) % lista.length]);
+  const q = G.qs[(k * 7 + 3) % G.qs.length], d = G.Q / 2 - 1.1, rota = [[q.x - d, q.z - d], [q.x + d, q.z - d], [q.x + d, q.z + d], [q.x - d, q.z + d]];
+  if (k % 2) rota.reverse();
+  av.raiz.position.set(rota[0][0], 0.19, rota[0][1]); av.raiz.visible = false;
+  scene.add(av.raiz); av.tocar('walk', { velocidade: 0.85 });
+  npcs.push({ av, rota, laco: laco(rota), vel: 1.3 + (k % 5) * 0.07, fase: k * 61 + 11, vida: 100, caido: 0, hostil: 0, tiro: 0, civil: true, cid: nome });
+}
+function atualizarCarrosCid(dt) {
+  for (const c of carrosCid) {
+    const o = c.obj, vis = CIDADES_NOVAS.some((C) => C.def.nome === c.cid && C.R) && Math.hypot(o.position.x - jogador.pos.x, o.position.z - jogador.pos.z) < 260;
+    const p = pontoNoLaco(c.laco, agoraServidor() / 1000 * c.vel + c.fase);
+    if (!vis) { o.visible = false; o.position.set(p.x, 0.07, p.z); continue; }
+    if (!o.visible || Math.hypot(p.x - o.position.x, p.z - o.position.z) > 25) { o.visible = true; o.position.set(p.x, 0.07, p.z); o.rotation.y = p.ang; }
+    else { o.position.x += (p.x - o.position.x) * Math.min(1, dt * 4); o.position.z += (p.z - o.position.z) * Math.min(1, dt * 4); o.rotation.y = suavizarAngulo(o.rotation.y, p.ang, dt * 5); }
+  }
+}
 // modelos 3D das cidades novas (20h): carregados uma vez e normalizados (base no chão, caixa 1 × 1 × 1, frente para +Z).
 // "gira": quanto girar o modelo original para a frente ficar em +Z (os do Meshy vieram com a frente em +X)
 const MODELOS_CID = {}, GIRO_CID = { cid_casa: -Math.PI / 2, cid_sobrado: -Math.PI / 2, cid_orla: -Math.PI / 2, cid_residencial: 0 };
@@ -15885,7 +15932,7 @@ function gradeCidade(R, cx, cz, nx, nz, Q, rua, { arv = 'meio', pular = null, va
     for (const [dx, dz, a] of arv === 'meio' ? cantos : meio.slice(0, 2)) P.push([q.x + dx, q.z + dz, a]);
   }
   R.arvores(A); R.postes(P);
-  return { qs, x0, z0, W, D };
+  return { qs, x0, z0, W, D, Q, rua, nx, nz };
 }
 // prédio de serviço com a placa; com tipo, ganha uma porta que funciona (20d)
 // modelo 3D de cada corporação (os mesmos da ilha); sem modelo, fica a caixa com janelas
@@ -15954,7 +16001,7 @@ const CINZAS = ['#9aa3ad', '#7c8794', '#b8bfc6', '#5f6b78', '#c9c2b6', '#8f8a80'
 const TELHAS = ['#a0522d', '#b5562f', '#8e3b2a', '#7a4a3a', '#c06a3e'];
 const rndSeed = (s) => () => ((s = (s * 16807) % 2147483647) / 2147483647);
 function montarBarraAmarela(R, C) {
-  const rnd = rndSeed(4242), G = gradeCidade(R, C.x, C.z, 6, 6, 40, 12, { arv: 'meio', pular: (i, j) => (i >= 2 && i <= 3 && j >= 2 && j <= 3) || (i === 4 && j === 2), vazio: (i, j) => j === 5 && (i === 1 || i === 4) }), L = [];
+  const rnd = rndSeed(4242), G = R.grade = gradeCidade(R, C.x, C.z, 6, 6, 40, 12, { arv: 'meio', pular: (i, j) => (i >= 2 && i <= 3 && j >= 2 && j <= 3) || (i === 4 && j === 2), vazio: (i, j) => j === 5 && (i === 1 || i === 4) }), L = [];
   const especial = { '2,2': 'praca', '3,2': 'praca', '2,3': 'praca', '3,3': 'praca', '0,0': 'delegacia', '1,0': 'prf', '4,0': 'bombeiros', '5,0': 'hospital', '0,5': 'oficina', '5,5': 'estacao', '1,5': 'empresas', '4,5': 'empresas', '4,2': 'terminal' };
   for (const q of G.qs) {
     const e = especial[`${q.i},${q.j}`];
@@ -15982,6 +16029,7 @@ function montarBarraAmarela(R, C) {
   // praça central: gramado, coreto, igreja e a prefeitura
   const pr = G.qs.filter((q) => especial[`${q.i},${q.j}`] === 'praca'), px = pr.reduce((a, q) => a + q.x, 0) / 4, pz = pr.reduce((a, q) => a + q.z, 0) / 4;
   R.plano(px, pz, 92, 92, 0.2, R.MATS?.grama || R.M('#7fae5a'));
+  G.evitar = { x0: px - 47, x1: px + 47, z0: pz - 47, z1: pz + 47 };
   R.arvores([[px - 30, pz + 30, 1.3], [px - 38, pz + 10, 1.1], [px + 38, pz - 12, 1.2], [px - 12, pz + 40, 1], [px + 12, pz - 20, 1.1], [px - 25, pz - 15, 1.2]]);
   // coreto e igreja: modelos 3D (a igreja com a frente para a praça); a colisão fica nas caixas de antes, invisíveis
   R.modelo('cid_coreto', px, pz, 13, 0, 0.2);
@@ -16000,7 +16048,7 @@ function montarBarraAmarela(R, C) {
   R.predios(F, false); R.sprite('🏘️ Favela da Barra', fx, 18, fz, 0.6);
 }
 function montarOysterRiver(R, C) {
-  const rnd = rndSeed(9090), G = gradeCidade(R, C.x, C.z, 10, 8, 50, 14, { arv: 'cantos', vazio: (i, j) => (i === 1 || i === 8) && j >= 5 && j <= 6 }), L = [], topo = [];
+  const rnd = rndSeed(9090), G = R.grade = gradeCidade(R, C.x, C.z, 10, 8, 50, 14, { arv: 'cantos', vazio: (i, j) => (i === 1 || i === 8) && j >= 5 && j <= 6 }), L = [], topo = [];
   const servicos = { '0,0': ['🚓 Delegacia de Oyster River', '#4c6fa8', 18, 'delegacia'], '1,0': ['💀 Base do BOPE', '#1d1d1d', 12, 'bope'], '2,0': ['🚔 Superintendência da PRF', '#3e6a9a', 16, 'prf'],
     '7,0': ['🚒 Bombeiros', '#c0392b', 12, 'bombeiros'], '8,0': ['🏥 Hospital Central', '#f0f0f0', 30, 'hospital'], '9,0': ['🎖️ Quartel do Exército', '#4b5a3a', 12, 'quartel'],
     '9,3': ['⚓ Marinha', '#24467a', 14, 'marinha'], '9,4': ['✈️ Aeronáutica', '#3c5a7a', 14, 'aerea'], '0,7': ['🔧 Oficina de Oyster River', '#8a6d3b', 8, 'oficina'],
