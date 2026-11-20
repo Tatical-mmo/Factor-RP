@@ -5594,10 +5594,16 @@ function somAmbiente() {
   const p = jogador.pos, tempo = clima.fatorTempo(), dentro = jogador.dentroCasa ? 0.35 : 1;
   const metro = Math.abs(p.x) < mundo.LIM + 30 && Math.abs(p.z) < mundo.LIM + 30;
   const praca = Math.min(...PRACAS.map(([x, z]) => Math.hypot(p.x - x, p.z - z)), contratante ? Math.hypot(p.x - contratante.x, p.z - contratante.z) : Infinity);
-  const noite = horaAtual < 5.5 || horaAtual > 19.5;
-  sons.continuo('cidade_ambiente', (metro ? 0.32 * (1 - 0.5 * sons.perto(praca, 40)) : 0) * (1 - 0.6 * tempo) * dentro);
-  const passaros = metro ? 0.45 * sons.perto(praca, 45) : Math.abs(p.z) > 860 ? 0.4 : 0;
-  sons.continuo('passaros', passaros * (noite ? 0.15 : 1) * (1 - tempo) * dentro);
+  // 20p: de dia o som de sempre, de noite o noturno (cidade grande: rua com carros ao longe; Vila Serra e Porto Sul:
+  // grilos e mato). Na virada (18h30–20h e 5h–6h30) um some enquanto o outro aparece
+  const h = horaAtual, fN = h < 5 || h > 20 ? 1 : h < 6.5 ? (6.5 - h) / 1.5 : h > 18.5 ? (h - 18.5) / 1.5 : 0;
+  const cidade = (metro ? 0.32 * (1 - 0.5 * sons.perto(praca, 40)) : 0) * (1 - 0.6 * tempo) * dentro;
+  sons.continuo('cidade_ambiente', cidade * (1 - fN));
+  sons.continuo('cidade_noite', cidade * 1.5 * fN);
+  const pequena = !metro && Math.abs(p.z) > 860;   // Vila Serra (norte) e Porto Sul (sul)
+  const passaros = metro ? 0.45 * sons.perto(praca, 45) : pequena ? 0.4 : 0;
+  sons.continuo('passaros', passaros * (pequena ? 1 - fN : 1 - 0.85 * fN) * (1 - tempo) * dentro);
+  sons.continuo('noite_cidades', (pequena ? 0.4 : 0) * fN * (1 - tempo) * dentro);
 }
 
 // ---------------------------------------------------------------- NPCs se encontram e conversam
