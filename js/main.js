@@ -16424,11 +16424,16 @@ function atualizarLancador(dt) {
   ui.innerHTML = `${A.lanca === 'rpg' ? '🚀 RPG' : '🚀 Bazuca'} · ${qtdItem('foguete')} foguete(s) · ${!lanc.alvo ? 'mire numa aeronave' : lanc.ok ? `<span style="color:#ff5252">🔒 TRAVADO: ${nome}</span>` : `<span style="color:#ffd23e">travando ${nome}… ${Math.max(0, 2 - lanc.t).toFixed(1)} s</span>`}`;
 }
 // outro jogador com o lançador: o nome da animação chega pela rede; o tempo da recarga sai da arma dele
+// 20o: "uma vez" recomeça a animação a cada chamada; o estado chega várias vezes por segundo (e o local chama a cada
+// quadro), então só começa se ainda não estiver tocando. Antes ela recomeçava sem parar e, com o peso sempre voltando a
+// zero, o corpo caía na pose de braços abertos depois do tiro.
 function animLancadorRemoto(av, a) {
   if (a.a === 'lanc_tiro') {
+    if (av.nomeAtual === 'lanc_tiro') return;
     av.tocar('lanc_tiro', { umaVez: true, fade: 0.06, velocidade: 1.6 });
     if (av.nomeAtual === 'lanc_tiro' && av.atual) av.atual.time = 0.55;
   } else {
+    if (av.nomeAtual === 'lanc_recarga') return;
     const rec = (ARMAS[ARMA_POR_COD[a.ar]]?.recarga || 3) - 1.2;
     av.tocar('lanc_recarga', { umaVez: true, fade: 0.15, velocidade: Math.max(0.6, 2.97 / Math.max(0.8, rec) * 0.95) });
   }
@@ -16436,9 +16441,9 @@ function animLancadorRemoto(av, a) {
 function animLancador(av, j) {
   const t = performance.now();
   if (t < (j.lancTiroAte || 0)) {   // o coice: pula o começo da animação (a mira) para o tranco sair junto com o foguete
-    av.tocar('lanc_tiro', { umaVez: true, fade: 0.06, velocidade: 1.6 });
+    if (!j.lancTiroIni) av.tocar('lanc_tiro', { umaVez: true, fade: 0.06, velocidade: 1.6 });   // começa uma vez só (20o)
     if (av.nomeAtual === 'lanc_tiro' && !j.lancTiroIni) { j.lancTiroIni = true; if (av.atual) av.atual.time = 0.55; }
-  } else if (t < (j.lancRecAte || 0)) av.tocar('lanc_recarga', { umaVez: true, fade: 0.15, velocidade: Math.max(0.6, 2.97 / Math.max(0.8, (j.lancRecAte - j.lancTiroAte) / 1000) * 0.95) });
+  } else if (t < (j.lancRecAte || 0)) { if (av.nomeAtual !== 'lanc_recarga') av.tocar('lanc_recarga', { umaVez: true, fade: 0.15, velocidade: Math.max(0.6, 2.97 / Math.max(0.8, (j.lancRecAte - j.lancTiroAte) / 1000) * 0.95) }); }
   else av.tocar('lanc_mirar', { fade: 0.2 });
 }
 function dispararFoguete(A, alvoChao) {
