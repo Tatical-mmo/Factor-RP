@@ -841,6 +841,10 @@ export const marinha = {
   definirForca: (id, forca) => rpc('definir_forca', { p_jogador: id, p_forca: forca }),
   forcas: (ids) => ids.length ? sel(sb.from('perfis').select('id,forca').in('id', ids)) : Promise.resolve([]),
 };
+// governo do estado (127): pedágio da PRF na Ponte do Continente
+export const governo = {
+  pagarPedagio: () => rpc('pagar_pedagio'),
+};
 // laboratório da Área 51 (124): armaduras e autorização do General Supremo
 export const lab = {
   minha: async () => { const u = (await sb.auth.getUser()).data.user; if (!u) return null; return (await sel(sb.from('armaduras').select('*').eq('dono', u.id)))[0] || null; },

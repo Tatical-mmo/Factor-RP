@@ -111,7 +111,7 @@ export function colidir(p, raio, resolverLista) {
     resolverLista(novos, p, raio);
   }
 }
-export function altura(x, z) { return alturaBase(x, z, true); }
+export function altura(x, z) { if (z < -1528) { if (naPonte(x, z)) return alturaPonte(z); if (z < -1975) return 0.06; } return alturaBase(x, z, true); }
 // rua = false: o chão sem os 10 cm do asfalto das ruas dos morros (é sobre ele que o asfalto é desenhado)
 function alturaBase(x, z, rua) {
   for (let k = pisos.length - 1; k >= 0; k--) {
@@ -172,6 +172,15 @@ function alturaNaCalcada(x, z) {
 export const AREAS_NAVIO = [{ x0: 43.6, x1: 52.4, z0: 1100, z1: 1182 }, { x0: 52, x1: 60, z0: 1149.5, z1: 1153.5 }, { x0: 59.4, x1: 72.6, z0: 1131, z1: 1189 }];
 export function limitar(p) {
   if (p.x > 1500) return;                                   // interiores das casas
+  if (p.z < -1380 && (noCorredorNorte(p.x, p.z) || naPonte(p.x, p.z) || naPracaPedagio(p.x, p.z) || noContinente(p.x, p.z))) return;   // caminho do continente
+  if (p.z < -1528) {   // fora do caminho, ao norte: volta para o lugar permitido mais perto
+    const cands = [[THREE.MathUtils.clamp(p.x, PONTE.x - PONTE.larg / 2, PONTE.x + PONTE.larg / 2), THREE.MathUtils.clamp(p.z, -1975, -1529)],
+      [THREE.MathUtils.clamp(p.x, PEDAGIO.x - 9, PEDAGIO.x + 9), THREE.MathUtils.clamp(p.z, -2100, -1975)],
+      [THREE.MathUtils.clamp(p.x, CONTINENTE.x0, CONTINENTE.x1), THREE.MathUtils.clamp(p.z, CONTINENTE.z0, -2100)]];
+    let melhor = cands[0], md = Infinity;
+    for (const [x, z] of cands) { const d = Math.hypot(x - p.x, z - p.z); if (d < md) { md = d; melhor = [x, z]; } }
+    p.x = melhor[0]; p.z = melhor[1]; return;
+  }
   if (p.z > CIDADE_Z.maxSul && p.z < 1200 && p.x > 30 && p.x < 80) {   // píer, rampa e convés do cargueiro
     let melhor = null, md = Infinity;
     for (const r of AREAS_NAVIO) {
@@ -654,6 +663,35 @@ function gerarCidade(cid) {
 }
 // ---------------------------------------------------------------- favelas: casas prontas no morro (ninguém constrói), becos, ruas no relevo
 export const ILHA = { x0: -1000, x1: 1100, z0: -1528, z1: 1112 };   // a terra; em volta é mar
+// ---------------------------------------------------------------- CONTINENTE (cidades novas, 20a)
+// Ao norte da ilha, depois do canal: a ponte sai do alto da Serra (x = -160), cruza o mar e chega ao pedágio da PRF.
+// Da praça do pedágio a rodovia vai até a Sede do Governo do Estado e se divide para Barra Amarela (oeste) e
+// Oyster River (litoral, mais ao norte). As cidades ainda estão em obras: a estrada termina numa barreira.
+export const CONTINENTE = { x0: -3600, x1: 1400, z0: -7600, z1: -1960 };
+export const PONTE = { x: -160, larg: 12, z0: -1528, z1: -1975, alto: 24 };   // tabuleiro alto no meio (navios passam por baixo)
+export const PEDAGIO = { x: -160, z: -2060 };
+export const SEDE_GOVERNO = { x: -300, z: -3070, w: 170, d: 170 };   // o palácio é quase quadrado
+export const BARRA_AMARELA = { nome: 'Barra Amarela', x: -1800, z: -3300 };
+export const OYSTER_RIVER = { nome: 'Oyster River', x: 900, z: -6000 };
+// rodovia (pontos do eixo, 12 m de largura): ponte → pedágio → sede; ramais para as duas cidades (até as obras)
+export const RODOVIAS = [
+  [[PONTE.x, PONTE.z1], [PEDAGIO.x, PEDAGIO.z], [PONTE.x, -2700], [SEDE_GOVERNO.x + 30, SEDE_GOVERNO.z + SEDE_GOVERNO.d / 2 + 30]],
+  [[PONTE.x, -2700], [-900, -2950], [BARRA_AMARELA.x + 420, BARRA_AMARELA.z + 120]],
+  [[SEDE_GOVERNO.x + 30, SEDE_GOVERNO.z + SEDE_GOVERNO.d / 2 + 30], [SEDE_GOVERNO.x + SEDE_GOVERNO.w / 2 + 45, SEDE_GOVERNO.z + SEDE_GOVERNO.d / 2 + 30], [SEDE_GOVERNO.x + SEDE_GOVERNO.w / 2 + 45, SEDE_GOVERNO.z - SEDE_GOVERNO.d / 2 - 30], [300, -4200], [OYSTER_RIVER.x - 120, OYSTER_RIVER.z + 520]],
+];
+export const LARG_RODOVIA = 12;
+// altura do tabuleiro da ponte: sobe da praia, fica alta no canal e desce no continente
+export function alturaPonte(z) {
+  const a = -z;
+  if (a < 1528 || a > 1975) return null;
+  const sobe = THREE.MathUtils.smoothstep(a, 1528, 1665), desce = 1 - THREE.MathUtils.smoothstep(a, 1830, 1975);
+  return 0.3 + PONTE.alto * Math.min(sobe, desce);
+}
+function naPonte(x, z) { return Math.abs(x - PONTE.x) <= PONTE.larg / 2 && z <= -1528 && z >= -1975; }
+// trecho de terra da Serra até a praia da ponte (a estrada desce o morro) e a praça do pedágio (corredor estreito)
+function noCorredorNorte(x, z) { return Math.abs(x - PONTE.x) <= 7 && z <= -1380 && z > -1528; }
+function naPracaPedagio(x, z) { return Math.abs(x - PEDAGIO.x) <= 9 && z <= -1975 && z >= -2100; }   // estreita: não dá para contornar a cancela
+export function noContinente(x, z) { return x >= CONTINENTE.x0 && x <= CONTINENTE.x1 && z >= CONTINENTE.z0 && z <= -2100; }
 let s1 = 424242; const rf = () => (s1 = (s1 * 16807) % 2147483647) / 2147483647;   // sorteio próprio (não mexe no resto do mapa)
 const CORES_FAVELA = ['#b5652f', '#a85a2a', '#c4703a', '#9c4f25', '#b86b3c', '#a4532b', '#d9cfc0', '#cfc6b4', '#e8c547', '#6fb1d6', '#e07a7a', '#8fcf8a', '#f0a35e', '#f2efe6', '#c9a0dc', '#7fc6b5'];
 const chaoNatural = (x, z) => (z < -1150 ? morro(x, z) : morroPorto(x, z));
@@ -979,7 +1017,7 @@ function montarChaos() {
   const terreno = new THREE.Mesh(geo, MAT.campo); terreno.position.z = -1340; terreno.receiveShadow = true; ctx.scene.add(terreno);
   const cone = new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0);
   const morros = [];
-  for (let k = 0; k < 22; k++) morros.push([entre(-900, 900), -entre(2050, 2350), entre(90, 180), entre(70, 140)]);   // serra de fundo: ilhas ao norte, longe da rota dos navios
+  for (let k = 0; k < 22; k++) morros.push([entre(-3400, 1200), -entre(7300, 7550), entre(90, 180), entre(70, 140)]);   // serra de fundo: no fim do continente (20a: antes ficava onde agora passa a rodovia)
   const im = new THREE.InstancedMesh(cone, MAT.morro, morros.length);
   morros.forEach(([x, z, r, h], k) => { _m.compose(_v.set(x, 0, z), _q.identity(), _e.set(r, h, r)); im.setMatrixAt(k, _m); im.setColorAt(k, _c.set(escolher(['#7d8f63', '#6f8259', '#8a9a6c', '#76866a']))); });
   im.receiveShadow = true; ctx.scene.add(im);
@@ -1161,6 +1199,11 @@ export function desenharMapa(g) {
   g.fillStyle = '#86a95c';
   for (const s of [-1, 1]) g.fillRect(-1100, s > 0 ? FIM_HORIZONTE : -1300, 2200, 1300 - FIM_HORIZONTE);
   for (const e of extras) { g.fillStyle = e.cor; g.fillRect(e.x0, e.z0, e.x1 - e.x0, e.z1 - e.z0); }
+  g.fillStyle = '#86a95c'; g.fillRect(CONTINENTE.x0, CONTINENTE.z0, CONTINENTE.x1 - CONTINENTE.x0, CONTINENTE.z1 - CONTINENTE.z0);   // continente (20a)
+  g.strokeStyle = '#4a4e57'; g.lineWidth = LARG_RODOVIA; g.beginPath();
+  for (const r of RODOVIAS) { g.moveTo(r[0][0], r[0][1]); for (const [x, z] of r.slice(1)) g.lineTo(x, z); }
+  g.moveTo(PONTE.x, -1380); g.lineTo(PONTE.x, PONTE.z1); g.stroke();
+  g.fillStyle = '#e8e3d6'; g.fillRect(SEDE_GOVERNO.x - SEDE_GOVERNO.w / 2, SEDE_GOVERNO.z - SEDE_GOVERNO.d / 2, SEDE_GOVERNO.w, SEDE_GOVERNO.d);
   g.fillStyle = '#d8d1c3'; for (const [x, z, w, d] of calcadas) g.fillRect(x - w / 2, z - d / 2, w, d);
   g.fillStyle = '#7fa45a'; for (const [x, z, w, d] of gramados) g.fillRect(x - w / 2, z - d / 2, w, d);
   g.fillStyle = '#4a4e57'; for (const [x, z, w, d] of ruas) g.fillRect(x - w / 2, z - d / 2, w, d);

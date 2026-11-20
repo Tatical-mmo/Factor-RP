@@ -1464,6 +1464,7 @@ function acaoContexto() {
     else if (a?.[0] === 'jato') servicos.apagar(servicos.fogoProximo(jogador.carro?.servico === 'helicoptero_bombeiros' ? 28 : 15) || servicos.listaIncendios()[0]);
     else if (a?.[0] === 'socorrer') socorrerFerido(feridoProximo(7));
     else if (a?.[0] === 'abduzir') abduzir(alvoAbducao());
+    else if (a?.[0] === 'pedagio') pagarPedagio();
     else sairCarro();
     return;
   }
@@ -2210,7 +2211,7 @@ const cacheArmaN = new Map();
 const pedidosLaser = new Set();
 function modeloLaser(nome) {
   if (modelos[nome] || pedidosLaser.has(nome)) return; pedidosLaser.add(nome);
-  carregarGLB(`assets/modelos/${nome}.glb`).then((g) => {
+  Promise.resolve(carregarGLB(`assets/modelos/${nome}.glb`)).then((g) => {
     modelos[nome] = prepararEstatico(g.scene);
     if (jogador.armaTipo === nome && jogador.avatar) { jogador.armaTipo = null; conferirArma(); }
     for (const [, r] of remotos) if (r.av && ARMA_POR_COD[r.armaCod] === nome) r.armaCod = -1;   // remotos: refaz a arma no próximo quadro
@@ -4791,6 +4792,7 @@ function entrarServico(sv) {
 }
 function acaoNoVeiculo() {
   const c = jogador.carro;
+  if (pertoPedagio() && !pedagioLivre()) return ['pedagio', `pagar o pedágio da PRF (${PRECO_PEDAGIO} moedas)`, '💳 Pedágio'];
   if (podeDescarregar()) return ['descarregar', `saquear as ${c.carga} caixas aqui`, 'Saquear'];
   if (c.jujuba) { const cj = contextoComprador(); if (cj) return ['comprador', cj[0], cj[1]]; }
   if (c.servico === 'helicoptero_bombeiros' && Math.abs(c.vel) < 3 && c.alt > 3 && c.alt < 40 && (servicos.estaApagando() || servicos.fogoProximo(28))) return ['jato', servicos.estaApagando() ? 'jogando água (toque para parar)' : 'jogar água do alto no fogo (+400)', 'Água'];
@@ -8064,6 +8066,7 @@ function montarLocais() {
   LOCAIS.push({ nome: 'Avenida Central', x: 0, z: ruaC(2) });
   for (const a of AEROPORTOS) LOCAIS.push({ nome: `✈️ ${a.nome}`, x: a.balcao.x, z: a.balcao.z + (a.eixo === 'x' ? 4 : 0) });
   LOCAIS.push({ nome: '🛸 Área 51 (portão)', x: mundo.AREA51.x1 + 8, z: 0 });
+  LOCAIS.push({ nome: '🌉 Ponte do Continente (pedágio)', x: mundo.PEDAGIO.x, z: mundo.PEDAGIO.z + 30 }, { nome: '🏛️ Sede do Governo do Estado', x: mundo.SEDE_GOVERNO.x + 30, z: mundo.SEDE_GOVERNO.z + mundo.SEDE_GOVERNO.d / 2 + 30 });
   LOCAIS.push({ nome: '🪖 Quartel do Exército (portão)', x: mundo.QUARTEL.x0 - 8, z: mundo.QUARTEL.portao.z });
   LOCAIS.push({ nome: '✈️ Base Aérea (portão)', x: mundo.BASE_AEREA.portao.x, z: mundo.BASE_AEREA.z0 - 8 });
   LOCAIS.push({ nome: '⚓ Base Naval (portão)', x: mundo.BASE_NAVAL.portao.x, z: mundo.BASE_NAVAL.z0 - 8 });
@@ -8979,7 +8982,7 @@ function quadroJogo() {
   voz.atualizar(dt); atualizarOficinasJog(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   diag('ônibus/aviação/rodas');
-  atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
+  atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarRegioes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
   diag('rede');
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
@@ -15304,12 +15307,100 @@ const feixesOvni = [];
 function acessoArea51() { return jogador.perfil?.cargo === 'admin' || !!jogador.perfil?.lab_autorizado || (militar() && podePilotarHeliExercito()); }   // 19p: autorizados do laboratório também
 function dentroArea51(x, z, m = 0) { return x > A51.x0 - m && x < A51.x1 + m && z > A51.z0 - m && z < A51.z1 + m; }
 function regiaoDe(x, z) {
+  if (z < -1975) return Math.hypot(x - mundo.SEDE_GOVERNO.x, z - mundo.SEDE_GOVERNO.z) < 250 ? 'Sede do Governo do Estado' : 'continente, ao norte da ilha';
+  if (z < -1528) return 'Ponte do Continente';
   if (x <= -640) return 'deserto a oeste da Metrópole';
   if (Math.abs(z) > 700) return z < 0 ? 'Vila Serra' : 'Porto Sul';
   const p = []; if (z < -150) p.push('norte'); else if (z > 150) p.push('sul'); if (x > 150) p.push('leste'); else if (x < -150) p.push('oeste');
   return p.length ? `zona ${p.join('-')} da Metrópole` : 'centro da Metrópole';
 }
 const holofotesA51 = [];
+// ================================================================= CONTINENTE (20a): ponte, pedágio da PRF, rodovia e Sede do Governo
+// Tudo ao norte da ilha é montado só quando o jogador chega perto (z < -1250) e desmontado quando ele volta (z > -1100):
+// o celular não carrega o que está longe. As cidades novas (Barra Amarela e Oyster River) entram nas próximas etapas.
+const PRECO_PEDAGIO = 30;
+let regiaoNorte = null, pedagioPagoAte = 0, cancelaPedagio = null;
+function pertoPedagio() { return Math.hypot(jogador.pos.x - mundo.PEDAGIO.x, jogador.pos.z - mundo.PEDAGIO.z) < 16; }
+function isentoPedagio() { const p = jogador.perfil, c = jogador.carro; return !!(p?.cargo === 'admin' || p?.prf || p?.policial || militar() || c?.servico || c?.voa); }
+function pedagioLivre() { return isentoPedagio() || performance.now() < pedagioPagoAte; }
+async function pagarPedagio() {
+  try { await rede.governo.pagarPedagio(); pedagioPagoAte = performance.now() + 30000; aviso(`💳 Pedágio pago (${PRECO_PEDAGIO}). Boa viagem!`, 2.5); }
+  catch (e) { aviso(e.message, 3); }
+}
+function atualizarRegioes() {
+  const z = jogador.carro?.mesh ? jogador.carro.mesh.position.z : jogador.pos.z;
+  if (!regiaoNorte && z < -1250) montarNorte();
+  else if (regiaoNorte && z > -1100) desmontarNorte();
+  if (cancelaPedagio) {   // a cancela só segura quem está de carro e não pagou (a pé passa pelo lado da cabine)
+    const fechada = !!jogador.carro && !jogador.carro.voa && !pedagioLivre();
+    cancelaPedagio.col.off = !fechada; cancelaPedagio.braco.rotation.z = THREE.MathUtils.lerp(cancelaPedagio.braco.rotation.z, fechada ? 0 : 1.35, 0.15);
+  }
+}
+function desmontarNorte() {
+  const R = regiaoNorte; regiaoNorte = null; cancelaPedagio = null;
+  scene.remove(R.g);
+  R.g.traverse((o) => { if (o.isMesh && !o.userData.compartilhado) { o.geometry?.dispose(); if (!R.mats.has(o.material)) o.material?.dispose?.(); } });
+  for (const c of R.cols) { const k = colisores.indexOf(c); if (k >= 0) colisores.splice(k, 1); }
+}
+function montarNorte() {
+  const g = new THREE.Group(), cols = [], mats = new Set(); scene.add(g);
+  regiaoNorte = { g, cols, mats };
+  const M = (c, x = {}) => { const m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, ...x }); mats.add(m); return m; };
+  const asf = M('#3d4047'), faixa = M('#e8c23a'), branco = M('#eeeeee'), concreto = M('#9d9a92'), grama = M('#7f9f57'), ferro = M('#5b6168', { metalness: 0.4, roughness: 0.6 });
+  const caixa = (x, y, z, w, h, d, mat, col = false, rotY = 0) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.rotation.y = rotY; m.castShadow = h > 1; m.receiveShadow = true; g.add(m);
+    if (col) { const c = { tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 }; colisores.push(c); cols.push(c); }
+    return m;
+  };
+  const sprite = (txt, x, y, z, esc = 0.6, fundo = 'rgba(20,40,70,.92)') => { const s = textoSprite(txt, { escala: esc, fundo }); s.position.set(x, y, z); g.add(s); return s; };
+  const C = mundo.CONTINENTE, P = mundo.PONTE, PG = mundo.PEDAGIO, S = mundo.SEDE_GOVERNO;
+  // chão do continente
+  { const m = new THREE.Mesh(new THREE.PlaneGeometry(C.x1 - C.x0, C.z1 - C.z0 + 40).rotateX(-Math.PI / 2), grama); m.position.set((C.x0 + C.x1) / 2, 0.04, (C.z0 + C.z1) / 2 - 20); m.receiveShadow = true; g.add(m); }
+  // estrada de terra que desce a Serra até a praia da ponte
+  for (let z = -1382; z > -1530; z -= 4) { const h = mundo.altura(P.x, z - 2) ?? 0; caixa(P.x, h + 0.06, z - 2, 9, 0.12, 4.4, M('#7d6a4f')); }
+  // ponte: tabuleiro em gomos que seguem a altura, guarda-corpos e pilares (o vão do canal fica livre para os navios)
+  for (let z = P.z0; z > P.z1; z -= 6) {
+    const zc = z - 3, h = mundo.alturaPonte(zc) ?? 0.3, h2 = mundo.alturaPonte(zc - 3) ?? h, h1 = mundo.alturaPonte(zc + 3) ?? h;
+    const t = caixa(P.x, h - 0.25, zc, P.larg, 0.5, 6.2, concreto); t.rotation.x = Math.atan2(h2 - h1, 6);
+    for (const sx of [-1, 1]) { const r = caixa(P.x + sx * (P.larg / 2 - 0.2), h + 0.55, zc, 0.25, 1.1, 6.2, ferro); r.rotation.x = t.rotation.x; }
+    caixa(P.x, h + 0.01, zc, 0.3, 0.02, 3, faixa).rotation.x = t.rotation.x;
+    const a = -zc; if (h > 3 && (a < 1660 || a > 1830) && Math.round(a) % 30 < 6) caixa(P.x, h / 2 - 0.4, zc, 3, h, 3, concreto);   // pilar (fora do canal)
+  }
+  for (const [x, z] of [[P.x - 6.4, -1690], [P.x + 6.4, -1690], [P.x - 6.4, -1800], [P.x + 6.4, -1800]]) caixa(x, P.alto + 8, z, 1.2, 18, 1.2, branco);   // torres do vão central
+  sprite('🌉 Ponte do Continente', P.x, P.alto + 10, -1745, 0.7);
+  // rodovias: faixa de asfalto com linha amarela no meio
+  for (const r of mundo.RODOVIAS) for (let k = 0; k < r.length - 1; k++) {
+    const [x0, z0] = r[k], [x1, z1] = r[k + 1], L = Math.hypot(x1 - x0, z1 - z0), ang = Math.atan2(x1 - x0, z1 - z0);
+    caixa((x0 + x1) / 2, 0.08, (z0 + z1) / 2, mundo.LARG_RODOVIA, 0.05, L + mundo.LARG_RODOVIA, asf, false, ang);
+    for (let d = 6; d < L - 4; d += 12) { const f = d / L; caixa(x0 + (x1 - x0) * f, 0.12, z0 + (z1 - z0) * f, 0.3, 0.02, 5, faixa, false, ang); }
+  }
+  // pedágio da PRF: cobertura, cabines e a cancela (só fecha para carro que não pagou; PRF, polícia, militares e serviços passam)
+  caixa(PG.x, 6.2, PG.z, 22, 0.6, 9, M('#f2f2f2')); for (const sx of [-10, 10]) for (const sz of [-4, 4]) caixa(PG.x + sx, 3, PG.z + sz, 0.6, 6, 0.6, ferro);
+  caixa(PG.x - 8, 1.4, PG.z, 2.4, 2.8, 3, M('#2e5fa8'), true); caixa(PG.x + 8, 1.4, PG.z, 2.4, 2.8, 3, M('#2e5fa8'), true);
+  caixa(PG.x, 6.7, PG.z + 4.6, 22, 1.2, 0.2, M('#1f3f78'));
+  sprite(`🚧 PEDÁGIO · PRF · ${PRECO_PEDAGIO} moedas`, PG.x, 8.6, PG.z, 0.65, 'rgba(30,60,120,.94)');
+  { const piv = new THREE.Group(); piv.position.set(PG.x - 6.6, 1.1, PG.z); g.add(piv);
+    const braco = new THREE.Mesh(new THREE.BoxGeometry(12.6, 0.22, 0.22), M('#d33a2c')); braco.position.x = 6.3; piv.add(braco);
+    for (let k = 1; k < 12; k += 2) { const f = new THREE.Mesh(new THREE.BoxGeometry(1, 0.24, 0.24), branco); f.position.x = k; piv.add(f); }
+    const col = { tipo: 'caixa', x0: PG.x - 6.9, x1: PG.x + 6.9, z0: PG.z - 0.6, z1: PG.z + 0.6, off: true }; colisores.push(col); cols.push(col);
+    cancelaPedagio = { braco: piv, col }; }
+  // Sede do Governo do Estado: praça, o palácio (bem grande) e os mastros
+  caixa(S.x, 0.1, S.z, S.w + 40, 0.1, S.d + 40, M('#cfc8b8'));
+  for (const sx of [-1, 1]) caixa(S.x + sx * 22, 9, S.z + S.d / 2 + 14, 0.4, 18, 0.4, branco);
+  sprite('🏛️ Sede do Governo do Estado', S.x, 46, S.z + S.d / 2 + 6, 1.1, 'rgba(110,80,20,.94)');
+  Promise.resolve(carregarGLB('assets/modelos/palacio_governo.glb')).then((gl) => {
+    if (regiaoNorte?.g !== g) return;   // já saiu da região
+    const m = prepararEstatico(gl.scene), b = new THREE.Box3().setFromObject(m), k = S.w / Math.max(0.01, b.max.x - b.min.x);
+    m.scale.setScalar(k); m.position.set(S.x - (b.min.x + b.max.x) / 2 * k, -b.min.y * k + 0.15, S.z - (b.min.z + b.max.z) / 2 * k); g.add(m);
+  }).catch(() => { caixa(S.x, 12, S.z, S.w * 0.8, 24, S.d * 0.6, M('#e8e3d6')); });
+  { const c = { tipo: 'caixa', x0: S.x - S.w * 0.45, x1: S.x + S.w * 0.45, z0: S.z - S.d * 0.4, z1: S.z + S.d * 0.33 }; colisores.push(c); cols.push(c); }
+  // obras no fim dos ramais
+  for (const [cid, r] of [[mundo.BARRA_AMARELA, mundo.RODOVIAS[1]], [mundo.OYSTER_RIVER, mundo.RODOVIAS[2]]]) {
+    const [x, z] = r[r.length - 1], [xa, za] = r[r.length - 2], ang = Math.atan2(x - xa, z - za);
+    for (let k = -2; k <= 2; k++) caixa(x + Math.cos(ang) * k * 2.6, 0.6, z - Math.sin(ang) * k * 2.6, 2.2, 1.2, 0.5, M(k % 2 ? '#f2f2f2' : '#e06a1a'), true, ang);
+    sprite(`🚧 ${cid.nome} · em obras`, x, 5, z, 0.7, 'rgba(160,80,20,.94)');
+  }
+}
 const LAB_A51 = { x: -737, z: 34 };   // porta do laboratório (19p)
 function montarArea51() {
   if (area51) return;
