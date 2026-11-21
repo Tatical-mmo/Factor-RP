@@ -132,24 +132,27 @@ async function criar() {
 }
 // 20a: abertura (vídeo da Kitsune) e música do carregamento. O jogo já começa a carregar por baixo do vídeo.
 let introFeita = false;
+// 20b: a abertura roda assim que o jogo abre, antes do login. Antes de qualquer toque o navegador só deixa vídeo
+// mudo: se for assim, aparece "toque para ouvir" e o primeiro toque liga o som. Depois dela vem o login.
 function tocarIntro() {
-  const el = $('intro'), v = el?.querySelector('.frente'), f = el?.querySelector('.fundo');
-  if (!el || !v || introFeita) { tocarMusicaCarregamento(); return; }
+  const el = $('intro'), v = el?.querySelector('.frente');
+  if (!el || !v || introFeita) return;
   introFeita = true; el.classList.remove('oculto', 'saindo');
   let acabou = false;
   const fim = () => {
-    if (acabou) return; acabou = true; clearTimeout(limite);
-    el.classList.add('saindo'); setTimeout(() => { el.classList.add('oculto'); try { v.pause(); f.pause(); v.removeAttribute('src'); f.removeAttribute('src'); v.load(); f.load(); } catch { /* ok */ } }, 520);
-    if (!$('carregando').classList.contains('oculto')) tocarMusicaCarregamento();
+    if (acabou) return; acabou = true; clearTimeout(limite); introRodando = false;
+    el.classList.add('saindo'); setTimeout(() => { el.classList.add('oculto'); try { v.pause(); v.removeAttribute('src'); v.load(); } catch { /* ok */ } }, 620);
+    if (!$('carregando').classList.contains('oculto')) tocarMusicaCarregamento();   // já logado direto: a música entra agora
   };
-  const limite = setTimeout(fim, 14000);   // nunca prende a entrada (rede lenta, vídeo travado)
+  introRodando = true;
+  const limite = setTimeout(fim, 15000);   // nunca prende a entrada (rede lenta, vídeo travado)
   v.onended = fim; v.onerror = fim;
-  $('pularIntro').onclick = fim; setTimeout(() => $('pularIntro').classList.add('on'), 1000);
-  v.currentTime = 0; f.currentTime = 0; v.muted = false; v.volume = 0.9;
-  v.play().catch(() => { v.muted = true; return v.play(); }).catch(fim);   // sem permissão para som: toca mudo
-  f.play().catch(() => {});
-  v.ontimeupdate = () => { if (Math.abs(f.currentTime - v.currentTime) > 0.3) f.currentTime = v.currentTime; };
+  $('pularIntro').onclick = (e) => { e.stopPropagation(); fim(); }; setTimeout(() => $('pularIntro').classList.add('on'), 1000);
+  el.onpointerdown = () => { if (v.muted) { v.muted = false; v.volume = 0.9; $('somIntro').classList.add('oculto'); } };
+  v.currentTime = 0; v.muted = false; v.volume = 0.9;
+  v.play().catch(() => { v.muted = true; $('somIntro').classList.remove('oculto'); return v.play(); }).catch(fim);
 }
+let introRodando = false;
 let musicaFade = null;
 function fadeMusica(a, alvo, seg, depois) {
   clearInterval(musicaFade); const ini = a.volume, t0 = performance.now();
@@ -163,10 +166,11 @@ function tocarMusicaCarregamento() {
 }
 function pararMusicaCarregamento() { const a = $('musicaCarregamento'); if (!a || a.paused) return; fadeMusica(a, 0, 1.2, () => a.pause()); }
 function comecar(perfil) {
-  mostrar('carregando'); tocarIntro();
+  mostrar('carregando'); if (!introRodando) tocarMusicaCarregamento();
   iniciarJogo(perfil).catch((e) => { console.error(e); $('progressoTxt').textContent = 'Erro ao carregar: ' + e.message; });
 }
 
+tocarIntro();
 montarLogin();
 montarEscolha();
 // voltando pelo link de "esqueci minha senha": mostra a tela de senha nova em vez de entrar direto
