@@ -2590,9 +2590,10 @@ function atirar(alvo) {
   let vyMira = dourada || manual ? null : miraNoAlvo(boca, dir, A.vel, A.grav ?? 1);
   if (vyMira == null && assist) { const vv = dourada ? 34 : A.vel, d = Math.hypot(assist.x - boca.x, assist.z - boca.z), t = d / vv; vyMira = (assist.y - boca.y + 4.9 * (dourada ? 1 : A.grav ?? 1) * t * t) / t; }
   const v = dir.multiplyScalar(dourada ? 34 : A.vel).add(new THREE.Vector3(0, vyMira ?? (dourada ? 0.6 : 1.2 * 24 / A.vel * (A.grav ?? 1)), 0));   // menos queda: mira mais reta
-  if (manual) v.copy(velocidadeParaMira(boca, dourada ? 34 : A.vel, dourada ? 1 : A.grav ?? 1, A));   // cai exatamente sob a cruz
+  if (manual) v.copy(velocidadeParaMira(boca, dourada ? 34 : A.vel, dourada ? 1 : A.grav ?? 1, A));   // vai reto até a cruz
   else if (modoCam === 'p1' && vyMira == null) v.y += Math.tan(THREE.MathUtils.clamp(olhar.pitch, -0.6, 0.6)) * (dourada ? 34 : A.vel);   // mira para cima / para baixo
   criarBola(boca, v, cor, true, dourada ? 1 : A.bola || 1, !dourada && !!A.laser); balistica(bolas[bolas.length - 1], A);
+  if (manual) bolas[bolas.length - 1].g = 9.8 * (dourada ? 1 : A.grav ?? 1) * QUEDA_CENTRO;
   const critico = Math.random() < bonusTreino('tiro');   // treino de tiro: chance de acerto crítico (dano dobrado)
   bolas[bolas.length - 1].dano = Math.round(A.dano * (critico ? 2 : 1) * fatorForca()); bolas[bolas.length - 1].critico = critico;
   if (dourada) {
@@ -2602,7 +2603,7 @@ function atirar(alvo) {
     jogador.recarga = 1.2;
   }
   const r2 = (n) => Math.round(n * 100) / 100;
-  conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: cor, s: A.bola || 1, g: A.grav ?? 1, vd: A.alc ? r2(A.alc / A.vel) : 0, l: A.laser && !dourada ? 1 : 0 });
+  conexao?.enviar('tiro', { x: r2(boca.x), y: r2(boca.y), z: r2(boca.z), vx: r2(v.x), vy: r2(v.y), vz: r2(v.z), c: cor, s: A.bola || 1, g: (A.grav ?? 1) * (manual ? QUEDA_CENTRO : 1), vd: A.alc ? r2(A.alc / A.vel) : 0, l: A.laser && !dourada ? 1 : 0 });
   if (A.chumbos && !dourada) chumbos(A, boca, v, cor);
   if (!dourada && jogador.desviada && jogador.armaTipo === jogador.desviada.item) gastarBalaDesviada();
   if (!dourada) jogador.recarga = A.recarga / (1 + bonusTreino('luta'));
@@ -4936,7 +4937,7 @@ function criarMira() {
 }
 function atualizarMira() {
   const j = jogador, tanque = j.carro?.servico === 'tanque';
-  const ligada = j.avatar && !j.morto && (tanque || (j.armado && !j.carro && j.armaTipo && j.armaTipo !== 'basica'));
+  const ligada = j.avatar && !j.morto && (tanque || (j.armado && !j.carro && j.armaTipo && j.armaTipo !== 'basica' && !miraC.ligada));   // 20n: com a cruz de centro, a curva antiga não aparece
   if (!ligada) { if (mira) mira.linha.visible = mira.anel.visible = false; return; }
   if (!mira) criarMira();
   const A = ARMAS[j.armaTipo] || ARMAS.basica, f = new THREE.Vector3(Math.sin(j.yaw), 0, Math.cos(j.yaw));
@@ -17629,9 +17630,12 @@ function velocidadeParaMira(boca, V, grav, A) {
   let dx = alvo.x - boca.x, dz = alvo.z - boca.z, d = Math.hypot(dx, dz);
   if (d > alc) { const k = alc / d; alvo = boca.clone().lerp(alvo, k); dx = alvo.x - boca.x; dz = alvo.z - boca.z; d = alc; }   // além do alcance: vai pela linha da mira
   if (d < 0.4) return direcaoMira().multiplyScalar(V);
-  const t = d / V, vy = (alvo.y - boca.y + 4.9 * grav * t * t) / t;
-  return new THREE.Vector3(dx / d * V, vy, dz / d * V);
+  // 20n: vai em linha reta até o ponto da cruz (antes subia num arco para compensar a queda inteira); a bala da mira de
+  // centro cai só 20% do normal e a pequena queda é compensada, então ela passa exatamente pela cruz
+  const dir = alvo.clone().sub(boca), L = dir.length(), t = L / V;
+  return dir.divideScalar(L).multiplyScalar(V).add(new THREE.Vector3(0, 0.5 * 9.8 * grav * QUEDA_CENTRO * t, 0));
 }
+const QUEDA_CENTRO = 0.2;
 function cruzDaMira(on) {
   let el = $('miraCentro');
   if (!el) {
