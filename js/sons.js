@@ -9,16 +9,19 @@ const ARQUIVOS = ['sirene_bombeiros', 'sirene_ambulancia', 'sirene_policia', 'he
   'carro_partida', 'passaros', 'explosao_carro', 'explosao_grande', 'explosao_longe', 'explosao_agua', 'corvo', 'corvos', 'apagado', 'em_cana'];
 const SOB_DEMANDA = ['onibus_viagem', 'cidade_ambiente', 'cidade_noite', 'noite_cidades', 'chuva', 'tempestade', 'nevasca', 'aviao_fora', 'aviao_dentro', 'aviao_pequeno', 'aviao_medio', 'onibus_grande', 'onibus_pequeno',
   // motores novos (laços de marcha lenta e de rotação alta), baixados quando tocam pela primeira vez
-  ...['classico', 'popular', 'esportivo', 'presidencial', 'suv', 'jipe', 'van', 'caminhao', 'onibus', 'aviaoG', 'aviaoM', 'aviaoP'].flatMap((p) => [`${p}_lenta`, `${p}_alto`])];
+  ...['classico', 'popular', 'esportivo', 'presidencial', 'suv', 'jipe', 'van', 'caminhao', 'onibus', 'aviaoG', 'aviaoGG', 'aviaoM', 'aviaoP'].flatMap((p) => [`${p}_lenta`, `${p}_alto`])];
 const CONTINUOS = ['sirene_bombeiros', 'sirene_ambulancia', 'sirene_policia', 'helicoptero_baixo', 'helicoptero_alto', 'trem_andando',
   'passaros', ...SOB_DEMANDA];
 let ac = null, mestre = null, ligado = true;
 const esperando = {}, buffers = {}, lacos = {}, desejado = {}, taxa = {}, pedidos = new Set();
 try { ligado = localStorage.getItem('fatorSom') !== '0'; } catch { /* sem armazenamento */ }
 
+// 20u: o avião gigante toca o som do grande duas vezes (uma cópia do laço, começando noutro ponto e num tom um
+// pouquinho diferente), para soar como mais motores
+const APELIDO = { aviaoGG_lenta: 'aviaoG_lenta', aviaoGG_alto: 'aviaoG_alto' };
 function carregar(n) {
   if (pedidos.has(n)) return; pedidos.add(n);
-  fetch(`assets/sons/${n}.mp3`).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => {
+  fetch(`assets/sons/${APELIDO[n] || n}.mp3`).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => {
     buffers[n] = buf;
     const e = esperando[n]; delete esperando[n];   // efeito pedido antes de baixar: toca se ainda for a hora
     if (e && performance.now() - e.t < 1500) tocar(n, e.op);

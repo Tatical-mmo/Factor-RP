@@ -2881,7 +2881,7 @@ function avioesParaRastro() {
   const l = [];
   for (const a of npcAvioes) if (a.mesh?.visible) l.push([a.mesh, a.porte]);
   const c = jogador.carro; if (c?.aviao && c.mesh && c.porte !== 'pequeno') l.push([c.mesh, c.porte]);
-  for (const r of remotos.values()) if (r.carro?.visible && /^aviao_(grande|medio)/.test(r.carroModelo || '')) l.push([r.carro, r.carroModelo.slice(6)]);
+  for (const r of remotos.values()) if (r.carro?.visible && /^aviao_(gigante|grande|medio)/.test(r.carroModelo || '')) l.push([r.carro, r.carroModelo.slice(6)]);
   return l;
 }
 const _vR = new THREE.Vector3();
@@ -5547,7 +5547,7 @@ function atualizarSons() {
   sons.atualizar();
 }
 // motor de cada tipo de veículo: o meu (tom sobe com a velocidade), dos outros jogadores e das empresas por perto
-const SOM_AVIAO = { grande: 'aviaoG', medio: 'aviaoM', pequeno: 'aviaoP' };
+const SOM_AVIAO = { gigante: 'aviaoG', grande: 'aviaoG', medio: 'aviaoM', pequeno: 'aviaoP' };
 // som de motor de cada veículo: marcha lenta, rotação alta (os dois em laço), partida e uma acelerada curta (carros e
 // ônibus; caminhões não têm). O tom sobe com a velocidade; o tanque usa o caminhão mais grave.
 const PERFIL_SOM = {
@@ -14143,11 +14143,13 @@ const AEROPORTOS = [
     vaga: { x: -228, z: 1030 }, portao: { x: -216, z: 1016 }, balcao: { x: -200, z: 1012 }, atendente: { x: -203.6, z: 1012, yaw: Math.PI / 2 },
     taxiOut: [{ x: -255, z: 1030 }, { x: -255, z: 1086 }], saida: { x: -255, z: 985 }, taxiIn: [{ x: -230, z: 985 }, { x: -228, z: 1030 }] },
 ];
+const PISTA_LONGA = (p) => p === 'grande' || p === 'gigante';   // só pousam na pista longa da Metrópole
 const AERO = Object.fromEntries(AEROPORTOS.map((a) => [a.id, a]));
 const PORTES = {
   pequeno: { modelo: 'aviao_pequeno', vdec: 20, vmax: 40, cruz: 42, giro: 0.6, raio: 2.6, nome: 'pequeno' },
   medio: { modelo: 'aviao_medio', vdec: 26, vmax: 52, cruz: 58, giro: 0.45, raio: 4, nome: 'médio' },
   grande: { modelo: 'aviao_grande', vdec: 32, vmax: 64, cruz: 72, giro: 0.32, raio: 6, nome: 'grande' },
+  gigante: { modelo: 'aviao_gigante', vdec: 36, vmax: 70, cruz: 76, giro: 0.24, raio: 9, nome: 'gigante' },   // 20u: cargueiro de 6 motores (~64 m)
 };
 // comprimento, ponta de decolagem/pouso e direção de cada pista
 function pista(a) {
@@ -14168,7 +14170,7 @@ let aeroMontado = false;
 const luzesPista = [], aviaoParado = [], tetosTerminal = [];
 let painelVoos = null, matLuzPista = null, matLuzTaxi = null, farolTorre = null;
 const AVIOES_PARADOS = [   // decoração: [porte, x, z, ângulo]
-  ['grande', 232, -735, 0], ['medio', 285, -737, 0], ['pequeno', 440, -735, 0], ['pequeno', 490, -735, 0],
+  ['grande', 232, -735, 0], ['medio', 285, -737, 0], ['pequeno', 440, -735, 0], ['pequeno', 490, -735, 0], ['gigante', 396, -737, 0],   // gigante no fim: os ids da frota (revisão) não mudam
   ['pequeno', -232, -1062, Math.PI], ['pequeno', -232, 1062, 0],
 ];
 function montarAeroportos() {
@@ -14314,15 +14316,15 @@ function montarAvioesParados() {
     const P = PORTES[porte];
     const frota = x > 200 && z < -700 && z > -760;   // os da Metrópole são a frota dos pilotos
     const o = { porte, x, z, ang, mesh: null, cols: [], frota, fid: frota ? aviaoParado.filter((q) => q.frota).length : -1 }; aviaoParado.push(o);
-    const comp = { pequeno: 9, medio: 20, grande: 32 }[porte], env = { pequeno: 10, medio: 20, grande: 30 }[porte];
+    const comp = { pequeno: 9, medio: 20, grande: 32, gigante: 62 }[porte], env = { pequeno: 10, medio: 20, grande: 30, gigante: 66 }[porte];
     for (let k = -0.4; k <= 0.41; k += 0.2) o.cols.push({ tipo: 'circ', x: x + Math.sin(ang) * comp * k, z: z + Math.cos(ang) * comp * k, r: P.raio * 0.55 });
     for (const lado of [-1, 1]) o.cols.push({ tipo: 'circ', x: x + Math.cos(ang) * env * 0.3 * lado, z: z - Math.sin(ang) * env * 0.3 * lado, r: P.raio * 0.4 });
     o.cols.forEach((c) => mundo.addCol(c));
-    if (frota) { const r = textoSprite(`🛩️ Avião ${P.nome} · pilotos`, { escala: 0.9, fundo: 'rgba(43,95,168,.92)' }); r.position.set(x, { pequeno: 5, medio: 9, grande: 13 }[porte], z); scene.add(r); o.placa = r; }
+    if (frota) { const r = textoSprite(`🛩️ Avião ${P.nome} · pilotos`, { escala: 0.9, fundo: 'rgba(43,95,168,.92)' }); r.position.set(x, { pequeno: 5, medio: 9, grande: 13, gigante: 24 }[porte], z); scene.add(r); o.placa = r; }
   }
 }
 // avião da frota mais perto do jogador (a pé), para pilotar
-const ALCANCE_AVIAO = { pequeno: 10, medio: 15, grande: 21 };
+const ALCANCE_AVIAO = { pequeno: 10, medio: 15, grande: 21, gigante: 38 };
 function aviaoFrotaPerto() {
   let m = null, dm = Infinity;
   for (const o of aviaoParado) { if (!o.frota) continue; const d = Math.hypot(o.x - jogador.pos.x, o.z - jogador.pos.z); if (d < ALCANCE_AVIAO[o.porte] && d < dm) { dm = d; m = o; } }
@@ -14331,13 +14333,13 @@ function aviaoFrotaPerto() {
 const aviaoLivre = (porte) => aviaoParado.find((o) => o.frota && o.porte === porte && jogador.carro?.vaga !== o);
 // ---- revisão da frota: cada avião conta os voos desde a última revisão (no servidor, igual para todos)
 const frotaVoos = {}; let tempoFrota = 0;
-const REVISAO_PRECO = { pequeno: 2000, medio: 4000, grande: 8000 };
+const REVISAO_PRECO = { pequeno: 2000, medio: 4000, grande: 8000, gigante: 14000 };
 function placaFrota(o) {
   const v = frotaVoos[o.fid] ?? 0, P = PORTES[o.porte], chave = `${v >= 3 ? 'x' : v}`;
   if (o.placaChave === chave) return; o.placaChave = chave;
   if (o.placa) scene.remove(o.placa);
   const r = textoSprite(v >= 3 ? `⚠️ Avião ${P.nome} · revisão vencida (${v} voos)` : `🛩️ Avião ${P.nome} · ${v}/3 voos`, { escala: 0.9, fundo: v >= 3 ? 'rgba(190,50,30,.95)' : 'rgba(43,95,168,.92)' });
-  r.position.set(o.x, { pequeno: 5, medio: 9, grande: 13 }[o.porte], o.z); scene.add(r); o.placa = r;
+  r.position.set(o.x, { pequeno: 5, medio: 9, grande: 13, gigante: 24 }[o.porte], o.z); scene.add(r); o.placa = r;
 }
 function atualizarFrota(dt) {
   if ((tempoFrota -= dt) > 0) return; tempoFrota = 15;
@@ -14546,16 +14548,16 @@ function seguirVoo() {
 const ehPiloto = () => jogador.perfil?.profissao === 'piloto' || jogador.perfil?.cargo === 'admin';
 const ehControlador = () => jogador.perfil?.profissao === 'controlador' || jogador.perfil?.cargo === 'admin';
 function portesLiberados() {
-  if (jogador.perfil?.cargo === 'admin') return ['pequeno', 'medio', 'grande'];
-  const n = jogador.patenteNivel || 1; return n >= 3 ? ['pequeno', 'medio', 'grande'] : n >= 2 ? ['pequeno', 'medio'] : ['pequeno'];
+  if (jogador.perfil?.cargo === 'admin') return ['pequeno', 'medio', 'grande', 'gigante'];
+  const n = jogador.patenteNivel || 1; return n >= 3 ? ['pequeno', 'medio', 'grande', 'gigante'] : n >= 2 ? ['pequeno', 'medio'] : ['pequeno'];
 }
 function pegarAviao(o) {
   if (!ehPiloto()) { abrirServico('piloto'); return; }
   if (o) {
-    if (!portesLiberados().includes(o.porte)) { aviso(`O avião ${PORTES[o.porte].nome} libera com a carreira (Piloto = médio, Comandante = grande). Pegue o pequeno.`, 4); return; }
+    if (!portesLiberados().includes(o.porte)) { aviso(`O avião ${PORTES[o.porte].nome} libera com a carreira (Piloto = médio, Comandante = grande e gigante). Pegue o pequeno.`, 4); return; }
     entrarAviao(o.porte, o); return;
   }
-  escolher('🛩️ Hangar', 'Escolha o avião (o porte libera com a carreira: Piloto = médio, Comandante = grande).', portesLiberados().map((p) => ({ rotulo: `✈️ Avião ${PORTES[p].nome}`, fn: () => entrarAviao(p) })));
+  escolher('🛩️ Hangar', 'Escolha o avião (o porte libera com a carreira: Piloto = médio, Comandante = grande e gigante).', portesLiberados().map((p) => ({ rotulo: `✈️ Avião ${PORTES[p].nome}`, fn: () => entrarAviao(p) })));
 }
 const prefixo = () => `PR-${(jogador.perfil?.nome || 'FTR').normalize('NFD').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase().padEnd(3, 'X')}`;
 // admin: testa qualquer veículo do jogo (some ao sair; aviões saem da frota do aeroporto)
@@ -14680,8 +14682,8 @@ function pilotarAviao(c, dt) {
     { const ch = alturaChao(jogador.pos.x, jogador.pos.z); if (aeronaveEmPredio(c, ch)) return; alertaPredio(c, ch); }
     if (c.pousar && !c.pedidoPouso) { c.pedidoPouso = true; pedirTorre(c, 'pouso'); }
     if (c.alt <= 0.3) {   // tocou o chão
-      const ok = pe && alinhado(pe, jogador.yaw) && c.vel <= P.vdec * 1.3 && c.vs > -5 && (c.porte !== 'grande' || pe.grande);
-      if (!ok) { acidenteVeiculo(c, !pe ? '💥 O avião caiu fora da pista!' : c.porte === 'grande' && !pe.grande ? '💥 Pista curta demais para o avião grande!' : !alinhado(pe, jogador.yaw) ? '💥 Pouso torto: o avião saiu da pista!' : c.vs <= -5 ? '💥 Pouso duro: desceu rápido demais!' : '💥 Pouso rápido demais!'); return; }
+      const ok = pe && alinhado(pe, jogador.yaw) && c.vel <= P.vdec * 1.3 && c.vs > -5 && (!PISTA_LONGA(c.porte) || pe.grande);
+      if (!ok) { acidenteVeiculo(c, !pe ? '💥 O avião caiu fora da pista!' : PISTA_LONGA(c.porte) && !pe.grande ? `💥 Pista curta demais para o avião ${PORTES[c.porte].nome}!` : !alinhado(pe, jogador.yaw) ? '💥 Pouso torto: o avião saiu da pista!' : c.vs <= -5 ? '💥 Pouso duro: desceu rápido demais!' : '💥 Pouso rápido demais!'); return; }
       c.noAr = false; c.pousar = false; c.pedidoPouso = false; c.alt = 0; c.vs = 0; c.pitch = 0; c.vel = Math.min(c.vel, P.vdec);
       if (c.aula && c.aula.decolou) { c.vel = 0; if (c.aula.comAP) encerrarAula(false, '🤖 Pousou no piloto automático: a aula só conta pilotando sozinho. Tente de novo.'); else encerrarAula(true); return; }
       radio('torre', `${pe.torreNome}: ${prefixo()}, bem-vindo! Livre a pista.`);
@@ -14824,7 +14826,7 @@ function msaAFrente(dist = 700) {
   return topo - alturaChao(jogador.pos.x, jogador.pos.z);
 }
 function escolherAP(c) {
-  const ops = AEROPORTOS.filter((a) => c.porte !== 'grande' || a.grande).map((a) => ({ rotulo: `🛬 ${a.nome}${a.id === aeroProximo().id && !c.noAr ? ' (dar uma volta e pousar aqui)' : ''}`, fn: () => ligarAP(c, a.id) }));
+  const ops = AEROPORTOS.filter((a) => !PISTA_LONGA(c.porte) || a.grande).map((a) => ({ rotulo: `🛬 ${a.nome}${a.id === aeroProximo().id && !c.noAr ? ' (dar uma volta e pousar aqui)' : ''}`, fn: () => ligarAP(c, a.id) }));
   escolher('🤖 Piloto automático', c.noAr ? 'Escolha onde pousar. Ele vai até a reta final, desce, pousa e freia. Mexer no manche ou nos pedais devolve o controle.'
     : 'Escolha o destino. Ele taxia até a cabeceira, pede a decolagem, decola, voa, pousa e para na pista. Mexer no manche ou nos pedais devolve o controle.', ops);
 }
@@ -14948,7 +14950,7 @@ function pilotoAutomatico(c, dt, P) {
 const TAXI_ROTA = { metro: [[465, -765], [150, -765], [146, -800]], serra: [[-255, -1030], [-255, -1086]], porto: [[-255, 1030], [-255, 1086]] };
 function destinoVoo(origem, porte) {
   let m = null, dm = Infinity;
-  for (const a of AEROPORTOS) { if (a.id === origem.id || (porte === 'grande' && !a.grande)) continue; const p = pista(a), d = Math.hypot(p.ini.x - jogador.pos.x, p.ini.z - jogador.pos.z); if (d < dm) { dm = d; m = a; } }
+  for (const a of AEROPORTOS) { if (a.id === origem.id || (PISTA_LONGA(porte) && !a.grande)) continue; const p = pista(a), d = Math.hypot(p.ini.x - jogador.pos.x, p.ini.z - jogador.pos.z); if (d < dm) { dm = d; m = a; } }
   return (m || origem).id;
 }
 let guiaVoo = false, tempoGuia = 0;
@@ -15110,11 +15112,11 @@ function atualizarAviacao(dt) {
   if (matLuzPista) { matLuzPista.emissiveIntensity = 0.2 + noiteAtual * 2.5; matLuzTaxi.emissiveIntensity = 0.2 + noiteAtual * 2.2; }
   if (farolTorre) { farolTorre.rotation.y += dt * 2.4; farolTorre.material.emissiveIntensity = 0.5 + noiteAtual * 2.5; }
   // no ar: rotação alta (some com a distância); no chão por perto: marcha lenta (taxiando, no portão, na cabeceira)
-  const vols = { grande: [0, 0], medio: [0, 0], pequeno: [0, 0] };
+  const vols = { gigante: [0, 0], grande: [0, 0], medio: [0, 0], pequeno: [0, 0] };
   const ouvir = (porte, x, z, y) => {
     const d = Math.hypot(x - jogador.pos.x, z - jogador.pos.z), v = vols[porte];
-    if (y > 3) v[1] = Math.max(v[1], 1 - d / (porte === 'pequeno' ? 180 : porte === 'medio' ? 220 : 260));
-    else { v[0] = Math.max(v[0], 1 - d / (porte === 'pequeno' ? 70 : 100)); v[1] = Math.max(v[1], 0.35 * (1 - d / 140)); }
+    if (y > 3) v[1] = Math.max(v[1], 1 - d / (porte === 'pequeno' ? 180 : porte === 'medio' ? 220 : porte === 'gigante' ? 320 : 260));
+    else { v[0] = Math.max(v[0], 1 - d / (porte === 'pequeno' ? 70 : porte === 'gigante' ? 130 : 100)); v[1] = Math.max(v[1], 0.35 * (1 - d / 140)); }
   };
   npcAvioes.forEach((n, idx) => {
     let v = vooNpc(seg - (n.espera || 0), n.tab, n.tab.desloc || 0);
@@ -15137,6 +15139,8 @@ function atualizarAviacao(dt) {
       if (n.ult !== null && v.fala && FALAS[v.fala]) { const a = AERO[v.aeroFala] || AERO.metro, cs = `${n.tab.cs}${String(v.n % 100).padStart(2, '0')}`; if (ouveRadio(a)) FALAS[v.fala](cs, a).forEach(([q, t], k) => setTimeout(() => radio(q, t), k * 1600)); }
       n.ult = chave;
     }
+    // 20u: o internacional alterna entre o grande e o gigante a cada viagem (troca enquanto está fora do país)
+    if (n.tab === VOO_INTER) { const pt = v.n % 2 && modelos.aviao_gigante ? 'gigante' : 'grande'; if (pt !== n.porte && (v.oculto || !n.mesh)) { if (n.mesh) scene.remove(n.mesh); n.mesh = null; n.porte = pt; } }
     if (!n.mesh && modelos[PORTES[n.porte].modelo]) { n.mesh = civico.modeloCarro(PORTES[n.porte].modelo, '#ffffff'); scene.add(n.mesh); n.ang = v.ang; }
     if (!n.mesh) return;
     n.ang += Math.atan2(Math.sin(v.ang - n.ang), Math.cos(v.ang - n.ang)) * Math.min(1, dt * (v.y > 2 ? 1.5 : 2.2));
@@ -15152,6 +15156,13 @@ function atualizarAviacao(dt) {
   // o ronco do avião é para quem está do lado de fora: dentro (piloto ou passageiro) fica em silêncio
   for (const [porte, [lenta, alto]] of Object.entries(vols)) {
     const p = SOM_AVIAO[porte];
+    if (porte === 'gigante') {   // 20u: o som do grande dobrado (duas cópias defasadas) e um pouco mais alto
+      for (const [q, tom] of [['aviaoG', 1], ['aviaoGG', 0.94]]) {
+        sons.continuo(`${q}_lenta`, dentro ? 0 : Math.max(0, lenta) * 0.8, tom);
+        sons.continuo(`${q}_alto`, dentro ? 0 : Math.max(0, alto) * 0.95, tom);
+      }
+      continue;
+    }
     sons.continuo(`${p}_lenta`, dentro ? 0 : Math.max(0, lenta) * 0.7);
     sons.continuo(`${p}_alto`, dentro ? 0 : Math.max(0, alto) * 0.85);
   }
