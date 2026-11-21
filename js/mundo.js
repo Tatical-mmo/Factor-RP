@@ -1457,7 +1457,7 @@ function montarMobiliario() {
     const vert = Math.abs(Math.sin(rot)) < 0.5;
     carros[k].col = { tipo: 'caixa', x0: x - (vert ? 0.95 : 2.15), x1: x + (vert ? 0.95 : 2.15), z0: z - (vert ? 2.15 : 0.95), z1: z + (vert ? 2.15 : 0.95) }; addCol(carros[k].col);
   });
-  for (const m of [ic, iv, ir]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
+  for (const m of [ic, iv, ir]) { m.castShadow = m !== ir; m.receiveShadow = true; scene.add(m); }   // 20g: as rodas ficam dentro da sombra da lataria (não precisam desenhar a delas)
   const MAX = window.matchMedia?.('(pointer: coarse)').matches ? 8 : 16;
   const glb = ['carro_popular', 'carro_suv', 'carro_esportivo'].map((n) => {
     const base = ctx.modelo?.(n); if (!base) return null;

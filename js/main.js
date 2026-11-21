@@ -357,6 +357,7 @@ let luzInterna = 0, tNitidas = 0;
 // (a sombra muda de lado conforme você passa pelo poste). Uma luz só, que pula para o poste mais perto.
 let luzPoste = null, tPoste = 0;
 function atualizarLuzPoste(dt) {
+  if (luzPoste) luzPoste.shadow.autoUpdate = luzPoste.visible && luzPoste.intensity > 0.05;   // 20g: apagada não redesenha a sombra
   const ultra = visual.nivelAtual() === 'ultra', fo = foco(), quer = ultra && noiteAtual > 0.35 && !jogador.dentroCasa && !jogador.carro?.voa && !jogador.carro?.aviao && !jogador.voo && (fo.y || 0) < 8;
   // fora do ultra some; no ultra fica sempre na cena (só apaga): ligar e desligar luz recompila os materiais (engasga)
   if (!ultra) { if (luzPoste) luzPoste.visible = false; return; }
@@ -9085,12 +9086,18 @@ const relogio = new THREE.Clock();
 const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
 let tempoMapa = 0;
 
-// 20e: passos do jogador, conforme o chão (rua/calçada/dentro de casa = duro; o resto = grama/mato) e o ritmo
-function passos(j, vel) {
-  if (!(vel > 0) || j.carro || j.ave || j.morto || j.pulo || j.trem || j.embarcado || j.algemado) return;
+// 20g: passos do jogador um a um, no ritmo do andar/correr, conforme o chão (rua/calçada/dentro = duro; o resto =
+// grama/mato). Cada passo é sorteado entre 10 gravações, com tom e volume um pouco diferentes: não soa mais como um
+// laço repetindo (o de 2 s da grama ficava bem marcado)
+const passoSt = { t: 0, ult: -1, lado: 0 };
+function passos(j, vel, dt) {
+  if (!(vel > 0) || j.carro || j.ave || j.morto || j.pulo || j.trem || j.embarcado || j.algemado) { passoSt.t = 0.12; return; }
+  if ((passoSt.t -= dt) > 0) return;
   const duro = !!j.dentroCasa || mundo.naRua(j.pos.x, j.pos.z, 3.6) || j.pos.y > alturaChao(j.pos.x, j.pos.z) + 0.6;
-  const corre = vel > VELOCIDADE.andar * 1.25, r = THREE.MathUtils.clamp(vel / (corre ? VELOCIDADE.correr : VELOCIDADE.andar), 0.8, 1.25);
-  sons.continuo(corre ? (duro ? 'correr_asfalto' : 'correr_grama') : (duro ? 'passos_calcada' : 'passos_mato'), corre ? 0.34 : 0.3, r);
+  const corre = vel > VELOCIDADE.andar * 1.25;
+  passoSt.t = corre ? THREE.MathUtils.clamp(0.31 * VELOCIDADE.correr / vel, 0.23, 0.38) : THREE.MathUtils.clamp(0.5 * VELOCIDADE.andar / vel, 0.36, 0.7);
+  let i; do { i = 1 + Math.floor(Math.random() * 10); } while (i === passoSt.ult); passoSt.ult = i; passoSt.lado ^= 1;
+  sons.tocar(`passo_${duro ? 'duro' : 'grama'}_${i}`, { vol: (corre ? 0.42 : 0.3) * (passoSt.lado ? 1 : 0.86) * (0.88 + Math.random() * 0.12), velocidade: (corre ? 1.04 : 0.96) + (Math.random() - 0.5) * 0.14 });
 }
 function atualizarJogador(dt) {
   const j = jogador, av = j.avatar;
@@ -9193,7 +9200,7 @@ function atualizarJogador(dt) {
       else if (voz.estaFalando() || performance.now() < (j.falaAte || 0)) av.tocar(gestoConversa(av, j));
       else av.tocar('idle');
     }
-    passos(j, vel);
+    passos(j, vel, dt);
   }
   if (j.emote === 'beber' && forca > 0.15) j.emote = null;   // andou: para de beber
   if (j.emote === 'celular' && forca > 0.15) celular.fechar();   // andou: guarda o celular
@@ -16633,6 +16640,9 @@ function atualizarRefletores() {
   refletores.tTorre -= 1 / 60;
   const alvoI = refletores.alvo && !jogador.dentroCasa ? 4.5 * refletores.alvo.d * n : 0;
   L.intensity += (alvoI - L.intensity) * 0.15;
+  // 20g: apagada (de dia ou longe das torres) não redesenha a sombra. Antes ela desenhava a cena inteira de novo a cada
+  // quadro, mesmo com a luz em zero (desligar a sombra de vez recompilaria os materiais e engasgaria)
+  L.shadow.autoUpdate = L.intensity > 0.02; if (L.shadow.autoUpdate) L.shadow.needsUpdate = true;
 }
 
 // ================================================================= estrelas e perdão automático
