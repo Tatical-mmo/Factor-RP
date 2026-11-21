@@ -190,9 +190,9 @@ export function limitar(p) {
   }
   if (p.x >= 250 && p.x <= BASE_NAVAL.x1 + 10 && p.z >= 938 && p.z <= BASE_NAVAL.z1 + 2) return;   // Base Aérea, Base Naval, o campo em volta e a rua até os portões
   if (p.x >= AREA51.x0 - 15 && p.x <= -630 && p.z >= AREA51.z0 - 15 && p.z <= AREA51.z1 + 15) { p.x = Math.max(p.x, AREA51.x0 + 1); p.z = THREE.MathUtils.clamp(p.z, AREA51.z0 + 1, AREA51.z1 - 1); return; }   // deserto da Área 51 e a estrada até ela
-  if (p.x >= 157 && p.x <= 167 && p.z >= -662 && p.z <= -630) return;   // acesso ao aeroporto
-  if (p.x >= -167 && p.x <= -157 && p.z >= -950 && p.z <= -636) return;   // rodovia para Vila Serra
-  if (p.x >= 211 && p.x <= 221 && p.z >= 636 && p.z <= 950) return;     // rodovia para Porto Sul
+  if (p.x >= 149 && p.x <= 175 && p.z >= -662 && p.z <= -630) return;   // acesso ao aeroporto (20k: com 8 m de grama de cada lado)
+  if (p.x >= -175 && p.x <= -149 && p.z >= -950 && p.z <= -636) return;   // rodovia para Vila Serra (20k: com 8 m de grama de cada lado)
+  if (p.x >= 203 && p.x <= 229 && p.z >= 636 && p.z <= 950) return;     // rodovia para Porto Sul (20k: com 8 m de grama de cada lado)
   if (Math.abs(p.z) > 700) {
     const s = Math.sign(p.z);
     // Porto Sul a leste (bases e Morro do Porto): para no limite mais perto da área permitida. Antes jogava o x para 300:

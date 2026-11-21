@@ -1431,7 +1431,17 @@ function resolverColisao(p, raio) {
   colidirCarros(p, raio); colidirOnibus(p, raio); colidirLixoNpc(p, raio);
   if (!jogador.trem) ferrovia.empurrar(p, raio);
   resolverMoveis(p, raio);
+  limitarComBarreira(p);
+}
+// 20k: limite do mapa como barreira invisível. Se a correção do limite jogaria o personagem (ou o veículo) longe — o
+// "ponto válido mais perto" às vezes fica do outro lado —, ele fica onde estava, como se batesse num muro, e continua
+// podendo andar para os outros lados. Correções pequenas (deslizar na borda) continuam valendo
+const ultimoNoLimite = new WeakMap();
+function limitarComBarreira(p) {
+  const x0 = p.x, z0 = p.z, u = ultimoNoLimite.get(p);
   mundo.limitar(p);
+  if (u && Math.hypot(p.x - x0, p.z - z0) > 1 && Math.hypot(x0 - u.x, z0 - u.z) < 4) { p.x = u.x; p.z = u.z; }
+  if (u) { u.x = p.x; u.z = p.z; } else ultimoNoLimite.set(p, { x: p.x, z: p.z });
 }
 function colidirLista(lista, p, raio) {
   for (const c of lista) {
