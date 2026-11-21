@@ -3557,6 +3557,7 @@ async function iniciarJogo(perfil) {
   try { montarEstacionamentos(); } catch (e) { console.warn('estacionamentos:', e); }
   try { montarOficinas(); } catch (e) { console.warn('oficinas:', e); }
   try { montarSirenes(); } catch (e) { console.warn('sirenes', e); } atualizarEstadoBau();
+  montarMonumento();
   desenharFundoMapa(); try { montarLocais(); } catch { /* sem locais */ }   // as oficinas e os estacionamentos entram no mapa e no teleporte
   servicos.iniciar({ ultra: () => visual.nivelAtual() === 'ultra', socorrista: socorristaNpc,
     scene, textoSprite, altura: alturaChao, jogador: () => jogador, perfil: () => jogador.perfil, aviso, agora: agoraServidor,
@@ -6269,6 +6270,22 @@ function falarBruxo() {
   ]);
 }
 
+// ================================================================= MONUMENTO DO GUARDIÃO (20s)
+// A estátua das cidades do continente, reaproveitada no ponto mais alto da Serra (~47 m), acima do Morro da Serra e de
+// frente para Vila Serra. A base de pedra do modelo (52 m) cobre o topo do morro.
+const MONUMENTO = { x: -200, z: -1378, larg: 52 };
+function montarMonumento() {
+  const M = MONUMENTO; let mn = Infinity;
+  for (let r = 0; r <= 24; r += 4) for (let k = 0; k < (r ? 16 : 1); k++) { const a = k / 16 * Math.PI * 2; mn = Math.min(mn, alturaChao(M.x + Math.cos(a) * r, M.z + Math.sin(a) * r)); }
+  colisores.push({ tipo: 'circ', x: M.x, z: M.z, r: 5 });
+  const placa = textoSprite('🗿 Monumento do Guardião', { escala: 0.8, fundo: 'rgba(60,60,70,.9)' }); placa.position.set(M.x, mn + 58, M.z); scene.add(placa);
+  Promise.resolve(carregarGLB('assets/modelos/monumento_guardiao.glb')).then((gl) => {
+    const m = prepararEstatico(gl.scene.clone(true)), b = new THREE.Box3().setFromObject(m), k = M.larg / Math.max(b.max.x - b.min.x, b.max.z - b.min.z, 0.01);
+    const piv = new THREE.Group(); m.scale.setScalar(k); m.position.set(-(b.min.x + b.max.x) / 2 * k, -b.min.y * k, -(b.min.z + b.max.z) / 2 * k);
+    piv.add(m); piv.position.set(M.x, mn + 0.5, M.z); piv.rotation.y = -Math.PI / 2;   // a frente do modelo vem em +X: vira para o sul (Vila Serra)
+    scene.add(piv);
+  }).catch(() => {});
+}
 // ================================================================= SIRENES DE ALARME (20q)
 // Mastros com megafone em pontos estratégicos. Tocam juntas quando a Marinha lança o míssil de cruzeiro (e no teste do
 // admin). Cada uma toca do lugar dela: mais longe = mais baixa e atrasada (o som anda ~340 m/s), então duas perto uma da
@@ -8303,6 +8320,7 @@ function montarLocais() {
   for (const e of ESCONDERIJOS) LOCAIS.push({ nome: `⛺ ${e.nome}`, x: e.x + 3.5, z: e.z + 3.5 });
   for (const [id, p] of Object.entries(PORTAS_QG)) LOCAIS.push({ nome: `🏴 QG do clã (${id === 'leste' ? 'Leste' : 'Oeste'})`, x: p.x + (p.x > 0 ? -2 : 2), z: p.z });
   LOCAIS.push({ nome: '🚢 Píer do cargueiro', x: 48, z: 1112 });
+  LOCAIS.push({ nome: '🗿 Monumento do Guardião (topo da Serra)', x: MONUMENTO.x + 8, z: MONUMENTO.z + 30 });
   for (const f of Object.values(mundo.FAVELAS)) {
     LOCAIS.push({ nome: `🏚️ ${f.nome} (entrada)`, x: f.entrada.x + 6, z: f.entrada.z });
     LOCAIS.push({ nome: `🏴 ${f.nome} (base de clã no alto)`, x: f.base.x, z: f.base.z });
@@ -13737,6 +13755,7 @@ function prepararTransporte() {
   for (const k of ['B', 'C', 'D']) mundo.semEstacionar(CATEGORIAS[k].rota.pts);
   for (const [x0, z0, x1, z1] of RODOVIAS) mundo.abrirTrilha([[x0, z0], [x1, z1]], 9);
   for (const c of RODO_CIDADES) mundo.abrirTrilha([[c.x0, c.z], [c.x1, c.z]], 4);
+  mundo.limparArea(MONUMENTO.x - 28, MONUMENTO.z - 28, MONUMENTO.x + 28, MONUMENTO.z + 28);   // 20s: topo da Serra livre para o monumento
   mundo.limparArea(RODO.x0 - 1, RODO.z0 - 1, TERMINAL_RODO.x1 + 1, RODO.z1 + 1);   // terminal inteiro (plataformas, pátio e saguão)
   mundo.limparArea(CENTRAL.x0 - 1, CENTRAL.z0 - 1, CENTRAL.x1 + 1, CENTRAL.z1 + 1); for (const S of SETORES) mundo.semEstacionar(S.cam.pts);
   mundo.limparArea(AUTOESCOLA.x0 - 1, AUTOESCOLA.z0 - 1, AUTOESCOLA.x1 + 1, AUTOESCOLA.z1 + 1);
