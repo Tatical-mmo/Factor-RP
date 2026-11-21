@@ -946,10 +946,24 @@ class Avatar {
     const lado = Math.sign(m.x) || -1; m.x = lado * THREE.MathUtils.clamp(Math.abs(m.x), 0.04 * h, 0.16 * h);   // do lado da mão direita, sem atravessar o peito
     m.y = THREE.MathUtils.clamp(m.y, 0.52 * h, 0.74 * h);          // entre a cintura e o ombro
     m.z = Math.max(m.z, 0.14 * h + 0.12);                           // sempre na frente do corpo
-    arma.position.set(m.x - px, m.y - py, m.z - pz); arma.rotation.set(0, 0, 0);
+    // 20y: na recarga a arma acompanha a mão direita (posição e inclinação). A inclinação é a diferença entre a mão
+    // agora e a mão na pose normal com a arma (guardada enquanto não está recarregando); entra e sai suave.
+    const recar = /^recarga_/.test(this.nomeAtual || '');
+    this._rk = (this._rk || 0) + ((recar ? 1 : 0) - (this._rk || 0)) * 0.18;
+    this.raiz.getWorldQuaternion(_qRaizArma).invert();
+    _qMaoArma.copy(_qRaizArma).multiply(this.maoD.getWorldQuaternion(_qTmpArma));   // mão no espaço do personagem
+    if (!recar && this._rk < 0.03) { (this._qRefMao ||= new THREE.Quaternion()).copy(_qMaoArma); }
+    if (this._rk < 0.01 || !this._qRefMao) { arma.position.set(m.x - px, m.y - py, m.z - pz); arma.rotation.set(0, 0, 0); return; }
+    _qDelta.copy(_qMaoArma).multiply(_qTmpArma.copy(this._qRefMao).invert());
+    _qDelta.slerpQuaternions(_qId, _qDelta, this._rk);
+    const mh = this.maoD.getWorldPosition(_maoArma2); this.raiz.worldToLocal(mh);
+    _pegaArma.set(px, py, pz).applyQuaternion(_qDelta);
+    arma.position.set(m.x - px, m.y - py, m.z - pz).lerp(mh.sub(_pegaArma), this._rk);
+    arma.quaternion.copy(_qDelta);
   }
 }
-const _maoArma = new THREE.Vector3();
+const _maoArma = new THREE.Vector3(), _maoArma2 = new THREE.Vector3(), _pegaArma = new THREE.Vector3();
+const _qRaizArma = new THREE.Quaternion(), _qMaoArma = new THREE.Quaternion(), _qTmpArma = new THREE.Quaternion(), _qDelta = new THREE.Quaternion(), _qId = new THREE.Quaternion();
 
 // As animações (menos correr e andar, que são de cada personagem) vêm do robô, que tem o mesmo esqueleto Mixamo.
 // Copiar as rotações direto deixava pés e corpo tortos, porque cada esqueleto tem a pose de descanso um pouco diferente.
