@@ -1086,6 +1086,18 @@ function adaptarClipe(clip, cenaR, cenaN) {
     if (_da.dot(_db) > Math.cos(12 * Math.PI / 180)) continue;
     _al.setFromUnitVectors(_da, _db); restoMundoN.get(n).premultiply(_al);
   }
+  // 19zv: a mão também vem dobrada na pose A (60-70° em algumas skins do baú) e ficava torta. Endireita a mão pela
+  // direção punho → dedo médio e aplica a mesma correção aos dedos, para eles continuarem alinhados com a palma.
+  for (const lado of ['Left', 'Right']) {
+    const n = `mixamorig${lado}Hand`, o = N.get(n), r = R.get(n), fN = N.get(`mixamorig${lado}HandMiddle1`), fR = R.get(`mixamorig${lado}HandMiddle1`);
+    if (!o || !r || !fN || !fR) continue;
+    _da.subVectors(fN.getWorldPosition(_pb), o.getWorldPosition(_pa)); _db.subVectors(fR.getWorldPosition(_pb), r.getWorldPosition(_pa));
+    if (_da.lengthSq() < 1e-8 || _db.lengthSq() < 1e-8) continue;
+    _da.normalize(); _db.normalize();
+    if (_da.dot(_db) > Math.cos(12 * Math.PI / 180)) continue;
+    _al.setFromUnitVectors(_da, _db);
+    o.traverse((d) => { if (d.isBone || d.type === 'Bone') restoMundoN.get(d.name)?.premultiply(_al); });
+  }
   const faixas = new Map(); let hipsPos = null, tempos = null;
   for (const t of clip.tracks) {
     const [osso, prop] = t.name.split('.');
