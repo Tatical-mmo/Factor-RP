@@ -53,6 +53,23 @@ export function alternar() {
   if (mestre) mestre.gain.value = ligado ? 0.8 : 0;
   return ligado;
 }
+// 20j: toque do celular. O jogo diz o volume a cada quadro (1 = o seu celular; mais baixo = o de alguém perto);
+// começa do início quando passa a tocar e para quando ninguém perto está recebendo ligação
+let toqueCel = null, toqueVol = 0;
+export function toqueCelular(vol) { toqueVol = Math.max(toqueVol, vol); }
+function atualizarToque() {
+  const v = toqueVol; toqueVol = 0;
+  if (v > 0.01 && !buffers.toque_celular) { carregar('toque_celular'); return; }
+  if (v > 0.01 && !toqueCel) {
+    const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = buffers.toque_celular; src.loop = true; g.gain.value = v;
+    src.connect(g); g.connect(mestre); src.start(); toqueCel = { src, g, zero: 0 };
+  } else if (toqueCel) {
+    toqueCel.g.gain.setTargetAtTime(v, ac.currentTime, 0.08);
+    toqueCel.zero = v > 0.01 ? 0 : toqueCel.zero + 1;
+    if (toqueCel.zero > 20) { try { toqueCel.src.stop(); } catch { /* já parou */ } toqueCel = null; }
+  }
+}
+export const tocaDoJogo = () => !!(ac && ligado);
 // som da tela de APAGADO / EM CANA: toca cheio e abaixa o resto do jogo por alguns segundos
 export function tocarTela(nome, seg = 3.5) {
   if (!ac || !ligado) return;
@@ -79,7 +96,7 @@ export function continuo(nome, vol, velocidade) {
 }
 export function atualizar() {
   if (!ac) return;
-  atualizarZumbido();
+  atualizarZumbido(); atualizarToque();
   for (const n of CONTINUOS) {
     const l = lacos[n]; if (!l) continue;
     const alvo = Math.min(1, desejado[n] || 0);

@@ -242,6 +242,9 @@ export async function mensagemChegou(de, nome) {
   ctx.aviso?.(`💬 Mensagem de ${nome || 'um amigo'}. Abra o 📱 → 👥 Contatos.`, 3.5);
 }
 function tocar(on) {
+  // 20j: com o som do jogo ligado toca o toque do Fator RP (quem está perto também ouve, mais baixo); senão, o bipe
+  const doJogo = ctx.toqueCelular?.(on);
+  if (doJogo && on) { if (toque) { clearInterval(toque.i); toque.ac.close?.().catch(() => {}); toque = null; } return; }
   if (!on) { if (toque) { clearInterval(toque.i); toque.ac.close?.().catch(() => {}); toque = null; } return; }
   if (toque) return;
   try {

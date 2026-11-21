@@ -3812,7 +3812,7 @@ async function iniciarJogo(perfil) {
     abrirJanela: (q) => $(q === 'empresa' ? 'btEmpresa' : 'btCla')?.click(), chamarMecanico, estacionamentoPerto: estacionamentoMaisPerto,
     saldoMudou: () => rede.carregarPerfil(jogador.perfil.id).then((p) => { if (p) { jogador.perfil.moedas = p.moedas; atualizarInfo(); } }).catch(() => {}), aoFechar: () => { if (jogador.emote === 'celular') jogador.emote = null; },
     moedas: () => jogador.perfil?.moedas || 0, lojaOnline, comprarOnline, miniaturaCarro,
-    online: (id) => remotos.has(id), euId: () => jogador.perfil?.id, aviso,
+    online: (id) => remotos.has(id), euId: () => jogador.perfil?.id, aviso, toqueCelular,
     avisarMensagem: (id) => conexao?.enviar('dm', { de: jogador.perfil.id, para: id }),
     abrirParaLigacao: () => { if (!jogador.carro && !jogador.dentroCasa && !jogador.morto) { if (jogador.armado) alternarArma(); jogador.emote = 'celular'; jogador.avatar.garantir('celular'); } },
     aoFimLigacao: () => { if (jogador.emote === 'celular' && !celular.celularAberto()) jogador.emote = null; },
@@ -3999,7 +3999,7 @@ function conectarMultiplayer(perfil) {
     explosao: (e) => receberExplosao(e),
     voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, dm: (m) => { if (m?.para === jogador.perfil?.id && amigosIds.has(m.de)) celular.mensagemChegou(m.de, remotos.get(m.de)?.meta?.nome); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
-    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, derrubar: (e) => receberDerrubar(e), danoQueda: (e) => { if (e.alvo === jogador.perfil?.id) danoNoMeuVeiculo(Math.min(40, Math.max(0, +e.d || 0))); }, viacao: () => atualizarEstadoViacao(), somSoco: (e) => sons.tocar(e.k ? 'soco1' : 'soco2', { vol: 0.85, dist: Math.hypot((+e.x || 0) - jogador.pos.x, (+e.z || 0) - jogador.pos.z), raio: 30 }), navio: (e) => receberNavio(e),
+    toqueCel: (e) => receberToqueCel(e), abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, derrubar: (e) => receberDerrubar(e), danoQueda: (e) => { if (e.alvo === jogador.perfil?.id) danoNoMeuVeiculo(Math.min(40, Math.max(0, +e.d || 0))); }, viacao: () => atualizarEstadoViacao(), somSoco: (e) => sons.tocar(e.k ? 'soco1' : 'soco2', { vol: 0.85, dist: Math.hypot((+e.x || 0) - jogador.pos.x, (+e.z || 0) - jogador.pos.z), raio: 30 }), navio: (e) => receberNavio(e),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -5794,6 +5794,31 @@ function andando(o) {
   const dt = (agora - u.somT) / 1000;
   if (dt >= 0.25) { u.somV = Math.hypot(x - u.somX, z - u.somZ) / dt; u.somT = agora; u.somX = x; u.somZ = z; }
   return u.somV > 0.8;
+}
+// 20j: toque do celular: quem recebe ouve cheio; outros jogadores até 25 m ouvem o mesmo toque saindo do personagem, mais baixo
+let toqueMeu = false, tToqueRede = 0;
+const toquesPerto = new Map();   // id do jogador → até quando está tocando (renovado pela rede a cada 2 s)
+function toqueCelular(on) {
+  toqueMeu = !!on; tToqueRede = 0;
+  if (!on) conexao?.enviar('toqueCel', { de: jogador.perfil?.id, on: false });
+  return sons.tocaDoJogo();
+}
+function receberToqueCel(e) {
+  if (!e?.de || e.de === jogador.perfil?.id) return;
+  if (e.on) toquesPerto.set(e.de, performance.now() + 5000); else toquesPerto.delete(e.de);
+}
+function atualizarToqueCelular(dt) {
+  if (toqueMeu) {
+    sons.toqueCelular(1);
+    if ((tToqueRede -= dt) <= 0) { tToqueRede = 2; conexao?.enviar('toqueCel', { de: jogador.perfil?.id, on: true }); }
+  }
+  const agora = performance.now();
+  for (const [id, ate] of toquesPerto) {
+    const r = remotos.get(id), p = r && (r.carro?.position || r.av?.raiz.position);
+    if (ate < agora || !p) { if (ate < agora) toquesPerto.delete(id); continue; }
+    const d = Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z);
+    if (d < 25) sons.toqueCelular(0.4 * (1 - d / 25));
+  }
 }
 function atualizarSons() {
   const p = jogador.pos, dist = (o) => Math.hypot(o.position.x - p.x, o.position.z - p.z), t = performance.now() / 1000;
@@ -9904,7 +9929,7 @@ function quadroJogo() {
   mundo.predios3dPerto(foco().x, foco().z, dt);
   sedes.atualizar(dt);
   diag('serviços/aves/sons');
-  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); voltarHelisServico(dt); atualizarLuzPoste(dt); checarTrem(); atualizarArmaPd(dt); atualizarBruxo(dt); atualizarAvesNpc(dt); atualizarBandos(dt); controleAve(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
+  if (jogador.avatar) { atualizarRastreio(dt); atualizarPrefeitura(dt); atualizarAssalto(dt); atualizarOcorrencias(dt); servicos.atualizar(dt); voltarHelisServico(dt); atualizarLuzPoste(dt); checarTrem(); atualizarArmaPd(dt); atualizarBruxo(dt); atualizarAvesNpc(dt); atualizarBandos(dt); controleAve(dt); atualizarProcurados(dt); atualizarJornal(dt); atualizarCarreira(dt); atualizarToqueCelular(dt); atualizarSons(); atualizarChat(dt); atualizarConversas(dt); }
   diag('jogador');
   atualizarJogador(dt);
   diag('veículos/logística');

@@ -113,6 +113,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'bau' }, ({ payload }) => eventos.bau?.(payload));
   canal.on('broadcast', { event: 'natal' }, ({ payload }) => eventos.natal?.(payload));
   canal.on('broadcast', { event: 'somSoco' }, ({ payload }) => eventos.somSoco?.(payload));
+  canal.on('broadcast', { event: 'toqueCel' }, ({ payload }) => eventos.toqueCel?.(payload));
   canal.on('broadcast', { event: 'derrubar' }, ({ payload }) => eventos.derrubar?.(payload));
   canal.on('broadcast', { event: 'viacao' }, ({ payload }) => eventos.viacao?.(payload));
   canal.on('broadcast', { event: 'danoQueda' }, ({ payload }) => eventos.danoQueda?.(payload));
