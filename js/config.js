@@ -52,6 +52,12 @@ export const PERSONAGENS_EVENTO = [   // limitados (Meshy): só o admin dá de p
   { id: 'Intruso_Mascarado', nome: 'Intruso Mascarado', soPresente: true, bau: true },
   { id: 'Androide_Moletom', nome: 'Androide de Moletom', soPresente: true, bau: true },
   { id: 'Bandido_Balaclava', nome: 'Bandido de Balaclava', soPresente: true, bau: true },
+  { id: 'Ciborgue_Futuro', nome: 'Ciborgue do Futuro', soPresente: true, bau: true },
+  { id: 'Dragao_Azul', nome: 'Filhote de Dragão Azul', soPresente: true, bau: true },
+  { id: 'Rapaz_Jaqueta', nome: 'Rapaz de Jaqueta', soPresente: true, bau: true },
+  { id: 'Urbano_Tranquilo', nome: 'Urbano Tranquilo', soPresente: true, bau: true },
+  { id: 'Forca_Estilo', nome: 'Força com Estilo', soPresente: true, bau: true },
+  { id: 'Cara_Regata', nome: 'Cara de Regata', soPresente: true, bau: true },
 ];
 
 // grátis ao criar a conta; os outros custam 8.000 na loja de personagens (mesma lista do banco)
