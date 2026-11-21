@@ -8,6 +8,7 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const mesmoSite = url.origin === self.location.origin, cdn = url.hostname === 'cdn.jsdelivr.net';
   if (!mesmoSite && !cdn) return;                        // banco de dados e login passam direto
+  if (/\.(mp4|mp3)$/i.test(url.pathname) || req.headers.has('range')) return;   // vídeo e música: o navegador busca em pedaços (não guarda)
   e.respondWith(fetch(req).then((resp) => {
     if (resp.ok && (mesmoSite || cdn)) { const copia = resp.clone(); caches.open(CACHE).then((c) => c.put(req, copia)); }
     return resp;

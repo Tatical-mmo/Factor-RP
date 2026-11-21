@@ -423,6 +423,7 @@ function blocoTesouro() {
   $('pBauAqui').onclick = () => esconder(true);
   $('pBauCancelar').onclick = () => executar(() => ctx.cancelarBau(), 'Caça ao tesouro encerrada.');
   $('pSirenes').onclick = () => { ctx.testarSirenes(); msg('Sirenes tocando por 15 s para todos.'); };
+  if ($('pFoto')) $('pFoto').onclick = () => { fechar(); setTimeout(() => ctx.modoFoto(), 150); };
 }
 async function blocoNatal() {
   const est = () => { const n = ctx.estadoNatal(), el = $('pNatalEstado'); if (!el) return;
@@ -473,7 +474,9 @@ function abaEu() {
       <div class="botoes"><select id="pBauTempo">${[[30, '30 min'], [60, '1 h'], [180, '3 h'], [720, '12 h'], [1440, '1 dia'], [4320, '3 dias']].map(([m, t]) => `<option value="${m}" ${m === 180 ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <button id="pBauSortear">🎲 Esconder em lugar sorteado</button><button id="pBauAqui">📍 Esconder aqui</button><button id="pBauCancelar" class="perigo">Encerrar caça</button></div>
       <div class="sub">📢 Sirenes de alarme</div><p class="dica">Tocam sozinhas quando a Marinha lança o míssil de cruzeiro. O teste toca 15 s para todos os jogadores.</p>
-      <div class="botoes"><button id="pSirenes">📢 Testar sirenes</button></div>`;
+      <div class="botoes"><button id="pSirenes">📢 Testar sirenes</button></div>
+      <div class="sub">📸 Modo foto</div><p class="dica">Esconde os botões, o minimapa e os nomes para tirar print da tela. Toque na tela para voltar.</p>
+      <div class="botoes"><button id="pFoto">📸 Modo foto</button></div>`;
   }
   if (eu.cargo === 'admin' && ctx.natalAdmin) {   // 20w: Papai Noel
     h += `<div class="sub">🎅 Papai Noel (Natal)</div><p class="dica">Aparece sozinho de <b>20 a 25 de dezembro</b> e muda de lugar a cada 2 h. Quem encontrar escolhe 1 presente do catálogo (1 por Natal). Para testar antes, antecipe aqui: os presentes do teste não contam para o Natal de verdade.</p>

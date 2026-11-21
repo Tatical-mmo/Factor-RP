@@ -130,8 +130,40 @@ async function criar() {
   try { comecar(await rede.criarPerfil(sessao.user.id, $('nome').value.trim(), escolhido)); }
   catch (e) { $('erroNome').textContent = e.message; validar(); $('erroNome').textContent = e.message; }
 }
+// 20a: abertura (vídeo da Kitsune) e música do carregamento. O jogo já começa a carregar por baixo do vídeo.
+let introFeita = false;
+function tocarIntro() {
+  const el = $('intro'), v = el?.querySelector('.frente'), f = el?.querySelector('.fundo');
+  if (!el || !v || introFeita) { tocarMusicaCarregamento(); return; }
+  introFeita = true; el.classList.remove('oculto', 'saindo');
+  let acabou = false;
+  const fim = () => {
+    if (acabou) return; acabou = true; clearTimeout(limite);
+    el.classList.add('saindo'); setTimeout(() => { el.classList.add('oculto'); try { v.pause(); f.pause(); v.removeAttribute('src'); f.removeAttribute('src'); v.load(); f.load(); } catch { /* ok */ } }, 520);
+    if (!$('carregando').classList.contains('oculto')) tocarMusicaCarregamento();
+  };
+  const limite = setTimeout(fim, 14000);   // nunca prende a entrada (rede lenta, vídeo travado)
+  v.onended = fim; v.onerror = fim;
+  $('pularIntro').onclick = fim; setTimeout(() => $('pularIntro').classList.add('on'), 1000);
+  v.currentTime = 0; f.currentTime = 0; v.muted = false; v.volume = 0.9;
+  v.play().catch(() => { v.muted = true; return v.play(); }).catch(fim);   // sem permissão para som: toca mudo
+  f.play().catch(() => {});
+  v.ontimeupdate = () => { if (Math.abs(f.currentTime - v.currentTime) > 0.3) f.currentTime = v.currentTime; };
+}
+let musicaFade = null;
+function fadeMusica(a, alvo, seg, depois) {
+  clearInterval(musicaFade); const ini = a.volume, t0 = performance.now();
+  musicaFade = setInterval(() => { const k = Math.min(1, (performance.now() - t0) / (seg * 1000)); a.volume = ini + (alvo - ini) * k; if (k >= 1) { clearInterval(musicaFade); depois?.(); } }, 50);
+}
+function tocarMusicaCarregamento() {
+  const a = $('musicaCarregamento'); if (!a || $('carregando').classList.contains('oculto')) return;
+  a.volume = 0; a.currentTime = 0;
+  const ir = () => a.play().then(() => fadeMusica(a, 0.55, 1.6)).catch(() => {});
+  ir().then(() => { if (a.paused) document.addEventListener('pointerdown', () => { if (!$('carregando').classList.contains('oculto')) ir(); }, { once: true }); });
+}
+function pararMusicaCarregamento() { const a = $('musicaCarregamento'); if (!a || a.paused) return; fadeMusica(a, 0, 1.2, () => a.pause()); }
 function comecar(perfil) {
-  mostrar('carregando');
+  mostrar('carregando'); tocarIntro();
   iniciarJogo(perfil).catch((e) => { console.error(e); $('progressoTxt').textContent = 'Erro ao carregar: ' + e.message; });
 }
 
@@ -3549,7 +3581,7 @@ async function iniciarJogo(perfil) {
   if (TOQUE) { $('toque').classList.remove('oculto'); configurarJoystick(); $('btTiro').classList.add('oculto'); }
   else { $('ajuda').innerHTML = CONTROLES_PC.map(([k, t]) => `<kbd>${k}</kbd> ${t}`).join('<br>'); $('ajuda').classList.remove('oculto'); setTimeout(() => $('ajuda').classList.add('oculto'), 15000); }
   $('hud').classList.remove('oculto');
-  $('carregando').classList.add('oculto');
+  $('carregando').classList.add('oculto'); pararMusicaCarregamento();
   aviso(`Bem-vindo à cidade, ${nome}!`);
   aplicarPrefs();   // gráfico e câmera que o jogador escolheu (salvos na conta: valem em qualquer aparelho e não somem)
   { const nova = Date.now() - Date.parse(jogador.perfil?.criado_em || 0) < 20 * 60000, pr = jogador.perfil?.prefs || {};
@@ -3687,6 +3719,11 @@ async function iniciarJogo(perfil) {
     esconderArmaPd: () => rede.pd.esconder(jogador.pos.x, jogador.pos.z),
     esconderPedra: () => rede.bruxo.esconder(jogador.pos.x, jogador.pos.z),
     criarBau: (rec, minutos, aqui) => criarBau(rec, minutos, aqui), cancelarBau: async () => { await rede.tesouro.cancelar(); conexao?.enviar('bau', { tipo: 'cancelado' }); receberBau({ tipo: 'cancelado' }); },
+    modoFoto: () => {   // 20a: esconde toda a interface e os nomes para tirar print; um toque na tela volta
+      document.body.classList.add('modoFoto'); if (jogador.etiqueta) jogador.etiqueta.visible = false;
+      const s = document.createElement('div'); s.id = 'sairFoto'; document.body.appendChild(s);
+      setTimeout(() => { s.onpointerdown = () => { s.remove(); document.body.classList.remove('modoFoto'); if (jogador.etiqueta) jogador.etiqueta.visible = !nomeOculto; }; }, 600);
+    },
     estadoNatal: () => natal, catalogoNatal: () => catalogoNatalCompleto(), natalAdmin: (cat, min) => natalAdmin(cat, min),
     natalIr: async () => { const o = await rede.natal.onde(); if (o?.x == null) throw new Error('Sem lugar definido.'); teleportar(o.x + 3, o.z + 3); return o; },
     estadoBau: () => bau, testarSirenes: () => { conexao?.enviar('sirene', { seg: 15 }); tocarSirenes(15, true); },
