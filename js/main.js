@@ -436,6 +436,7 @@ function salvarPref(k, v) {
 }
 function aplicarPrefs() {
   const pr = jogador.perfil?.prefs || {};
+  if (typeof pr.ajudaMira === 'boolean' && pr.ajudaMira !== ajudaMira) { ajudaMira = pr.ajudaMira; const sp = $('btAjudaMira')?.querySelector('span'); if (sp) sp.textContent = `Ajuda de mira: ${ajudaMira ? 'ligada' : 'desligada'}`; }
   if (baixouQualidade) salvarPref('grafico', visual.nivelAtual());   // o jogo baixou sozinho (sem memória): guarda o novo
   else if (visual.NIVEIS[pr.grafico] && pr.grafico !== visual.nivelAtual()) {
     visual.definirNivel(pr.grafico); ajustarCamera(); ajustarSombraQualidade();
@@ -1586,7 +1587,7 @@ const ponteiros = new Map(); let pinca = null;
 canvas.addEventListener('pointerdown', (e) => {
   ponteiros.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now() });
   if (e.pointerType === 'mouse' && e.button === 0 && jogador.armado && ARMAS[jogador.armaTipo || 'basica']?.rajada) { gatilho.segurando = true; gatilho.alvo = pontoNoChao(e.clientX, e.clientY); }
-  if (ponteiros.size === 2) {
+  if (ponteiros.size === 2 && !miraC.ligada) {   // com a mira de centro, dois dedos na tela miram (sem zoom de pinça)
     const [a, b] = [...ponteiros.values()]; pinca = { d: Math.hypot(a.x - b.x, a.y - b.y), z: zoom };
   }
 });
@@ -1594,10 +1595,12 @@ canvas.addEventListener('pointermove', (e) => {
   if (gatilho.segurando && e.pointerType === 'mouse') gatilho.alvo = pontoNoChao(e.clientX, e.clientY);
   if (!ponteiros.has(e.pointerId)) return;
   const ant = ponteiros.get(e.pointerId);
-  if (miraM.ativo && ponteiros.size === 1 && podeMiraManual()) {   // mira manual: arrastar vira o personagem e sobe/desce a mira
-    const k = e.pointerType === 'mouse' ? 0.004 : 0.006, dx = e.clientX - ant.x, dy = e.clientY - ant.y;
-    jogador.yaw -= dx * k; miraM.pitch = THREE.MathUtils.clamp(miraM.pitch - dy * k, -0.75, ARMAS[jogador.armaTipo || 'basica']?.lanca ? 1.3 : 0.9);   // lançador mira bem mais para cima (aeronaves)
-    ponteiros.set(e.pointerId, { ...ant, x: e.clientX, y: e.clientY, mov: (ant.mov || 0) + 99 }); return;
+  if (miraC.ligada) {   // 20m: mira de centro: arrastar (qualquer dedo na tela, ou o mouse) gira a câmera e a mira
+    const dx = e.clientX - ant.x, dy = e.clientY - ant.y;
+    const k = (e.pointerType === 'mouse' ? 0.0042 : 0.0058) * (miraC.perto ? 0.6 : 1);   // ajuda: perto do inimigo fica mais fina
+    miraC.yaw -= dx * k; miraC.pitch = THREE.MathUtils.clamp(miraC.pitch - dy * k, -0.6, ARMAS[jogador.armaTipo || 'basica']?.lanca ? 1.2 : 0.75);   // lançador mira bem mais para cima (aeronaves)
+    if (Math.abs(dx) + Math.abs(dy) > 0) miraC.mexeu = performance.now();
+    ponteiros.set(e.pointerId, { ...ant, x: e.clientX, y: e.clientY, mov: (ant.mov || 0) + Math.abs(dx) + Math.abs(dy) }); return;
   }
   if (p50.ativo && ponteiros.size === 1 && heliP50()) {   // ponto 50 ligada: arrastar mira (para os lados e para cima/baixo)
     const k = e.pointerType === 'mouse' ? 0.005 : 0.007, dx = e.clientX - ant.x, dy = e.clientY - ant.y;
@@ -1623,7 +1626,7 @@ function soltarPonteiro(e) {
   const p = ponteiros.get(e.pointerId); ponteiros.delete(e.pointerId);
   if (pinca) { if (ponteiros.size === 0) pinca = null; return; }
   if (!p || !jogador.avatar || e.type === 'pointercancel') return;
-  if (miraM.ativo && podeMiraManual()) return;   // mira manual: tocar/arrastar não anda
+  if (miraC.ligada) { if (e.pointerType === 'mouse' && e.button === 0 && (p.mov || 0) < 6 && performance.now() - p.t < 450) atirar(null); return; }   // mira de centro: tocar não anda; clique do mouse atira na cruz
   if (p50.ativo && heliP50()) return;   // mirando a ponto 50: arrastar/tocar não anda nem atira
   if (performance.now() - p.t > 450) return;      // segurou: não é toque
   if (modo3D() && (p.mov || 0) > 10) return;      // arrastou para olhar: não é toque
@@ -2571,8 +2574,8 @@ function atirar(alvo) {
     if (pe.ate) { if (!gatilho.segurando || t > (gatilho.avisou || 0)) { gatilho.avisou = t + 1500; aviso(`🔄 Trocando o pente… ${Math.ceil((pe.ate - t) / 1000)} s`, 1.2); } return; }
     pe.balas--; if (pe.balas <= 0) trocarPente(); desenharMunicao();
   }
-  const manual = miraM.ativo && podeMiraManual();
-  if (manual) { /* mira manual: vai exatamente pelos pontinhos */ } else if (modoCam === 'p1' && !jogador.carro) jogador.yaw = olhar.yaw;
+  const manual = miraC.ligada;   // 20m: mira de centro
+  if (manual) jogador.yaw = miraC.yaw; else if (modoCam === 'p1' && !jogador.carro) jogador.yaw = olhar.yaw;
   else if (alvo) jogador.yaw = Math.atan2(alvo.x - jogador.pos.x, alvo.z - jogador.pos.z);
   jogador.avatar.raiz.rotation.y = jogador.yaw;
   jogador.avatar.raiz.updateMatrixWorld(true);
@@ -2587,7 +2590,7 @@ function atirar(alvo) {
   let vyMira = dourada || manual ? null : miraNoAlvo(boca, dir, A.vel, A.grav ?? 1);
   if (vyMira == null && assist) { const vv = dourada ? 34 : A.vel, d = Math.hypot(assist.x - boca.x, assist.z - boca.z), t = d / vv; vyMira = (assist.y - boca.y + 4.9 * (dourada ? 1 : A.grav ?? 1) * t * t) / t; }
   const v = dir.multiplyScalar(dourada ? 34 : A.vel).add(new THREE.Vector3(0, vyMira ?? (dourada ? 0.6 : 1.2 * 24 / A.vel * (A.grav ?? 1)), 0));   // menos queda: mira mais reta
-  if (manual) v.copy(direcaoMira().multiplyScalar(dourada ? 34 : A.vel));
+  if (manual) v.copy(velocidadeParaMira(boca, dourada ? 34 : A.vel, dourada ? 1 : A.grav ?? 1, A));   // cai exatamente sob a cruz
   else if (modoCam === 'p1' && vyMira == null) v.y += Math.tan(THREE.MathUtils.clamp(olhar.pitch, -0.6, 0.6)) * (dourada ? 34 : A.vel);   // mira para cima / para baixo
   criarBola(boca, v, cor, true, dourada ? 1 : A.bola || 1, !dourada && !!A.laser); balistica(bolas[bolas.length - 1], A);
   const critico = Math.random() < bonusTreino('tiro');   // treino de tiro: chance de acerto crítico (dano dobrado)
@@ -3889,6 +3892,8 @@ async function iniciarJogo(perfil) {
   $('btMenu').onclick = () => $('menuBar').classList.toggle('aberto');
   $('menuItens').addEventListener('click', (e) => { if (e.target.closest('button') && e.target.closest('button').id !== 'btMenu') $('menuBar').classList.remove('aberto'); });
   $('btCamera').onclick = () => { trocarCamera(); $('menuBar').classList.remove('aberto'); };
+  { const b = $('btAjudaMira'); const txt = () => { const sp = b?.querySelector('span'); if (sp) sp.textContent = `Ajuda de mira: ${ajudaMira ? 'ligada' : 'desligada'}`; };   // 20m
+    if (b) { txt(); b.onclick = () => { ajudaMira = !ajudaMira; try { localStorage.setItem('fr_ajuda_mira', ajudaMira ? '1' : '0'); } catch { /* sem armazenamento */ } salvarPref('ajudaMira', ajudaMira); txt(); aviso(ajudaMira ? '🎯 Ajuda de mira ligada: perto do inimigo a mira fica mais fina e gruda de leve.' : '🎯 Ajuda de mira desligada: a mira é 100% no dedo.', 3); }; } }
   $('btCreditos').onclick = () => { creditos(); $('menuBar').classList.remove('aberto'); };
   { const b = $('btTutorial'); if (b) b.onclick = () => { abrirTutorial(); $('menuBar').classList.remove('aberto'); }; }
   $('btSom').onclick = () => { const l = sons.alternar(); $('btSom').firstChild.textContent = l ? '🔊' : '🔇'; };
@@ -4147,7 +4152,7 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), iv: j.carro?.invisivel ? 1 : 0, mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? (j.paraquedas.mesh ? 1 : 2) : 0, ave: j.ave ? (j.ave.tipo === 'corvo' ? 1 : 2) : 0, bd: j.ave?.bando ? 1 : 0, oc: nomeOculto ? 1 : 0, mp: miraM.ativo && j.armado && podeMiraManual() ? Math.round(miraM.pitch * 20) / 20 : 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), iv: j.carro?.invisivel ? 1 : 0, mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? (j.paraquedas.mesh ? 1 : 2) : 0, ave: j.ave ? (j.ave.tipo === 'corvo' ? 1 : 2) : 0, bd: j.ave?.bando ? 1 : 0, oc: nomeOculto ? 1 : 0, mp: miraC.ligada ? Math.round(miraC.pitch * 20) / 20 : 0 };
   const u = ultimoEnvio;
   const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs || u.iv !== est.iv || u.mh !== est.mh || u.ap !== est.ap || u.sg !== est.sg || u.mp !== est.mp;
   if (!mudou && tempoKeepAlive > 0) return;
@@ -9222,7 +9227,7 @@ function atualizarJogador(dt) {
 
   // direção de entrada relativa à câmera
   const off = offsetCamera(anguloCamSuave);
-  const frente = modo3D() ? new THREE.Vector3(Math.sin(olhar.yaw), 0, Math.cos(olhar.yaw)) : new THREE.Vector3(-off.x, 0, -off.z).normalize();
+  const frente = miraC.ligada ? new THREE.Vector3(Math.sin(miraC.yaw), 0, Math.cos(miraC.yaw)) : modo3D() ? new THREE.Vector3(Math.sin(olhar.yaw), 0, Math.cos(olhar.yaw)) : new THREE.Vector3(-off.x, 0, -off.z).normalize();
   const direita = new THREE.Vector3(-frente.z, 0, frente.x);
   let ix = 0, iy = 0;
   if (teclas.has('w') || teclas.has('arrowup')) iy += 1;
@@ -9276,6 +9281,7 @@ function atualizarJogador(dt) {
       j.pos.x += dir.x * vel * dt; j.pos.z += dir.z * vel * dt;
       resolverColisao(j.pos, j.raio); j.ultimoMov = performance.now(); j.correndo = correr;
     }
+    if (miraC.ligada) j.yaw = miraC.yaw;   // 20m: com a mira de centro o corpo fica virado para a mira (anda de lado/de costas)
     // animação conforme o estado
     if (j.morto) { /* fica caído */ }
     else if (vel > 0) {
@@ -9651,6 +9657,8 @@ function cameraDoEditor() {
 function atualizarCamera(dt) {
   if (editorFarda && jogador.avatar) { cameraDoEditor(); return; }
   if (camEditor.ativa) { camEditor.ativa = false; document.body.classList.remove('editandoFarda'); camP.fov = 68; camP.updateProjectionMatrix(); if (jogador.etiqueta) jogador.etiqueta.visible = true; }
+  if (miraC.ligada && jogador.avatar) { cameraOmbro(dt); return; }   // 20m: arma na mão: câmera de ombro
+  if (camP.fov === 60 && !modo3D()) { camP.fov = 68; camP.updateProjectionMatrix(); }
   if (modo3D()) { atualizarCamera3D(dt); return; }
   ladoUnicoP1(null);
   camAtiva = camera;
@@ -17340,7 +17348,7 @@ function atualizarMisseis(dt) {
     if ((acertou && m.meu) || fim) { efeitoExplosao(m.mesh.position.x, m.mesh.position.y, m.mesh.position.z, acertou ? 1.2 : 0.6, false); scene.remove(m.mesh); misseis.splice(i, 1); }
   }
   if (!jogador.carro?.jato) { const pn = $('painelJato'); if (pn) pn.style.display = 'none'; }
-  atualizarLancador(dt); atualizarP50(dt); hudAeronave(dt); atualizarMiraManual();
+  atualizarLancador(dt); atualizarP50(dt); hudAeronave(dt); atualizarMiraManual(dt);
   // som dos caças dos outros
   for (const r of remotos.values()) if (r.carro?.visible && civico.CARROS[r.carroModelo]?.jato) sons.continuo('aviaoG_alto', 0.6 * sons.perto(r.carro.position.distanceTo(jogador.pos), 260), 1.4);
 }
@@ -17428,7 +17436,7 @@ function dispararFoguete(A, alvoChao) {
   if (qtdItem('foguete') < 1) { aviso('🚀 Sem foguetes. Militares pegam no Arsenal; clãs compram com o contrabandista.', 3); return; }
   const rr = lanc.ok && lanc.alvo ? remotos.get(lanc.alvo) : null, o = aeronaveRemota(rr);
   if (o) jogador.yaw = Math.atan2(o.position.x - jogador.pos.x, o.position.z - jogador.pos.z);
-  else if (miraM.ativo && podeMiraManual()) { /* mira manual: mantém para onde está virado */ } else if (alvoChao) jogador.yaw = Math.atan2(alvoChao.x - jogador.pos.x, alvoChao.z - jogador.pos.z);
+  else if (miraC.ligada) jogador.yaw = miraC.yaw; else if (alvoChao) jogador.yaw = Math.atan2(alvoChao.x - jogador.pos.x, alvoChao.z - jogador.pos.z);
   jogador.avatar.raiz.rotation.y = jogador.yaw; jogador.avatar.raiz.updateMatrixWorld(true);
   const boca = jogador.arma && modelos[A.modelo] ? jogador.arma.localToWorld(new THREE.Vector3(...A.boca)) : jogador.pos.clone().add(new THREE.Vector3(Math.sin(jogador.yaw) * 0.6, 1.5, Math.cos(jogador.yaw) * 0.6));
   let dir;
@@ -17436,7 +17444,7 @@ function dispararFoguete(A, alvoChao) {
     const alvo = o.position.clone().add(new THREE.Vector3(0, 1.2, 0));
     if (A.lanca === 'baz' && rr.vAero) for (let k = 0; k < 3; k++) { const t = alvo.distanceTo(boca) / 75; alvo.copy(o.position).add(new THREE.Vector3(0, 1.2, 0)).addScaledVector(rr.vAero, t); }   // onde ela vai estar
     dir = alvo.sub(boca).normalize();
-  } else if (miraM.ativo && podeMiraManual()) dir = direcaoMira();   // sem trava, com a mira manual: vai exatamente pelos pontinhos
+  } else if (miraC.ligada) dir = pontoDaMira(260).p.sub(boca).normalize();   // sem trava, com a mira de centro: vai reto até o ponto sob a cruz
   else dir = new THREE.Vector3(Math.sin(jogador.yaw), 0.04, Math.cos(jogador.yaw)).normalize();
   const vel = dir.multiplyScalar(A.vel), id = jogador.perfil.id.slice(0, 6) + Date.now().toString(36);
   const m = { id, de: jogador.perfil.id, alvo: o && A.lanca === 'rpg' ? lanc.alvo : null, mira: o ? lanc.alvo : null, pos: boca.clone(), vel, meu: true, k: A.lanca, dano: A.dano };
@@ -17524,16 +17532,19 @@ function balaNaAeronave(b) {
   }
   return false;
 }
-// ---- mira manual (19f): botão 🎯 Mira com a arma na mão: arrastar na tela vira o personagem e sobe/desce a mira.
-// Os pontinhos vermelhos mostram o caminho exato da bala (com a queda da arma); o tiro sai exatamente por ali,
-// sem mira assistida. O tronco do personagem inclina junto.
-const miraM = { ativo: false, pitch: 0, pontos: null, fim: null };
-function podeMiraManual() { const j = jogador; return !!(j.avatar && j.armado && !j.carro && !j.passageiro && !j.morto); }   // 19v: RPG e bazuca também
-function direcaoMira() { const p = miraM.pitch, y = jogador.yaw; return new THREE.Vector3(Math.sin(y) * Math.cos(p), Math.sin(p), Math.cos(y) * Math.cos(p)); }
-function bocaDaArma() { const A = ARMAS[jogador.armaTipo || 'basica']; return jogador.arma.localToWorld(new THREE.Vector3(...(modelos[A.modelo] ? A.boca : ARMAS.basica.boca))); }
+// ---- mira de centro (20m): com a arma na mão (a pé), a câmera vai para trás do ombro e aparece uma cruz fixa no meio
+// da tela. Arrastar o dedo em qualquer lugar livre da tela (ou o mouse) gira a câmera e a mira; o analógico só anda.
+// O tiro sai da boca da arma já com o ângulo certo para cair exatamente no ponto que está sob a cruz (com a queda).
+// "Ajuda de mira" (☰ › 🎯, ligada por padrão): perto de um inimigo a mira fica mais lenta, gruda de leve e o tiro vai
+// no peito dele. A antiga mira manual (pontinhos) saiu: a cruz faz o mesmo e acerta onde aponta.
+const miraC = { ligada: false, yaw: 0, pitch: 0, perto: null, tPonto: 0, tipo: null, mexeu: 0 };
+let ajudaMira = (() => { try { return localStorage.getItem('fr_ajuda_mira') !== '0'; } catch { return true; } })();
+function podeMiraManual() { const j = jogador; return !!(j.avatar && j.armado && !j.carro && !j.passageiro && !j.morto); }
+function miraCentroPode() { const j = jogador; return podeMiraManual() && !j.granadaNaMao && !p50.ativo && !j.trem && !j.ave && !j.embarcado && !j.paraquedas && !j.voo && !j.onibus && !editorFarda; }
+function direcaoMira() { const p = miraC.pitch, y = miraC.yaw; return new THREE.Vector3(Math.sin(y) * Math.cos(p), Math.sin(p), Math.cos(y) * Math.cos(p)); }
 function inclinarMira(av) {
-  if (!miraM.ativo || !podeMiraManual()) { if (av.colunaAntes) { av.coluna.quaternion.copy(av.colunaAntes); av.colunaAntes = null; } return; }
-  inclinarColuna(av, miraM.pitch);
+  if (!miraC.ligada) { if (av.colunaAntes) { av.coluna.quaternion.copy(av.colunaAntes); av.colunaAntes = null; } return; }
+  inclinarColuna(av, miraC.pitch);
 }
 // inclina o tronco para cima/baixo; volta antes do próximo quadro (a animação "mirar" não mexe nesse osso: senão a
 // inclinação acumulava)
@@ -17543,44 +17554,112 @@ function inclinarColuna(av, pitch) {
   av.colunaAntes = av.coluna.quaternion.clone();
   av.coluna.rotateX(-THREE.MathUtils.clamp(pitch, -0.75, 0.9) * 0.8); av.raiz.updateMatrixWorld(true);   // o tronco inclina até ~40°; o resto é o braço/arma
 }
-function botaoMira(mostra) {
-  let b = $('btMiraM');
-  if (!b) {
-    if (!mostra) return;
-    b = document.createElement('button'); b.id = 'btMiraM';
-    b.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 64px);transform:translateX(-50%);z-index:30;border-radius:14px;border:2px solid #ffd23e;background:rgba(14,24,40,.88);color:#fff;font:800 13px system-ui;padding:8px 14px;touch-action:none';
-    b.addEventListener('pointerdown', (ev) => {
-      ev.preventDefault(); ev.stopPropagation();
-      miraM.ativo = !miraM.ativo; miraM.pitch = 0;
-      if (miraM.ativo) aviso('🎯 Mira manual: arraste na tela para virar e para mirar para cima/baixo. Os pontos mostram onde a bala vai.', 4);
-    });
-    document.body.appendChild(b);
-  }
-  b.style.display = mostra ? 'block' : 'none';
-  if (mostra) { const t = miraM.ativo ? `🎯 Mira manual ${Math.round(THREE.MathUtils.radToDeg(miraM.pitch))}° ✓` : '🎯 Mira manual'; if (b.textContent !== t) b.textContent = t; b.style.borderColor = miraM.ativo ? '#7dff8a' : '#ffd23e'; }
+// câmera de ombro: atrás e à direita do personagem, olhando exatamente na direção da mira (o centro da tela é a mira)
+const _fwdM = new THREE.Vector3(), _dirM = new THREE.Vector3(), _hitM = new THREE.Vector3(), _rayM = new THREE.Ray();
+function cameraOmbro(dt) {
+  camAtiva = camP; ladoUnicoP1(null); camP.layers.enable(1);
+  for (const g of Object.values(cabines)) g.visible = false;
+  const y = miraC.yaw, p = miraC.pitch, j = jogador;
+  _fwdM.set(Math.sin(y) * Math.cos(p), Math.sin(p), Math.cos(y) * Math.cos(p));
+  const rx = -Math.cos(y), rz = Math.sin(y), lado = 0.8, dist = j.dentroCasa ? 2.1 : 3.5;
+  const piv = new THREE.Vector3(j.pos.x + rx * lado, (j.pos.y || 0) + 1.72, j.pos.z + rz * lado);
+  const cam = piv.clone().addScaledVector(_fwdM, -dist);
+  // parede atrás: a câmera chega mais perto em vez de entrar no prédio
+  _dirM.copy(cam).sub(piv); const L = _dirM.length(); _dirM.divideScalar(L || 1); _rayM.set(piv, _dirM);
+  let lim = L;
+  for (const pr of predios) { if (Math.abs(pr.caixa.min.x - piv.x) > 60 && Math.abs(pr.caixa.max.x - piv.x) > 60) continue; if (_rayM.intersectBox(pr.caixa, _hitM)) { const t = piv.distanceTo(_hitM); if (t < lim) lim = Math.max(0.6, t - 0.3); } }
+  if (lim < L) cam.copy(piv).addScaledVector(_dirM, lim);
+  const chao = alturaChao(cam.x, cam.z) + 0.35; if (cam.y < chao) cam.y = chao;
+  camP.position.copy(cam);
+  if (Math.abs(camP.fov - 60) > 0.5) { camP.fov += (60 - camP.fov) * Math.min(1, dt * 5); camP.updateProjectionMatrix(); }
+  camP.lookAt(cam.clone().add(_fwdM));
+  if (tremor > 0) { tremor -= dt; camP.position.x += (Math.random() - 0.5) * tremor * 0.4; camP.position.y += (Math.random() - 0.5) * tremor * 0.4; }
+  alvoCam.set(cam.x + Math.sin(y) * 25, 0, cam.z + Math.cos(y) * 25); posicionarSol(alvoCam.x, alvoCam.z);
+  for (const pr of predios) if (pr.opac < 0.99) { pr.opac = 1; for (const m of pr.mats) { m.transparent = false; m.opacity = 1; m.depthWrite = true; } }
+  const mira1 = $('mira1p'); if (mira1) mira1.classList.add('oculto');
 }
-function atualizarMiraManual() {
+// o que está sob a cruz: pessoa, veículo, parede ou chão (até "max" metros). Devolve o ponto e o tipo
+function pontoDaMira(max = 160) {
+  const o = camP.position, d = direcaoMira(), j = jogador;
+  const tMin = Math.hypot(j.pos.x - o.x, j.pos.z - o.z) + 0.6;
+  let best = max, tipo = null;
+  const pessoa = (q, r, tp) => {
+    if (!q) return;
+    const vx = q.x - o.x, vy = q.y + 1.0 - o.y, vz = q.z - o.z, t = vx * d.x + vy * d.y + vz * d.z;
+    if (t < tMin || t > best) return;
+    const px = vx - d.x * t, py = (vy - d.y * t) * 0.6, pz = vz - d.z * t;   // cápsula: mais alta que larga
+    if (px * px + py * py + pz * pz < r * r) { best = t; tipo = tp; }
+  };
+  for (const [, r] of remotos) { if (r.carro) pessoa(r.carro.position, 2, 'veiculo'); else if (r.av?.raiz.visible) pessoa(r.av.raiz.position, 0.5, 'pessoa'); }
+  for (const n of npcs) if (n.caido <= 0 && n.av.raiz.visible) pessoa(n.av.raiz.position, 0.5, 'pessoa');
+  if (cacada && esquadra.pronto) for (const u of esquadra.soldados) if (u.av.raiz.visible) pessoa(u.av.raiz.position, 0.5, 'pessoa');
+  for (const v of viaturas) if (v.obj?.visible) pessoa(v.obj.position, 2, 'veiculo');
+  for (const v of carrosMundo.values()) if (v.mesh?.visible) pessoa(v.mesh.position, 1.9, 'veiculo');
+  _rayM.set(o, d);
+  for (const pr of predios) { if (_rayM.intersectBox(pr.caixa, _hitM)) { const t = o.distanceTo(_hitM); if (t > tMin && t < best) { best = t; tipo = 'parede'; } } }
+  // chão: anda pelo raio e refina onde ele entra no terreno
+  if (d.y < 0.2) {
+    let ta = tMin;
+    for (let t = tMin; t <= best; t += 1.5) {
+      const x = o.x + d.x * t, z = o.z + d.z * t, yy = o.y + d.y * t;
+      if (yy <= alturaChao(x, z)) { let a = ta, b = t; for (let k = 0; k < 6; k++) { const m = (a + b) / 2; if (o.y + d.y * m <= alturaChao(o.x + d.x * m, o.z + d.z * m)) b = m; else a = m; } best = b; tipo = 'chao'; break; }
+      ta = t;
+    }
+  }
+  return { p: o.clone().addScaledVector(d, best), tipo };
+}
+// ajuda de mira: o inimigo mais perto da cruz (ângulo), dentro do alcance da arma
+function alvoPertoDaMira(maxGraus, alc) {
+  const o = camP.position, d = direcaoMira(), cmin = Math.cos(THREE.MathUtils.degToRad(maxGraus));
+  let melhor = null, mc = cmin;
+  const ver = (q) => {
+    const x = q.x - o.x, y = q.y + 1.15 - o.y, z = q.z - o.z, L = Math.hypot(x, y, z); if (L < 2 || L > alc + 4) return;
+    const c = (x * d.x + y * d.y + z * d.z) / L; if (c > mc) { mc = c; melhor = { x: q.x, y: q.y + 1.15, z: q.z, ang: Math.acos(Math.min(1, c)) }; }
+  };
+  for (const [, r] of remotos) if (r.av?.raiz.visible && !r.carro) ver(r.av.raiz.position);
+  for (const n of npcs) if (n.policia && n.caido <= 0 && n.av.raiz.visible) ver(n.av.raiz.position);
+  if (cacada && esquadra.pronto) for (const u of esquadra.soldados) if (u.av.raiz.visible) ver(u.av.raiz.position);
+  return melhor;
+}
+// velocidade inicial da bala para cair no ponto sob a cruz (ou no peito do alvo da ajuda)
+function velocidadeParaMira(boca, V, grav, A) {
+  const alc = A.alc || 60, pt = pontoDaMira(Math.min(220, alc + 40));
+  let alvo = pt.p;
+  if (ajudaMira) { const a = alvoPertoDaMira(3.5, alc); if (a) alvo = new THREE.Vector3(a.x, a.y, a.z); }
+  let dx = alvo.x - boca.x, dz = alvo.z - boca.z, d = Math.hypot(dx, dz);
+  if (d > alc) { const k = alc / d; alvo = boca.clone().lerp(alvo, k); dx = alvo.x - boca.x; dz = alvo.z - boca.z; d = alc; }   // além do alcance: vai pela linha da mira
+  if (d < 0.4) return direcaoMira().multiplyScalar(V);
+  const t = d / V, vy = (alvo.y - boca.y + 4.9 * grav * t * t) / t;
+  return new THREE.Vector3(dx / d * V, vy, dz / d * V);
+}
+function cruzDaMira(on) {
+  let el = $('miraCentro');
+  if (!el) {
+    if (!on) return;
+    el = document.createElement('div'); el.id = 'miraCentro'; el.innerHTML = '<i class="c"></i><i class="b"></i><i class="e"></i><i class="d"></i><b></b>'; document.body.appendChild(el);
+  }
+  el.classList.toggle('oculto', !on);
+  if (on) el.classList.toggle('alvo', miraC.tipo === 'pessoa' || miraC.tipo === 'veiculo' || !!miraC.perto);
+}
+function atualizarMiraManual(dt = 0.016) {
   if (jogador.granadaNaMao && (jogador.carro || jogador.passageiro || jogador.morto)) { jogador.granadaNaMao = false; const bt = $('btTiro'); if (bt) { bt.innerHTML = 'Atirar'; bt.classList.toggle('oculto', !jogador.armado); } }
-  const pode = podeMiraManual(); botaoMira(pode);
-  const on = pode && miraM.ativo;
-  if (!miraM.pontos) {
-    const cv = document.createElement('canvas'); cv.width = cv.height = 32; const cg = cv.getContext('2d'); cg.fillStyle = '#fff'; cg.beginPath(); cg.arc(16, 16, 13, 0, Math.PI * 2); cg.fill();
-    const mat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), color: '#ff3030', transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, sizeAttenuation: false, toneMapped: false });   // tamanho fixo na tela
-    miraM.pontos = []; for (let k = 0; k < 44; k++) { const s = new THREE.Sprite(mat); s.scale.setScalar(0.009); s.renderOrder = 5; s.visible = false; scene.add(s); miraM.pontos.push(s); }
-    miraM.fim = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.3, 20), new THREE.MeshBasicMaterial({ color: '#ff3030', transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false })); miraM.fim.renderOrder = 5; miraM.fim.visible = false; scene.add(miraM.fim);
+  const bm = $('btMiraM'); if (bm) bm.remove();   // botão da mira manual antiga
+  const on = miraCentroPode();
+  if (on && !miraC.ligada) { miraC.ligada = true; miraC.yaw = jogador.yaw; miraC.pitch = 0; if (jogador.etiqueta) jogador.etiqueta.visible = false; }   // o seu nome some (tapava a cruz)
+  else if (!on && miraC.ligada) { miraC.ligada = false; if (jogador.etiqueta) jogador.etiqueta.visible = !nomeOculto; miraC.perto = null; miraC.tipo = null; if (camP.fov !== 68) { camP.fov = 68; camP.updateProjectionMatrix(); } }
+  if (miraC.ligada && camAtiva === camP) {
+    const A = ARMAS[jogador.armaTipo || 'basica'], alc = A.alc || 60;
+    if ((miraC.tPonto -= dt) <= 0) { miraC.tPonto = 0.1; miraC.tipo = pontoDaMira(Math.min(160, alc + 20)).tipo; }
+    miraC.perto = ajudaMira ? alvoPertoDaMira(5, alc) : null;
+    // ajuda: enquanto você mexe a mira ou anda, ela puxa de leve para o peito do inimigo mais perto da cruz
+    const ativo = performance.now() - miraC.mexeu < 400 || (joy.ativo && Math.hypot(joy.x, joy.y) > 0.15);
+    if (miraC.perto && ativo) {
+      const o = camP.position, a = miraC.perto, yawA = Math.atan2(a.x - o.x, a.z - o.z), pitA = Math.atan2(a.y - o.y, Math.hypot(a.x - o.x, a.z - o.z));
+      const k = Math.min(1, dt * 2.2 * (1 - a.ang / THREE.MathUtils.degToRad(5)));
+      miraC.yaw += Math.atan2(Math.sin(yawA - miraC.yaw), Math.cos(yawA - miraC.yaw)) * k; miraC.pitch += (pitA - miraC.pitch) * k;
+    }
   }
-  if (!on) { for (const s of miraM.pontos) s.visible = false; miraM.fim.visible = false; return; }
-  const A = ARMAS[jogador.armaTipo || 'basica'], dourada = tenhoArmaPd(), vel = dourada ? 34 : A.vel, g = A.lanca ? 0 : 9.8 * (dourada ? 1 : A.grav ?? 1);   // foguete vai reto
-  const vida = A.lanca ? 260 / vel : Math.min(4, (A.alc || 40) / vel), p = bocaDaArma(), v = direcaoMira().multiplyScalar(vel), dt = vida / miraM.pontos.length;
-  let acabou = false;
-  for (const s of miraM.pontos) {
-    if (acabou) { s.visible = false; continue; }
-    const ant = p.clone(); p.addScaledVector(v, dt); v.y -= g * dt;
-    const chao = alturaChao(p.x, p.z);
-    if (p.y <= chao + 0.02) { const k = (ant.y - chao) / Math.max(1e-3, ant.y - p.y); p.copy(ant.lerp(p, THREE.MathUtils.clamp(k, 0, 1))); p.y = chao + 0.03; acabou = true; }
-    s.position.copy(p); s.visible = true;
-  }
-  miraM.fim.position.copy(p); miraM.fim.lookAt(camAtiva.position); miraM.fim.visible = true;
+  cruzDaMira(miraC.ligada);
 }
 // ---- ponto 50 do helicóptero do Exército: mira livre (arrastar na tela), qualquer direção, independente do nariz
 const p50 = { ativo: false, yaw: 0, pitch: -0.25, t: 0, atirando: false, arma: null, linha: null };
