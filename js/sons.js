@@ -19,7 +19,7 @@ try { ligado = localStorage.getItem('fatorSom') !== '0'; } catch { /* sem armaze
 
 // 20u: o avião gigante toca o som do grande duas vezes (uma cópia do laço, começando noutro ponto e num tom um
 // pouquinho diferente), para soar como mais motores
-const APELIDO = { aviaoGG_lenta: 'aviaoG_lenta', aviaoGG_alto: 'aviaoG_alto' };
+const APELIDO = { aviaoGG_lenta: 'aviaoG_lenta', aviaoGG_alto: 'aviaoG_alto', toque_celular: 'toque_celular_v2' };   // 20l: toque com som de alto-falante de celular
 function carregar(n) {
   if (pedidos.has(n)) return; pedidos.add(n);
   fetch(n.startsWith('vz_') ? `assets/sons/vozes/${n.slice(3)}.mp3?v=1` : `assets/sons/${APELIDO[n] || n}.mp3`).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => {
