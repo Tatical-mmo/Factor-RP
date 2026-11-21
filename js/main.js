@@ -6,7 +6,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { FERRO_VELHOS, FABRICAS, PRODUTOS, FOME_POR_SEGUNDO, LOTES_VENDA, DESTINOS } from './config.js';
 import { iniciarCla, atualizarCla } from './cla.js';
 import { iniciarEmpresa, abrirCompra, abrirMissoes, atualizar as atualizarJanelaEmpresa } from './empresa.js';
-import { iniciarLoja, abrir as abrirJanela, recarregarInventario, qtdItem, inventarioCarregado } from './loja.js';
+import { iniciarLoja, abrir as abrirJanela, recarregarInventario, qtdItem, inventarioCarregado, ICONES as ICONES_ITEM } from './loja.js';
 import { MASCARAS, PERSONAGENS, PERSONAGENS_EVENTO, PERSONAGENS_GRATIS, ROBOS, MODELOS, CIDADE, RUAS_HORIZONTAIS, RUAS_VERTICAIS, QUARTEIROES_ESPECIAIS, VELOCIDADE, CONTROLES_PC } from './config.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1505,6 +1505,7 @@ function acaoContexto() {
   if (pertoContratante()) { abrirMissoes(); return; }
   if (pedraPerto()) { pegarPedra(); return; }
   if (bauPerto()) { comecarAbrirBau(); return; }
+  if (natalPerto()) { abrirCatalogoNatal(); return; }
   if (bruxoPerto()) { falarBruxo(); return; }
   if (jogador.perfil.prf) { const alvo = eleitoralProximo(2.4); if (alvo) { prenderEleitoral(alvo); return; } }
   if (jogador.perfil.profissao === 'medico') { const fer = feridoProximo(2.8); if (fer) { socorrerFerido(fer); return; } }
@@ -3362,6 +3363,10 @@ function desenharMapa() {
     if (bau?.ativo) {   // caça ao tesouro: o círculo de busca (dourado, tracejado)
       const [cx, cz] = telaMini(bau.cx, bau.cz), rr = bau.raio * w / (MAPA_R * 2);
       g.save(); g.strokeStyle = '#ffd23e'; g.lineWidth = 3; g.setLineDash([7, 5]); g.fillStyle = 'rgba(255,210,62,.14)'; g.beginPath(); g.arc(cx, cz, rr, 0, 7); g.fill(); g.stroke(); g.restore();
+    }
+    if (natal?.ativo) {   // Papai Noel: círculo vermelho tracejado
+      const [cx, cz] = telaMini(natal.cx, natal.cz), rr = natal.raio * w / (MAPA_R * 2);
+      g.save(); g.strokeStyle = '#ff3b3b'; g.lineWidth = 3; g.setLineDash([7, 5]); g.fillStyle = 'rgba(255,59,59,.13)'; g.beginPath(); g.arc(cx, cz, rr, 0, 7); g.fill(); g.stroke(); g.restore();
     } }   // rota do rastreio pelas ruas (roxa, como o GPS do GTA)
   const desenhar = (x, z, cor, raio) => {
     const mx = ((x - px) / MAPA_R * 0.5 + 0.5) * w, mz = ((z - pz) / MAPA_R * 0.5 + 0.5) * w;
@@ -3568,7 +3573,7 @@ async function iniciarJogo(perfil) {
   if ($('btCelular')) $('btCelular').onclick = () => abrirCelular();
   try { montarEstacionamentos(); } catch (e) { console.warn('estacionamentos:', e); }
   try { montarOficinas(); } catch (e) { console.warn('oficinas:', e); }
-  try { montarSirenes(); } catch (e) { console.warn('sirenes', e); } atualizarEstadoBau();
+  try { montarSirenes(); } catch (e) { console.warn('sirenes', e); } atualizarEstadoBau(); atualizarEstadoNatal();
   montarMonumento();
   desenharFundoMapa(); try { montarLocais(); } catch { /* sem locais */ }   // as oficinas e os estacionamentos entram no mapa e no teleporte
   servicos.iniciar({ ultra: () => visual.nivelAtual() === 'ultra', socorrista: socorristaNpc,
@@ -3664,6 +3669,8 @@ async function iniciarJogo(perfil) {
     esconderArmaPd: () => rede.pd.esconder(jogador.pos.x, jogador.pos.z),
     esconderPedra: () => rede.bruxo.esconder(jogador.pos.x, jogador.pos.z),
     criarBau: (rec, minutos, aqui) => criarBau(rec, minutos, aqui), cancelarBau: async () => { await rede.tesouro.cancelar(); conexao?.enviar('bau', { tipo: 'cancelado' }); receberBau({ tipo: 'cancelado' }); },
+    estadoNatal: () => natal, catalogoNatal: () => catalogoNatalCompleto(), natalAdmin: (cat, min) => natalAdmin(cat, min),
+    natalIr: async () => { const o = await rede.natal.onde(); if (o?.x == null) throw new Error('Sem lugar definido.'); teleportar(o.x + 3, o.z + 3); return o; },
     estadoBau: () => bau, testarSirenes: () => { conexao?.enviar('sirene', { seg: 15 }); tocarSirenes(15, true); },
     locais: () => LOCAIS,
     objetosNaRua: () => objetosNaRua(),
@@ -3737,7 +3744,7 @@ function conectarMultiplayer(perfil) {
     explosao: (e) => receberExplosao(e),
     voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, dm: (m) => { if (m?.para === jogador.perfil?.id && amigosIds.has(m.de)) celular.mensagemChegou(m.de, remotos.get(m.de)?.meta?.nome); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
-    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), navio: (e) => receberNavio(e),
+    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, navio: (e) => receberNavio(e),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -6429,6 +6436,96 @@ async function criarBau(recompensas, minutos, aqui) {
   conexao?.enviar('bau', { tipo: 'novo', regiao }); receberBau({ tipo: 'novo', regiao });
   return p;
 }
+// ---- 20w: Papai Noel. De 20 a 25/12 (Brasília) ele aparece num lugar da ilha e muda a cada 2 h; o admin antecipa
+// para testar. Todos veem o círculo vermelho no minimapa; dentro dele o radar diz quente/frio e, perto, ele aparece.
+// Quem chega do lado escolhe 1 presente do catálogo (personagens, moedas e itens, cada um com imagem).
+const NATAL_MOEDAS = [1000, 2500, 5000, 10000, 25000, 50000];
+let natal = null, natalObj = null, natalRadar = null, tEstadoNatal = 0, tRadarNatal = 0, natalAvisou = false, natalItens = null;
+async function atualizarEstadoNatal() {
+  const antes = natal?.troca_em;
+  try { natal = await rede.natal.estado(); } catch { natal = null; }
+  if (!natal?.ativo || natal.troca_em !== antes) tirarNatal();
+  if (natal?.ativo && !natalAvisou) { natalAvisou = true; aviso(`🎅 Ho ho ho! O Papai Noel está na ilha${natal.teste ? ' (teste)' : ''}! Procure o círculo vermelho no minimapa: quem encontrar escolhe um presente.`, 8); }
+}
+function tirarNatal() { if (natalObj) { scene.remove(natalObj); natalObj = null; } natalRadar = null; }
+function montarNatal(x, z) {
+  natalObj = new THREE.Group(); natalObj.position.set(x, alturaChao(x, z), z); scene.add(natalObj);
+  const et = textoSprite('🎅 Papai Noel', { escala: 0.6, fundo: 'rgba(170,20,30,.92)' }); et.position.y = 2.6; natalObj.add(et);
+  const brilho = textoSprite('🎁', { escala: 0.9, fundo: 'rgba(0,0,0,0)' }); brilho.position.set(0.9, 0.5, 0.3); natalObj.add(brilho);
+  const luz = new THREE.PointLight('#ffd9a0', 5, 8, 1.6); luz.position.set(0, 2, 0.6); natalObj.add(luz);
+  const g = natalObj;
+  criarAvatar('personagens', 'Papai_Noel').then((av) => { if (natalObj !== g) return; g.add(av.raiz); av.tocar('idle'); avataresObra.add(av); g.userData.av = av; }).catch(() => {});
+}
+function tickNatal(dt) {
+  if ((tEstadoNatal -= dt) <= 0) { tEstadoNatal = 60; atualizarEstadoNatal(); }
+  const el = $('radarNatal');
+  const ativo = !!natal?.ativo, dentro = ativo && Math.hypot(jogador.pos.x - natal.cx, jogador.pos.z - natal.cz) < natal.raio + 25;
+  if (natal?.troca_em && new Date(natal.troca_em).getTime() <= agoraServidor() && tEstadoNatal > 2) { tEstadoNatal = 2; }   // hora de mudar de lugar
+  if (!ativo && natalObj) tirarNatal();
+  if (dentro && (tRadarNatal -= dt) <= 0) {
+    tRadarNatal = 1.5;
+    rede.natal.radar(jogador.pos.x, jogador.pos.z).then((r) => {
+      natalRadar = r;
+      if (r?.x != null && !natalObj) montarNatal(r.x, r.z);
+      else if (r?.x == null && natalObj) tirarNatal();
+    }).catch(() => {});
+  }
+  if (natalObj) {   // vira para quem chega perto
+    const a = Math.atan2(jogador.pos.x - natalObj.position.x, jogador.pos.z - natalObj.position.z), av = natalObj.userData.av;
+    if (av && Math.hypot(jogador.pos.x - natalObj.position.x, jogador.pos.z - natalObj.position.z) < 20) av.raiz.rotation.y = a;
+    natalObj.children[1].position.y = 0.5 + Math.sin(performance.now() / 350) * 0.08;
+  }
+  let t = '';
+  if (dentro && !natalObj) { const d = natalRadar?.d; t = d == null ? '🎅 Papai Noel: procure dentro do círculo vermelho' : d <= 25 ? `🔥 Quente · ~${d} m` : d <= 50 ? `🌤️ Morno · ~${d} m` : `❄️ Frio · ~${d} m`; }
+  else if (natalObj && !natal?.ja_peguei && !natalPerto()) t = '🎅 Ho ho ho! Chegue perto do Papai Noel';
+  if (el && el.dataset.t !== t) { el.dataset.t = t; el.textContent = t; el.style.display = t ? 'block' : 'none'; }
+}
+const natalPerto = () => !!(natalObj && natal?.ativo && !jogador.carro && !jogador.ave && Math.hypot(natalObj.position.x - jogador.pos.x, natalObj.position.z - jogador.pos.z) < 4);
+// o catálogo inteiro (o admin marca o que entra); cada item com imagem: miniatura do personagem, saco de moedas ou o ícone do item
+async function catalogoNatalCompleto() {
+  if (!natalItens) { try { natalItens = await rede.tesouro.itens(); } catch { natalItens = []; } }
+  return [
+    ...NATAL_MOEDAS.map((m) => ({ id: `m:${m}`, tipo: 'm', nome: `${num(m)} moedas`, ic: '💰' })),
+    ...natalItens.map((x) => ({ id: `i:${x.item}`, tipo: 'i', nome: `3× ${x.nome}`, ic: ICONES_ITEM[x.item] || '📦' })),
+    ...[...PERSONAGENS, ...PERSONAGENS_EVENTO].map((p) => ({ id: `p:${p.id}`, tipo: 'p', nome: p.nome, img: `assets/miniaturas/${p.id}.webp` })),
+  ];
+}
+async function abrirCatalogoNatal() {
+  if (natal?.ja_peguei) { aviso('🎅 Ho ho ho! Você já ganhou seu presente neste Natal. Feliz Natal!', 4); return; }
+  const todos = await catalogoNatalCompleto(), ok = new Set(natal?.catalogo || []), lista = todos.filter((x) => ok.has(x.id));
+  if (!lista.length) { aviso('🎅 O saco de presentes está vazio por enquanto.', 3); return; }
+  let el = $('natalCatalogo'); if (el) el.remove();
+  el = document.createElement('div'); el.id = 'natalCatalogo';
+  el.innerHTML = `<div class="nc-caixa"><div class="nc-topo"><b>🎅 Escolha seu presente</b><button class="nc-x">✕</button></div>
+    <p class="nc-dica">Ho ho ho! Você me encontrou. Escolha <b>um</b> presente:</p>
+    <div class="nc-grade">${lista.map((x) => `<button class="nc-item" data-id="${x.id}">${x.img ? `<img src="${x.img}" alt="" loading="lazy">` : `<span class="nc-ic">${x.ic}</span>`}<span class="nc-nome">${esc(x.nome)}</span></button>`).join('')}</div></div>`;
+  document.body.appendChild(el);
+  el.querySelector('.nc-x').onclick = () => el.remove();
+  el.querySelectorAll('.nc-item').forEach((b) => { b.onclick = () => {
+    const x = lista.find((y) => y.id === b.dataset.id); if (!x) return;
+    el.querySelectorAll('.nc-item').forEach((y) => y.classList.toggle('esc', y === b));
+    let conf = el.querySelector('.nc-conf'); if (!conf) { conf = document.createElement('div'); conf.className = 'nc-conf'; el.querySelector('.nc-caixa').appendChild(conf); }
+    conf.innerHTML = `<button class="nc-ok">🎁 Quero: ${esc(x.nome)}</button>`;
+    conf.querySelector('.nc-ok').onclick = async () => {
+      if (!natalPerto()) { aviso('Chegue mais perto do Papai Noel.', 2); return; }
+      try {
+        await rede.natal.pegar(x.id, jogador.pos.x, jogador.pos.z);
+        natal = { ...natal, ja_peguei: x.id }; el.remove();
+        aviso(`🎁 Presente do Papai Noel: ${x.nome}! Feliz Natal! 🎄`, 7);
+        recarregarInventario?.(); atualizarPerfilDepois();
+      } catch (e) { aviso(e.message, 3); }
+    };
+  }; });
+}
+const atualizarPerfilDepois = () => rede.carregarPerfil(jogador.perfil.id).then((p) => { if (p) { jogador.perfil.moedas = p.moedas; atualizarInfo(); } }).catch(() => {});
+// admin: lugares possíveis (chão livre da ilha) e funções do painel
+function lugaresNatal(n = 30) { const l = []; for (let i = 0; i < n * 3 && l.length < n; i++) { const p = sortearLugarBau(); if (!l.some((q) => Math.hypot(q[0] - p.x, q[1] - p.z) < 120)) l.push([Math.round(p.x), Math.round(p.z)]); } return l; }
+async function natalAdmin(catalogo, testeMin) {
+  const r = await rede.natal.admin(catalogo, catalogo ? lugaresNatal() : null, testeMin);
+  natalAvisou = false; tirarNatal(); await atualizarEstadoNatal();
+  if (testeMin != null) conexao?.enviar('natal', {});
+  return r;
+}
 function criarBruxo() {
   const g = new THREE.Group(), glb = modelos.npc_bruxo;
   if (glb) {
@@ -9009,6 +9106,7 @@ function contexto() {
   if (jogador.perfil?.policial && procuradoProximo(2.4)) return ['algemar e prender o procurado', 'Prender'];
   if (pedraPerto()) return ['pegar a pedra preciosa e invocar o Bruxo', '💎 Pegar'];
   if (bauPerto()) return ['abrir o baú do tesouro (5 s parado do lado)', '🗝️ Abrir'];
+  if (natalPerto()) return [natal?.ja_peguei ? 'falar com o Papai Noel' : 'escolher seu presente do Papai Noel', '🎅 Presente'];
   if (bruxoPerto()) return ['falar com o Bruxo: faça o seu pedido', '🧙 Falar'];
   if (jogador.perfil?.prf && eleitoralProximo(2.4)) return ['prender por crime eleitoral (PRF)', 'Prender'];
   if (jogador.perfil?.profissao === 'medico' && feridoProximo(2.8)) return ['salvar o ferido (+250)', '✚ Salvar'];
@@ -9235,7 +9333,7 @@ function quadroJogo() {
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
-  atualizarBolas(dt); atualizarSirenes(); tickBau(dt);
+  atualizarBolas(dt); atualizarSirenes(); tickBau(dt); tickNatal(dt);
   diag('câmera/oclusão');
   atualizarCamera(dt);
   mundo.atualizarOclusao(dt, foco(), modo3D() ? new THREE.Vector3(0, 1, 0) : offsetCamera(anguloCamSuave));

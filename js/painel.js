@@ -424,6 +424,27 @@ function blocoTesouro() {
   $('pBauCancelar').onclick = () => executar(() => ctx.cancelarBau(), 'Caça ao tesouro encerrada.');
   $('pSirenes').onclick = () => { ctx.testarSirenes(); msg('Sirenes tocando por 15 s para todos.'); };
 }
+async function blocoNatal() {
+  const est = () => { const n = ctx.estadoNatal(), el = $('pNatalEstado'); if (!el) return;
+    el.innerHTML = n?.ativo ? (n.teste ? `<b>🟢 Em teste</b> até ${new Date(n.teste_ate).toLocaleString('pt-BR').slice(0, 17)}.` : '<b>🟢 No ar (Natal)</b>.') + ` Muda de lugar às ${new Date(n.troca_em).toLocaleTimeString('pt-BR').slice(0, 5)}.` : '⚪ Desligado (liga sozinho em 20/12).'; };
+  est();
+  let cat = [];
+  try { cat = await ctx.catalogoNatal(); } catch { cat = []; }
+  let marcados = new Set(ctx.estadoNatal()?.catalogo || []);
+  try { const o = await rede.natal.onde(); if (o?.catalogo) marcados = new Set(o.catalogo); } catch { /* sem permissão */ }
+  const c = $('pNatalCat'); if (!c) return;
+  c.innerHTML = cat.map((x) => `<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" data-natal="${x.id}" ${marcados.has(x.id) ? 'checked' : ''}>${x.img ? `<img src="${x.img}" alt="" style="width:34px;height:34px;border-radius:6px;object-fit:cover">` : `<span style="font-size:24px;width:34px;text-align:center">${x.ic}</span>`} ${esc(x.nome)}</label>`).join('');
+  const caixas = () => [...c.querySelectorAll('[data-natal]')];
+  $('pNatalTudo').onclick = () => caixas().forEach((b) => { b.checked = true; });
+  $('pNatalNada').onclick = () => caixas().forEach((b) => { b.checked = false; });
+  $('pNatalSalvar').onclick = () => { const l = caixas().filter((b) => b.checked).map((b) => b.dataset.natal); if (!l.length) { msg('Marque pelo menos um presente.', false); return; }
+    executar(async () => { await ctx.natalAdmin(l, null); est(); }, `Catálogo salvo: ${l.length} presente(s).`); };
+  const teste = (min, t) => executar(async () => { await ctx.natalAdmin(null, min); est(); }, t);
+  $('pNatal1h').onclick = () => teste(60, '🎅 Papai Noel no ar por 1 h (teste). Todos foram avisados.');
+  $('pNatal1d').onclick = () => teste(1440, '🎅 Papai Noel no ar por 1 dia (teste).');
+  $('pNatalFim').onclick = () => teste(0, 'Teste do Papai Noel encerrado.');
+  $('pNatalIr').onclick = () => executar(async () => { await ctx.natalIr(); fechar(); }, '📍 Você está do lado do Papai Noel.');
+}
 async function blocoBueiro() {
   const c = $('pBueiro'); if (!c) return;
   let k; try { k = await rede.painel.bueiroSecreto(); } catch (e) { c.textContent = e.message; return; }
@@ -453,6 +474,14 @@ function abaEu() {
         <button id="pBauSortear">🎲 Esconder em lugar sorteado</button><button id="pBauAqui">📍 Esconder aqui</button><button id="pBauCancelar" class="perigo">Encerrar caça</button></div>
       <div class="sub">📢 Sirenes de alarme</div><p class="dica">Tocam sozinhas quando a Marinha lança o míssil de cruzeiro. O teste toca 15 s para todos os jogadores.</p>
       <div class="botoes"><button id="pSirenes">📢 Testar sirenes</button></div>`;
+  }
+  if (eu.cargo === 'admin' && ctx.natalAdmin) {   // 20w: Papai Noel
+    h += `<div class="sub">🎅 Papai Noel (Natal)</div><p class="dica">Aparece sozinho de <b>20 a 25 de dezembro</b> e muda de lugar a cada 2 h. Quem encontrar escolhe 1 presente do catálogo (1 por Natal). Para testar antes, antecipe aqui: os presentes do teste não contam para o Natal de verdade.</p>
+      <div id="pNatalEstado" class="dica">Carregando…</div>
+      <div class="botoes"><button id="pNatal1h">▶️ Testar agora (1 h)</button><button id="pNatal1d">▶️ Testar (1 dia)</button><button id="pNatalFim" class="perigo">⏹️ Encerrar teste</button><button id="pNatalIr">📍 Ir até o Papai Noel</button></div>
+      <div class="dica">Catálogo: marque o que o Papai Noel oferece.</div>
+      <div class="botoes"><button id="pNatalTudo">☑️ Marcar tudo</button><button id="pNatalNada">⬜ Desmarcar tudo</button><button id="pNatalSalvar">💾 Salvar catálogo</button></div>
+      <div id="pNatalCat" class="poderes" style="max-height:260px;overflow:auto">Carregando…</div>`;
   }
   if (eu.cargo === 'admin') h += '<div class="sub">🐀 Bueiro secreto dos Lixeiros</div><div id="pBueiro" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') h += '<div class="sub">⚖️ Perdoar crimes</div><div id="pPerdao" class="dica">Carregando…</div>';
@@ -486,6 +515,7 @@ function abaEu() {
   c.innerHTML = h;
   if ($('pBueiro')) blocoBueiro();
   if ($('pBauSortear')) blocoTesouro();
+  if ($('pNatalCat')) blocoNatal();
   const apd = $('pArmaPd'); if (apd) apd.onclick = () => executar(() => ctx.esconderArmaPd(), 'Arma dourada escondida aqui. Todos foram avisados do evento.');
   const ppd = $('pPedra'); if (ppd) ppd.onclick = () => executar(() => ctx.esconderPedra(), 'Pedra do Bruxo escondida aqui. Todos foram avisados do evento.');
   const b = $('pImortal'); if (b) b.onclick = () => executar(() => rede.painel.imortal(!eu.imortal), eu.imortal ? 'Modo imortal desligado.' : 'Modo imortal ligado.');

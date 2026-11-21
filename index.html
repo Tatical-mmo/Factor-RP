@@ -203,6 +203,20 @@
     font:bold 15px system-ui, sans-serif; color:#fff; background:rgba(0,0,0,.55); padding:4px 9px; border-radius:10px; text-shadow:0 1px 2px #000; }
   body:not(.toque) #municao { right:auto; left:50%; transform:translateX(-50%); bottom:calc(70px + env(safe-area-inset-bottom)); }
   body.passageiro #btRecarregar { display:none; }
+  #radarNatal { display:none; position:fixed; left:50%; transform:translateX(-50%); top:calc(100px + env(safe-area-inset-top)); z-index:6; pointer-events:none;
+    font:bold 15px system-ui, sans-serif; color:#fff; background:rgba(120,10,20,.78); border:1px solid #ff6b6b; padding:5px 12px; border-radius:12px; text-shadow:0 1px 2px #000; }
+  #natalCatalogo { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:12px; }
+  #natalCatalogo .nc-caixa { background:#1b1420; border:2px solid #c8202a; border-radius:16px; width:min(560px,100%); max-height:88vh; display:flex; flex-direction:column; color:#fff; font-family:system-ui, sans-serif; box-shadow:0 0 30px rgba(200,32,42,.5); }
+  #natalCatalogo .nc-topo { display:flex; justify-content:space-between; align-items:center; padding:12px 14px; background:linear-gradient(90deg,#a3121c,#c8202a); border-radius:14px 14px 0 0; font-size:18px; }
+  #natalCatalogo .nc-x { background:none; border:0; color:#fff; font-size:22px; }
+  #natalCatalogo .nc-dica { margin:10px 14px 4px; font-size:14px; color:#ffd9d9; }
+  #natalCatalogo .nc-grade { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:10px; padding:10px 14px; overflow:auto; }
+  #natalCatalogo .nc-item { background:#2a2030; border:2px solid #3d2e45; border-radius:12px; padding:6px; display:flex; flex-direction:column; align-items:center; gap:4px; color:#fff; font-size:13px; }
+  #natalCatalogo .nc-item.esc { border-color:#ffd23e; background:#3a2a20; }
+  #natalCatalogo .nc-item img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px; background:#110c14; }
+  #natalCatalogo .nc-ic { width:100%; aspect-ratio:1; display:flex; align-items:center; justify-content:center; font-size:52px; background:radial-gradient(#3b2a1a,#110c14); border-radius:8px; }
+  #natalCatalogo .nc-conf { padding:10px 14px 14px; }
+  #natalCatalogo .nc-ok { width:100%; padding:12px; font-size:16px; font-weight:bold; border:0; border-radius:12px; background:#2e9b47; color:#fff; }
   #radarBau { display:none; position:fixed; left:50%; transform:translateX(-50%); top:calc(64px + env(safe-area-inset-top)); z-index:6; pointer-events:none;
     font:bold 15px system-ui, sans-serif; color:#ffe9a0; background:rgba(60,40,0,.72); border:1px solid #ffd23e; padding:5px 12px; border-radius:12px; text-shadow:0 1px 2px #000; }
   body.dirigindo #btPular, body.passageiro #btPular, body.dirigindo #btRender, body.passageiro #btRender { display:none !important; }
@@ -321,35 +335,35 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261119zv",
-  "./js/mundo.js": "./js/mundo.js?v=20261119zv",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261119zv",
-  "./js/cla.js": "./js/cla.js?v=20261119zv",
-  "./js/config.js": "./js/config.js?v=20261119zv",
-  "./js/empresa.js": "./js/empresa.js?v=20261119zv",
-  "./js/loja.js": "./js/loja.js?v=20261119zv",
-  "./js/painel.js": "./js/painel.js?v=20261119zv",
-  "./js/rede.js": "./js/rede.js?v=20261119zv",
-  "./js/sedes.js": "./js/sedes.js?v=20261119zv",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261119zv",
-  "./js/civico.js": "./js/civico.js?v=20261119zv",
-  "./js/ovni.js": "./js/ovni.js?v=20261119zv",
-  "./js/jato.js": "./js/jato.js?v=20261119zv",
-  "./js/governo.js": "./js/governo.js?v=20261119zv",
-  "./js/servicos.js": "./js/servicos.js?v=20261119zv",
-  "./js/sons.js": "./js/sons.js?v=20261119zv",
-  "./js/voz.js": "./js/voz.js?v=20261119zv",
-  "./js/clima.js": "./js/clima.js?v=20261119zv",
-  "./js/ceu.js": "./js/ceu.js?v=20261119zv",
-  "./js/semaforos.js": "./js/semaforos.js?v=20261119zv",
-  "./js/cabine.js": "./js/cabine.js?v=20261119zv",
-  "./js/eixos.js": "./js/eixos.js?v=20261119zv",
-  "./js/racoes.js": "./js/racoes.js?v=20261119zv",
-  "./js/logos.js": "./js/logos.js?v=20261119zv",
-  "./js/celular.js": "./js/celular.js?v=20261119zv",
-  "./js/jornal.js": "./js/jornal.js?v=20261119zv",
-  "./js/visual.js": "./js/visual.js?v=20261119zv",
-  "./js/tutorial.js": "./js/tutorial.js?v=20261119zv"
+  "./js/main.js": "./js/main.js?v=20261119zw",
+  "./js/mundo.js": "./js/mundo.js?v=20261119zw",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261119zw",
+  "./js/cla.js": "./js/cla.js?v=20261119zw",
+  "./js/config.js": "./js/config.js?v=20261119zw",
+  "./js/empresa.js": "./js/empresa.js?v=20261119zw",
+  "./js/loja.js": "./js/loja.js?v=20261119zw",
+  "./js/painel.js": "./js/painel.js?v=20261119zw",
+  "./js/rede.js": "./js/rede.js?v=20261119zw",
+  "./js/sedes.js": "./js/sedes.js?v=20261119zw",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261119zw",
+  "./js/civico.js": "./js/civico.js?v=20261119zw",
+  "./js/ovni.js": "./js/ovni.js?v=20261119zw",
+  "./js/jato.js": "./js/jato.js?v=20261119zw",
+  "./js/governo.js": "./js/governo.js?v=20261119zw",
+  "./js/servicos.js": "./js/servicos.js?v=20261119zw",
+  "./js/sons.js": "./js/sons.js?v=20261119zw",
+  "./js/voz.js": "./js/voz.js?v=20261119zw",
+  "./js/clima.js": "./js/clima.js?v=20261119zw",
+  "./js/ceu.js": "./js/ceu.js?v=20261119zw",
+  "./js/semaforos.js": "./js/semaforos.js?v=20261119zw",
+  "./js/cabine.js": "./js/cabine.js?v=20261119zw",
+  "./js/eixos.js": "./js/eixos.js?v=20261119zw",
+  "./js/racoes.js": "./js/racoes.js?v=20261119zw",
+  "./js/logos.js": "./js/logos.js?v=20261119zw",
+  "./js/celular.js": "./js/celular.js?v=20261119zw",
+  "./js/jornal.js": "./js/jornal.js?v=20261119zw",
+  "./js/visual.js": "./js/visual.js?v=20261119zw",
+  "./js/tutorial.js": "./js/tutorial.js?v=20261119zw"
 } }
 </script>
 </head>
@@ -531,6 +545,7 @@
 
 <div id="municao"></div>
 <div id="radarBau"></div>
+<div id="radarNatal"></div>
 <div id="toque" class="oculto">
   <div id="joy"><i></i></div>
   <div id="botoes">
@@ -554,7 +569,7 @@
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
 <div id="telaFim"><b></b></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 19/11 · Mãos das skins + arquivos restaurados (19zv)</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 19/11 · Papai Noel (19zw)</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

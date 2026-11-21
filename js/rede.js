@@ -111,6 +111,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'cruzeiro' }, ({ payload }) => eventos.cruzeiro?.(payload));
   canal.on('broadcast', { event: 'sirene' }, ({ payload }) => eventos.sirene?.(payload));
   canal.on('broadcast', { event: 'bau' }, ({ payload }) => eventos.bau?.(payload));
+  canal.on('broadcast', { event: 'natal' }, ({ payload }) => eventos.natal?.(payload));
   canal.on('broadcast', { event: 'missil' }, ({ payload }) => eventos.missil?.(payload));
   canal.on('broadcast', { event: 'travado' }, ({ payload }) => eventos.travado?.(payload));
   canal.on('broadcast', { event: 'missilAcerto' }, ({ payload }) => eventos.missilAcerto?.(payload));
@@ -168,7 +169,7 @@ function traduzirRpc(m) {
     'adicional de 0 a 100 por cento': 'O adicional vai de 0 a 100%.',
     'esse terreno ja tem obra': 'Esse terreno já tem obra.',
     'a pedra ja foi achada': 'Alguém já achou a pedra preciosa.',
-    'alguem ja abriu o bau': 'Alguém já abriu o baú do tesouro.', 'o bau sumiu': 'O baú do tesouro não está mais lá.', 'bau vazio': 'Coloque alguma coisa dentro do baú.',
+    'alguem ja abriu o bau': 'Alguém já abriu o baú do tesouro.', 'o papai noel ja foi embora': 'O Papai Noel já foi embora.', 'chegue mais perto do papai noel': 'Chegue mais perto do Papai Noel.', 'presente fora do catalogo': 'Esse presente não está no catálogo do Papai Noel.', 'voce ja ganhou seu presente neste natal': 'Você já ganhou seu presente neste Natal. 🎅', 'catalogo vazio': 'Marque pelo menos um presente no catálogo.', 'o bau sumiu': 'O baú do tesouro não está mais lá.', 'bau vazio': 'Coloque alguma coisa dentro do baú.',
     'o bruxo nao atende voce': 'O Bruxo só atende quem achou a pedra.',
     'valor de 1 a 10.000.000 por jogador': 'O valor vai de 1 a 10.000.000 por jogador.',
     'escolha quem recebe': 'Escolha quem recebe.',
@@ -900,6 +901,14 @@ export const tesouro = {
   criar: (x, z, recompensas, minutos) => rpc('admin_criar_bau', { p_x: x, p_z: z, p_recompensas: recompensas, p_minutos: minutos }),
   cancelar: () => rpc('admin_cancelar_bau'),
   itens: () => sel(sb.from('precos').select('item, nome').order('nome')),
+};
+// 20w: Papai Noel (20 a 25/12; o admin antecipa para testar). A posição só vem pelo radar, de perto.
+export const natal = {
+  estado: () => rpc('natal_estado'),
+  radar: (x, z) => rpc('natal_radar', { p_x: x, p_z: z }),
+  pegar: (escolha, x, z) => rpc('natal_pegar', { p_escolha: escolha, p_x: x, p_z: z }),
+  admin: (catalogo, pontos, testeMin) => rpc('admin_natal', { p_catalogo: catalogo, p_pontos: pontos, p_teste_min: testeMin }),
+  onde: () => rpc('admin_natal_onde'),
 };
 export const bruxo = {
   estado: () => sel(sb.from('pedra_bruxo').select('*').eq('id', 1).maybeSingle()),

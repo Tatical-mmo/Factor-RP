@@ -4,7 +4,7 @@ import { PERSONAGENS, PERSONAGENS_GRATIS, PERSONAGENS_EVENTO, PRECO_PERSONAGEM, 
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const ICONES = { mascara_camisa_cinza: '😷', mascara_camisa_vermelha: '😷', mascara_bandana: '😷', mascara_balaclava: '🥷', mascara_lenco: '🧕', mascara_estrela: '🎭', mascara_caveira: '💀', mascara_camuflada: '🎭', mascara_onca: '🐆', mascara_coroa: '👑', espingarda: '🔫', fuzil: '🔫', granada: '💣', barricada: '🚧', jujuba: '🍬', antiacido: '🥤', sucata: '⚙️', chocolate: '🍫', cereal: '🥣', remedio: '💊', desbloqueio: '🔓', parafuso: '🔩' };
+export const ICONES = { mascara_camisa_cinza: '😷', mascara_camisa_vermelha: '😷', mascara_bandana: '😷', mascara_balaclava: '🥷', mascara_lenco: '🧕', mascara_estrela: '🎭', mascara_caveira: '💀', mascara_camuflada: '🎭', mascara_onca: '🐆', mascara_coroa: '👑', espingarda: '🔫', fuzil: '🔫', granada: '💣', barricada: '🚧', jujuba: '🍬', antiacido: '🥤', sucata: '⚙️', chocolate: '🍫', cereal: '🥣', remedio: '💊', desbloqueio: '🔓', parafuso: '🔩' };
 
 let ctx = null;
 let precos = [];
