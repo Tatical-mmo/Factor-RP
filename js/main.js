@@ -8298,28 +8298,13 @@ function atualizarViaturas(dt) {
       if (!v.perseguindo && d < (atacou ? 160 : 90)) { v.perseguindo = true; aviso(denuncia ? '🚓 O pedestre chamou a polícia: uma viatura está vindo!' : atacou ? '🚓 Você atirou na polícia: as viaturas estão vindo!' : '🚓 Uma viatura da polícia está atrás de você!', 3); }
       if (v.perseguindo && d > 220) v.perseguindo = false;
       if (v.perseguindo) {
-        const vel = j.carro ? 12 : 8.5;
-        // segue pelas ruas (refaz o caminho a cada 2 s); no fim do caminho vai direto até você
-        v.recalc = (v.recalc || 0) - dt;
-        if (v.recalc <= 0 || !v.rota) { v.recalc = 2; v.rota = servicos.rotaRuas({ x: o.position.x, z: o.position.z }, { x: j.pos.x, z: j.pos.z }, 4); v.s = 0; }
-        if (d > 5) {
-          v.s += vel * dt;
-          const p = servicos.pontoNaRota(v.rota, v.s);
-          if (!p.fim) { o.rotation.y = suavizarAngulo(o.rotation.y, p.ang, dt * 6); o.position.x = p.x; o.position.z = p.z; }
-          // fim das ruas e você fora da pista (terreno, entre prédios): a viatura encosta e os policiais seguem a pé
-          else if (!j.carro && !mundo.naRua(j.pos.x, j.pos.z) && d < 45) { descerPoliciais(v); continue; }
-          else { o.position.x += dx / d * vel * dt; o.position.z += dz / d * vel * dt; o.rotation.y = suavizarAngulo(o.rotation.y, Math.atan2(dx, dz), dt * 4); }
-        }
-        o.position.y = alturaChao(o.position.x, o.position.z);
-        if (d < 6 && !j.passageiro && (!j.carro || Math.abs(j.carro.vel) < 1.5) && !ocupado) {
-          if (j.carro) sairCarro();
-          ocupado = true; v.perseguindo = false;
-          rede.recompensas.presoPorRobo().then((min) => { if (min) aviso(`🚓 A viatura te alcançou: ${min} min de pena.`, 4); }).catch((e) => aviso(e.message)).finally(() => { ocupado = false; });
-        }
+        perseguirComViatura(v, o, dt, d);
+        if (!v.perseguindo || v.pe) continue;
         publicarRobo(v, dt, o);
         continue;
       }
     } else if (v.perseguindo) v.perseguindo = false;
+    if (v.ia && !v.perseguindo) { voltarParaRonda(v, o, dt); if (v.estadoPub) publicarRobo(v, dt, o); continue; }   // 20f: volta dirigindo até a ronda (antes sumia e aparecia lá)
     if (v.estadoPub) publicarRobo(v, dt, o);
     v.st ||= { atraso: 0 }; frearAtras(v.st, o, dt, 8);
     let p = pontoNoLaco(v.laco, arrancarLaco(v.st, (agoraServidor() / 1000 - v.st.atraso) * v.vel + v.fase, v.vel, 'viatura', dt)); p = desvioUltra(v.st, p);
@@ -8327,6 +8312,106 @@ function atualizarViaturas(dt) {
     else { o.position.x += (p.x - o.position.x) * Math.min(1, dt * 4); o.position.z += (p.z - o.position.z) * Math.min(1, dt * 4); o.position.y = alturaChao(o.position.x, o.position.z); }
     o.rotation.y = suavizarAngulo(o.rotation.y, p.ang, dt * 5);
   }
+}
+// ---- 20f: perseguição de verdade (inspirada nos jogos de mundo aberto). A viatura agora dirige como um carro:
+// acelera, freia, vira com limite de aderência e bate nas paredes. Longe, segue pelas ruas (olhando à frente, sem
+// voltar para trás nas esquinas); perto, mira onde você vai estar; emparelhada, dá a "batida na traseira" (PIT) que
+// faz o carro em fuga rodar. Só prende com o carro parado: o policial abre a porta e te tira. Em movimento, não prende.
+const _pv = { x: 0, z: 0 };
+function dirigirIA(v, o, alvo, dt, maxV) {
+  const ia = v.ia ||= { vel: 0, yaw: o.rotation.y, preso: 0, re: 0, ult: { x: o.position.x, z: o.position.z }, tCheca: 0 };
+  const dx = alvo.x - o.position.x, dz = alvo.z - o.position.z;
+  let err = Math.atan2(dx, dz) - ia.yaw; err = Math.atan2(Math.sin(err), Math.cos(err));
+  if (ia.re > 0) {   // presa numa parede: dá ré virando para o outro lado
+    ia.re -= dt; ia.vel = Math.max(-4.5, ia.vel - 9 * dt); ia.yaw -= Math.sign(err || 1) * 0.9 * dt;
+  } else {
+    const alvoV = maxV * THREE.MathUtils.clamp(1.15 - Math.abs(err) / 1.5, 0.3, 1);
+    ia.vel += THREE.MathUtils.clamp(alvoV - ia.vel, -11 * dt, 6.5 * dt);
+    const vAbs = Math.max(1, Math.abs(ia.vel)), maxGiro = Math.min(vAbs * Math.tan(0.62) / 2.8, 6 / vAbs);
+    ia.yaw += THREE.MathUtils.clamp(err * 3, -maxGiro, maxGiro) * dt;
+  }
+  _pv.x = o.position.x + Math.sin(ia.yaw) * ia.vel * dt; _pv.z = o.position.z + Math.cos(ia.yaw) * ia.vel * dt;
+  const ax = _pv.x, az = _pv.z;
+  colidirLista(colisores, _pv, 1.5); mundo.colidir(_pv, 1.5, colidirLista);
+  if (Math.hypot(_pv.x - ax, _pv.z - az) > 0.05) ia.vel *= 0.92;   // raspando na parede perde velocidade
+  o.position.set(_pv.x, alturaChao(_pv.x, _pv.z), _pv.z); o.rotation.y = ia.yaw;
+  if ((ia.tCheca += dt) > 1.3) {   // andou quase nada em 1,3 s querendo andar: está presa
+    const andou = Math.hypot(o.position.x - ia.ult.x, o.position.z - ia.ult.z);
+    if (ia.re <= 0 && andou < 1.2 && Math.hypot(dx, dz) > 6) ia.re = 1.2;
+    ia.tCheca = 0; ia.ult = { x: o.position.x, z: o.position.z };
+  }
+}
+// ponto para onde ir pelas ruas: o primeiro ponto da rota, à frente, a uns 8-20 m (não volta para trás nas esquinas)
+function alvoNaRota(v, o, j) {
+  if (!v.rota || (v.tRota = (v.tRota || 0) + 1) > 90) { v.tRota = 0; v.rota = servicos.rotaRuas({ x: o.position.x, z: o.position.z }, { x: j.pos.x, z: j.pos.z }, 0); }
+  const yaw = v.ia?.yaw ?? o.rotation.y;
+  let melhor = null;
+  for (let s = 7; s <= 24; s += 1.5) {
+    const p = servicos.pontoNaRota(v.rota, s); let e = Math.atan2(p.x - o.position.x, p.z - o.position.z) - yaw; e = Math.atan2(Math.sin(e), Math.cos(e));
+    if (Math.abs(e) < 1.7) { melhor = p; break; }
+    if (p.fim) break;
+  }
+  return melhor || servicos.pontoNaRota(v.rota, 10);
+}
+function perseguirComViatura(v, o, dt, d) {
+  const j = jogador, c = j.carro;
+  if (c && !c.voa) {
+    const fx = Math.sin(j.yaw), fz = Math.cos(j.yaw), rx = Math.cos(j.yaw), rz = -Math.sin(j.yaw);
+    const ox = o.position.x - j.pos.x, oz = o.position.z - j.pos.z, lon = ox * fx + oz * fz, lat = ox * rx + oz * rz;
+    const maxV = Math.max(13, (c.max || 12) * 1.12);
+    let alvo;
+    if (d < 10 && lon > -6 && lon < 2.5 && Math.abs(lat) < 5) {   // emparelhada: mira a traseira do carro em fuga
+      alvo = { x: j.pos.x - fx * 1.6 + rx * Math.sign(lat) * 0.4, z: j.pos.z - fz * 1.6 + rz * Math.sign(lat) * 0.4 };
+      if (d < 3.1 && performance.now() > (v.pitAte || 0) && Math.abs(c.vel) > 3) {   // a batida que faz rodar
+        v.pitAte = performance.now() + 2600;
+        const forca = Math.min(1, Math.abs(c.vel) / 9);
+        j.yaw += -Math.sign(lat) * (0.55 + Math.random() * 0.45) * forca; c.vel *= 0.5; tremor = Math.max(tremor, 0.5);
+        if (v.ia) v.ia.vel *= 0.7;
+        danoNoMeuVeiculo(Math.round(3 + forca * 5)); aviso('💥 A viatura bateu na sua traseira!', 1.6);
+      }
+    } else if (d < 38) {   // perto: mira onde você vai estar
+      const t = Math.min(1.1, d / 14); alvo = { x: j.pos.x + fx * c.vel * t, z: j.pos.z + fz * c.vel * t };
+    } else alvo = alvoNaRota(v, o, j);
+    dirigirIA(v, o, alvo, dt, maxV);
+    // prender: só com o carro parado (e a viatura do lado). Em movimento, o policial não consegue
+    v.paradoT = Math.abs(c.vel) < 1.3 && d < 8 ? (v.paradoT || 0) + dt : 0;
+    if (v.paradoT > 1.8 && !j.passageiro && !ocupado) {
+      v.paradoT = 0; ocupado = true; v.perseguindo = false;
+      aviso('👮 O policial abriu a porta e te tirou do carro!', 3);
+      sairCarro();
+      rede.recompensas.presoPorRobo().then((min) => { if (min) aviso(`🚓 Preso: ${min} min de pena.`, 4); }).catch((e) => aviso(e.message)).finally(() => { ocupado = false; });
+    }
+    return;
+  }
+  // a pé
+  const dx = j.pos.x - o.position.x, dz = j.pos.z - o.position.z;
+  if (!mundo.naRua(j.pos.x, j.pos.z) && d < 45) { if (v.ia) v.ia.vel = 0; descerPoliciais(v); return; }   // fora da pista: a viatura encosta e os policiais seguem a pé
+  dirigirIA(v, o, d < 30 ? { x: j.pos.x - dx / Math.max(1, d) * 3, z: j.pos.z - dz / Math.max(1, d) * 3 } : alvoNaRota(v, o, j), dt, 9);
+  if (d < 6 && !j.passageiro && !ocupado) {
+    ocupado = true; v.perseguindo = false;
+    rede.recompensas.presoPorRobo().then((min) => { if (min) aviso(`🚓 A viatura te alcançou: ${min} min de pena.`, 4); }).catch((e) => aviso(e.message)).finally(() => { ocupado = false; });
+  }
+}
+// acabou a perseguição: volta dirigindo até o ponto mais perto da ronda e continua de lá (sem pular)
+function voltarParaRonda(v, o, dt) {
+  if (!v.volta) {   // ponto mais perto do laço
+    let melhor = { d: Infinity, s: 0 }, acc = 0;
+    for (const [a, b, L] of v.laco.seg) {
+      const ux = b[0] - a[0], uz = b[1] - a[1], t = THREE.MathUtils.clamp(((o.position.x - a[0]) * ux + (o.position.z - a[1]) * uz) / Math.max(1e-6, L * L), 0, 1);
+      const px = a[0] + ux * t, pz = a[1] + uz * t, dd = Math.hypot(px - o.position.x, pz - o.position.z);
+      if (dd < melhor.d) melhor = { d: dd, s: acc + t * L };
+      acc += L;
+    }
+    v.volta = { s: melhor.s + 10 };
+  }
+  const p = pontoNoLaco(v.laco, v.volta.s), d = Math.hypot(p.x - o.position.x, p.z - o.position.z);
+  dirigirIA(v, o, p, dt, 8);
+  civico.atualizarSirenes(0, o);
+  if (d < 4) {   // chegou na ronda: a patrulha continua deste ponto
+    v.st ||= { atraso: 0 };
+    v.fase = v.volta.s - (agoraServidor() / 1000 - v.st.atraso) * v.vel;
+    v.ia = null; v.volta = null; v.rota = null;
+  } else if (d < 12) v.volta.s += 6 * dt;
 }
 // ---------------------------------------------------------------- viatura que encosta: policiais robôs a pé
 // Na perseguição, se você sai da pista (terreno, entre prédios), a viatura encosta e descem dois policiais robôs que
