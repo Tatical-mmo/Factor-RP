@@ -2385,12 +2385,12 @@ function criarBola(pos, vel, cor, minha = false, escala = 1, laser = false) {
   if (laser) {   // laser (20m): feixe fino e comprido, na direção do tiro, com um miolo branco (brilha)
     m = new THREE.Mesh(geoFeixe, new THREE.MeshBasicMaterial({ color: cor, toneMapped: false, transparent: true, opacity: 0.9 }));
     const miolo = new THREE.Mesh(geoFeixe, new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false })); miolo.scale.set(0.4, 0.4, 0.92); m.add(miolo);
-    m.position.copy(pos); m.quaternion.setFromUnitVectors(EIXO_Z, vel.clone().normalize()); scene.add(m);
+    m.position.copy(pos); m.quaternion.setFromUnitVectors(EIXO_Z, vel.clone().normalize()); m.scale.z = 0.001; scene.add(m);   // 20z: nasce na boca com tamanho zero
   } else {
     m = new THREE.Mesh(geoBola, new THREE.MeshStandardMaterial({ color: cor, roughness: 0.3 }));
     m.position.copy(pos); m.scale.setScalar(escala); scene.add(m);
   }
-  bolas.push({ m, v: vel.clone(), vida: escala >= 3 ? 2.5 : 2, cor, minha, tanque: escala >= 3, laser });
+  bolas.push({ m, v: vel.clone(), vida: escala >= 3 ? 2.5 : 2, cor, minha, tanque: escala >= 3, laser, ini: laser ? pos.clone() : null });
 }
 // ---------------------------------------------------------------- tanque: canhão de tinta que explode veículos
 let recargaTanque = 0;
@@ -2980,7 +2980,9 @@ function atualizarBolas(dt) {
   for (let i = bolas.length - 1; i >= 0; i--) {
     const b = bolas[i]; b.vida -= dt; b.v.y -= (b.g ?? 9.8) * dt;
     const ant = b.m.position.clone(); b.m.position.addScaledVector(b.v, dt);
-    if (b.laser) b.m.quaternion.setFromUnitVectors(EIXO_Z, _vf.copy(b.v).normalize());
+    // 20z: o feixe vai da ponta para trás; antes nascia inteiro (2,5 m) atrás da boca, atravessando as costas de quem
+    // atira. Agora cresce conforme anda, então a cauda nunca passa da boca da arma.
+    if (b.laser) { b.m.quaternion.setFromUnitVectors(EIXO_Z, _vf.copy(b.v).normalize()); b.m.scale.z = Math.min(1, Math.max(0.001, b.m.position.distanceTo(b.ini) / 2.5)); }
     let fim = false;
     if (b.minha) fim = acertoNoAlvo(b) || acertoDaBola(b);
     if (!fim) for (const c of colisores) {
