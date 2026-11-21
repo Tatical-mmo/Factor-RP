@@ -1014,6 +1014,8 @@ const ANIM_CORRIDA = ['corrida_fome', 'corrida_carga', 'corrida_rapida', 'corrid
 for (const n of ANIM_CORRIDA) ANIM_EXTRAS.add(n);
 // RPG e bazuca no ombro: mirar (parado), disparo (coice) e recarga (19e; outro esqueleto de origem, outro arquivo)
 const ANIM_LANC = ['lanc_mirar', 'lanc_tiro', 'lanc_recarga'];
+// 20x: recargas novas para todas as armas com pente e para o RPG/bazuca: parado, andando e correndo (arquivo próprio)
+const ANIM_RECARGA = ['recarga_parada', 'recarga_andando', 'recarga_correndo'];
 // farda completa (19i): em serviço o personagem inteiro vira a farda da corporação; os NPCs dela também usam
 const SKIN_FARDA = { exercito: 'Farda_Exercito', marinha: 'Farda_Marinha', aeronautica: 'Farda_Aeronautica', paraquedista: 'Farda_Paraquedista', policia: 'Farda_Policia', prf: 'Farda_PRF', bope: 'Farda_BOPE' };
 const ehSkinFarda = (id) => /^(Farda_|Armadura_)/.test(id || '');   // farda ou armadura: o corpo inteiro (sem colete por cima)
@@ -1037,8 +1039,8 @@ function skinDaFarda(papel, patente, sexo) {
   }
   return SKIN_FARDA[papel] || null;
 }
-for (const n of ANIM_LANC) ANIM_EXTRAS.add(n);
-const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : 'assets/personagens/animacoes_emotes.glb?v=2');
+for (const n of [...ANIM_LANC, ...ANIM_RECARGA]) ANIM_EXTRAS.add(n);
+const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
 function obterBaseExtra(arq) {
   if (!basesExtra.has(arq)) basesExtra.set(arq, carregarGLB(arq).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { basesExtra.delete(arq); return null; }));
@@ -3843,7 +3845,8 @@ function atualizarRemotos(dt) {
     endireitar(r.av); raiz.rotation.y = suavizarAngulo(raiz.rotation.y, a.r, dt * 12);
     if (a.a !== r.anim) {
       r.anim = a.a;
-      if (a.a === 'lanc_tiro' || a.a === 'lanc_recarga') animLancadorRemoto(r.av, a);   // lançador (19h): coice e recarga uma vez só, como em quem atira
+      if (a.a === 'lanc_tiro' || a.a === 'lanc_recarga') animLancadorRemoto(r.av, a);
+      else if (ANIM_RECARGA.includes(a.a)) { const rec = ARMAS[ARMA_POR_COD[a.ar]]; animRecarga(r.av, a.a === 'recarga_correndo' ? 'correndo' : a.a === 'recarga_andando' ? 'andando' : 'parado', { ini: performance.now(), fim: performance.now() + ((rec?.lanca ? rec.recarga - 1.2 : rec?.troca) || 2.5) * 1000 }); }   // lançador (19h): coice e recarga uma vez só, como em quem atira
       else {
         const umaVez = a.a in ANIM_UMA_VEZ;
         r.av.tocar(a.a, { umaVez, velocidade: ANIM_UMA_VEZ[a.a] || ANIM_VEL[a.a] || 1, fade: umaVez ? 0.1 : 0.2 });
@@ -8640,6 +8643,7 @@ function atualizarJogador(dt) {
       j.paradaAte = 0; j.tCorre = correr && !j.armado && !j.carregando && !j.algemado ? (j.tCorre || 0) + dt : 0;
       if (j.algemado) av.tocar('algemado_andar', { velocidade: 1 });
       else if (j.carregando) av.tocar('carry_walk', { velocidade: 1 });
+      else if (j.armado && recargaAtual(j)) animRecarga(av, correr ? 'correndo' : 'andando', recargaAtual(j));
       else if (j.armado) { if (correr && turbinado()) av.tocar('corrida_rifle', { velocidade: 1 }); else av.tocar('walk_shoot', { velocidade: 1.25 }); }
       else if (correr) av.tocar(animCorrida(), { velocidade: 1 });
       else av.tocar('walk', { velocidade: vel / VELOCIDADE.andar });
@@ -8649,6 +8653,7 @@ function atualizarJogador(dt) {
       if (performance.now() < (j.paradaAte || 0)) { /* termina a parada brusca */ }
       else if (j.algemado) av.tocar('algemado');
       else if (j.carregando) av.tocar('carregar_parado');
+      else if (j.armado && recargaAtual(j)) animRecarga(av, 'parado', recargaAtual(j));
       else if (j.armado && ARMAS[j.armaTipo]?.lanca) animLancador(av, j);
       else if (j.armado) av.tocar('mirar');
       else if (j.emote) {
@@ -16730,8 +16735,25 @@ function animLancador(av, j) {
   if (t < (j.lancTiroAte || 0)) {   // o coice: pula o começo da animação (a mira) para o tranco sair junto com o foguete
     if (!j.lancTiroIni) av.tocar('lanc_tiro', { umaVez: true, fade: 0.06, velocidade: 1.6 });   // começa uma vez só (20o)
     if (av.nomeAtual === 'lanc_tiro' && !j.lancTiroIni) { j.lancTiroIni = true; if (av.atual) av.atual.time = 0.55; }
-  } else if (t < (j.lancRecAte || 0)) { if (av.nomeAtual !== 'lanc_recarga') av.tocar('lanc_recarga', { umaVez: true, fade: 0.15, velocidade: Math.max(0.6, 2.97 / Math.max(0.8, (j.lancRecAte - j.lancTiroAte) / 1000) * 0.95) }); }
-  else av.tocar('lanc_mirar', { fade: 0.2 });
+  } else av.tocar('lanc_mirar', { fade: 0.2 });
+}
+// 20x: recarregando agora? Lançador: depois do coice até a recarga acabar. Armas com pente: enquanto troca o pente.
+function recargaAtual(j) {
+  const A = ARMAS[j.armaTipo || 'basica'], t = performance.now(); if (!A || j.carro) return null;
+  if (A.lanca) return t >= (j.lancTiroAte || 0) && t < (j.lancRecAte || 0) ? { ini: j.lancTiroAte, fim: j.lancRecAte } : null;
+  if (!A.pente || tenhoArmaPd()) return null;
+  const pe = penteDe(j.armaTipo || 'basica');
+  return pe.ate && pe.ate > t ? { ini: pe.ate - A.troca * 1000, fim: pe.ate } : null;
+}
+// toca a recarga do jeito do movimento (parado, andando, correndo), no tempo da arma; trocando de ritmo no meio,
+// a outra recarga continua do mesmo ponto
+function animRecarga(av, modo, r) {
+  const nome = modo === 'correndo' ? 'recarga_correndo' : modo === 'andando' ? 'recarga_andando' : 'recarga_parada';
+  if (av.nomeAtual === nome || (!av.clipes?.[nome] && av.querExtra === nome)) return;   // já tocando / ainda carregando o arquivo
+  const total = Math.max(0.5, (r.fim - r.ini) / 1000), frac = THREE.MathUtils.clamp((performance.now() - r.ini) / 1000 / total, 0, 0.98);
+  const dur = av.clipes?.[nome]?.duration || 3.5;
+  av.tocar(nome, { umaVez: true, fade: 0.18, velocidade: THREE.MathUtils.clamp(dur / total, 0.5, 2.5) });
+  if (av.nomeAtual === nome && av.atual) av.atual.time = frac * dur;
 }
 function dispararFoguete(A, alvoChao) {
   if (jogador.carro || jogador.passageiro) return;
