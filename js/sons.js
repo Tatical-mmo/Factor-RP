@@ -22,7 +22,7 @@ try { ligado = localStorage.getItem('fatorSom') !== '0'; } catch { /* sem armaze
 const APELIDO = { aviaoGG_lenta: 'aviaoG_lenta', aviaoGG_alto: 'aviaoG_alto' };
 function carregar(n) {
   if (pedidos.has(n)) return; pedidos.add(n);
-  fetch(`assets/sons/${APELIDO[n] || n}.mp3`).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => {
+  fetch(n.startsWith('vz_') ? `assets/sons/vozes/${n.slice(3)}.mp3?v=1` : `assets/sons/${APELIDO[n] || n}.mp3`).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => {
     buffers[n] = buf;
     const e = esperando[n]; delete esperando[n];   // efeito pedido antes de baixar: toca se ainda for a hora
     if (e && performance.now() - e.t < 1500) tocar(n, e.op);

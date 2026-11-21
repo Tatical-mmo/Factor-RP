@@ -749,6 +749,7 @@ function ocultarDerrubavel(d, sim) {
 // dx, dz: direção da pancada; v: velocidade do veículo (m/s); meu: fui eu que bati (calculo o dano dos arremessos)
 function derrubar(d, dx, dz, v, meu, quem) {
   if (d.caido) return; d.caido = true; d.volta = performance.now() + DERRUBA_VOLTA * 1000;
+  reacaoPerto(d.x, d.z, 'poste', 25, 5000);
   ocultarDerrubavel(d, true);
   const T = TIPO_DERRUBA[d.tipo], n = Math.hypot(dx, dz) || 1, fx = dx / n, fz = dz / n;
   const obj = pecaQueda(d), y0 = d.tipo === 'poste' ? 0.18 : d.tipo === 'poste_favela' ? d.y : d.tipo === 'semaforo' ? d.y : 0.18;
@@ -1730,8 +1731,8 @@ function acaoContexto() {
   if (pl) { aviso(contexto()[0]); return; }
   if (jogador.perfil.policial) { const alvo = procuradoProximo(2.4); if (alvo) { prenderProcurado(alvo); return; } }
   if (pertoSedeBope()) { entrarSedeBope(); return; }
-  if (pertoDelegacia()) { entrarPublico('delegacia', () => salaDelegacia('delegacia', 1100 + 0, 'Delegacia', '#f1c40f'), pontos.delegacia, '🚓 Delegacia: balcão de serviço, procurados, celas e estande de tiro.'); return; }
-  if (pertoContratante()) { abrirMissoes(); return; }
+  if (pertoDelegacia()) { dublar('delegacia_oi', { chave: 'delegacia', espera: 8000 }); entrarPublico('delegacia', () => salaDelegacia('delegacia', 1100 + 0, 'Delegacia', '#f1c40f'), pontos.delegacia, '🚓 Delegacia: balcão de serviço, procurados, celas e estande de tiro.'); return; }
+  if (pertoContratante()) { abrirMissoes(); dublar('contratante_oi', { chave: 'contratante', espera: 15000 }); return; }
   if (pedraPerto()) { pegarPedra(); return; }
   if (bauPerto()) { comecarAbrirBau(); return; }
   if (balcaoViacaoPerto()) { abrirViacao(); return; }
@@ -2596,6 +2597,7 @@ function chumbos(A, boca, v, cor) {
   }
 }
 function criarBola(pos, vel, cor, minha = false, escala = 1, laser = false) {
+  if (escala < 3) reacaoPerto(pos.x, pos.z, 'socorro', 30, 9000);
   if (escala < 3) sons.tocar(laser ? 'laser' : 'tiro', { vol: laser ? 0.8 : 0.7, dist: jogador.avatar ? Math.hypot(pos.x - jogador.pos.x, pos.z - jogador.pos.z) : 0, raio: laser ? 70 : 55, velocidade: 0.9 + Math.random() * 0.2 });
   let m;
   if (laser) {   // laser (20m): feixe fino e comprido, na direção do tiro, com um miolo branco (brilha)
@@ -3831,7 +3833,7 @@ async function iniciarJogo(perfil) {
     bloqueiosMudaram: () => carregarBloqueios(), sairDaConta: async () => { await rede.sair(); location.reload(); },
     rastrear: (a) => rastrear(a), portaoEmpresa: (id) => portaoDaEmpresa(id),
     locaisTrabalho: () => ({ policia: pontos.delegacia, prf: civico.PREFEITURA.prf, medico: civico.HOSPITAL.balcao, bombeiro: civico.BOMBEIROS.balcao,
-      jornalista: civico.PREFEITURA.jornal, exercito: mundo.QUARTEL.portao, motorista: TERMINAL, fiscal: PONTO_FISCAL, gari: CENTRAL.garagem, piloto: AERO.metro.hangar, controlador: AERO.metro.torre, agencia: civico.BANCO.empregos }), destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); }, pontoMudou: () => servicos.recomecarPonto(),
+      jornalista: civico.PREFEITURA.jornal, exercito: mundo.QUARTEL.portao, motorista: TERMINAL, fiscal: PONTO_FISCAL, gari: CENTRAL.garagem, piloto: AERO.metro.hangar, controlador: AERO.metro.torre, agencia: civico.BANCO.empregos }), destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); dublar('hospital_alta'); }, pontoMudou: () => servicos.recomecarPonto(),
   });
   $('btVeiculos').onclick = () => abrirServico('veiculos');
   $('btAmigos').onclick = () => abrirServico('amigos');
@@ -4767,7 +4769,7 @@ async function acaoCaixaPedido() {
     try {
       const pago = await rede.logistica.entregar();
       jogador.carregando = null; scene.remove(cx);
-      aviso(pago > 0 ? `Carga entregue! +${pago} moedas` : 'Carga entregue!');
+      aviso(pago > 0 ? `Carga entregue! +${pago} moedas` : 'Carga entregue!'); if (pertoContratante()) dublar('contratante_ok');
     } catch (e) { aviso(e.message, 3.5); }
     finally { ocupado = false; }
     return;
@@ -5403,6 +5405,7 @@ function acertarPoliciaNPC(n, dano) {
 function acertarCivil(n, dano) {
   if (n.caido > 0 || n.algemado) return;
   n.vida = (n.vida ?? 100) - dano;
+  vozNpc(n, `reacao_${n.vida <= 0 || Math.random() < 0.5 ? 'ai' : 'ei'}${sufixoReacao(n.av)}`, { chave: 'soco', espera: 1200 });
   const q = n.av.raiz.position, dx = q.x - jogador.pos.x, dz = q.z - jogador.pos.z, d = Math.hypot(dx, dz) || 1;
   if (n.vida <= 0) {
     n.caido = 30; n.conversa = null; n.fugindoT = 0;
@@ -5889,10 +5892,45 @@ function somAmbiente() {
 }
 
 // ---------------------------------------------------------------- NPCs se encontram e conversam
-const FALAS_ROBO = ['Tudo em ordem por aqui.', 'Ronda tranquila.', 'Algum procurado por aí?', 'Café no fim do turno?', 'Viu a viatura 3?', 'Fica de olho na esquina.'];
-const FALAS_GENTE = ['Oi! Tudo bem?', 'Que calor hoje!', 'Viu o preço do chocolate?', 'Vou pegar o trem.', 'Ouvi uma sirene…', 'Bom dia!', 'Até mais!'];
+// 20h: as falas têm voz (assets/sons/vozes). Cada balão diz o texto e toca o áudio com o mesmo id; quem está longe não ouve
+const FALAS_ROBO = [['Tudo em ordem por aqui.', 'ordem'], ['Ronda tranquila.', 'ronda'], ['Algum procurado por aí?', 'procurado'], ['Café no fim do turno?', 'cafe'], ['Viu a viatura 3?', 'viatura3'], ['Fica de olho na esquina.', 'esquina']];
+const FALAS_GENTE = [['Oi! Tudo bem?', 'oi'], ['Que calor hoje!', 'calor'], ['Viu o preço do chocolate?', 'chocolate'], ['Vou pegar o trem.', 'trem'], ['Ouvi uma sirene…', 'sirene'], ['Bom dia!', 'bomdia'], ['Até mais!', 'ate'],
+  ['O ônibus da Viação passou cheio hoje.', 'onibus'], ['Derrubaram o poste de novo…', 'poste'], ['Boa noite! Cuidado por aí.', 'noite'], ['Acho que vai chover.', 'chuva'], ['Já sabe em quem vai votar pra prefeito?', 'prefeito']];
+// ---------------------------------------------------------------- vozes dubladas
+const PERS_MULHER = new Set(['Moca_Academia', 'Moca_Trancas', 'Moradora', 'Executiva', 'Enfermeira', 'Gaucha', 'Ruiva', 'Dona_Salao', 'Dona_Empresa', 'Soldada', 'Maloqueira', 'Medica', 'Dona_Morro', 'Agente_Secreta', 'Vovo']);
+const ehMulher = (av) => PERS_MULHER.has(av?.personagemId);
+const sufixoGente = (av) => (ehMulher(av) ? '_f' : (av?.personagemId || '').length % 2 ? '_m' : '_m2');   // dois homens: cada skin fica sempre com a mesma voz
+const sufixoReacao = (av) => (ehMulher(av) ? '_f' : '_m');
+const vozEspera = {}; let vozesNoAr = [];
+// toca uma voz: sem x/z é de balcão/janela (cheia); com x/z cai com a distância. "chave" + "espera" (ms) evitam repetir
+function dublar(nome, { x, z, raio = 26, vol = 1, chave, espera = 0 } = {}) {
+  const agora = performance.now(), k = chave || nome;
+  if ((vozEspera[k] || 0) > agora) return false;
+  const dist = x === undefined || !jogador.avatar ? 0 : Math.hypot(x - jogador.pos.x, z - jogador.pos.z);
+  if (dist >= raio) return false;
+  vozesNoAr = vozesNoAr.filter((t) => t > agora);
+  if (dist > 0 && vozesNoAr.length >= 3) return false;   // no meio da multidão, no máximo 3 vozes ao mesmo tempo
+  if (espera) vozEspera[k] = agora + espera;
+  vozesNoAr.push(agora + 2800);
+  sons.tocar('vz_' + nome, { vol: dist ? vol : vol * 0.9, dist, raio });
+  return true;
+}
+const vozNpc = (n, nome, op = {}) => { const q = n.av.raiz.position; return dublar(nome, { x: q.x, z: q.z, ...op }); };
+// viaturas: metade com policial mulher
+const vozViatura = (v, nome, espera = 0) => { const k = viaturas.indexOf(v), q = v.obj.position; return dublar(`pol_${nome}${k % 2 ? '_f' : ''}`, { x: q.x, z: q.z, raio: 60, chave: `vt${k}${espera ? nome : ''}`, espera: espera || 2500 }); };
+// o morador mais perto de um ponto reage (soco, tiro, poste caindo, carro passando raspando)
+function reacaoPerto(x, z, nome, raio = 22, espera = 6000) {
+  let melhor = null, md = raio;
+  for (const n of npcs) { if (!n.civil || n.caido > 0 || !n.av.raiz.visible) continue; const q = n.av.raiz.position, d = Math.hypot(q.x - x, q.z - z); if (d < md) { md = d; melhor = n; } }
+  if (melhor) vozNpc(melhor, `reacao_${nome}${sufixoReacao(melhor.av)}`, { chave: 'reacao', espera });
+}
 function atualizarConversas(dt) {
   const agora = performance.now();
+  const cs = jogador.carro;   // carro passando raspando num morador: susto
+  if (cs?.mesh && Math.abs(cs.vel) > 8 && !cs.voa) {
+    const q = cs.mesh.position;
+    for (const n of npcs) { if (!n.civil || n.caido > 0) continue; const p = n.av.raiz.position; if (Math.abs(p.x - q.x) < 3.4 && Math.abs(p.z - q.z) < 3.4) { vozNpc(n, `reacao_susto${sufixoReacao(n.av)}`, { chave: 'reacao', espera: 6000 }); break; } }
+  }
   for (const n of npcs) {
     if (n.conversa) {
       const c = n.conversa;
@@ -5901,8 +5939,9 @@ function atualizarConversas(dt) {
         c.proxFala = agora + 2200; c.vez = !c.vez;
         if (n.balao) { n.av.raiz.remove(n.balao); n.balao = null; }
         if (c.vez) {
-          const falas = n.policia ? FALAS_ROBO : FALAS_GENTE;
-          n.balao = textoSprite(falas[Math.floor(Math.random() * falas.length)], { escala: 0.5, fundo: 'rgba(255,255,255,.92)', cor: '#1a1a1a' });
+          const falas = n.policia ? FALAS_ROBO : FALAS_GENTE, [txt, id] = falas[Math.floor(Math.random() * falas.length)];
+          n.balao = textoSprite(txt, { escala: 0.5, fundo: 'rgba(255,255,255,.92)', cor: '#1a1a1a' });
+          vozNpc(n, n.policia ? `pol_${id}` : `gente_${id}${sufixoGente(n.av)}`, { raio: 20 });
           n.balao.position.y = 3.0; n.av.raiz.add(n.balao);
         }
       }
@@ -6542,12 +6581,13 @@ function falarBruxo() {
     if (k === 'perdao') { jogador.perfil.crimes = 0; jogador.perfil.eleitoral = false; jogador.perfil.recompensa = 0; conexao?.rastrear(metaPresenca()); }
     aviso(ok(r), 7); recarregarInventario?.();
   }).catch((e) => aviso(e.message, 3));
+  dublar('bruxo_pedido', { chave: 'bruxo', espera: 4000 });
   escolher('🧙 O Bruxo', '<b>“Você encontrou a minha pedra… Faça UM pedido, e eu desapareço.”</b>', [
     { rotulo: '🐦 Virar pássaro durante um ciclo (quando quiser — ótimo para fugir)', fn: pedir('passaro', () => '🐦 Feitiço lançado! Use o botão Extra "🐦 Voar" quando quiser, por 32 minutos.') },
     { rotulo: '⚖️ Ser perdoado de todos os crimes', fn: pedir('perdao', () => '⚖️ Seus crimes sumiram como fumaça. Você está limpo.') },
     { rotulo: '💰 Riqueza: de 1 a 10 milhões de moedas (a sorte decide)', fn: pedir('dinheiro', (r) => `💰 O Bruxo encheu seus bolsos: +${num(r.valor)} moedas!`) },
     { rotulo: '✨ A arma amarela (dourada), com 2 balas', fn: pedir('arma', () => '✨ A ARMA DOURADA é sua: 2 balas. Saque a arma para usar.') },
-    { rotulo: '🤔 Pensar mais um pouco', fn: () => aviso('🧙 “Estarei aqui esperando o seu pedido…”', 3) },
+    { rotulo: '🤔 Pensar mais um pouco', fn: () => { aviso('🧙 “Estarei aqui esperando o seu pedido…”', 3); dublar('bruxo_espera'); } },
   ]);
 }
 
@@ -6734,7 +6774,9 @@ function tickNatal(dt) {
   }
   if (natalObj) {   // vira para quem chega perto
     const a = Math.atan2(jogador.pos.x - natalObj.position.x, jogador.pos.z - natalObj.position.z), av = natalObj.userData.av;
-    if (av && Math.hypot(jogador.pos.x - natalObj.position.x, jogador.pos.z - natalObj.position.z) < 20) av.raiz.rotation.y = a;
+    const dn = Math.hypot(jogador.pos.x - natalObj.position.x, jogador.pos.z - natalObj.position.z);
+    if (av && dn < 20) av.raiz.rotation.y = a;
+    if (dn < 14 && !natalObj.userData.saudou && !natal?.ja_peguei) { natalObj.userData.saudou = true; dublar('noel_hoho', { x: natalObj.position.x, z: natalObj.position.z, raio: 30 }); }
     natalObj.children[1].position.y = 0.5 + Math.sin(performance.now() / 350) * 0.08;
   }
   let t = '';
@@ -6753,7 +6795,7 @@ async function catalogoNatalCompleto() {
   ];
 }
 async function abrirCatalogoNatal() {
-  if (natal?.ja_peguei) { aviso('🎅 Ho ho ho! Você já ganhou seu presente neste Natal. Feliz Natal!', 4); return; }
+  if (natal?.ja_peguei) { aviso('🎅 Ho ho ho! Você já ganhou seu presente neste Natal. Feliz Natal!', 4); dublar('noel_feliz', { chave: 'noel', espera: 5000 }); return; }
   const todos = await catalogoNatalCompleto(), ok = new Set(natal?.catalogo || []), lista = todos.filter((x) => ok.has(x.id));
   if (!lista.length) { aviso('🎅 O saco de presentes está vazio por enquanto.', 3); return; }
   let el = $('natalCatalogo'); if (el) el.remove();
@@ -6761,7 +6803,7 @@ async function abrirCatalogoNatal() {
   el.innerHTML = `<div class="nc-caixa"><div class="nc-topo"><b>🎅 Escolha seu presente</b><button class="nc-x">✕</button></div>
     <p class="nc-dica">Ho ho ho! Você me encontrou. Escolha <b>um</b> presente:</p>
     <div class="nc-grade">${lista.map((x) => `<button class="nc-item" data-id="${x.id}">${x.img ? `<img src="${x.img}" alt="" loading="lazy">` : `<span class="nc-ic">${x.ic}</span>`}<span class="nc-nome">${esc(x.nome)}</span></button>`).join('')}</div></div>`;
-  document.body.appendChild(el);
+  document.body.appendChild(el); dublar('noel_escolha', { chave: 'noel', espera: 5000 });
   el.querySelector('.nc-x').onclick = () => el.remove();
   el.querySelectorAll('.nc-item').forEach((b) => { b.onclick = () => {
     const x = lista.find((y) => y.id === b.dataset.id); if (!x) return;
@@ -6773,7 +6815,7 @@ async function abrirCatalogoNatal() {
       try {
         await rede.natal.pegar(x.id, jogador.pos.x, jogador.pos.z);
         natal = { ...natal, ja_peguei: x.id }; el.remove();
-        aviso(`🎁 Presente do Papai Noel: ${x.nome}! Feliz Natal! 🎄`, 7);
+        aviso(`🎁 Presente do Papai Noel: ${x.nome}! Feliz Natal! 🎄`, 7); dublar('noel_feliz');
         recarregarInventario?.(); atualizarPerfilDepois();
       } catch (e) { aviso(e.message, 3); }
     };
@@ -6870,13 +6912,14 @@ function abrirViacao() {
   const v = viacao, h = (m) => `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
   if (!v) { aviso('Carregando a Viação…', 2); atualizarEstadoViacao(); return; }
   const ops = [];
-  if (!v.motorista) ops.push({ rotulo: `📝 Cadastrar como motorista (precisa de ${h(v.exp_min)} na carreira de ônibus; você tem ${h(v.minutos)})`, fn: () => rede.viacao.cadastrar().then((e) => { viacao = e; aviso('✅ Cadastrado na Viação Expresso Fator! Pegue um ônibus no pátio para começar uma viagem.', 5); }).catch((e) => aviso(e.message, 4)) });
+  if (!v.motorista) ops.push({ rotulo: `📝 Cadastrar como motorista (precisa de ${h(v.exp_min)} na carreira de ônibus; você tem ${h(v.minutos)})`, fn: () => rede.viacao.cadastrar().then((e) => { viacao = e; dublar('viacao_cadastro'); aviso('✅ Cadastrado na Viação Expresso Fator! Pegue um ônibus no pátio para começar uma viagem.', 5); }).catch((e) => { aviso(e.message, 4); if (/experi|contrata/i.test(e.message)) dublar('viacao_sem_exp'); }) });
   ops.push({ rotulo: '🛒 Comprar um ônibus', fn: () => escolher('🛒 Ônibus à venda', `Vai para os seus veículos (☰ › 🚗 Veículos) e aparece na saída do pátio. Você tem ${num(jogador.perfil.moedas)} moedas.`,
     VIACAO_MODELOS.map((m) => ({ rotulo: `${nomeOnibus(m)} · ${num(v.precos?.[m])} moedas`, fn: () => escolher('Confirmar compra', `Comprar o ${nomeOnibus(m)} por ${num(v.precos?.[m])} moedas?`, [
       { rotulo: '✅ Comprar', fn: () => rede.viacao.comprar(m).then(() => { aviso(`🚌 ${nomeOnibus(m)} comprado! Está na saída do pátio.`, 5); atualizarPerfilDepois(); }).catch((e) => aviso(e.message, 4)) },
       { rotulo: 'Cancelar', fn: () => {} }]) }))) });
   if (v.motorista) ops.push({ rotulo: '🚪 Sair da Viação', fn: () => rede.viacao.sair().then(() => { aviso('Você saiu da Viação.', 3); atualizarEstadoViacao(); }).catch((e) => aviso(e.message, 3)) });
   ops.push({ rotulo: 'Fechar', fn: () => {} });
+  dublar('viacao_oi', { chave: 'viacao', espera: 12000 });
   escolher('🚌 Viação Expresso Fator', `Viagens rodoviárias entre a Metrópole, Vila Serra e Porto Sul, sem paradas. <b>${num(v.salario)} moedas</b> por viagem completa.<br>
     ${v.motorista ? `✅ Você é motorista da Viação · ${v.viagens || 0} viagem(ns) feitas. Pegue um ônibus livre no pátio.` : `Para trabalhar aqui: ${h(v.exp_min)} de experiência como motorista de ônibus.`}`, ops);
 }
@@ -6928,6 +6971,8 @@ function executarViacao(k) {
   const emb = k === 'vEmbarcar';
   (emb ? rede.viacao.embarcar(jogador.pos.x, jogador.pos.z) : rede.viacao.desembarcar(jogador.pos.x, jogador.pos.z)).then((r) => {
     cenaPassageiros(emb);
+    { const q = jogador.carro?.mesh?.position || jogador.pos, sx = Math.random() < 0.5 ? '_f' : '_m';
+      dublar(`pass_${emb ? 'embarque' : 'chegou'}${sx}`, { x: q.x + 0.01, z: q.z, raio: 30 }); }
     if (emb) { viacao = r; const d = VIACAO_PONTOS[viacao.minha.destino]; rastrear({ nome: `🚌 Destino: ${d.nome}`, x: d.x, z: d.z }); aviso(`🧍 ${u.pass} passageiros embarcaram. Leve até ${d.nome}, sem paradas!`, 5); }
     else { viacao.minha = { ...u, fase: 'voltar' }; atualizarPerfilDepois(); rastrear({ nome: '🅿️ Garagem da Viação', x: VIACAO.vx(u.vaga), z: VIACAO.vz }); aviso(`💰 Viagem completa: +${num(r)} moedas! Volte com o ônibus vazio para a garagem.`, 6); }
   }).catch((e) => aviso(e.message, 3));
@@ -6950,6 +6995,8 @@ function cenaPassageiros(embarcar) {
 }
 function tickViacao(dt) {
   if (!viacaoVagas.length) return;
+  { const c = jogador.carro;   // passageiro reclama da velocidade (ônibus cheio acima de ~90 km/h)
+    if (c?.servico === 'viacao' && viacao?.minha?.fase === 'levar' && Math.abs(c.vel) > 25) dublar(`pass_rapido${Math.random() < 0.5 ? '_f' : '_m'}`, { chave: 'passRapido', espera: 30000 }); }
   if ((tViacao -= dt) <= 0) { tViacao = 25; atualizarEstadoViacao(); }
   if (viacaoTeto) { const E = VIACAO.escr, dentro = jogador.pos.x > E.x0 && jogador.pos.x < E.x1 && jogador.pos.z > E.z0 && jogador.pos.z < E.z1 + 0.6; viacaoTeto.visible = !dentro; }
   const cena = viacaoCena; if (!cena) return;
@@ -7242,13 +7289,13 @@ function policiaPersegue(n, dt) {
   if (!procurado || refugiado()) { if (n.perseguindo) { n.perseguindo = false; n.av.tocar('walk', { velocidade: 0.85 }); } n.cerco = null; return false; }
   if (j.dentroCasa) return n.perseguindo;
   const dx = j.pos.x - p.x, dz = j.pos.z - p.z, d = Math.hypot(dx, dz);
-  if (!n.perseguindo && d < 25) { n.perseguindo = true; aviso('🚓 A polícia robô viu você! Fuja ou se esconda.', 3); }
+  if (!n.perseguindo && d < 25) { n.perseguindo = true; aviso('🚓 A polícia robô viu você! Fuja ou se esconda.', 3); vozNpc(n, 'pol_parado', { raio: 40 }); }
   if (!n.perseguindo) return false;
-  if (d > 70) { n.perseguindo = false; n.av.tocar('walk', { velocidade: 0.85 }); return false; }
+  if (d > 70) { n.perseguindo = false; n.av.tocar('walk', { velocidade: 0.85 }); vozNpc(n, 'pol_perdi', { raio: 90 }); return false; }
   n.av.raiz.rotation.y = suavizarAngulo(n.av.raiz.rotation.y, Math.atan2(dx, dz), dt * 8);
   if (d > 1.3) { p.x += dx / d * 4.2 * dt; p.z += dz / d * 4.2 * dt; n.av.tocar('run'); }
   else if (!j.carro && !j.passageiro && !ocupado) {
-    ocupado = true; n.perseguindo = false;
+    ocupado = true; n.perseguindo = false; vozNpc(n, 'pol_preso');
     rede.recompensas.presoPorRobo().then((min) => { if (min) aviso(`🚓 A polícia robô te prendeu: ${min} min de pena.`, 4); }).catch((e) => aviso(e.message)).finally(() => { ocupado = false; });
   }
   return true;
@@ -8296,8 +8343,8 @@ function atualizarViaturas(dt) {
     }
     if (cacado) {
       const dx = j.pos.x - o.position.x, dz = j.pos.z - o.position.z, d = Math.hypot(dx, dz);
-      if (!v.perseguindo && d < (atacou ? 160 : 90)) { v.perseguindo = true; aviso(denuncia ? '🚓 O pedestre chamou a polícia: uma viatura está vindo!' : atacou ? '🚓 Você atirou na polícia: as viaturas estão vindo!' : '🚓 Uma viatura da polícia está atrás de você!', 3); }
-      if (v.perseguindo && d > 220) v.perseguindo = false;
+      if (!v.perseguindo && d < (atacou ? 160 : 90)) { v.perseguindo = true; dublar(`pol_suspeito${viaturas.indexOf(v) % 2 ? '_f' : ''}`, { chave: 'radio', espera: 20000 }); aviso(denuncia ? '🚓 O pedestre chamou a polícia: uma viatura está vindo!' : atacou ? '🚓 Você atirou na polícia: as viaturas estão vindo!' : '🚓 Uma viatura da polícia está atrás de você!', 3); }
+      if (v.perseguindo && d > 220) { v.perseguindo = false; dublar(`pol_perdi${viaturas.indexOf(v) % 2 ? '_f' : ''}`, { chave: 'radio', espera: 8000 }); }
       if (v.perseguindo) {
         perseguirComViatura(v, o, dt, d);
         if (!v.perseguindo || v.pe) continue;
@@ -8374,11 +8421,13 @@ function perseguirComViatura(v, o, dt, d) {
       const t = Math.min(1.1, d / 14); alvo = { x: j.pos.x + fx * c.vel * t, z: j.pos.z + fz * c.vel * t };
     } else alvo = alvoNaRota(v, o, j);
     dirigirIA(v, o, alvo, dt, maxV);
+    if (d < 40 && Math.abs(c.vel) > 3) vozViatura(v, 'encosta', 9000);
     // prender: só com o carro parado (e a viatura do lado). Em movimento, o policial não consegue
     v.paradoT = Math.abs(c.vel) < 1.3 && d < 8 ? (v.paradoT || 0) + dt : 0;
+    if (v.paradoT > 0.3) vozViatura(v, 'maos', 6000);
     if (v.paradoT > 1.8 && !j.passageiro && !ocupado) {
       v.paradoT = 0; ocupado = true; v.perseguindo = false;
-      aviso('👮 O policial abriu a porta e te tirou do carro!', 3);
+      aviso('👮 O policial abriu a porta e te tirou do carro!', 3); vozViatura(v, 'preso');
       sairCarro();
       rede.recompensas.presoPorRobo().then((min) => { if (min) aviso(`🚓 Preso: ${min} min de pena.`, 4); }).catch((e) => aviso(e.message)).finally(() => { ocupado = false; });
     }
@@ -8388,8 +8437,9 @@ function perseguirComViatura(v, o, dt, d) {
   const dx = j.pos.x - o.position.x, dz = j.pos.z - o.position.z;
   if (!mundo.naRua(j.pos.x, j.pos.z) && d < 45) { if (v.ia) v.ia.vel = 0; descerPoliciais(v); return; }   // fora da pista: a viatura encosta e os policiais seguem a pé
   dirigirIA(v, o, d < 30 ? { x: j.pos.x - dx / Math.max(1, d) * 3, z: j.pos.z - dz / Math.max(1, d) * 3 } : alvoNaRota(v, o, j), dt, 9);
+  if (d < 30) vozViatura(v, 'parado', 10000);
   if (d < 6 && !j.passageiro && !ocupado) {
-    ocupado = true; v.perseguindo = false;
+    ocupado = true; v.perseguindo = false; vozViatura(v, 'preso');
     rede.recompensas.presoPorRobo().then((min) => { if (min) aviso(`🚓 A viatura te alcançou: ${min} min de pena.`, 4); }).catch((e) => aviso(e.message)).finally(() => { ocupado = false; });
   }
 }
@@ -10891,7 +10941,7 @@ SALAS.delegacia = {
     if (pontoInterior('vestiario', 1.6)) { vestiario('Polícia'); return; }
     if (pontoInterior('treino', 1.8)) { const pt = jogador.pos; entrarTreino({ chave: jogador.dentroCasa, x: pt.x, z: pt.z }); return; }
     if (pontoInterior('celas', 1.6)) { entrarCarceragem(); return; }
-    if (pontoInterior('balcao', 1.8)) { alternarServico(); return; }
+    if (pontoInterior('balcao', 1.8)) { dublar('delegacia_aguarde', { chave: 'delegacia', espera: 8000 }); alternarServico(); return; }
     if (pontoInterior('quadro', 1.8)) { quadroProcurados(); return; }
     if (pontoInterior('estande', 2.2)) aviso(daPolicia() ? '🎯 Saque a arma (Arma) e atire nos alvos: a mira compensa a distância.' : 'Só policiais usam o estande.', 3);
   },
@@ -10953,7 +11003,7 @@ SALAS.hospital = {
   },
   acao: () => {
     if (naPorta()) { sairSala(); return; }
-    if (pontoInterior('recepcao', 1.8) || pontoInterior('farmacia', 1.8) || pontoInterior('consultorio', 1.6)) { abrirServico('hospital'); return; }
+    if (pontoInterior('recepcao', 1.8) || pontoInterior('farmacia', 1.8) || pontoInterior('consultorio', 1.6)) { abrirServico('hospital'); dublar('hospital_oi', { chave: 'hospital', espera: 15000 }); return; }
     if (pontoInterior('heliponto', 1.8)) { pegarHeliServico(civico.HOSPITAL, 'helicoptero_resgate', 'medico'); return; }
     if (pontoInterior('vestiario', 1.6)) { vestiario('Hospital'); return; }
     if (pontoInterior('leitos', 2.2)) aviso('🛏️ Enfermaria: para se tratar, fale na recepção ou no consultório.', 3);
@@ -11527,10 +11577,11 @@ function menuOficina(o) {
     ]); return; }
   }
   const meus = [...carrosMundo.values()].filter((v) => v.d.dono === jogador.perfil.id && !v.d.ladrao && v.mesh.visible && Math.hypot(v.mesh.position.x - o.vaga.x, v.mesh.position.z - o.vaga.z) < 14);
+  dublar('oficina_oi', { chave: 'oficina', espera: 15000 });
   if (!meus.length) { aviso(`Traga o seu carro até a vaga da ${o.nome} (dentro do galpão). ${o.texto}`, 4.5); return; }
   const servico = (v, nome, fn) => fn().then((r) => {
     v.d = { ...v.d, cor: r.cor, motor: r.motor, blindado: r.blindado, blind_hp: r.blindado ? 1 : v.d.blind_hp, oficina_ate: r.pronto };
-    jogador.perfil.moedas = Math.max(0, (jogador.perfil.moedas || 0) - r.preco); atualizarInfo(); tempoCarros = 0;
+    jogador.perfil.moedas = Math.max(0, (jogador.perfil.moedas || 0) - r.preco); atualizarInfo(); tempoCarros = 0; dublar('oficina_pronto');
     aviso(`🔧 ${nome} feito por ${r.preco.toLocaleString('pt-BR')} moedas.${r.pronto ? ` O carro fica ${Math.max(1, Math.round((Date.parse(r.pronto) - agoraServidor()) / 60000))} min na oficina.` : ''}`, 4); if (o.jog) tempoOficinasJog = 0;
   }).catch((e) => aviso(e.message, 3));
   const escolherServico = (v) => {
@@ -13717,13 +13768,14 @@ function opcoesPartidas() {
 }
 function falarGuiche(k) {
   const g = interiores.get('saguao')?.guiches?.[k]; if (!g) return;
+  dublar('rodo_guiche_f', { chave: 'guiche', espera: 8000 });
   if (!g.L) {
     escolher('ℹ️ Informações', 'As linhas com plataforma (1, 2, 3, 7 e 8) saem do terminal. As circulares (4, 5 e 6) param no ponto coberto da calçada em frente. A passagem custa 5 moedas e é paga ao embarcar. Para onde você quer ir?', [...opcoesPartidas(), { rotulo: 'Obrigado!', fn: () => {} }]);
     return;
   }
   const t = agoraServidor() / 1000, L = g.L, f = Math.max(0, Math.round(horaSaida(L, proximaSaidaLinha(L, t)) - t));
   escolher(`🎫 ${g.nome}`, `${L.nome}: a próxima saída é em <b>${f} s</b> na <b>plataforma ${numPlataforma(L)}</b>. A passagem (5 moedas) é paga ao embarcar no ônibus.`, [
-    { rotulo: `🚶 Ir para a plataforma ${numPlataforma(L)}`, fn: () => irPlataforma(L) }, { rotulo: 'Obrigado!', fn: () => {} }]);
+    { rotulo: `🚶 Ir para a plataforma ${numPlataforma(L)}`, fn: () => { dublar('rodo_passagem_f'); irPlataforma(L); } }, { rotulo: 'Obrigado!', fn: () => {} }]);
 }
 SALAS.saguao = {
   contexto: () => {
@@ -14462,6 +14514,7 @@ for (const k of ['B', 'C', 'D']) {
 const temCarteira = (c) => (jogador.perfil?.habilitacoes || []).includes(c);
 let aula = null;   // prova em andamento: { cat, i, inicio, batidas, veiculo, parado }
 function abrirAutoescola() {
+  dublar('autoescola_oi', { chave: 'autoescola', espera: 15000 });
   const minhas = (jogador.perfil?.habilitacoes || []).map((c) => (c === 'AV' ? 'Brevê' : c)).join(', ') || 'nenhuma';
   escolher('🚗 Autoescola', `Suas carteiras: ${minhas}. Pague a aula e faça a prova prática na hora. Médico precisa da B, bombeiro da C, motorista de ônibus da D e piloto do brevê.`, Object.entries(CATEGORIAS).map(([k, c]) => {
     const tem = temCarteira(k), falta = c.precisa && !temCarteira(c.precisa);
@@ -14500,7 +14553,7 @@ async function encerrarAula(passou, msg) {
   rastrear(null); esconderRota();
   if (!passou) { aviso(`❌ ${msg || 'Reprovado.'} Pague a aula de novo para tentar outra vez.`, 5); return; }
   try {
-    const h = await rede.autoescola.concluir(a.cat); if (jogador.perfil) jogador.perfil.habilitacoes = h;
+    const h = await rede.autoescola.concluir(a.cat); if (jogador.perfil) jogador.perfil.habilitacoes = h; dublar('autoescola_aprovado');
     aviso(`🎉 Aprovado! ${CATEGORIAS[a.cat].nome} na sua carteira.`, 5);
   } catch (e) { aviso('Aprovado, mas não salvou: ' + (e.message || e), 4); }
 }
@@ -15001,8 +15054,9 @@ function atualizarFrota(dt) {
 // no chão perto de um avião da frota: pilotar, revisão com o mecânico do hangar ou (mecânico jogador) fazer a revisão
 function menuAviaoFrota(fa) {
   const v = frotaVoos[fa.fid] ?? 0, P = PORTES[fa.porte], mec = jogador.perfil?.profissao === 'mecanico' || jogador.perfil?.cargo === 'admin';
-  const revisar = (mecanico) => rede.aviacao.revisar(fa.fid, mecanico).then((r) => { frotaVoos[fa.fid] = 0; placaFrota(fa); aviso(mecanico ? `🔧 Revisão feita! +${r}` : `🔧 O mecânico do hangar revisou o avião (${num(r)}).`, 4); }).catch((e) => aviso(e.message, 3));
+  const revisar = (mecanico) => rede.aviacao.revisar(fa.fid, mecanico).then((r) => { frotaVoos[fa.fid] = 0; placaFrota(fa); if (!mecanico) dublar('mecanico_pronto'); aviso(mecanico ? `🔧 Revisão feita! +${r}` : `🔧 O mecânico do hangar revisou o avião (${num(r)}).`, 4); }).catch((e) => aviso(e.message, 3));
   const ops = [{ rotulo: `✈️ Pilotar o avião ${P.nome}${v >= 3 ? ' (⚠️ revisão vencida: pode falhar no ar)' : ''}`, fn: () => pegarAviao(fa) }];
+  if (v > 0) dublar('mecanico_oi', { chave: 'mecHangar', espera: 15000 });
   if (v > 0) ops.push({ rotulo: `🔧 Revisão com o mecânico do hangar (${num(REVISAO_PRECO[fa.porte])})`, fn: () => revisar(false) });
   if (mec && v > 0) ops.push({ rotulo: '🔧 Fazer a revisão eu mesmo (+300)', fn: () => revisar(true) });
   escolher(`🛩️ Avião ${P.nome}`, `${v} voo(s) desde a última revisão. A revisão é a cada 3 voos; depois disso, cada voo tem mais chance de o motor falhar no ar.`, ops);
