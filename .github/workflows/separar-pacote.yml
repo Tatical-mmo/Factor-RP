@@ -1,0 +1,124 @@
+# Robô separador: junta as partes do pacote, extrai e organiza o repositório.
+# Envie para a raiz do repositório arquivos chamados:
+#   pacote-QUALQUERNOME.zip              (pacote inteiro, até 25 MB)
+#   pacote-QUALQUERNOME.zip.parte1de3    (pacote dividido em partes)
+# Quando todas as partes estiverem no repositório, o robô extrai,
+# copia os arquivos para os lugares certos, apaga o pacote e faz o commit.
+
+name: Robô separador
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: robo-separador
+  cancel-in-progress: false
+
+jobs:
+  separar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+
+      - name: Procurar pacotes
+        id: busca
+        shell: bash
+        run: |
+          shopt -s nullglob
+          inteiros=(pacote-*.zip)
+          partes=(pacote-*.zip.parte*de*)
+          soltas=()
+          for d in modelos miniaturas personagens sons; do [ -d "$d" ] && soltas+=("$d"); done
+          if [ ${#inteiros[@]} -eq 0 ] && [ ${#partes[@]} -eq 0 ] && [ ${#soltas[@]} -eq 0 ]; then
+            echo "Nenhum pacote encontrado. Nada a fazer."
+            echo "achou=nao" >> "$GITHUB_OUTPUT"
+          else
+            echo "achou=sim" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Juntar, extrair e organizar
+        if: steps.busca.outputs.achou == 'sim'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p /tmp/pacotes /tmp/extraido
+          processados=()
+
+          # pacotes divididos em partes
+          todas=(pacote-*.zip.parte*de*)
+          bases=()
+          [ ${#todas[@]} -gt 0 ] && mapfile -t bases < <(printf '%s\n' "${todas[@]}" | sed -E 's/\.parte[0-9]+de[0-9]+$//' | sort -u)
+          for base in "${bases[@]}"; do
+            suas=("$base".parte*de*)
+            total=$(printf '%s\n' "${suas[0]}" | sed -E 's/.*de([0-9]+)$/\1/')
+            achadas=${#suas[@]}
+            if [ "$achadas" -lt "$total" ]; then
+              echo "::warning::$base: chegaram $achadas de $total partes. Esperando o resto."
+              continue
+            fi
+            for i in $(seq 1 "$total"); do
+              cat "$base.parte${i}de${total}"
+            done > "/tmp/pacotes/$(basename "$base")"
+            processados+=("$base".parte*de*)
+            echo "Juntei $total partes de $base"
+          done
+
+          # pacotes inteiros
+          for z in pacote-*.zip; do
+            cp "$z" /tmp/pacotes/
+            processados+=("$z")
+          done
+
+          for z in /tmp/pacotes/*.zip; do
+            destino="/tmp/extraido/$(basename "$z" .zip)"
+            mkdir -p "$destino"
+            unzip -q -o "$z" -d "$destino"
+            # se o zip tiver uma única pasta por cima de tudo, usa o conteúdo dela
+            # (mas não se for pasta do próprio jogo, como assets/js/supabase: aí ela é mantida)
+            itens=("$destino"/*)
+            nome1=""; [ ${#itens[@]} -eq 1 ] && nome1="$(basename "${itens[0]}")"
+            if [ ${#itens[@]} -eq 1 ] && [ -d "${itens[0]}" ] && [[ ! "$nome1" =~ ^(assets|js|supabase|robos|\.github)$ ]]; then
+              origem="${itens[0]}"
+            else
+              origem="$destino"
+            fi
+            echo "Copiando $(basename "$z") para o repositório"
+            cp -a "$origem"/. .
+          done
+
+          if [ ${#processados[@]} -gt 0 ]; then
+            git rm -q --cached --ignore-unmatch "${processados[@]}"
+            rm -f "${processados[@]}"
+          fi
+
+          # conserto: arquivos que caíram na raiz vão para assets/
+          for d in modelos miniaturas personagens sons; do
+            if [ -d "$d" ]; then
+              mkdir -p "assets/$d"
+              cp -a "$d"/. "assets/$d"/
+              git rm -r -q --cached --ignore-unmatch "$d"
+              rm -rf "$d"
+              echo "Movi $d/ para assets/$d/"
+            fi
+          done
+
+      - name: Salvar no repositório
+        if: steps.busca.outputs.achou == 'sim'
+        shell: bash
+        run: |
+          git config user.name "Robô separador"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nada mudou."
+          else
+            git commit -m "Robô separador: pacote extraído e organizado"
+            git push
+          fi
