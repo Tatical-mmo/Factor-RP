@@ -1634,6 +1634,17 @@ function configurarJoystick() {
   const fim = (e) => { if (e.pointerId !== joy.id) return; joy.ativo = false; joy.x = joy.y = 0; bola.style.transform = ''; };
   base.addEventListener('pointerup', fim); base.addEventListener('pointercancel', fim);
   const toque = (id, fn) => $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
+  // 20i: com um dedo já na tela (joystick, ⬆️ do pássaro, acelerador), o celular não gera "click" no segundo toque:
+  // o botão tocado pelo segundo dedo é disparado na hora do toque (e o click repetido, se vier, é ignorado)
+  let multiBt = null, multiT = 0;
+  document.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch' || e.isPrimary) return;
+    const b = e.target.closest?.('button'); if (!b || b.disabled) return;
+    multiBt = b; multiT = performance.now(); b.click();
+  }, true);
+  document.addEventListener('click', (e) => {
+    if (multiBt && performance.now() - multiT < 700 && e.isTrusted && e.target.closest?.('button') === multiBt) { e.stopPropagation(); e.preventDefault(); multiBt = null; }
+  }, true);
   // manche do avião: arrastar para baixo puxa (nariz sobe), para cima empurra (desce); para os lados vira
   const mb = $('manche'); if (mb) {
     const mbola = mb.querySelector('i'), rm = 58;
@@ -2073,16 +2084,18 @@ function dirigir(dt) {
   {
     // carro de verdade (modelo de bicicleta): o volante gira aos poucos e volta ao centro sozinho; a curva depende da
     // distância entre os eixos e da velocidade (rápido, o volante "pesa" e a curva fica mais aberta). Sem curva seca.
-    c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * (volante ? 3.4 : 4.5));
+    // 20i: devagar o volante gira bem mais rápido (manobra leve); rápido continua gradual
+    const vAbs = Math.abs(c.vel), rapidez = THREE.MathUtils.clamp(1 - (vAbs - 4) / 18, 0, 1);
+    c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * (volante ? 3.4 + 4 * rapidez : 4.5 + 2 * rapidez));
     // distância entre eixos do próprio modelo (com dois eixos atrás, o efetivo fica mais para trás: vira mais aberto)
-    const tc = tipoCabine(), ex = c.mesh ? civico.eixosDe(c.mesh) : null, vAbs = Math.abs(c.vel);
+    const tc = tipoCabine(), ex = c.mesh ? civico.eixosDe(c.mesh) : null;
     const eixo = ex && ex.zf - ex.zr > 1.5 ? ex.zf - ex.zr : tc === 'onibus' ? 6.2 : tc === 'caminhao' ? 4.8 : 2.7;
     // ângulo máximo das rodas (devagar dá para manobrar fechado: ônibus e caminhão viram até ~48°, como os de verdade)
     // e limite de aderência: quanto mais rápido, mais aberta a curva (~0,45 g no carro, ~0,3 g em caminhão/ônibus);
     // o tanque gira sobre as esteiras.
     const tanque = c.modelo === 'tanque', maxEsterco = tc === 'carro' ? 0.68 : 0.84;
     c.eixoTras = tanque || !ex ? 0 : ex.zr;   // o veículo gira em volta do eixo de trás (a frente é que vira)
-    const aLat = tanque ? 99 : tc === 'carro' ? (c.modelo === 'esportivo' || c.modelo === 'classico' ? 5.5 : 4.5) : 3;
+    const aLat = tanque ? 99 : tc === 'carro' ? (c.modelo === 'esportivo' || c.modelo === 'classico' ? 9.5 : 8) : 5;   // 20i: ~0,8 g no carro (antes 0,45 g: a 30 km/h só fazia curva de 14 m)
     let curva = Math.tan(c.volante * maxEsterco) / eixo;
     const curvaMax = aLat / Math.max(1, vAbs * vAbs);
     curva = THREE.MathUtils.clamp(curva, -curvaMax, curvaMax);
@@ -15316,6 +15329,23 @@ function marchaRe(c, dt, acel, freio) {   // no chão: freia; já parado, segura
   if (c.vel < 0) { c.vel = Math.min(0, c.vel + 4 * dt); return true; }
   return false;
 }
+// 20i: avião grande no chão: a roda do nariz esterça (até ~65° bem devagar, menos com velocidade) e ele gira em volta do
+// trem de pouso principal (um pouco atrás do meio), com distância entre trens de ~40% do comprimento. Parado não gira;
+// quanto maior o avião, mais aberta a curva (como ônibus e caminhão)
+function taxiar(c, P, dt) {
+  if (!c.comprAv) {
+    let L = P.raio * 7;
+    try { if (c.mesh) { const ry = c.mesh.rotation.y; c.mesh.rotation.y = 0; c.mesh.updateMatrixWorld(true); const sz = new THREE.Box3().setFromObject(c.mesh).getSize(new THREE.Vector3()); c.mesh.rotation.y = ry; c.mesh.updateMatrixWorld(true); const m = Math.max(sz.x, sz.z); if (m > 5 && m < 200) L = m * 0.95; } } catch { /* usa o padrão */ }
+    c.comprAv = L;
+  }
+  const L = c.comprAv, entre = L * 0.4, atras = L * 0.06;
+  const esterco = c.volante * 1.13 / (1 + Math.abs(c.vel) / 6);
+  const w = c.vel * Math.tan(esterco) / entre;   // ré inverte sozinho (vel negativa)
+  if (Math.abs(w) < 1e-5) return;
+  const y0 = jogador.yaw, px = jogador.pos.x - Math.sin(y0) * atras, pz = jogador.pos.z - Math.cos(y0) * atras;   // ponto do trem principal
+  jogador.yaw -= w * dt;
+  jogador.pos.x = px + Math.sin(jogador.yaw) * atras; jogador.pos.z = pz + Math.cos(jogador.yaw) * atras;
+}
 function pilotarAviao(c, dt) {
   const P = PORTES[c.porte];
   // PC: W/S = motor, setas ↑/↓ = manche (↑ empurra, ↓ puxa), A/D ou ←/→ = inclinar. Celular: pedais = motor, manche amarelo = direção.
@@ -15348,7 +15378,8 @@ function pilotarAviao(c, dt) {
     const lim = pe && c.liberado ? P.vmax : 10;
     if (marchaRe(c, dt, acel, freio)) { /* freio / ré */ } else if (acel) c.vel = Math.min(lim, c.vel + (pe ? 6 : 3) * dt); else c.vel = Math.max(0, c.vel - (c.vel > 10 ? 4 : 2) * dt);
     if (pe && !c.liberado && acel) pedirTorre(c, 'decolagem');
-    jogador.yaw -= c.volante * 1.1 * Math.min(1, c.vel / 3) / (1 + c.vel / 15) * dt;
+    if (c.porte === 'pequeno') jogador.yaw -= c.volante * 1.1 * Math.min(1, c.vel / 3) / (1 + c.vel / 15) * dt;
+    else taxiar(c, P, dt);   // 20i: médio, grande e gigante manobram como veículo grande (roda do nariz, giro no trem principal)
     jogador.pos.x += Math.sin(jogador.yaw) * c.vel * dt; jogador.pos.z += Math.cos(jogador.yaw) * c.vel * dt;
     resolverColisao(jogador.pos, Math.min(3, P.raio));
     // rotação: com velocidade, puxar o manche levanta o nariz; sem velocidade a roda do nariz fica no chão
