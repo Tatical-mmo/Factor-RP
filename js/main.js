@@ -158,12 +158,26 @@ function fadeMusica(a, alvo, seg, depois) {
   clearInterval(musicaFade); const ini = a.volume, t0 = performance.now();
   musicaFade = setInterval(() => { const k = Math.min(1, (performance.now() - t0) / (seg * 1000)); a.volume = ini + (alvo - ini) * k; if (k >= 1) { clearInterval(musicaFade); depois?.(); } }, 50);
 }
+// 20c: a música é baixada inteira logo que o jogo abre (durante o vídeo/login) e só toca com o arquivo todo na
+// memória; antes ela vinha aos poucos disputando a internet com os modelos e cortava
+let musicaPronta = null;
+function baixarMusica() {
+  const a = $('musicaCarregamento'); if (!a || musicaPronta) return musicaPronta;
+  musicaPronta = fetch('assets/intro/musica_carregamento.mp3').then((r) => (r.ok ? r.blob() : Promise.reject(new Error('sem musica'))))
+    .then((b) => { a.src = URL.createObjectURL(b); a.preload = 'auto'; a.load(); return true; }).catch(() => false);
+  return musicaPronta;
+}
 function tocarMusicaCarregamento() {
   const a = $('musicaCarregamento'); if (!a || $('carregando').classList.contains('oculto')) return;
+  baixarMusica().then((ok) => { if (ok) tocarMusicaJa(a); });
+}
+function tocarMusicaJa(a) {
+  if ($('carregando').classList.contains('oculto') || preparandoFim()) return;
   a.volume = 0; a.currentTime = 0;
   const ir = () => a.play().then(() => fadeMusica(a, 0.55, 1.6)).catch(() => {});
   ir().then(() => { if (a.paused) document.addEventListener('pointerdown', () => { if (!$('carregando').classList.contains('oculto')) ir(); }, { once: true }); });
 }
+const preparandoFim = () => $('carregando').style.opacity === '0';
 function pararMusicaCarregamento() { const a = $('musicaCarregamento'); if (!a || a.paused) return; fadeMusica(a, 0, 1.2, () => a.pause()); }
 function comecar(perfil) {
   mostrar('carregando'); if (!introRodando) tocarMusicaCarregamento();
@@ -171,6 +185,7 @@ function comecar(perfil) {
 }
 
 tocarIntro();
+baixarMusica();
 montarLogin();
 montarEscolha();
 // voltando pelo link de "esqueci minha senha": mostra a tela de senha nova em vez de entrar direto
@@ -443,7 +458,8 @@ function offsetCamera(ang) {
 // ---------------------------------------------------------------- carregamento
 const manager = new THREE.LoadingManager();
 manager.onProgress = (_url, carregados, total) => {
-  const p = Math.round(carregados / total * 100);
+  if (preparando || $('carregando').classList.contains('oculto')) return;
+  const p = Math.round(carregados / total * 90);   // baixar vai até 90%; o resto é preparar a cidade
   $('progresso').style.width = p + '%'; $('progressoTxt').textContent = p + '%';
 };
 const loader = new GLTFLoader(manager);
@@ -481,6 +497,35 @@ function aquecerShaders() {
     if (mats.size) setTimeout(espera, 30); else compilando = false;
   };
   espera();
+}
+// 20c: a tela de carregamento só some quando o jogo já está fluido. Depois de baixar tudo, o jogo roda por baixo dela:
+// compila os gráficos de uma vez, sobe as texturas e espera ~20 quadros seguidos sem travar (no máximo 10 s, para
+// nunca prender um celular fraco). Antes ela sumia logo e o jogo engasgava nos primeiros segundos.
+let revelarJogo; const jogoRevelado = new Promise((ok) => { revelarJogo = ok; });
+let preparando = false;
+function prepararAntesDeMostrar() {
+  const tela = $('carregando'), t0 = performance.now();
+  preparando = true;
+  $('progresso').style.width = '90%'; $('progressoTxt').textContent = '90%';
+  const txt = tela.querySelector('.frente > div:nth-child(2)'); if (txt) txt.textContent = 'Preparando a cidade…';
+  aquecerShaders();
+  let bons = 0, ult = performance.now();
+  const passo = (agora) => {
+    const dt = agora - ult; ult = agora;
+    for (let k = 0; k < 6; k++) aquecerQuadro();   // texturas: várias por quadro enquanto ninguém vê
+    bons = !compilando && !filaAquecer.length && dt < 45 ? bons + 1 : 0;
+    const p = Math.min(99, 90 + Math.round((performance.now() - t0) / 1000) + Math.round(bons / 2));
+    $('progresso').style.width = p + '%'; $('progressoTxt').textContent = p + '%';
+    if (bons >= 20 || performance.now() - t0 > 10000) mostrarJogo(); else requestAnimationFrame(passo);
+  };
+  requestAnimationFrame(passo);
+}
+function mostrarJogo() {
+  const tela = $('carregando'); preparando = false;
+  $('progresso').style.width = '100%'; $('progressoTxt').textContent = '100%';
+  pararMusicaCarregamento();
+  tela.style.transition = 'opacity .7s ease'; tela.style.opacity = '0';
+  setTimeout(() => { tela.classList.add('oculto'); tela.style.opacity = ''; tela.style.transition = ''; revelarJogo(); }, 720);
 }
 function aquecerQuadro() {
   const t = filaAquecer.shift(); if (!t) return;
@@ -3585,11 +3630,10 @@ async function iniciarJogo(perfil) {
   if (TOQUE) { $('toque').classList.remove('oculto'); configurarJoystick(); $('btTiro').classList.add('oculto'); }
   else { $('ajuda').innerHTML = CONTROLES_PC.map(([k, t]) => `<kbd>${k}</kbd> ${t}`).join('<br>'); $('ajuda').classList.remove('oculto'); setTimeout(() => $('ajuda').classList.add('oculto'), 15000); }
   $('hud').classList.remove('oculto');
-  $('carregando').classList.add('oculto'); pararMusicaCarregamento();
   aviso(`Bem-vindo à cidade, ${nome}!`);
   aplicarPrefs();   // gráfico e câmera que o jogador escolheu (salvos na conta: valem em qualquer aparelho e não somem)
   { const nova = Date.now() - Date.parse(jogador.perfil?.criado_em || 0) < 20 * 60000, pr = jogador.perfil?.prefs || {};
-    setTimeout(() => seguranca.pedirIdadeSePreciso().catch(() => {}).then(() => tutorialPrimeiraVez(nova, !!pr.tutorial, () => salvarPref('tutorial', 1))), 2500); }   // tutorial: uma vez por jogador
+    jogoRevelado.then(() => new Promise((ok) => setTimeout(ok, 2500))).then(() => seguranca.pedirIdadeSePreciso().catch(() => {}).then(() => tutorialPrimeiraVez(nova, !!pr.tutorial, () => salvarPref('tutorial', 1)))); }   // tutorial: uma vez por jogador (depois que a tela de carregamento some)
   if (baixouQualidade) setTimeout(() => aviso(`⚠️ O celular ficou sem memória de vídeo duas vezes seguidas e o jogo reiniciou. Baixei a qualidade gráfica para ${baixouQualidade}; dá para voltar em ⚙️.`, 7), 4000);
   criarNPCs(id);
   conectarMultiplayer(perfil);
@@ -3745,6 +3789,7 @@ async function iniciarJogo(perfil) {
   if (jogador.pena > 0) aviso(`Você está preso. Faltam ${formatarTempo(jogador.pena)}.`, 4);
   relogio.start();
   renderer.setAnimationLoop(quadro);
+  prepararAntesDeMostrar();
 }
 
 function atualizarInfo() {
