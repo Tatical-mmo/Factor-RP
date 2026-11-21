@@ -33,7 +33,9 @@ jobs:
           shopt -s nullglob
           inteiros=(pacote-*.zip)
           partes=(pacote-*.zip.parte*de*)
-          if [ ${#inteiros[@]} -eq 0 ] && [ ${#partes[@]} -eq 0 ]; then
+          soltas=()
+          for d in modelos miniaturas personagens sons; do [ -d "$d" ] && soltas+=("$d"); done
+          if [ ${#inteiros[@]} -eq 0 ] && [ ${#partes[@]} -eq 0 ] && [ ${#soltas[@]} -eq 0 ]; then
             echo "Nenhum pacote encontrado. Nada a fazer."
             echo "achou=nao" >> "$GITHUB_OUTPUT"
           else
@@ -50,13 +52,14 @@ jobs:
           processados=()
 
           # pacotes divididos em partes
-          # (sem "ls": com nullglob, um ls sem nada listava a raiz inteira e criava pacotes vazios)
+          # (com nullglob, um "ls" sem nenhum arquivo listava a raiz inteira e o robô quebrava: agora usa listas)
+          todas=(pacote-*.zip.parte*de*)
           bases=()
-          for p in pacote-*.zip.parte*de*; do bases+=("${p%.parte*de*}"); done
-          for base in $(printf '%s\n' "${bases[@]}" | sort -u); do
-            pp=("$base".parte*de*)
-            total=$(printf '%s\n' "${pp[0]}" | sed -E 's/.*de([0-9]+)$/\1/')
-            achadas=${#pp[@]}
+          [ ${#todas[@]} -gt 0 ] && mapfile -t bases < <(printf '%s\n' "${todas[@]}" | sed -E 's/\.parte[0-9]+de[0-9]+$//' | sort -u)
+          for base in "${bases[@]}"; do
+            suas=("$base".parte*de*)
+            total=$(printf '%s\n' "${suas[0]}" | sed -E 's/.*de([0-9]+)$/\1/')
+            achadas=${#suas[@]}
             if [ "$achadas" -lt "$total" ]; then
               echo "::warning::$base: chegaram $achadas de $total partes. Esperando o resto."
               continue
@@ -74,29 +77,38 @@ jobs:
             processados+=("$z")
           done
 
-          if [ ${#processados[@]} -eq 0 ]; then
-            echo "Nenhum pacote completo ainda."
-            exit 0
-          fi
-
           for z in /tmp/pacotes/*.zip; do
             destino="/tmp/extraido/$(basename "$z" .zip)"
             mkdir -p "$destino"
-            if ! unzip -q -o "$z" -d "$destino"; then echo "::warning::$(basename "$z") não é um zip válido, pulei."; continue; fi
-            chmod -R u+rwX,go+rX "$destino"   # arquivos somente-leitura no zip travavam o próximo pacote (cp: Permission denied)
+            unzip -q -o "$z" -d "$destino"
             # se o zip tiver uma 煤nica pasta por cima de tudo, usa o conte煤do dela
+            # (mas não se essa pasta for uma pasta do próprio jogo, como assets/js/supabase: aí ela é mantida)
             itens=("$destino"/*)
-            if [ ${#itens[@]} -eq 1 ] && [ -d "${itens[0]}" ]; then
+            nome1=""; [ ${#itens[@]} -eq 1 ] && nome1="$(basename "${itens[0]}")"
+            if [ ${#itens[@]} -eq 1 ] && [ -d "${itens[0]}" ] && [[ ! "$nome1" =~ ^(assets|js|supabase|robos|\.github)$ ]]; then
               origem="${itens[0]}"
             else
               origem="$destino"
             fi
             echo "Copiando $(basename "$z") para o reposit贸rio"
-            cp -r --no-preserve=mode "$origem"/. .
+            cp -a "$origem"/. .
           done
 
-          git rm -q --cached --ignore-unmatch "${processados[@]}"
-          rm -f "${processados[@]}"
+          if [ ${#processados[@]} -gt 0 ]; then
+            git rm -q --cached --ignore-unmatch "${processados[@]}"
+            rm -f "${processados[@]}"
+          fi
+
+          # conserto: arquivos que caíram na raiz (modelos/, miniaturas/, personagens/, sons/) vão para assets/
+          for d in modelos miniaturas personagens sons; do
+            if [ -d "$d" ]; then
+              mkdir -p "assets/$d"
+              cp -a "$d"/. "assets/$d"/
+              git rm -r -q --cached --ignore-unmatch "$d"
+              rm -rf "$d"
+              echo "Movi $d/ para assets/$d/"
+            fi
+          done
 
       - name: Salvar no reposit贸rio
         if: steps.busca.outputs.achou == 'sim'
