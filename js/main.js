@@ -1276,8 +1276,10 @@ function skinDaFarda(papel, patente, sexo) {
   }
   return SKIN_FARDA[papel] || null;
 }
-for (const n of [...ANIM_LANC, ...ANIM_RECARGA]) ANIM_EXTRAS.add(n);
-const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : 'assets/personagens/animacoes_emotes.glb?v=2');
+// 20o: andando com a mira de centro: para trás (devagar e rápido) e de lado agachado (a direita é a esquerda espelhada)
+const ANIM_MIRA = ['mira_tras_lento', 'mira_tras_rapido', 'mira_lado_esq', 'mira_lado_dir'];
+for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA]) ANIM_EXTRAS.add(n);
+const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
 function obterBaseExtra(arq) {
   if (!basesExtra.has(arq)) basesExtra.set(arq, carregarGLB(arq).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { basesExtra.delete(arq); return null; }));
@@ -9291,6 +9293,10 @@ function atualizarJogador(dt) {
       if (j.algemado) av.tocar('algemado_andar', { velocidade: 1 });
       else if (j.carregando) av.tocar('carry_walk', { velocidade: 1 });
       else if (j.armado && recargaAtual(j)) animRecarga(av, correr ? 'correndo' : 'andando', recargaAtual(j));
+      else if (j.armado && miraC.ligada && !(correr && turbinado()) && (iy < -0.2 || Math.abs(ix) > Math.max(0.25, iy * 1.1))) {   // 20o: mirando, para trás ou de lado
+        if (iy < 0 && -iy >= Math.abs(ix) * 0.8) av.tocar(forca > 0.75 ? 'mira_tras_rapido' : 'mira_tras_lento', { velocidade: 1 });
+        else av.tocar(ix > 0 ? 'mira_lado_dir' : 'mira_lado_esq', { velocidade: 1 });
+      }
       else if (j.armado) { if (correr && turbinado()) av.tocar('corrida_rifle', { velocidade: 1 }); else av.tocar('walk_shoot', { velocidade: 1.25 }); }
       else if (correr) av.tocar(animCorrida(), { velocidade: 1 });
       else av.tocar('walk', { velocidade: vel / VELOCIDADE.andar });

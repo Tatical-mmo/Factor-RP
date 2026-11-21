@@ -2,6 +2,7 @@
 // Toda ação é conferida no banco; aqui só mostramos os botões que fazem sentido.
 import * as rede from './rede.js';
 import { PERSONAGENS, PERSONAGENS_EVENTO, ROBOS } from './config.js';
+import { ICONES as ICONES_ITEM } from './loja.js';
 
 const $ = (id) => document.getElementById(id);
 const PODERES = [
@@ -406,12 +407,16 @@ function abaTempo() {
 // caça ao tesouro (20q): monta o conteúdo do baú e esconde
 function blocoTesouro() {
   const itens = {}; let nomes = {};
-  const desenharItens = () => { const l = Object.entries(itens); $('pBauItens').innerHTML = l.length ? l.map(([k, q]) => `<button data-bautira="${k}">${q}× ${esc(nomes[k] || k)} ✕</button>`).join(' ') : 'Nenhum item.';
+  const desenharItens = () => { const l = Object.entries(itens); $('pBauItens').innerHTML = l.length ? 'No baú: ' + l.map(([k, q]) => `<button data-bautira="${k}">${ICONES_ITEM[k] || '📦'} ${q}× ${esc(nomes[k] || k)} ✕</button>`).join(' ') : 'Nenhum item no baú. Toque num item acima para pôr.';
     $('pBauItens').querySelectorAll('[data-bautira]').forEach((b) => { b.onclick = () => { delete itens[b.dataset.bautira]; desenharItens(); }; }); };
   desenharItens();
-  rede.tesouro.itens().then((l) => { nomes = Object.fromEntries(l.map((x) => [x.item, x.nome])); const s = $('pBauItem'); if (s) s.innerHTML = l.map((x) => `<option value="${x.item}">${esc(x.nome)}</option>`).join(''); }).catch(() => {});
+  // 20o: itens com o ícone (igual ao catálogo do Papai Noel): tocar põe a quantidade escolhida no baú
+  rede.tesouro.itens().then((l) => {
+    nomes = Object.fromEntries(l.map((x) => [x.item, x.nome])); const g = $('pBauGrade'); if (!g) return;
+    g.innerHTML = l.map((x) => `<button data-bauitem="${x.item}" style="display:flex;align-items:center;gap:6px;text-align:left"><span style="font-size:24px;width:34px;text-align:center">${ICONES_ITEM[x.item] || '📦'}</span>${esc(x.nome)}</button>`).join('');
+    g.querySelectorAll('[data-bauitem]').forEach((b) => { b.onclick = () => { const k = b.dataset.bauitem, q = Math.max(1, Math.round(Number($('pBauQtd').value) || 1)); itens[k] = (itens[k] || 0) + q; desenharItens(); }; });
+  }).catch(() => { const g = $('pBauGrade'); if (g) g.textContent = 'Não carregou os itens.'; });
   const b0 = ctx.estadoBau(); $('pBauAtual').innerHTML = b0?.ativo ? `<b>Baú ativo</b> até ${new Date(b0.expira_em).toLocaleString('pt-BR').slice(0, 17)}.` : b0?.aberto_nome ? `Último baú: aberto por <b>${esc(b0.aberto_nome)}</b>.` : 'Nenhum baú ativo.';
-  $('pBauAddItem').onclick = () => { const k = $('pBauItem').value, q = Math.max(1, Math.round(Number($('pBauQtd').value) || 1)); if (!k) return; itens[k] = (itens[k] || 0) + q; desenharItens(); };
   const montar = () => {
     const r = {}, m = Math.max(0, Math.round(Number($('pBauMoedas').value) || 0)); if (m) r.moedas = m;
     if (Object.keys(itens).length) r.itens = { ...itens };
@@ -484,9 +489,11 @@ function abaEu() {
     h += `<div class="sub">🗝️ Caça ao tesouro</div><p class="dica">Monte o baú: moedas, itens da mochila e personagens (qualquer um, inclusive os 🗝️ só do baú). O primeiro que abrir leva tudo. Todos veem só o círculo de busca no minimapa.</p>
       <div id="pBauAtual" class="dica"></div>
       <div class="botoes"><label>💰 Moedas <input id="pBauMoedas" type="number" min="0" step="100" value="0" style="width:110px"></label></div>
-      <div class="botoes"><select id="pBauItem"><option value="">Carregando itens…</option></select><input id="pBauQtd" type="number" min="1" value="1" style="width:64px"><button id="pBauAddItem">➕ Item</button></div>
+      <div class="botoes"><label>Quantidade por toque <input id="pBauQtd" type="number" min="1" value="1" style="width:64px"></label></div>
+      <div id="pBauGrade" class="poderes" style="max-height:200px;overflow:auto;display:grid;grid-template-columns:1fr 1fr;gap:6px">Carregando itens…</div>
       <div id="pBauItens" class="dica"></div>
-      <div class="poderes" style="max-height:180px;overflow:auto">${todos.map((x) => `<label><input type="checkbox" data-baup="${x.id}"> ${x.bau ? '🗝️ ' : ''}${esc(x.nome)}</label>`).join('')}</div>
+      <div class="sub">Personagens no baú</div>
+      <div class="poderes" style="max-height:220px;overflow:auto">${todos.map((x) => `<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" data-baup="${x.id}"><img src="assets/miniaturas/${x.id}.webp" alt="" loading="lazy" style="width:34px;height:34px;border-radius:6px;object-fit:cover"> ${x.bau ? '🗝️ ' : ''}${esc(x.nome)}</label>`).join('')}</div>
       <div class="botoes"><select id="pBauTempo">${[[30, '30 min'], [60, '1 h'], [180, '3 h'], [720, '12 h'], [1440, '1 dia'], [4320, '3 dias']].map(([m, t]) => `<option value="${m}" ${m === 180 ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <button id="pBauSortear">🎲 Esconder em lugar sorteado</button><button id="pBauAqui">📍 Esconder aqui</button><button id="pBauCancelar" class="perigo">Encerrar caça</button></div>
       <div class="sub">📢 Sirenes de alarme</div><p class="dica">Tocam sozinhas quando a Marinha lança o míssil de cruzeiro. O teste toca 15 s para todos os jogadores.</p>
