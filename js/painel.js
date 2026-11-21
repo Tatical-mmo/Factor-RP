@@ -425,6 +425,22 @@ function blocoTesouro() {
   $('pSirenes').onclick = () => { ctx.testarSirenes(); msg('Sirenes tocando por 15 s para todos.'); };
   if ($('pFoto')) $('pFoto').onclick = () => { fechar(); setTimeout(() => ctx.modoFoto(), 150); };
 }
+const MOD_VIACAO = [['onibus_rod_dourado', 'Rodoviário Dourado'], ['onibus_rod_amarelo', 'Rodoviário Amarelo'], ['onibus_rod_vermelho', 'Executivo Vermelho'], ['onibus_rod_branco', 'Micro Executivo Branco']];
+async function blocoViacao() {
+  const c = $('pViacao'); if (!c) return;
+  let e; try { e = await ctx.viacaoEstado(); } catch (er) { c.textContent = er.message; return; }
+  const uso = new Set(e.em_uso || []);
+  c.innerHTML = `<div class="cartoes"><div><small>Pagamento por viagem</small><input id="pVSal" type="number" min="0" value="${e.salario}"></div>
+      <div><small>Experiência mínima (horas)</small><input id="pVExp" type="number" min="0" step="0.5" value="${(e.exp_min / 60).toFixed(1)}"></div></div>
+    <div class="sub">Vagas do pátio</div>${(e.vagas || []).map((m, i) => `<div class="botoes"><span style="min-width:70px">Vaga ${i + 1}${uso.has(i) ? ' 🚌 em viagem' : ''}</span><select data-vaga="${i}"><option value="">— vazia —</option>${MOD_VIACAO.map(([id, n]) => `<option value="${id}" ${id === m ? 'selected' : ''}>${n}</option>`).join('')}</select></div>`).join('')}
+    <div class="sub">Preço de venda</div>${MOD_VIACAO.map(([id, n]) => `<div class="botoes"><span style="min-width:150px">${n}</span><input data-preco="${id}" type="number" min="0" value="${e.precos?.[id] ?? 0}"></div>`).join('')}
+    <div class="botoes"><button id="pVSalvar">💾 Salvar Viação</button></div>`;
+  $('pVSalvar').onclick = () => {
+    const vagas = [...c.querySelectorAll('[data-vaga]')].map((s) => s.value), precos = {};
+    c.querySelectorAll('[data-preco]').forEach((i) => { precos[i.dataset.preco] = Math.max(0, Math.round(Number(i.value) || 0)); });
+    executar(() => ctx.viacaoAdmin({ salario: Math.round(Number($('pVSal').value) || 0), exp_min: Math.round((Number($('pVExp').value) || 0) * 60), precos, vagas }), '🚌 Viação salva.');
+  };
+}
 async function blocoNatal() {
   const est = () => { const n = ctx.estadoNatal(), el = $('pNatalEstado'); if (!el) return;
     el.innerHTML = n?.ativo ? (n.teste ? `<b>🟢 Em teste</b> até ${new Date(n.teste_ate).toLocaleString('pt-BR').slice(0, 17)}.` : '<b>🟢 No ar (Natal)</b>.') + ` Muda de lugar às ${new Date(n.troca_em).toLocaleTimeString('pt-BR').slice(0, 5)}.` : '⚪ Desligado (liga sozinho em 20/12).'; };
@@ -478,6 +494,10 @@ function abaEu() {
       <div class="sub">📸 Modo foto</div><p class="dica">Esconde os botões, o minimapa e os nomes para tirar print da tela. Toque na tela para voltar.</p>
       <div class="botoes"><button id="pFoto">📸 Modo foto</button></div>`;
   }
+  if (eu.cargo === 'admin' && ctx.viacaoAdmin) {   // 20e: Viação Expresso Fator
+    h += `<div class="sub">🚌 Viação Expresso Fator</div><p class="dica">Pátio a leste da Rodoviária. Escolha o ônibus de cada vaga (vazia = sem ônibus), o pagamento por viagem, a experiência mínima e os preços de venda.</p>
+      <div id="pViacao" class="dica">Carregando…</div>`;
+  }
   if (eu.cargo === 'admin' && ctx.natalAdmin) {   // 20w: Papai Noel
     h += `<div class="sub">🎅 Papai Noel (Natal)</div><p class="dica">Aparece sozinho de <b>20 a 25 de dezembro</b> e muda de lugar a cada 2 h. Quem encontrar escolhe 1 presente do catálogo (1 por Natal). Para testar antes, antecipe aqui: os presentes do teste não contam para o Natal de verdade.</p>
       <div id="pNatalEstado" class="dica">Carregando…</div>
@@ -519,6 +539,7 @@ function abaEu() {
   if ($('pBueiro')) blocoBueiro();
   if ($('pBauSortear')) blocoTesouro();
   if ($('pNatalCat')) blocoNatal();
+  if ($('pViacao')) blocoViacao();
   const apd = $('pArmaPd'); if (apd) apd.onclick = () => executar(() => ctx.esconderArmaPd(), 'Arma dourada escondida aqui. Todos foram avisados do evento.');
   const ppd = $('pPedra'); if (ppd) ppd.onclick = () => executar(() => ctx.esconderPedra(), 'Pedra do Bruxo escondida aqui. Todos foram avisados do evento.');
   const b = $('pImortal'); if (b) b.onclick = () => executar(() => rede.painel.imortal(!eu.imortal), eu.imortal ? 'Modo imortal desligado.' : 'Modo imortal ligado.');

@@ -186,6 +186,11 @@ export const CARROS = {
   onibus_laranja: { nome: 'Ônibus urbano (laranja)', preco: 0, vel: 12 },
   onibus_brasilsul: { nome: 'Ônibus de viagem dois andares', preco: 0, vel: 13 },
   onibus_viacao: { nome: 'Ônibus de viagem executivo', preco: 0, vel: 13 },
+  // 20e: ônibus da Viação Expresso Fator (rodoviários)
+  onibus_rod_dourado: { nome: 'Rodoviário Dourado (3 eixos)', preco: 0, vel: 13.5 },
+  onibus_rod_amarelo: { nome: 'Rodoviário Amarelo (3 eixos)', preco: 0, vel: 13.5 },
+  onibus_rod_vermelho: { nome: 'Executivo Vermelho', preco: 0, vel: 13 },
+  onibus_rod_branco: { nome: 'Micro Executivo Branco', preco: 0, vel: 12.5 },
   aviao_pequeno: { nome: 'Avião pequeno', preco: 0, vel: 40, voa: true },
   aviao_medio: { nome: 'Avião médio', preco: 0, vel: 52, voa: true },
   aviao_grande: { nome: 'Avião grande', preco: 0, vel: 64, voa: true },
@@ -195,7 +200,8 @@ export const CARROS = {
 const ARRANCADA = { esportivo: 3, classico: 3, popular: 5, viatura: 5, ambulancia: 5.5, presidencial: 5.5, suv: 6.5, militar: 6.5, van: 6.5,
   caminhao: 11, caminhao_escola: 11, caminhao_lixo: 11, bombeiros: 11, exercito_caminhao: 11, tanque: 12,
   onibus: 12, onibus_urbano: 12, onibus_apache: 12, onibus_busscar: 12, onibus_executivo: 14, onibus_executivo2: 15, onibus_dois_andares: 15, onibus_articulado: 16,
-  onibus_amarelo: 12, onibus_branco: 12, onibus_laranja: 12, onibus_brasilsul: 15, onibus_viacao: 14 };
+  onibus_amarelo: 12, onibus_branco: 12, onibus_laranja: 12, onibus_brasilsul: 15, onibus_viacao: 14,
+  onibus_rod_dourado: 14, onibus_rod_amarelo: 14, onibus_rod_vermelho: 12.5, onibus_rod_branco: 11 };
 // aceleração (m/s²) na velocidade v: forte no começo e mais fraca perto do máximo, como um motor de verdade
 export function aceleracao(modelo, v, max) {
   const T = ARRANCADA[modelo] ?? 6, a0 = 1.21 * max / T, x = Math.min(1, Math.max(0, v / max));
@@ -1089,8 +1095,9 @@ function modeloCarroBase(modelo, cor) {
 // modelos 3D gerados (vêm com a frente em +x e tamanho 1): gira para +z, põe as rodas no chão e ajusta o comprimento
 const GLB_NOVOS = { caveirao: 6, viatura_pm: 4.6, viatura_civil: 4.6, viatura_prf: 4.7, saveiro: 4.4, saveiro_som: 4.4,
   // ônibus novos (Meshy): os da cidade (circulares) e os de viagem; vêm com a frente em -x
-  onibus_amarelo: 12.5, onibus_branco: 12, onibus_laranja: 12, onibus_brasilsul: 14, onibus_viacao: 14 };
-const FRENTE_MENOS_X = new Set(['onibus_amarelo', 'onibus_branco', 'onibus_laranja', 'onibus_brasilsul', 'onibus_viacao']);
+  onibus_amarelo: 12.5, onibus_branco: 12, onibus_laranja: 12, onibus_brasilsul: 14, onibus_viacao: 14,
+  onibus_rod_dourado: 14, onibus_rod_amarelo: 14, onibus_rod_vermelho: 11.5, onibus_rod_branco: 10.5 };
+const FRENTE_MENOS_X = new Set(['onibus_amarelo', 'onibus_branco', 'onibus_laranja', 'onibus_brasilsul', 'onibus_viacao', 'onibus_rod_dourado', 'onibus_rod_amarelo', 'onibus_rod_vermelho', 'onibus_rod_branco']);
 const FRENTE_MENOS_Z = new Set(['viatura_pm']);
 // ---- pintura de verdade (18v): a textura do Meshy já vem colorida (ex.: o Popular é azul); multiplicar por uma cor só
 // escurecia. Aqui acha a cor da lataria (o tom mais comum entre os pixels coloridos), troca só esses pixels pela cor

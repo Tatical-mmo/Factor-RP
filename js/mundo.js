@@ -1193,6 +1193,29 @@ const pocas = [];                 // luz dos postes no chão (aparece à noite)
 export const LUZES_POSTE = [];   // [x, z] da lâmpada de cada poste (gráfico ultra: luz que faz sombra de verdade)
 export function poca(x, z, r = 5, cor, y) { pocas.push([x, z, r, cor, y]); }
 let matCabeca = null, matPoca = null, matLed = null, matLampFav = null, matHalo = null;
+// 20e: postes que os veículos derrubam (cidade e favela). Cada um some do desenho em lote (InstancedMesh) enquanto
+// está caído; quem desenha o poste caindo é o main.js. A lista sai sempre na mesma ordem em todo aparelho.
+const DERRUBAVEIS = []; let MALHAS_POSTE = null, MALHAS_FAVELA = null;
+export function postesDerrubaveis() { return DERRUBAVEIS; }
+const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
+export function ocultarPoste(p, ocultar) {
+  p.col.off = !!ocultar;
+  const marca = (im, i, m) => { if (im && i >= 0) { im.setMatrixAt(i, m); im.instanceMatrix.needsUpdate = true; } };
+  if (p.tipo === 'poste' && MALHAS_POSTE) {
+    const { iH, iC, iB, iS, iL, iT } = MALHAS_POSTE;
+    _q.setFromAxisAngle(_e.set(0, 1, 0), p.rot); const m = ocultar ? _zero : _m.compose(_v.set(p.x, 0.18, p.z), _q, _e.set(1, 1, 1)).clone();
+    marca(iH, p.k, m); marca(iC, p.k, m); marca(iB, p.k, m); marca(iS, p.s, m); marca(iL, p.l, m); marca(iT, p.t, m);
+  } else if (p.tipo === 'poste_favela' && MALHAS_FAVELA) {
+    const q = p.p; _q.setFromEuler(new THREE.Euler(q.tx, 0, q.tz));
+    marca(MALHAS_FAVELA.iP, p.k, ocultar ? _zero : _m.compose(_v.set(q.x, q.y, q.z), _q, _e.set(1, q.h, 1)).clone());
+    const lx = q.tp.x + Math.sin(q.rot) * 0.7, lz = q.tp.z + Math.cos(q.rot) * 0.7;
+    marca(MALHAS_FAVELA.iL, p.k, ocultar ? _zero : _m.compose(_v.set(lx, q.tp.y - 0.55, lz), _q.identity(), _e.set(1, 1, 1)).clone());
+  }
+  const ph = matHalo?.userData.malha; if (ph && p.h != null) {   // o brilho da lâmpada some junto
+    const a = ph.geometry.attributes.position; if (p.yHalo == null) p.yHalo = a.getY(p.h);
+    a.setY(p.h, ocultar ? -999 : p.yHalo); a.needsUpdate = true;
+  }
+}
 // postes de concreto do Brasil: [x, z, ângulo do braço (para a rua), tipo de lâmpada 0 sódio / 1 LED, lado, trecho]
 const POSTES = [];
 export function posteCidade(x, z, rot, trecho = -1) { POSTES.push([x, z, rot, POSTES.length % 3 === 0 ? 1 : 0, 0, trecho >= 0 ? 100000 + trecho : -1]); }   // quarteirões do centro (antes era o GLB)
@@ -1259,8 +1282,9 @@ function montarPostes(postes) {
     _q.setFromAxisAngle(_e.set(0, 1, 0), rot); _m.compose(_v.set(x, 0.18, z), _q, _e.set(1, 1, 1));
     iH.setMatrixAt(k, _m); iC.setMatrixAt(k, _m); iB.setMatrixAt(k, _m);
     if (tipo) iL.setMatrixAt(l0i++, _m); else iS.setMatrixAt(s0i++, _m);
+    const info = { tipo: 'poste', x, z, rot, k, s: tipo ? -1 : s0i - 1, l: tipo ? l0i - 1 : -1, t: k % 6 === 3 ? t0i : -1, h: halos.length / 4, col: { tipo: 'circ', x, z, r: 0.25 } };
     if (k % 6 === 3) iT.setMatrixAt(t0i++, _m);
-    addCol({ tipo: 'circ', x, z, r: 0.25 });
+    addCol(info.col); DERRUBAVEIS.push(info);
     const lamp = local(x, z, rot, 0, H - 0.3, 2.45);
     LUZES_POSTE.push([lamp.x, lamp.z, lamp.y]); halos.push(lamp.x, lamp.y - 0.12, lamp.z, tipo);
     const ch = local(x, z, rot, 0, 0, 2.45 + 1.2);
@@ -1268,6 +1292,7 @@ function montarPostes(postes) {
     if (trecho >= 0) { const ch2 = `${trecho}:${lado}`; if (!porTrecho.has(ch2)) porTrecho.set(ch2, []); porTrecho.get(ch2).push([x, z, rot]); }
   });
   for (const m of [iH, iC, iB, iS, iL, iT]) { m.castShadow = m === iH; scene.add(m); }
+  MALHAS_POSTE = { iH, iC, iB, iS, iL, iT };
   // fios: 3 na cruzeta (rede de cima) e 2 mais baixos (rede de baixo), de um poste ao próximo da mesma calçada
   for (const lista of porTrecho.values()) for (let i = 0; i < lista.length - 1; i++) {
     const [ax, az, ar] = lista[i], [bx, bz, br] = lista[i + 1];
@@ -1314,12 +1339,13 @@ function montarPostesFavela(fios, halos) {
     const tp = topo(p), lx = tp.x + Math.sin(p.rot) * 0.7, lz = tp.z + Math.cos(p.rot) * 0.7, ly = tp.y - 0.55;
     _m.compose(_v.set(lx, ly, lz), _q.identity(), _e.set(1, 1, 1)); iL.setMatrixAt(k, _m);
     fios.push(tp.x, tp.y - 0.4, tp.z, lx, ly + 0.12, lz);   // bracinho de fio até a lâmpada
+    const info = { tipo: 'poste_favela', x: p.x, z: p.z, y: p.y, k, h: halos.length / 4, alt: p.h, col: { tipo: 'circ', x: p.x, z: p.z, r: 0.2 }, p };
     halos.push(lx, ly, lz, 2); poca(lx, lz, 3.6, '#c98a3a', altura(lx, lz) + 0.12);
     LUZES_POSTE.push([lx, lz, ly]);
-    addCol({ tipo: 'circ', x: p.x, z: p.z, r: 0.2 });
+    addCol(info.col); DERRUBAVEIS.push(info);
     p.tp = tp;
   });
-  iP.castShadow = true; scene.add(iP, iL);
+  iP.castShadow = true; scene.add(iP, iL); MALHAS_FAVELA = { iP, iL };
   // fios embolados: de cada poste aos 2 seguintes (cruzando a rua), 3 a 6 fios cada, com caídas diferentes
   const desloca = (v, k) => v.clone().add(_d.set((r() - 0.5) * 0.3, -0.3 - k * 0.22 - r() * 0.2, (r() - 0.5) * 0.3));
   for (let i = 0; i < lista.length; i++) for (const j of [i + 1, i + 2]) {

@@ -112,6 +112,10 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'sirene' }, ({ payload }) => eventos.sirene?.(payload));
   canal.on('broadcast', { event: 'bau' }, ({ payload }) => eventos.bau?.(payload));
   canal.on('broadcast', { event: 'natal' }, ({ payload }) => eventos.natal?.(payload));
+  canal.on('broadcast', { event: 'somSoco' }, ({ payload }) => eventos.somSoco?.(payload));
+  canal.on('broadcast', { event: 'derrubar' }, ({ payload }) => eventos.derrubar?.(payload));
+  canal.on('broadcast', { event: 'viacao' }, ({ payload }) => eventos.viacao?.(payload));
+  canal.on('broadcast', { event: 'danoQueda' }, ({ payload }) => eventos.danoQueda?.(payload));
   canal.on('broadcast', { event: 'missil' }, ({ payload }) => eventos.missil?.(payload));
   canal.on('broadcast', { event: 'travado' }, ({ payload }) => eventos.travado?.(payload));
   canal.on('broadcast', { event: 'missilAcerto' }, ({ payload }) => eventos.missilAcerto?.(payload));
@@ -169,7 +173,7 @@ function traduzirRpc(m) {
     'adicional de 0 a 100 por cento': 'O adicional vai de 0 a 100%.',
     'esse terreno ja tem obra': 'Esse terreno já tem obra.',
     'a pedra ja foi achada': 'Alguém já achou a pedra preciosa.',
-    'alguem ja abriu o bau': 'Alguém já abriu o baú do tesouro.', 'o papai noel ja foi embora': 'O Papai Noel já foi embora.', 'chegue mais perto do papai noel': 'Chegue mais perto do Papai Noel.', 'presente fora do catalogo': 'Esse presente não está no catálogo do Papai Noel.', 'voce ja ganhou seu presente neste natal': 'Você já ganhou seu presente neste Natal. 🎅', 'catalogo vazio': 'Marque pelo menos um presente no catálogo.', 'o bau sumiu': 'O baú do tesouro não está mais lá.', 'bau vazio': 'Coloque alguma coisa dentro do baú.',
+    'alguem ja abriu o bau': 'Alguém já abriu o baú do tesouro.', 'o papai noel ja foi embora': 'O Papai Noel já foi embora.', 'pouca experiencia de motorista': 'A Viação só contrata quem já tem 5 h como motorista de ônibus (carreira na Rodoviária).', 'faca o cadastro no escritorio': 'Faça o cadastro no escritório da Viação primeiro.', 'voce ja tem um onibus da viacao': 'Você já está com um ônibus da Viação.', 'vaga vazia': 'Essa vaga está vazia.', 'esse onibus esta em viagem': 'Esse ônibus está em viagem.', 'chegue perto do onibus': 'Chegue perto do ônibus.', 'nenhum embarque agora': 'Não há embarque agora.', 'pare no ponto de embarque': 'Pare no ponto de embarque.', 'nenhum desembarque agora': 'Não há desembarque agora.', 'viagem rapida demais': 'Rápido demais: faça a viagem de verdade.', 'pare no ponto de desembarque': 'Pare no ponto de desembarque.', 'estacione na vaga do onibus': 'Estacione na vaga de onde o ônibus saiu.', 'chegue mais perto do papai noel': 'Chegue mais perto do Papai Noel.', 'presente fora do catalogo': 'Esse presente não está no catálogo do Papai Noel.', 'voce ja ganhou seu presente neste natal': 'Você já ganhou seu presente neste Natal. 🎅', 'catalogo vazio': 'Marque pelo menos um presente no catálogo.', 'o bau sumiu': 'O baú do tesouro não está mais lá.', 'bau vazio': 'Coloque alguma coisa dentro do baú.',
     'o bruxo nao atende voce': 'O Bruxo só atende quem achou a pedra.',
     'valor de 1 a 10.000.000 por jogador': 'O valor vai de 1 a 10.000.000 por jogador.',
     'escolha quem recebe': 'Escolha quem recebe.',
@@ -909,6 +913,18 @@ export const natal = {
   pegar: (escolha, x, z) => rpc('natal_pegar', { p_escolha: escolha, p_x: x, p_z: z }),
   admin: (catalogo, pontos, testeMin) => rpc('admin_natal', { p_catalogo: catalogo, p_pontos: pontos, p_teste_min: testeMin }),
   onde: () => rpc('admin_natal_onde'),
+};
+// 20e: Viação Expresso Fator (ônibus rodoviário)
+export const viacao = {
+  estado: () => rpc('viacao_estado'),
+  cadastrar: () => rpc('viacao_cadastrar'),
+  sair: () => rpc('viacao_sair'),
+  pegar: (vaga, x, z) => rpc('viacao_pegar', { p_vaga: vaga, p_x: x, p_z: z }),
+  embarcar: (x, z) => rpc('viacao_embarcar', { p_x: x, p_z: z }),
+  desembarcar: (x, z) => rpc('viacao_desembarcar', { p_x: x, p_z: z }),
+  devolver: (x, z, desistir) => rpc('viacao_devolver', { p_x: x, p_z: z, p_desistir: !!desistir }),
+  comprar: (modelo) => rpc('viacao_comprar', { p_modelo: modelo }),
+  admin: (cfg) => rpc('admin_viacao', { p_cfg: cfg }),
 };
 export const bruxo = {
   estado: () => sel(sb.from('pedra_bruxo').select('*').eq('id', 1).maybeSingle()),

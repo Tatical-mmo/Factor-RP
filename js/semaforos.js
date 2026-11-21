@@ -55,13 +55,16 @@ export function iniciar(scene, lista, alturaChao, relogioServidor) {
   for (let i = 0; i < MAX * 3; i++) luzes.setColorAt(i, APAGADA[i % 3]);
 }
 
+// 20e: os postes de semáforo podem ser derrubados por veículos (some do desenho enquanto está caído)
+export function cabecasLista() { return cabecas; }
+export function derrubado(h, sim) { h.caido = !!sim; tempoLod = 0; }
 // a cada meio segundo escolhe as cabeças mais perto; a cada quadro acende as luzes certas
 export function atualizar(dt, px, pz) {
   if (!poste) return;
   if ((tempoLod -= dt) <= 0) {
     tempoLod = 0.5;
     const perto = [];
-    for (const h of cabecas) { const d = Math.abs(h.x - px) + Math.abs(h.z - pz); if (d < 170) perto.push([d, h]); }
+    for (const h of cabecas) { if (h.caido) continue; const d = Math.abs(h.x - px) + Math.abs(h.z - pz); if (d < 170) perto.push([d, h]); }
     perto.sort((a, b) => a[0] - b[0]); ativas = perto.slice(0, MAX).map((p) => p[1]);
     ativas.forEach((h, i) => {
       _q.setFromAxisAngle(_y, h.ang); _m.compose(_v.set(h.x, h.y, h.z), _q, _e); poste.setMatrixAt(i, _m); corpo.setMatrixAt(i, _m);

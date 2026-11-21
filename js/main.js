@@ -697,7 +697,137 @@ function textoSprite(texto, { cor = '#ffffff', fundo = 'rgba(20,24,34,.78)', tam
   return s;
 }
 
-const placas = [];
+const placas = [], placasRua = [];
+// ---- 20e: postes, semáforos e placas que os veículos derrubam. Batida fraca: tomba no lugar; forte: é arremessado
+// para longe (quanto mais rápido, mais longe) e o que voa acerta e estraga outros veículos. Volta ao lugar em 4 min.
+// Quem bateu avisa os outros (todos veem cair igual); o dano dos arremessos é calculado por quem bateu.
+const DERRUBA_VOLTA = 240, derrubaveis = [], quedas = [];
+let gradeDerruba = null;
+const TIPO_DERRUBA = {   // altura, peso (quanto segura o veículo), dano no veículo que bateu
+  poste: { h: 9.6, peso: 0.7, dano: 6 }, poste_favela: { h: 6.6, peso: 0.82, dano: 3 }, semaforo: { h: 4, peso: 0.88, dano: 2 }, placa: { h: 3.3, peso: 0.94, dano: 1 },
+};
+function montarDerrubaveis() {
+  if (gradeDerruba) return;
+  gradeDerruba = new Map();
+  for (const p of mundo.postesDerrubaveis()) derrubaveis.push(p);
+  for (const h of semaforos.cabecasLista()) derrubaveis.push({ tipo: 'semaforo', x: h.x, z: h.z, y: h.y, ang: h.ang, cab: h });
+  for (const p of placasRua) derrubaveis.push(p);
+  derrubaveis.forEach((d, i) => { d.i = i; const k = `${Math.floor(d.x / 20)},${Math.floor(d.z / 20)}`; if (!gradeDerruba.has(k)) gradeDerruba.set(k, []); gradeDerruba.get(k).push(d); });
+}
+function postesDerrubaveis() { return derrubaveis; }
+function derrubaveisPerto(x, z) {
+  if (!gradeDerruba) montarDerrubaveis();
+  const l = [], cx = Math.floor(x / 20), cz = Math.floor(z / 20);
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const g = gradeDerruba.get(`${cx + i},${cz + j}`); if (g) l.push(...g); }
+  return l;
+}
+const matQueda = {
+  conc: new THREE.MeshStandardMaterial({ color: '#a3a29b', roughness: 0.92 }), ferro: new THREE.MeshStandardMaterial({ color: '#4b5056', roughness: 0.55, metalness: 0.5 }),
+  mad: new THREE.MeshStandardMaterial({ color: '#8d8a83', roughness: 0.95 }), preto: new THREE.MeshStandardMaterial({ color: '#15171a', roughness: 0.7 }),
+  cinza: new THREE.MeshStandardMaterial({ color: '#8d9297', roughness: 0.6, metalness: 0.4 }), verde: new THREE.MeshStandardMaterial({ color: '#1f6b3a', roughness: 0.6 }),
+};
+// a peça que cai (o original some do desenho em lote): o pé fica na origem e ela fica em pé ao longo de +y
+function pecaQueda(d) {
+  const g = new THREE.Group(), add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; g.add(o); return o; };
+  if (d.tipo === 'poste') {
+    add(new THREE.CylinderGeometry(0.1, 0.19, 9.6, 4), matQueda.conc, 0, 4.8, 0).rotation.y = Math.PI / 4;
+    add(new THREE.BoxGeometry(0.1, 0.1, 2), matQueda.ferro, 0, 9.1, -0.1);
+    add(new THREE.BoxGeometry(0.08, 0.08, 2.3), matQueda.ferro, 0, 9.4, 1.2);
+    add(new THREE.BoxGeometry(0.34, 0.1, 0.62), matQueda.ferro, 0, 9.36, 2.45);
+    g.rotation.y = d.rot;
+  } else if (d.tipo === 'poste_favela') add(new THREE.CylinderGeometry(0.08, 0.13, d.alt || 6.6, 6), matQueda.mad, 0, (d.alt || 6.6) / 2, 0);
+  else if (d.tipo === 'semaforo') { add(new THREE.CylinderGeometry(0.07, 0.09, 3.2, 8), matQueda.cinza, 0, 1.6, 0); add(new THREE.BoxGeometry(0.42, 1.18, 0.3), matQueda.preto, 0, 3.34, 0); g.rotation.y = d.ang; }
+  else { add(new THREE.CylinderGeometry(0.05, 0.05, 2.7, 8), matQueda.cinza, 0, 1.35, 0); add(new THREE.BoxGeometry(1.5, 0.75, 0.05), matQueda.verde, 0, 2.95, 0); }
+  const raiz = new THREE.Group(); raiz.add(g); return raiz;
+}
+function ocultarDerrubavel(d, sim) {
+  if (d.tipo === 'poste' || d.tipo === 'poste_favela') mundo.ocultarPoste(d, sim);
+  else if (d.tipo === 'semaforo') semaforos.derrubado(d.cab, sim);
+  else { d.col.off = !!sim; for (const m of d.malhas) m.visible = !sim; }
+}
+// dx, dz: direção da pancada; v: velocidade do veículo (m/s); meu: fui eu que bati (calculo o dano dos arremessos)
+function derrubar(d, dx, dz, v, meu, quem) {
+  if (d.caido) return; d.caido = true; d.volta = performance.now() + DERRUBA_VOLTA * 1000;
+  ocultarDerrubavel(d, true);
+  const T = TIPO_DERRUBA[d.tipo], n = Math.hypot(dx, dz) || 1, fx = dx / n, fz = dz / n;
+  const obj = pecaQueda(d), y0 = d.tipo === 'poste' ? 0.18 : d.tipo === 'poste_favela' ? d.y : d.tipo === 'semaforo' ? d.y : 0.18;
+  obj.position.set(d.x, y0, d.z); scene.add(obj);
+  const forte = v > (d.tipo === 'poste' ? 13 : 9);
+  const eixo = new THREE.Vector3(fz, 0, -fx);   // tomba para o lado da pancada
+  quedas.push({ d, obj, eixo, ang: 0, w: forte ? v / T.h * 1.6 : Math.max(0.6, v / T.h), forte, vx: forte ? fx * v * 0.75 : fx * v * 0.18, vz: forte ? fz * v * 0.75 : fz * v * 0.18, vy: forte ? 2 + v * 0.18 : 0,
+    meu, quem, t: 0, acertou: new Set(), h: T.h, parado: false });
+  sons.tocar('soco_metal', { vol: 1, dist: Math.hypot(d.x - jogador.pos.x, d.z - jogador.pos.z), raio: 70, velocidade: d.tipo === 'poste' ? 0.55 : 0.8 });
+}
+function atualizarQuedas(dt) {
+  const agora = performance.now();
+  for (let i = quedas.length - 1; i >= 0; i--) {
+    const q = quedas[i], o = q.obj, p = o.position;
+    if (agora > q.d.volta) { scene.remove(o); quedas.splice(i, 1); q.d.caido = false; ocultarDerrubavel(q.d, false); continue; }   // volta ao lugar
+    if (q.parado) continue;
+    q.t += dt;
+    const chao = alturaChao(p.x, p.z) + 0.05;
+    if (q.forte) {   // arremessado: voa girando, quica e arrasta até parar deitado
+      p.x += q.vx * dt; p.z += q.vz * dt; p.y += q.vy * dt; q.vy -= 9.8 * dt; q.ang += q.w * dt;
+      if (p.y <= chao) { p.y = chao; q.vy = Math.abs(q.vy) > 2 ? -q.vy * 0.25 : 0; q.vx *= 0.55; q.vz *= 0.55; q.w *= 0.45;
+        if (Math.hypot(q.vx, q.vz) < 0.6 && !q.vy) { q.forte = false; q.w = 0; q.vx = q.vz = 0; } }
+    } else {   // tomba girando no pé
+      q.w += 1.5 * 9.8 / q.h * Math.sin(Math.max(0.05, q.ang)) * dt; q.ang += q.w * dt;
+      p.x += q.vx * dt; p.z += q.vz * dt; q.vx *= Math.exp(-3 * dt); q.vz *= Math.exp(-3 * dt);
+      if (q.ang >= Math.PI / 2 - 0.04) { q.ang = Math.PI / 2 - 0.04; if (q.w > 2) { q.w = -q.w * 0.18; } else { q.parado = true; } }
+      p.y = Math.max(chao, p.y);
+    }
+    if (!q.forte && q.ang >= Math.PI / 2 - 0.05 && Math.abs(q.w) < 0.05 && q.t > 0.5) q.parado = true;
+    o.quaternion.setFromAxisAngle(q.eixo, q.forte ? q.ang : Math.min(q.ang, Math.PI / 2 - 0.04));
+    // o que voa (ou o topo do poste caindo rápido) acerta outros veículos
+    const vel = q.forte ? Math.hypot(q.vx, q.vy, q.vz) : Math.abs(q.w) * q.h;
+    if (q.meu && vel > 4 && q.t > 0.12) acertoDaQueda(q, vel);
+  }
+}
+const _pq = new THREE.Vector3();
+function acertoDaQueda(q, vel) {
+  for (const f of [0.35, 0.7, 1]) {
+    _pq.set(0, q.h * f, 0).applyQuaternion(q.obj.quaternion).add(q.obj.position);
+    if (_pq.y > alturaChao(_pq.x, _pq.z) + 4.5) continue;
+    for (const c of corposNaRua()) {
+      if (!c.o || c.pessoa || q.acertou.has(c.o) || c.o === q.quem) continue;
+      if (Math.hypot(c.x - _pq.x, c.z - _pq.z) > (c.r || 1.4) + 0.4) continue;
+      q.acertou.add(c.o);
+      const dano = Math.min(40, Math.round(vel * (q.d.tipo === 'poste' ? 2.2 : 1.2)));
+      for (const [id, r] of remotos) if (r.carro === c.o) conexao?.enviar('danoQueda', { alvo: id, d: dano });
+      sons.tocar('soco_metal', { vol: 1, dist: Math.hypot(_pq.x - jogador.pos.x, _pq.z - jogador.pos.z), raio: 70, velocidade: 0.7 });
+    }
+    const meu = jogador.carro; if (meu?.mesh && meu.mesh !== q.quem && !q.acertou.has(meu.mesh) && Math.hypot(meu.mesh.position.x - _pq.x, meu.mesh.position.z - _pq.z) < 2) { q.acertou.add(meu.mesh); danoNoMeuVeiculo(Math.min(40, Math.round(vel * 2))); }
+  }
+}
+function danoNoMeuVeiculo(d) {
+  const c = jogador.carro; if (!c || c.voa) return;
+  c.dano = Math.min(100, (c.dano || 0) + d); guardarDanoVeiculo(c); tremor = Math.max(tremor, 0.3);
+  if (c.dano >= 50) veicFumando.add(c);
+  if (c.dano >= 100) { if (!c.pegouFogo) { c.pegouFogo = 5; aviso('🔥 O veículo pegou fogo! Saia já: ele explode em 5 s!', 4); } }
+  else aviso(`💥 Algo arremessado acertou o veículo! ${Math.round(100 - c.dano)}%`, 2);
+}
+// dirigindo: o que estiver na frente (ou atrás, de ré) do veículo cai
+function derrubarNoCaminho(c) {
+  if (Math.abs(c.vel) < 2.5 || !c.mesh) return;
+  const b = caixaDoVeiculo(c.mesh), fx = Math.sin(jogador.yaw), fz = Math.cos(jogador.yaw), meia = Math.max(0.9, (b.x1 - b.x0) / 2);
+  const ponta = c.vel > 0 ? b.z1 : b.z0;
+  for (const d of derrubaveisPerto(jogador.pos.x, jogador.pos.z)) {
+    if (d.caido) continue;
+    const dx = d.x - jogador.pos.x, dz = d.z - jogador.pos.z, fr = dx * fx + dz * fz, la = Math.abs(dx * fz - dz * fx);
+    if (la > meia + 0.35) continue;
+    if (c.vel > 0 ? (fr < ponta - 1.2 || fr > ponta + 0.7) : (fr > ponta + 1.2 || fr < ponta - 0.7)) continue;
+    const T = TIPO_DERRUBA[d.tipo], v = Math.abs(c.vel), s = Math.sign(c.vel);
+    derrubar(d, fx * s, fz * s, v, true, c.mesh);
+    conexao?.enviar('derrubar', { i: d.i, dx: r2(fx * s), dz: r2(fz * s), v: r2(v) });
+    c.vel *= T.peso; tremor = Math.max(tremor, d.tipo === 'poste' ? 0.35 : 0.15);
+    if (v > 6) danoNoMeuVeiculo(Math.round(T.dano * v / 10));
+  }
+}
+function receberDerrubar(e) {
+  if (!gradeDerruba) montarDerrubaveis();
+  const d = derrubaveis[e.i | 0]; if (!d) return;
+  derrubar(d, +e.dx || 0, +e.dz || 1, Math.min(60, +e.v || 5), false, null);
+}
 function montarPlacasRuas() {
   const poste = new THREE.MeshStandardMaterial({ color: '#2e3238', roughness: 0.6, metalness: 0.4 });
   const geo = new THREE.CylinderGeometry(0.05, 0.05, 2.7, 8);
@@ -707,10 +837,10 @@ function montarPlacasRuas() {
     const sx = i < N / 2 ? 1 : -1, sz = j < N / 2 ? 1 : -1;
     const px = X + sx * (RW / 2 + 0.7), pz = Z + sz * (RW / 2 + 0.7);
     const p = new THREE.Mesh(geo, poste); p.position.set(px, 0.18 + 1.35, pz); p.castShadow = true; scene.add(p);
-    colisores.push({ tipo: 'circ', x: px, z: pz, r: 0.12 });
+    const col = { tipo: 'circ', x: px, z: pz, r: 0.12 }; colisores.push(col);
     const a = textoSprite(RUAS_HORIZONTAIS[j], { escala: 0.5, fundo: '#1f6b3a' }); a.position.set(px, 3.15, pz); scene.add(a);
     const b = textoSprite(RUAS_VERTICAIS[i], { escala: 0.5, fundo: '#1f6b3a' }); b.position.set(px, 2.72, pz); scene.add(b);
-    placas.push(a, b);
+    placas.push(a, b); placasRua.push({ tipo: 'placa', x: px, z: pz, malhas: [p, a, b], col, nomes: [RUAS_HORIZONTAIS[j], RUAS_VERTICAIS[i]] });
   }
 }
 function atualizarPlacas() {
@@ -1579,6 +1709,7 @@ function acaoContexto() {
     else if (a?.[0] === 'jato') servicos.apagar(servicos.fogoProximo(jogador.carro?.servico === 'helicoptero_bombeiros' ? 28 : 15) || servicos.listaIncendios()[0]);
     else if (a?.[0] === 'socorrer') socorrerFerido(feridoProximo(7));
     else if (a?.[0] === 'abduzir') abduzir(alvoAbducao());
+    else if (/^v(Embarcar|Desembarcar|Estacionar)$/.test(a?.[0] || '')) executarViacao(a[0]);
     else sairCarro();
     return;
   }
@@ -1602,6 +1733,8 @@ function acaoContexto() {
   if (pertoContratante()) { abrirMissoes(); return; }
   if (pedraPerto()) { pegarPedra(); return; }
   if (bauPerto()) { comecarAbrirBau(); return; }
+  if (balcaoViacaoPerto()) { abrirViacao(); return; }
+  { const v = vagaViacaoPerto(); if (v) { pegarOnibusViacao(v); return; } }
   if (natalPerto()) { abrirCatalogoNatal(); return; }
   if (bruxoPerto()) { falarBruxo(); return; }
   if (jogador.perfil.prf) { const alvo = eleitoralProximo(2.4); if (alvo) { prenderEleitoral(alvo); return; } }
@@ -1871,6 +2004,7 @@ function sairCarro() {
     if (Math.hypot(t.x - jogador.pos.x, t.z - jogador.pos.z) > 2) { aviso('Pouse numa cidade ou na mata para descer.', 2.5); return; }
   }
   if (c.teste) { jogador.carro = null; modoVolante(false); scene.remove(c.mesh); jogador.pos.x += Math.cos(jogador.yaw) * 2.5; jogador.pos.z -= Math.sin(jogador.yaw) * 2.5; resolverColisao(jogador.pos, jogador.raio); jogador.avatar.raiz.visible = true; aviso('🧪 Veículo de teste guardado.', 2); return; }
+  if (c.servico === 'viacao') { sairOnibusViacao(); return; }
   if (c.servico === 'aviao') { jogador.carro = null; modoVolante(false); scene.remove(c.mesh); jogador.pos.x += 3; resolverColisao(jogador.pos, jogador.raio); jogador.avatar.raiz.visible = true; aviso('✈️ Avião devolvido ao hangar.', 2.5); return; }
   if (c.servico) {   // ambulância / caminhão dos bombeiros: fica estacionado onde você desceu
     jogador.carro = null; modoVolante(false);
@@ -1964,7 +2098,7 @@ function dirigir(dt) {
     const rx = jogador.pos.x + Math.sin(y0) * zr + Math.sin(y0) * c.vel * dt, rz = jogador.pos.z + Math.cos(y0) * zr + Math.cos(y0) * c.vel * dt;
     jogador.pos.x = rx - Math.sin(jogador.yaw) * zr; jogador.pos.z = rz - Math.cos(jogador.yaw) * zr;
   }
-  if (!c.voa) { colidirVeiculo(c, dt); resolverColisao(jogador.pos, c.raio || 1.3); }
+  if (!c.voa) { derrubarNoCaminho(c); colidirVeiculo(c, dt); resolverColisao(jogador.pos, c.raio || 1.3); }
   const andou = Math.hypot(jogador.pos.x - antes.x, jogador.pos.z - antes.z), esperado = Math.abs(c.vel) * dt;
   if (esperado > 0.01 && andou < esperado * 0.6) {          // bateu
     if (Math.abs(c.vel) > 6 && performance.now() - (c.batida || 0) > 1200) {
@@ -3672,7 +3806,7 @@ async function iniciarJogo(perfil) {
   try { montarEstacionamentos(); } catch (e) { console.warn('estacionamentos:', e); }
   try { montarOficinas(); } catch (e) { console.warn('oficinas:', e); }
   try { montarSirenes(); } catch (e) { console.warn('sirenes', e); } atualizarEstadoBau(); atualizarEstadoNatal();
-  montarMonumento();
+  montarMonumento(); try { montarViacao(); } catch (e) { console.warn('viacao', e); }
   desenharFundoMapa(); try { montarLocais(); } catch { /* sem locais */ }   // as oficinas e os estacionamentos entram no mapa e no teleporte
   servicos.iniciar({ ultra: () => visual.nivelAtual() === 'ultra', socorrista: socorristaNpc,
     scene, textoSprite, altura: alturaChao, jogador: () => jogador, perfil: () => jogador.perfil, aviso, agora: agoraServidor,
@@ -3772,6 +3906,7 @@ async function iniciarJogo(perfil) {
       const s = document.createElement('div'); s.id = 'sairFoto'; document.body.appendChild(s);
       setTimeout(() => { s.onpointerdown = () => { s.remove(); document.body.classList.remove('modoFoto'); if (jogador.etiqueta) jogador.etiqueta.visible = !nomeOculto; }; }, 600);
     },
+    viacaoEstado: () => rede.viacao.estado(), viacaoAdmin: (cfg) => rede.viacao.admin(cfg).then((e) => { viacao = e; aplicarVagasViacao(); conexao?.enviar('viacao', {}); return e; }),
     estadoNatal: () => natal, catalogoNatal: () => catalogoNatalCompleto(), natalAdmin: (cat, min) => natalAdmin(cat, min),
     natalIr: async () => { const o = await rede.natal.onde(); if (o?.x == null) throw new Error('Sem lugar definido.'); teleportar(o.x + 3, o.z + 3); return o; },
     estadoBau: () => bau, testarSirenes: () => { conexao?.enviar('sirene', { seg: 15 }); tocarSirenes(15, true); },
@@ -3848,7 +3983,7 @@ function conectarMultiplayer(perfil) {
     explosao: (e) => receberExplosao(e),
     voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, dm: (m) => { if (m?.para === jogador.perfil?.id && amigosIds.has(m.de)) celular.mensagemChegou(m.de, remotos.get(m.de)?.meta?.nome); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
-    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, navio: (e) => receberNavio(e),
+    abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, derrubar: (e) => receberDerrubar(e), danoQueda: (e) => { if (e.alvo === jogador.perfil?.id) danoNoMeuVeiculo(Math.min(40, Math.max(0, +e.d || 0))); }, viacao: () => atualizarEstadoViacao(), somSoco: (e) => sons.tocar(e.k ? 'soco1' : 'soco2', { vol: 0.85, dist: Math.hypot((+e.x || 0) - jogador.pos.x, (+e.z || 0) - jogador.pos.z), raio: 30 }), navio: (e) => receberNavio(e),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -4719,22 +4854,34 @@ function golpeSoco() {
     if (!n.policia) continue;
     const d = new THREE.Vector3().subVectors(n.av.raiz.position, jogador.pos); d.y = 0;
     const dist = d.length();
-    if (dist < 1.7 && dist > 0.01 && d.normalize().dot(f) > 0.5) { acertarPoliciaNPC(n, forca); return; }
+    if (dist < 1.7 && dist > 0.01 && d.normalize().dot(f) > 0.5) { somSoco(); acertarPoliciaNPC(n, forca); return; }
   }
   for (const n of npcs) {
     if (!n.civil || n.caido > 0 || !n.av.raiz.visible) continue;
     const d = new THREE.Vector3().subVectors(n.av.raiz.position, jogador.pos); d.y = 0;
     const dist = d.length();
-    if (dist < 1.7 && dist > 0.01 && d.normalize().dot(f) > 0.5) { acertarCivil(n, forca); return; }
+    if (dist < 1.7 && dist > 0.01 && d.normalize().dot(f) > 0.5) { somSoco(); acertarCivil(n, forca); return; }
   }
   for (const [id, r] of remotos) {
     if (!r.av?.raiz.visible) continue;
     const d = new THREE.Vector3().subVectors(r.av.raiz.position, jogador.pos); d.y = 0;
     const dist = d.length();
-    if (dist < 1.7 && dist > 0.01 && d.normalize().dot(f) > 0.5) { aplicarDanoRemoto(id, forca); return; }
+    if (dist < 1.7 && dist > 0.01 && d.normalize().dot(f) > 0.5) { somSoco(); aplicarDanoRemoto(id, forca); return; }
   }
   const c = caminhaoProximo(3.4);
-  if (c) atacarCaminhao(c);
+  if (c) { sons.tocar('soco_metal', { vol: 0.8, velocidade: 0.95 + Math.random() * 0.1 }); atacarCaminhao(c); return; }
+  if (metalNaFrente(f)) sons.tocar('soco_metal', { vol: 0.8, velocidade: 0.95 + Math.random() * 0.1 });   // carro, ônibus, avião, poste…
+}
+// 20e: soco que acerta gente (os dois sons se alternam) e soco em lata/ferro
+let socoAlt = 0;
+function somSoco() { socoAlt ^= 1; sons.tocar(socoAlt ? 'soco1' : 'soco2', { vol: 0.85, velocidade: 0.95 + Math.random() * 0.1 }); conexao?.enviar('somSoco', { x: r2(jogador.pos.x), z: r2(jogador.pos.z), k: socoAlt }); }
+function metalNaFrente(f) {
+  const px = jogador.pos.x + f.x * 1.3, pz = jogador.pos.z + f.z * 1.3;
+  for (const c of corposNaRua()) if (c.o && !c.pessoa && Math.hypot(c.x - px, c.z - pz) < (c.r || 1.4) + 0.5) return true;
+  if (mundo.carroRuaPerto(px, pz, 2.4)) return true;
+  for (const o of aviaoParado) if (o.mesh?.visible !== false && Math.hypot(o.x - px, o.z - pz) < 6) return true;
+  for (const p of postesDerrubaveis()) if (!p.caido && Math.hypot(p.x - px, p.z - pz) < 0.9) return true;
+  return false;
 }
 // mira das armas novas (e do tanque): só quem está usando vê. Mostra a curva da tinta e onde ela vai cair;
 // o círculo fica vermelho quando o tiro vai pegar em alguém.
@@ -5001,6 +5148,7 @@ function acaoNoVeiculo() {
   if (c.servico === 'helicoptero_bombeiros' && Math.abs(c.vel) < 3 && c.alt > 3 && c.alt < 40 && (servicos.estaApagando() || servicos.fogoProximo(28))) return ['jato', servicos.estaApagando() ? 'jogando água (toque para parar)' : 'jogar água do alto no fogo (+400)', 'Água'];
   if (c.servico === 'bombeiros' && Math.abs(c.vel) < 2 && (servicos.estaApagando() || servicos.fogoProximo(15))) return ['jato', servicos.estaApagando() ? 'jogando água (toque para parar)' : 'jogar água no fogo (+400)', 'Jato'];
   if (c.servico === 'ambulancia' && Math.abs(c.vel) < 2 && feridoProximo(7)) return ['socorrer', 'salvar o ferido (+250)', '✚ Salvar'];
+  { const v = acaoViacao(c); if (v) return v; }
   if (ehOvni(c)) { const alvo = alvoAbducao(); if (alvo) return ['abduzir', alvo.npc ? (alvo.npc.policia ? 'abduzir o policial robô' : 'abduzir o morador') : `abduzir ${alvo.r.meta?.nome || 'o jogador'} (ele não vê nada e acorda em outro lugar)`, '👽 Abduzir']; }
   return null;
 }
@@ -6296,20 +6444,28 @@ function efeitoPena(x, y, z, tipo) {
 function grasnar() {
   const j = jogador; if (j.ave?.tipo !== 'corvo') return;
   if (performance.now() - (grasnar.t || 0) < 900) return; grasnar.t = performance.now();
-  sons.tocar('corvo', { vol: 0.9 });
+  sons.tocar('corvos', { vol: 0.9 });   // 20d: o som de um corvo só (o antigo "corvo" saiu); todos usam o mesmo
   conexao?.enviar('ave', { id: j.perfil.id, som: 'corvo', x: j.pos.x, y: j.pos.y, z: j.pos.z });
   const u = j.ave.g.userData; u.fase += 2;   // um bater de asas
+  if (j.ave.bando) bandoResponde(j.pos.x, j.pos.z, 1 + Math.floor(Math.random() * 3));   // o bando responde: 2 ou 3 vozes juntas
+}
+// 20d: cada corvo do bando grasna com o mesmo som, um pouco depois e num tom um pouco diferente: juntos fica o efeito
+// de som dobrado/triplicado (um bando de verdade), e não mais uma gravação pronta de grupo
+function bandoResponde(x, z, n, vol = 0.75) {
+  const d = Math.hypot(x - jogador.pos.x, z - jogador.pos.z);
+  for (let i = 0; i < n; i++) setTimeout(() => sons.tocar('corvos', { vol: vol * (0.75 + Math.random() * 0.25), dist: d, raio: 90, velocidade: 0.9 + Math.random() * 0.2 }), 120 + i * (140 + Math.random() * 220));
 }
 function alternarBando() {
   const a = jogador.ave; if (a?.tipo !== 'corvo') return;
   a.bando = !a.bando;
-  if (a.bando) { sons.tocar('corvos', { vol: 0.9 }); conexao?.enviar('ave', { id: jogador.perfil.id, som: 'corvos', x: jogador.pos.x, y: jogador.pos.y, z: jogador.pos.z }); aviso('🐦‍⬛ Você chamou o bando: os corvos vêm voar com você e pousam em volta quando você pousa.', 3.5); }
+  if (a.bando) { sons.tocar('corvos', { vol: 0.9 }); bandoResponde(jogador.pos.x, jogador.pos.z, 3); conexao?.enviar('ave', { id: jogador.perfil.id, som: 'corvos', x: jogador.pos.x, y: jogador.pos.y, z: jogador.pos.z }); aviso('🐦‍⬛ Você chamou o bando: os corvos vêm voar com você e pousam em volta quando você pousa.', 3.5); }
   else { removerBando('eu'); aviso('🐦‍⬛ O bando foi embora.', 2); }
 }
 function somAveRemoto(m) {
   if (!m || m.id === jogador.perfil?.id) return;
   const d = Math.hypot(m.x - jogador.pos.x, m.z - jogador.pos.z);
-  sons.tocar(m.som === 'corvos' ? 'corvos' : 'corvo', { vol: 0.9, dist: d, raio: 90 });
+  sons.tocar('corvos', { vol: 0.9, dist: d, raio: 90 });
+  if (m.som === 'corvos' || remotos.get(m.id)?.alvo?.bd) bandoResponde(m.x, m.z, m.som === 'corvos' ? 3 : 1 + Math.floor(Math.random() * 3));   // chamou o bando / o bando dele responde
 }
 const bandos = new Map();   // dono ('eu' ou id do jogador) -> { aves: [...], somEm }
 function removerBando(dono) { const b = bandos.get(dono); if (!b) return; for (const c of b.aves) scene.remove(c.g); bandos.delete(dono); }
@@ -6343,7 +6499,7 @@ function atualizarBandos(dt) {
       c.g.rotation.z = donoVoando ? -0.35 * Math.sign(c.vel) : 0;
       animarAve(c.g, dt, voando, voando && donoVoando && Math.sin(c.ang * 2) > 0.2);
     }
-    if (!longe && t > b.somEm) { b.somEm = t + 18 + Math.random() * 14; sons.tocar('corvos', { vol: 0.55, dist: Math.hypot(o.x - jogador.pos.x, o.z - jogador.pos.z), raio: 90 }); }
+    if (!longe && t > b.somEm) { b.somEm = t + 18 + Math.random() * 14; bandoResponde(o.x, o.z, 1 + Math.floor(Math.random() * 3), 0.55); }   // de vez em quando 1 a 3 corvos grasnam
   }
 }
 
@@ -6630,6 +6786,182 @@ async function natalAdmin(catalogo, testeMin) {
   natalAvisou = false; tirarNatal(); await atualizarEstadoNatal();
   if (testeMin != null) conexao?.enviar('natal', {});
   return r;
+}
+// ---- 20e: Viação Expresso Fator. Pátio no quarteirão a leste da Rodoviária (x 275..319, z -265..-221): 7 vagas de
+// ônibus, escritório com balcão (cadastro, viagens, compra), portão de entrada de ônibus (leste), saída (sul) e
+// entrada de pedestres (sul, do lado do escritório). Viagem: pega o ônibus na vaga, busca os passageiros numa cidade,
+// leva até outra sem paradas (rota no mapa), recebe e devolve o ônibus vazio na mesma vaga.
+const VIACAO = { x0: 278, x1: 316.5, z0: -262, z1: -224, vz: -254, vx: (i) => 292 + i * 3.85, balcao: { x: 283.6, z: -256.6 },
+  escr: { x0: 278.6, x1: 289, z0: -261.5, z1: -250 }, nVagas: 7 };
+const VIACAO_PONTOS = [{ x: 135, z: -230, nome: 'Rodoviária da Metrópole' }, { x: 69, z: -931, nome: 'Rodoviária de Vila Serra' }, { x: 69, z: 931, nome: 'Rodoviária de Porto Sul' }];
+const VIACAO_MODELOS = ['onibus_rod_dourado', 'onibus_rod_amarelo', 'onibus_rod_vermelho', 'onibus_rod_branco'];
+let viacao = null, viacaoVagas = [], viacaoTeto = null, tViacao = 0, viacaoNpcs = null, viacaoCena = null;
+function montarViacao() {
+  const y = 0.18, Q = VIACAO;
+  mundo.liberarQuadra(297, -243);
+  const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, ...o });
+  const plano = (x, z, w, d, m, h) => { const o = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), m); o.position.set(x, h, z); o.receiveShadow = true; scene.add(o); return o; };
+  const caixa = (x, yy, z, w, h, d, m, col = true) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, yy + h / 2, z); o.castShadow = true; o.receiveShadow = true; scene.add(o); if (col) colisores.push({ tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 }); return o; };
+  // piso: asfalto do pátio, faixas das vagas e o caminho de pedestres (amarelo) até o escritório
+  plano((Q.x0 + Q.x1) / 2, (Q.z0 + Q.z1) / 2, Q.x1 - Q.x0, Q.z1 - Q.z0, mat('#3b3f46', { roughness: 0.9 }), y + 0.012);
+  mundo.addPiso({ x0: Q.x0, x1: Q.x1, z0: Q.z0, z1: Q.z1, h: y });
+  const branco = new THREE.MeshBasicMaterial({ color: '#e8e8e8' }), amarelo = new THREE.MeshBasicMaterial({ color: '#f2c230' });
+  for (let i = 0; i <= Q.nVagas; i++) plano(Q.vx(i) - 1.925, -254.5, 0.14, 15, branco, y + 0.02);
+  plano(303.5, -246.8, 27, 0.14, branco, y + 0.02);
+  plano(283.6, -237, 2.6, 26, amarelo, y + 0.02); plano(283.6, -237, 2.2, 26, mat('#4a4f57'), y + 0.021);
+  for (let k = 0; k < 6; k++) plano(283.6, -247 + k * 4, 2.2, 0.5, amarelo, y + 0.022);
+  // cerca (alambrado) com os portões
+  const tela = mat('#8f969e', { metalness: 0.5, roughness: 0.5, transparent: true, opacity: 0.55 }), ferro = mat('#5b6168', { metalness: 0.5, roughness: 0.5 });
+  const cerca = (x0, z0, x1, z1) => {
+    const L = Math.hypot(x1 - x0, z1 - z0), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, vert = x0 === x1;
+    const t = new THREE.Mesh(new THREE.BoxGeometry(vert ? 0.05 : L, 2, vert ? L : 0.05), tela); t.position.set(cx, y + 1, cz); scene.add(t);
+    for (let k = 0; k <= Math.round(L / 3); k++) { const f = k / Math.max(1, Math.round(L / 3)); caixa(x0 + (x1 - x0) * f, y, z0 + (z1 - z0) * f, 0.1, 2.2, 0.1, ferro, false); }
+    colisores.push({ tipo: 'caixa', x0: Math.min(x0, x1) - 0.15, x1: Math.max(x0, x1) + 0.15, z0: Math.min(z0, z1) - 0.15, z1: Math.max(z0, z1) + 0.15 });
+  };
+  cerca(Q.x0, Q.z0, Q.x1, Q.z0); cerca(Q.x0, Q.z0, Q.x0, Q.z1);
+  cerca(Q.x0, Q.z1, 282, Q.z1); cerca(285.2, Q.z1, 302, Q.z1); cerca(314, Q.z1, Q.x1, Q.z1);   // sul: pedestres (282..285,2) e saída (302..314)
+  cerca(Q.x1, Q.z0, Q.x1, -246); cerca(Q.x1, -234, Q.x1, Q.z1);                                 // leste: entrada dos ônibus (-246..-234)
+  for (const [x, z, t, a] of [[Q.x1 + 0.6, -240, '⬅️ ENTRADA DE ÔNIBUS', Math.PI / 2], [308, Q.z1 + 0.6, '⬇️ SAÍDA DE ÔNIBUS', 0], [283.6, Q.z1 + 0.6, '🚶 PEDESTRES', 0]]) {
+    const r = rotuloSimples(t, a ? 6 : 5); r.position.set(x, y + 2.9, z); scene.add(r);
+  }
+  // escritório: paredes com a porta virada para o pátio (sul), balcão, atendente e teto (some quando o jogador entra)
+  const E = Q.escr, parede = mat('#e6dfd2'), vidro = mat('#9cc6e0', { metalness: 0.3, roughness: 0.1, transparent: true, opacity: 0.6 });
+  caixa((E.x0 + E.x1) / 2, y, E.z0, E.x1 - E.x0, 3.4, 0.25, parede); caixa(E.x0, y, (E.z0 + E.z1) / 2, 0.25, 3.4, E.z1 - E.z0, parede); caixa(E.x1, y, (E.z0 + E.z1) / 2, 0.25, 3.4, E.z1 - E.z0, parede);
+  caixa((E.x0 + 282) / 2, y, E.z1, 282 - E.x0, 3.4, 0.25, parede); caixa((285.2 + E.x1) / 2, y, E.z1, E.x1 - 285.2, 3.4, 0.25, parede);   // porta entre x 282 e 285,2
+  caixa(283.6, y + 2.5, E.z1, 3.2, 0.9, 0.25, parede, false);
+  for (const x of [280.3, 287.2]) caixa(x, y + 1, E.z1 + 0.02, 1.6, 1.3, 0.27, vidro, false);
+  plano((E.x0 + E.x1) / 2, (E.z0 + E.z1) / 2, E.x1 - E.x0 - 0.3, E.z1 - E.z0 - 0.3, mat('#b9b2a5'), y + 0.03);
+  caixa(283.6, y, -259, 6, 1.1, 0.7, mat('#2f5d8a'));   // balcão
+  caixa(279.6, y, -252.8, 0.8, 0.9, 2.4, mat('#3a3f47'), true);   // banco de espera
+  viacaoTeto = new THREE.Mesh(new THREE.BoxGeometry(E.x1 - E.x0 + 0.6, 0.35, E.z1 - E.z0 + 0.6), mat('#7a2e2e')); viacaoTeto.position.set((E.x0 + E.x1) / 2, y + 3.55, (E.z0 + E.z1) / 2); viacaoTeto.castShadow = true; scene.add(viacaoTeto);
+  const placa = rotuloSimples('🚌 VIAÇÃO EXPRESSO FATOR', 10); placa.position.set(283.8, y + 5.2, -249.5); scene.add(placa);
+  const pg = rotuloSimples('📋 Cadastro · Viagens · Venda de ônibus', 6); pg.position.set(283.6, y + 2.5, -259); scene.add(pg);
+  criarAvatar('personagens', 'Pai_Familia').then((av) => { av.raiz.position.set(283.6, y, -260.6); av.raiz.rotation.y = 0; scene.add(av.raiz); av.tocar('idle'); avataresObra.add(av); }).catch(() => {});
+  // ônibus nas vagas (somem enquanto estão em viagem)
+  for (let i = 0; i < Q.nVagas; i++) viacaoVagas.push({ i, x: Q.vx(i), z: Q.vz, mesh: null, modelo: '', col: { tipo: 'caixa', x0: Q.vx(i) - 1.35, x1: Q.vx(i) + 1.35, z0: Q.vz - 7, z1: Q.vz + 7, off: true } });
+  for (const v of viacaoVagas) colisores.push(v.col);
+  atualizarEstadoViacao();
+}
+function aplicarVagasViacao() {
+  const cfg = viacao?.vagas || [], uso = new Set(viacao?.em_uso || []);
+  for (const v of viacaoVagas) {
+    const mod = cfg[v.i] || '';
+    if (v.modelo !== mod) { if (v.mesh) scene.remove(v.mesh); v.mesh = null; v.modelo = mod; }
+    if (mod && !v.mesh && civico.CARROS[mod]) { v.mesh = civico.modeloCarro(mod, '#ffffff'); v.mesh.position.set(v.x, 0.18, v.z); v.mesh.rotation.y = 0; scene.add(v.mesh); }
+    const aqui = !!(v.mesh && !uso.has(v.i));
+    if (v.mesh) v.mesh.visible = aqui;
+    v.col.off = !aqui;
+  }
+}
+async function atualizarEstadoViacao() {
+  try { viacao = await rede.viacao.estado(); } catch { viacao = viacao || null; }
+  aplicarVagasViacao();
+}
+function avisarViacao() { atualizarEstadoViacao().then(() => conexao?.enviar('viacao', {})); }
+const balcaoViacaoPerto = () => !jogador.carro && Math.hypot(jogador.pos.x - VIACAO.balcao.x, jogador.pos.z - VIACAO.balcao.z) < 2.3;
+function vagaViacaoPerto() {
+  if (jogador.carro || !viacao?.motorista || viacao.minha) return null;
+  for (const v of viacaoVagas) if (v.mesh?.visible && Math.abs(jogador.pos.x - v.x) < 2.8 && Math.abs(jogador.pos.z - v.z) < 8) return v;
+  return null;
+}
+function nomeOnibus(m) { return civico.CARROS[m]?.nome || 'Ônibus'; }
+function abrirViacao() {
+  const v = viacao, h = (m) => `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
+  if (!v) { aviso('Carregando a Viação…', 2); atualizarEstadoViacao(); return; }
+  const ops = [];
+  if (!v.motorista) ops.push({ rotulo: `📝 Cadastrar como motorista (precisa de ${h(v.exp_min)} na carreira de ônibus; você tem ${h(v.minutos)})`, fn: () => rede.viacao.cadastrar().then((e) => { viacao = e; aviso('✅ Cadastrado na Viação Expresso Fator! Pegue um ônibus no pátio para começar uma viagem.', 5); }).catch((e) => aviso(e.message, 4)) });
+  ops.push({ rotulo: '🛒 Comprar um ônibus', fn: () => escolher('🛒 Ônibus à venda', `Vai para os seus veículos (☰ › 🚗 Veículos) e aparece na saída do pátio. Você tem ${num(jogador.perfil.moedas)} moedas.`,
+    VIACAO_MODELOS.map((m) => ({ rotulo: `${nomeOnibus(m)} · ${num(v.precos?.[m])} moedas`, fn: () => escolher('Confirmar compra', `Comprar o ${nomeOnibus(m)} por ${num(v.precos?.[m])} moedas?`, [
+      { rotulo: '✅ Comprar', fn: () => rede.viacao.comprar(m).then(() => { aviso(`🚌 ${nomeOnibus(m)} comprado! Está na saída do pátio.`, 5); atualizarPerfilDepois(); }).catch((e) => aviso(e.message, 4)) },
+      { rotulo: 'Cancelar', fn: () => {} }]) }))) });
+  if (v.motorista) ops.push({ rotulo: '🚪 Sair da Viação', fn: () => rede.viacao.sair().then(() => { aviso('Você saiu da Viação.', 3); atualizarEstadoViacao(); }).catch((e) => aviso(e.message, 3)) });
+  ops.push({ rotulo: 'Fechar', fn: () => {} });
+  escolher('🚌 Viação Expresso Fator', `Viagens rodoviárias entre a Metrópole, Vila Serra e Porto Sul, sem paradas. <b>${num(v.salario)} moedas</b> por viagem completa.<br>
+    ${v.motorista ? `✅ Você é motorista da Viação · ${v.viagens || 0} viagem(ns) feitas. Pegue um ônibus livre no pátio.` : `Para trabalhar aqui: ${h(v.exp_min)} de experiência como motorista de ônibus.`}`, ops);
+}
+function pegarOnibusViacao(v) {
+  rede.viacao.pegar(v.i, jogador.pos.x, jogador.pos.z).then((e) => {
+    viacao = e; aplicarVagasViacao(); conexao?.enviar('viacao', {});
+    entrarOnibusViacao(v);
+    const o = VIACAO_PONTOS[e.minha.origem], d = VIACAO_PONTOS[e.minha.destino];
+    rastrear({ nome: `🧍 Embarque: ${o.nome}`, x: o.x, z: o.z });
+    aviso(`🚌 Viagem: ${e.minha.pass} passageiros de ${o.nome} para ${d.nome}, sem paradas. Siga a rota roxa até o embarque.`, 6);
+  }).catch((e) => aviso(e.message, 4));
+}
+function entrarOnibusViacao(v) {
+  if (jogador.armado) alternarArma();
+  const m = civico.modeloCarro(v.modelo, '#ffffff'); m.position.set(v.x, 0.18, v.z); m.rotation.y = 0; scene.add(m);
+  modoVolante(true);
+  jogador.carro = { id: 'v' + jogador.perfil.id.slice(0, 8), servico: 'viacao', modelo: v.modelo, cor: '#ffffff', vel: 0, mesh: m, salvar: 1e9, max: civico.CARROS[v.modelo].vel, raio: 1.9, voa: false, alt: 0, vaga: v.i };
+  jogador.pos.set(m.position.x, alturaChao(m.position.x, m.position.z), m.position.z); jogador.yaw = 0; jogador.alvo = null;
+  jogador.avatar.raiz.visible = false;
+}
+function terminarOnibusViacao(msg) {
+  const c = jogador.carro; if (c?.servico !== 'viacao') return;
+  jogador.carro = null; modoVolante(false); scene.remove(c.mesh);
+  jogador.pos.x += 2.6; resolverColisao(jogador.pos, jogador.raio); jogador.avatar.raiz.visible = true;
+  rastrear(null); if (msg) aviso(msg, 4);
+}
+function sairOnibusViacao() {
+  const c = jogador.carro, u = viacao?.minha;
+  if (u?.fase === 'voltar' && Math.hypot(jogador.pos.x - VIACAO.vx(c.vaga), jogador.pos.z - VIACAO.vz) < 9) { estacionarViacao(); return; }
+  escolher('🚌 Desistir da viagem?', 'Se descer agora, o ônibus volta sozinho para a garagem e a viagem não é paga.', [
+    { rotulo: '🚌 Continuar dirigindo', fn: () => {} },
+    { rotulo: '🚪 Desistir e descer', fn: () => rede.viacao.devolver(jogador.pos.x, jogador.pos.z, true).catch(() => {}).then(() => { terminarOnibusViacao('O ônibus voltou para a garagem.'); avisarViacao(); }) }]);
+}
+function estacionarViacao() {
+  rede.viacao.devolver(jogador.pos.x, jogador.pos.z, false).then(() => { terminarOnibusViacao('🅿️ Ônibus estacionado na vaga. Pegue outro quando quiser.'); avisarViacao(); }).catch((e) => aviso(e.message, 3));
+}
+// ação do botão dentro do ônibus da Viação
+function acaoViacao(c) {
+  const u = viacao?.minha; if (!u || c.servico !== 'viacao' || Math.abs(c.vel) > 1.5 || viacaoCena) return null;
+  const o = VIACAO_PONTOS[u.origem], d = VIACAO_PONTOS[u.destino], perto = (p) => Math.hypot(jogador.pos.x - p.x, jogador.pos.z - p.z) < 18;
+  if (u.fase === 'buscar' && perto(o)) return ['vEmbarcar', `embarcar os ${u.pass} passageiros`, '🧍 Embarcar'];
+  if (u.fase === 'levar' && perto(d)) return ['vDesembarcar', `desembarcar os ${u.pass} passageiros (+${num(viacao.salario)})`, '🧍 Desembarcar'];
+  if (u.fase === 'voltar' && Math.hypot(jogador.pos.x - VIACAO.vx(c.vaga), jogador.pos.z - VIACAO.vz) < 9) return ['vEstacionar', 'estacionar o ônibus na vaga', '🅿️ Estacionar'];
+  return null;
+}
+function executarViacao(k) {
+  const u = viacao?.minha; if (!u) return;
+  if (k === 'vEstacionar') { estacionarViacao(); return; }
+  const emb = k === 'vEmbarcar';
+  (emb ? rede.viacao.embarcar(jogador.pos.x, jogador.pos.z) : rede.viacao.desembarcar(jogador.pos.x, jogador.pos.z)).then((r) => {
+    cenaPassageiros(emb);
+    if (emb) { viacao = r; const d = VIACAO_PONTOS[viacao.minha.destino]; rastrear({ nome: `🚌 Destino: ${d.nome}`, x: d.x, z: d.z }); aviso(`🧍 ${u.pass} passageiros embarcaram. Leve até ${d.nome}, sem paradas!`, 5); }
+    else { viacao.minha = { ...u, fase: 'voltar' }; atualizarPerfilDepois(); rastrear({ nome: '🅿️ Garagem da Viação', x: VIACAO.vx(u.vaga), z: VIACAO.vz }); aviso(`💰 Viagem completa: +${num(r)} moedas! Volte com o ônibus vazio para a garagem.`, 6); }
+  }).catch((e) => aviso(e.message, 3));
+}
+// passageiros (alguns NPCs representam o grupo): embarcando, andam até a porta e entram; desembarcando, saem e se espalham
+function cenaPassageiros(embarcar) {
+  const c = jogador.carro; if (!c?.mesh) return;
+  const m = c.mesh, fx = Math.sin(m.rotation.y), fz = Math.cos(m.rotation.y), rx = Math.cos(m.rotation.y), rz = -Math.sin(m.rotation.y);
+  const L = civico.CARROS[c.modelo] ? (c.modelo === 'onibus_rod_branco' ? 10.5 : c.modelo === 'onibus_rod_vermelho' ? 11.5 : 14) : 12;
+  const porta = { x: m.position.x + fx * (L / 2 - 1.6) - rx * 1.9, z: m.position.z + fz * (L / 2 - 1.6) - rz * 1.9 };
+  if (!viacaoNpcs) {
+    viacaoNpcs = [];
+    PERSONAGENS_GRATIS.slice(0, 6).forEach((id) => criarAvatar('personagens', id).then((av) => { av.raiz.visible = false; scene.add(av.raiz); avataresObra.add(av); viacaoNpcs.push(av); }).catch(() => {}));
+  }
+  const lista = viacaoNpcs.map((av, k) => {
+    const longe = { x: porta.x - rx * (5 + k * 1.1) + fx * ((k % 3) - 1) * 2.2, z: porta.z - rz * (5 + k * 1.1) + fz * ((k % 3) - 1) * 2.2 };
+    return { av, de: embarcar ? longe : porta, para: embarcar ? porta : longe, t: -k * 0.45 };
+  });
+  viacaoCena = { lista, dur: 3.2, fim: performance.now() + 9000 };
+}
+function tickViacao(dt) {
+  if (!viacaoVagas.length) return;
+  if ((tViacao -= dt) <= 0) { tViacao = 25; atualizarEstadoViacao(); }
+  if (viacaoTeto) { const E = VIACAO.escr, dentro = jogador.pos.x > E.x0 && jogador.pos.x < E.x1 && jogador.pos.z > E.z0 && jogador.pos.z < E.z1 + 0.6; viacaoTeto.visible = !dentro; }
+  const cena = viacaoCena; if (!cena) return;
+  let viva = false;
+  for (const p of cena.lista) {
+    p.t += dt; const k = Math.min(1, Math.max(0, p.t / cena.dur));
+    if (p.t < 0) { p.av.raiz.visible = false; viva = true; continue; }
+    if (k >= 1) { p.av.raiz.visible = false; continue; }
+    viva = true; const x = p.de.x + (p.para.x - p.de.x) * k, z = p.de.z + (p.para.z - p.de.z) * k;
+    p.av.raiz.visible = true; p.av.raiz.position.set(x, alturaChao(x, z), z); p.av.raiz.rotation.y = Math.atan2(p.para.x - p.de.x, p.para.z - p.de.z);
+    if (p.av.nomeAtual !== 'walk') p.av.tocar('walk');
+  }
+  if (!viva || performance.now() > cena.fim) { for (const p of cena.lista) p.av.raiz.visible = false; viacaoCena = null; }
 }
 function criarBruxo() {
   const g = new THREE.Group(), glb = modelos.npc_bruxo;
@@ -8668,6 +9000,13 @@ const relogio = new THREE.Clock();
 const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
 let tempoMapa = 0;
 
+// 20e: passos do jogador, conforme o chão (rua/calçada/dentro de casa = duro; o resto = grama/mato) e o ritmo
+function passos(j, vel) {
+  if (!(vel > 0) || j.carro || j.ave || j.morto || j.pulo || j.trem || j.embarcado || j.algemado) return;
+  const duro = !!j.dentroCasa || mundo.naRua(j.pos.x, j.pos.z, 3.6) || j.pos.y > alturaChao(j.pos.x, j.pos.z) + 0.6;
+  const corre = vel > VELOCIDADE.andar * 1.25, r = THREE.MathUtils.clamp(vel / (corre ? VELOCIDADE.correr : VELOCIDADE.andar), 0.8, 1.25);
+  sons.continuo(corre ? (duro ? 'correr_asfalto' : 'correr_grama') : (duro ? 'passos_calcada' : 'passos_mato'), corre ? 0.34 : 0.3, r);
+}
 function atualizarJogador(dt) {
   const j = jogador, av = j.avatar;
   for (let i = j.eventos.length - 1; i >= 0; i--) { j.eventos[i].t -= dt; if (j.eventos[i].t <= 0) { j.eventos[i].fn(); j.eventos.splice(i, 1); } }
@@ -8769,6 +9108,7 @@ function atualizarJogador(dt) {
       else if (voz.estaFalando() || performance.now() < (j.falaAte || 0)) av.tocar(gestoConversa(av, j));
       else av.tocar('idle');
     }
+    passos(j, vel);
   }
   if (j.emote === 'beber' && forca > 0.15) j.emote = null;   // andou: para de beber
   if (j.emote === 'celular' && forca > 0.15) celular.fechar();   // andou: guarda o celular
@@ -9213,6 +9553,8 @@ function contexto() {
   if (jogador.perfil?.policial && procuradoProximo(2.4)) return ['algemar e prender o procurado', 'Prender'];
   if (pedraPerto()) return ['pegar a pedra preciosa e invocar o Bruxo', '💎 Pegar'];
   if (bauPerto()) return ['abrir o baú do tesouro (5 s parado do lado)', '🗝️ Abrir'];
+  if (balcaoViacaoPerto()) return ['Viação Expresso Fator: cadastro, viagens e compra de ônibus', '🚌 Viação'];
+  if (vagaViacaoPerto()) return [`pegar o ${nomeOnibus(vagaViacaoPerto().modelo)} para uma viagem`, '🚌 Pegar'];
   if (natalPerto()) return [natal?.ja_peguei ? 'falar com o Papai Noel' : 'escolher seu presente do Papai Noel', '🎅 Presente'];
   if (bruxoPerto()) return ['falar com o Bruxo: faça o seu pedido', '🧙 Falar'];
   if (jogador.perfil?.prf && eleitoralProximo(2.4)) return ['prender por crime eleitoral (PRF)', 'Prender'];
@@ -9440,7 +9782,7 @@ function quadroJogo() {
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
   if (contratante?.avatar) contratante.avatar.mixer.update(dt);
-  atualizarBolas(dt); atualizarSirenes(); tickBau(dt); tickNatal(dt);
+  atualizarBolas(dt); atualizarSirenes(); tickBau(dt); tickNatal(dt); atualizarQuedas(dt); tickViacao(dt);
   diag('câmera/oclusão');
   atualizarCamera(dt);
   mundo.atualizarOclusao(dt, foco(), modo3D() ? new THREE.Vector3(0, 1, 0) : offsetCamera(anguloCamSuave));
