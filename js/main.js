@@ -3238,6 +3238,43 @@ function manchar(p, normal, cor) {
   scene.add(m); manchas.push(m);
   if (manchas.length > 80) { const v = manchas.shift(); scene.remove(v); v.material.dispose(); }
 }
+// 21b: paredes seguram a bala: as do civil (prefeitura, banco…), as do mapa (casas, prédios, muros — antes atravessava)
+// e os prédios. Testa o ponto e o meio do passo (bala rápida não pula parede fina). Muro baixo só segura até a altura dele.
+const _vMeio = new THREE.Vector3(), _rcTopo = new THREE.Raycaster();
+// altura de verdade de uma parede/muro (os colisores não guardam): um raio de cima para baixo nos modelos do mapa,
+// medido uma vez por colisor e guardado (c.top). Usado no pulo (muro baixo × alto) e nas balas (por cima do muro passa)
+function medirTopo(x, z) {
+  const chao = alturaChao(x, z);
+  _rcTopo.set(new THREE.Vector3(x, chao + 12, z), new THREE.Vector3(0, -1, 0)); _rcTopo.far = 12.2; _rcTopo.camera = camP;
+  const ign = (o) => { for (let k = o; k; k = k.parent) if (k === jogador.avatar?.raiz || k.userData?.efeito || k.isSprite) return true; return false; };
+  for (const h of _rcTopo.intersectObjects(scene.children, true)) {
+    if (!h.object.isMesh || !h.object.visible || ign(h.object) || h.object.material?.transparent && h.object.material.opacity < 0.5) continue;
+    if (h.point.y > chao + 0.15) return h.point.y;
+  }
+  return null;
+}
+function topoColisor(c) {
+  if (c.top != null || c.tipo !== 'caixa') return c.top;
+  const t = medirTopo(THREE.MathUtils.clamp((c.x0 + c.x1) / 2, c.x0 + 0.05, c.x1 - 0.05), THREE.MathUtils.clamp((c.z0 + c.z1) / 2, c.z0 + 0.05, c.z1 - 0.05));
+  c.top = t ?? 7; return c.top;
+}
+function balaNaParede(ant, p) {
+  _vMeio.addVectors(ant, p).multiplyScalar(0.5);
+  for (const q of [_vMeio, p]) {
+    let achou = null;
+    const ver = (lista) => { if (achou) return; for (const c of lista) {
+      if (c.tipo !== 'caixa' || c.off) continue;
+      if (q.x > c.x0 - 0.12 && q.x < c.x1 + 0.12 && q.z > c.z0 - 0.12 && q.z < c.z1 + 0.12 && q.y < topoColisor(c)) { achou = c; return; }
+    } };
+    ver(colisores); if (!achou) mundo.colidir(q, 0.12, (l) => ver(l));
+    if (!achou) for (const pr of predios) { const bx = pr.caixa; if (q.x > bx.min.x && q.x < bx.max.x && q.z > bx.min.z && q.z < bx.max.z && q.y > bx.min.y && q.y < bx.max.y) { achou = { x0: bx.min.x, x1: bx.max.x, z0: bx.min.z, z1: bx.max.z }; break; } }
+    if (achou) {
+      const c = achou, cx = (c.x0 + c.x1) / 2, cz = (c.z0 + c.z1) / 2;
+      return Math.abs(ant.x - cx) / Math.max(0.01, c.x1 - c.x0) > Math.abs(ant.z - cz) / Math.max(0.01, c.z1 - c.z0) ? new THREE.Vector3(Math.sign(ant.x - cx), 0, 0) : new THREE.Vector3(0, 0, Math.sign(ant.z - cz));
+    }
+  }
+  return null;
+}
 function atualizarBolas(dt) {
   atualizarFaiscas(dt);
   for (let i = bolas.length - 1; i >= 0; i--) {
@@ -3248,15 +3285,7 @@ function atualizarBolas(dt) {
     if (b.laser) { b.m.quaternion.setFromUnitVectors(EIXO_Z, _vf.copy(b.v).normalize()); b.m.scale.z = Math.min(1, Math.max(0.001, b.m.position.distanceTo(b.ini) / 2.5)); }
     let fim = false;
     if (b.minha) fim = acertoNoAlvo(b) || acertoDaBola(b);
-    if (!fim) for (const c of colisores) {
-      if (c.tipo !== 'caixa') continue;
-      const p = b.m.position;
-      if (p.x > c.x0 - 0.2 && p.x < c.x1 + 0.2 && p.z > c.z0 - 0.2 && p.z < c.z1 + 0.2 && p.y < 7) {
-        const n = Math.abs(ant.x - (c.x0 + c.x1) / 2) / (c.x1 - c.x0) > Math.abs(ant.z - (c.z0 + c.z1) / 2) / (c.z1 - c.z0)
-          ? new THREE.Vector3(Math.sign(ant.x - (c.x0 + c.x1) / 2), 0, 0) : new THREE.Vector3(0, 0, Math.sign(ant.z - (c.z0 + c.z1) / 2));
-        manchar(ant, n, b.cor); fim = true; break;
-      }
-    }
+    if (!fim) { const n = balaNaParede(ant, b.m.position); if (n) { manchar(ant, n, b.cor); fim = true; } }
     const chao = alturaChao(b.m.position.x, b.m.position.z);
     if (!fim && (b.m.position.y <= chao + 0.02 || b.vida <= 0)) { manchar(new THREE.Vector3(b.m.position.x, chao + 0.01, b.m.position.z), new THREE.Vector3(0, 1, 0), b.cor); fim = true; }
     if (fim && b.tanque && b.minha && !b.explodiu) { b.explodiu = true; explodir(b.m.position); }
@@ -19675,11 +19704,12 @@ function pular() {
     // veículo na frente (carro, ônibus, caminhão): a altura vem do próprio modelo. Antes um ônibus de 3 m era tratado como
     // "baixo" e o personagem atravessava a lataria num salto de 1 m.
     const hv = topo == null ? alturaVeiculoEm(x0 + dx * (ini + fim) / 2, z0 + dz * (ini + fim) / 2) : null;
+    if (topo == null && hv == null) { const t = medirTopo(x0 + dx * (ini + 0.15), z0 + dz * (ini + 0.15)); if (t != null) topo = t; }   // 21b: mede o muro de verdade
     const alt = topo != null ? topo - alturaChao(x0, z0) : hv;
     if (alt != null && alt > ALTURA_MAX_PULO) { aviso('🧱 Alto demais para pular.', 2); return; }
     const baixo = (alt != null ? alt <= 1.6 : false) || (alt == null && ([...barricadasMundo.values()].some((b) => Math.hypot(b.d.x - xm, b.d.z - zm) < 3) || !bloqueado(xm, zm, true)));   // mureta, carro baixo ou barricada
     const para = { x: x0 + dx * fim, z: z0 + dz * fim };
-    if (baixo && topo != null && av.clipes?.pular_muro && av.clipes?.pular_muro_parado) {   // 21a: muro baixo de verdade: apoia a mão e passa por cima
+    if (baixo && (topo != null || hv != null) && av.clipes?.pular_muro && av.clipes?.pular_muro_parado) {   // 21a: muro baixo ou carro: apoia a mão e passa por cima
       // em movimento: passa embalado; parado: apoia as duas mãos, sobe e passa. A animação já sobe o quadril ~0,55 m
       // (o suficiente para um muro de ~1 m); mais alto que isso o corpo sobe o que falta
       const nome = correndo ? 'pular_muro' : 'pular_muro_parado', vel = correndo ? 1.3 : 1.4;
