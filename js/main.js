@@ -17838,10 +17838,13 @@ function cruzDaMira(on) {
   let el = $('miraCentro');
   if (!el) {
     if (!on) return;
-    el = document.createElement('div'); el.id = 'miraCentro'; el.innerHTML = '<i class="c"></i><i class="b"></i><i class="e"></i><i class="d"></i><b></b><s class="x1"></s><s class="x2"></s><s class="x3"></s><s class="x4"></s>'; document.body.appendChild(el);
+    el = document.createElement('div'); el.id = 'miraCentro'; el.innerHTML = '<u class="y1"></u><u class="y2"></u><i class="c"></i><i class="b"></i><i class="e"></i><i class="d"></i><b></b><s class="x1"></s><s class="x2"></s><s class="x3"></s><s class="x4"></s>'; document.body.appendChild(el);
   }
   el.classList.toggle('oculto', !on);
-  if (on) { const ac = performance.now() < (miraC.acertoAte || 0); if (ac !== el.classList.contains('acerto')) el.classList.toggle('acerto', ac); }   // 20u: vermelha só quando acerta
+  if (on) {
+    const ac = performance.now() < (miraC.acertoAte || 0); if (ac !== el.classList.contains('acerto')) el.classList.toggle('acerto', ac);   // 20u: vermelha só quando acerta
+    const na = miraC.tipo === 'pessoa'; if (na !== el.classList.contains('noalvo')) el.classList.toggle('noalvo', na);   // 20v: X amarelo = pessoa à vista sob a cruz, no alcance
+  }
 }
 function atualizarMiraManual(dt = 0.016) {
   if (jogador.granadaNaMao && (jogador.carro || jogador.passageiro || jogador.morto)) { jogador.granadaNaMao = false; const bt = $('btTiro'); if (bt) { bt.innerHTML = 'Atirar'; bt.classList.toggle('oculto', !jogador.armado); } }
@@ -17851,7 +17854,7 @@ function atualizarMiraManual(dt = 0.016) {
   else if (!on && miraC.ligada) { miraC.ligada = false; if (jogador.etiqueta) jogador.etiqueta.visible = !nomeOculto; miraC.perto = null; miraC.tipo = null; if (camP.fov !== 68) { camP.fov = 68; camP.updateProjectionMatrix(); } }
   if (miraC.ligada && camAtiva === camP) {
     const A = ARMAS[jogador.armaTipo || 'basica'], alc = A.alc || 60;
-    if ((miraC.tPonto -= dt) <= 0) { miraC.tPonto = 0.1; miraC.tipo = pontoDaMira(Math.min(160, alc + 20)).tipo; }
+    if ((miraC.tPonto -= dt) <= 0) { miraC.tPonto = 0.08; miraC.tipo = pontoDaMira(Math.min(160, alc + 2)).tipo; }   // parede/carro na frente vence (não entrega quem está escondido)
     miraC.perto = ajudaMira ? alvoPertoDaMira(5, alc) : null;
     // ajuda: enquanto você mexe a mira ou anda, ela puxa de leve para o peito do inimigo mais perto da cruz
     const ativo = performance.now() - miraC.mexeu < 400 || (joy.ativo && Math.hypot(joy.x, joy.y) > 0.15);
