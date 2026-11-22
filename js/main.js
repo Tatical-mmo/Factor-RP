@@ -1279,10 +1279,12 @@ function skinDaFarda(papel, patente, sexo) {
 // 20o: andando com a mira de centro: para trás (devagar e rápido) e de lado agachado (a direita é a esquerda espelhada)
 const ANIM_MIRA = ['mira_tras_lento', 'mira_tras_rapido', 'mira_lado_esq', 'mira_lado_dir'];
 // 20p: posturas (abaixado, deitado, engatinhar, rastejar, cobertura, granada abaixado e as transições)
-const ANIM_POSTURA = ['deitado_arma', 'deitado_recarga', 'deitado', 'rastejar_tras', 'rastejar_frente', 'abaixado_arma', 'abaixado_recarga', 'abaixado', 'engatinhar',
-  'levantar_deitado', 'deitar', 'levantar_abaixado', 'abaixar', 'cobertura_esq', 'cobertura_dir', 'granada_abaixado'];
+const ANIM_POSTURA = ['deitado_arma', 'deitado_recarga', 'deitado', 'rastejar_tras', 'rastejar_frente', 'abaixado_arma', 'abaixado_recarga', 'abaixado',
+  'levantar_deitado', 'deitar', 'levantar_abaixado', 'abaixar', 'cobertura_esq', 'cobertura_dir', 'granada_abaixado', 'rolar_frente', 'rolar_dir', 'rolar_esq'];
+// 20r: deslocamento das cambalhotas (tempo, x = esquerda do personagem, z = frente), tirado do quadril da animação
+const CURVAS_ROLAR = {"rolar_frente":[[0.0,0.0,0.0],[0.1,-0.021,0.044],[0.2,-0.035,0.118],[0.3,-0.041,0.24],[0.4,-0.029,0.425],[0.5,-0.007,0.656],[0.6,0.037,0.922],[0.7,0.072,1.192],[0.8,0.066,1.435],[0.9,0.08,1.556],[1.0,0.088,1.644],[1.1,0.055,1.744],[1.2,0.027,1.833],[1.3,0.003,1.91],[1.4,-0.005,2.008],[1.5,0.004,2.109],[1.6,0.017,2.176],[1.7,0.038,2.213],[1.8,0.059,2.236],[1.9,0.069,2.25],[2.0,0.072,2.261],[2.1,0.073,2.268],[2.2,0.075,2.273],[2.3,0.077,2.274],[2.4,0.08,2.273],[2.5,0.082,2.273]],"rolar_dir":[[0.0,0.0,0.0],[0.1,-0.184,-0.049],[0.2,-0.5,-0.11],[0.3,-0.749,-0.153],[0.4,-1.003,-0.196],[0.5,-1.268,-0.213],[0.6,-1.498,-0.203],[0.7,-1.731,-0.201],[0.8,-1.918,-0.192],[0.9,-2.15,-0.172],[1.0,-2.365,-0.137],[1.1,-2.478,-0.128],[1.2,-2.54,-0.133],[1.3,-2.606,-0.127],[1.4,-2.694,-0.101],[1.5,-2.768,-0.046],[1.6,-2.825,0.003],[1.7,-2.906,0.07],[1.8,-2.98,0.121],[1.9,-3.055,0.172],[2.0,-3.104,0.216],[2.1,-3.129,0.235],[2.2,-3.146,0.239],[2.3,-3.155,0.239],[2.4,-3.165,0.239]],"rolar_esq":[[0.0,0.0,0.0],[0.1,0.184,-0.049],[0.2,0.5,-0.11],[0.3,0.749,-0.153],[0.4,1.003,-0.196],[0.5,1.268,-0.213],[0.6,1.498,-0.203],[0.7,1.731,-0.201],[0.8,1.918,-0.192],[0.9,2.15,-0.172],[1.0,2.365,-0.137],[1.1,2.478,-0.128],[1.2,2.54,-0.133],[1.3,2.606,-0.127],[1.4,2.694,-0.101],[1.5,2.768,-0.046],[1.6,2.825,0.003],[1.7,2.906,0.07],[1.8,2.98,0.121],[1.9,3.055,0.172],[2.0,3.104,0.216],[2.1,3.129,0.235],[2.2,3.146,0.239],[2.3,3.155,0.239],[2.4,3.165,0.239]]};
 for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA, ...ANIM_POSTURA]) ANIM_EXTRAS.add(n);
-const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=2' : 'assets/personagens/animacoes_emotes.glb?v=2');
+const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=3' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
 function obterBaseExtra(arq) {
   if (!basesExtra.has(arq)) basesExtra.set(arq, carregarGLB(arq).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { basesExtra.delete(arq); return null; }));
@@ -3990,8 +3992,8 @@ const remotos = new Map();     // id -> { meta, av, arma, alvo, anim, caixa }
 let conexao = null, online = 1, conectado = false;
 let envioTimer = 0, ultimoEnvio = null, tempoKeepAlive = 0, tempoSalvar = 15;
 const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1, flexao_desce: 1, flexao_sobe: 1, parada: 1, coletar: 1.2, levantar_socorro: 1.6, beber: 1,
-  abaixar: 1.8, levantar_abaixado: 1.8, deitar: 2, levantar_deitado: 2, cobertura_esq: 1.3, cobertura_dir: 1.3, granada_abaixado: 1.4 };   // 20p: posturas
-const ANIM_VEL = { walk_shoot: 1.25, engatinhar: 1.45, rastejar_frente: 1.7, rastejar_tras: 1.7 };
+  abaixar: 1.8, levantar_abaixado: 1.8, deitar: 2, levantar_deitado: 2, cobertura_esq: 1.3, cobertura_dir: 1.3, granada_abaixado: 1.4, rolar_frente: 1.25, rolar_dir: 1.25, rolar_esq: 1.25 };   // 20p: posturas
+const ANIM_VEL = { walk_shoot: 1.25, rastejar_frente: 1.9, rastejar_tras: 1.7 };
 
 function conectarMultiplayer(perfil) {
   conexao = rede.conectarCidade(perfil, {
@@ -9281,24 +9283,29 @@ function atualizarJogador(dt) {
   }
   // armado só corre turbinado (treino no máximo ou ração ativa): aí usa a corrida com o fuzil para baixo. Antes o
   // "!j.armado" deixava correr sempre falso com arma e essa animação nunca aparecia.
-  const correr = !j.carregando && (!j.armado || turbinado()) && (teclas.has('shift') || (joy.ativo && forca > 0.92) || (j.alvo && j.pos.distanceTo(j.alvo) > 12));
+  const correr = !j.carregando && !j.postura && (!j.armado || turbinado()) && (teclas.has('shift') || (joy.ativo && forca > 0.92) || (j.alvo && j.pos.distanceTo(j.alvo) > 12));
 
   if (j.pulo) passoPulo(dt);
   if (j.rendido && performance.now() - j.rendidoEm > 900) { j.trava = Math.max(j.trava, 0.1); av.tocar('rendido'); }   // rendido: mãos para cima, parado
+  if (j.postura === 'abaixado' && j.armado && !(j.trava > 0)) detectarCambalhota(ix, iy, forca);
   if (j.trava > 0) {
     j.trava -= dt;
+    if (j.rola) moverCambalhota(j);
   } else {
     let vel = 0;
-    if (forca > 0.15 && j.postura) {   // 20p: abaixado engatinha, deitado rasteja (devagar; sem correr)
-      vel = j.postura === 'deitado' ? 0.55 : 0.75;
+    // 20r: abaixado, para os lados anda agachado; para frente/trás levanta e anda normal (e abaixa de novo ao parar)
+    const ladoAbx = j.postura === 'abaixado' && Math.abs(ix) > Math.abs(iy) * 1.1;
+    j.abxEmPe = j.postura === 'abaixado' && forca > 0.15 && !ladoAbx;
+    if (forca > 0.15 && (j.postura === 'deitado' || ladoAbx)) {
+      vel = j.postura === 'deitado' ? 0.65 : 1.0;
       if (joy.ativo) vel *= THREE.MathUtils.clamp(forca * 1.3, 0.5, 1);
-      j.rastejaTras = j.postura === 'deitado' && iy < 0 && -iy >= Math.abs(ix);   // deitado, para trás: rasteja de costas olhando para a frente
-      j.ladoArmado = j.postura === 'abaixado' && j.armado && miraC.ligada && Math.abs(ix) > Math.abs(iy);
-      if (j.rastejaTras || j.ladoArmado) j.yaw = suavizarAngulo(j.yaw, miraC.ligada ? miraC.yaw : Math.atan2(frente.x, frente.z), dt * 8);
-      else j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 6);
+      j.rastejaTras = false; j.ladoArmado = ladoAbx;
+      if (ladoAbx) j.yaw = suavizarAngulo(j.yaw, miraC.ligada ? miraC.yaw : Math.atan2(frente.x, frente.z), dt * 8);   // de lado, olhando para a frente
+      else j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 5);   // deitado: rasteja para onde o analógico manda (pode fazer a volta)
       j.pos.x += dir.x * vel * dt; j.pos.z += dir.z * vel * dt;
-      resolverColisao(j.pos, j.raio); j.ultimoMov = performance.now(); j.correndo = false; j.coberturaAte = 0;
+      resolverColisao(j.pos, j.raio); j.ultimoMov = performance.now(); j.correndo = false; j.coberturaAte = 0; j.abxParou = true;
     } else if (forca > 0.15) {
+      if (j.abxEmPe) { j.coberturaAte = 0; j.abxParou = true; }
       vel = j.carregando ? VELOCIDADE.carregando : j.armado ? (correr && turbinado() ? VELOCIDADE.correr * 0.92 : VELOCIDADE.armado) : correr ? VELOCIDADE.correr : VELOCIDADE.andar;
       if (racaoAtiva()) vel *= 1.1;
       if (correr && jogador.armadura) vel *= 1 + ARMADURAS[jogador.armadura.modelo].bonus;   // armadura: corre até 15% mais
@@ -9308,7 +9315,10 @@ function atualizarJogador(dt) {
       j.pos.x += dir.x * vel * dt; j.pos.z += dir.z * vel * dt;
       resolverColisao(j.pos, j.raio); j.ultimoMov = performance.now(); j.correndo = correr;
     }
-    if (miraC.ligada && !j.postura) j.yaw = miraC.yaw;   // 20m: com a mira de centro o corpo fica virado para a mira (anda de lado/de costas)
+    if (j.postura === 'abaixado' && vel === 0 && j.abxParou) {   // 20r: parou: abaixa de novo sozinho (sem travar; dá para sair andando)
+      j.abxParou = false; j.abxDescendo = performance.now() + 900; if (av.nomeAtual !== 'abaixado' && av.nomeAtual !== 'abaixado_arma' && !ladoAbx) av.tocar('abaixar', { umaVez: true, fade: 0.15, velocidade: 2.8 });
+    }
+    if (miraC.ligada && (!j.postura || j.abxEmPe)) j.yaw = miraC.yaw;   // 20m: com a mira de centro o corpo fica virado para a mira (anda de lado/de costas)
     else if (miraC.ligada && vel === 0) j.yaw = suavizarAngulo(j.yaw, miraC.yaw, dt * 6);   // 20p: abaixado/deitado parado: vira para a mira
     // animação conforme o estado
     if (j.morto) { /* fica caído */ }
@@ -9317,7 +9327,7 @@ function atualizarJogador(dt) {
       j.paradaAte = 0; j.tCorre = correr && !j.armado && !j.carregando && !j.algemado ? (j.tCorre || 0) + dt : 0;
       if (j.algemado) av.tocar('algemado_andar', { velocidade: 1 });
       else if (j.carregando) av.tocar('carry_walk', { velocidade: 1 });
-      else if (j.postura) animPostura(av, j, true, ix);
+      else if (j.postura && !j.abxEmPe) animPostura(av, j, true, ix);
       else if (j.armado && recargaAtual(j)) animRecarga(av, correr ? 'correndo' : 'andando', recargaAtual(j));
       else if (j.armado && miraC.ligada && !(correr && turbinado()) && (iy < -0.2 || Math.abs(ix) > Math.max(0.25, iy * 1.1))) {   // 20o: mirando, para trás ou de lado
         if (iy < 0 && -iy >= Math.abs(ix) * 0.8) av.tocar(forca > 0.75 ? 'mira_tras_rapido' : 'mira_tras_lento', { velocidade: 1 });
@@ -17573,7 +17583,7 @@ function balaNaAeronave(b) {
 // Abaixar vira 🛡️ Cobertura: agacha, sai para o lado da mira, atira e volta. Abaixado/deitado é alvo menor.
 // 20q: deitado, o corpo encosta no chão (o modelo de origem flutuava uns centímetros): mede os ossos mais baixos e desce
 // a raiz até eles ficarem na altura do chão. Rastejando/engatinhando ou na transição, a arma fica guardada (nas costas)
-const PRONO = /^(deitado|rastejar|deitar|levantar_deitado)/, ARMA_GUARDADA = /^(rastejar|engatinhar|deitar|levantar_deitado|abaixar|levantar_abaixado)/;
+const PRONO = /^(deitado|rastejar|deitar|levantar_deitado)/, ARMA_GUARDADA = /^(rastejar|deitar|levantar_deitado|abaixar|levantar_abaixado|rolar)/;
 const OSSOS_CHAO = ['Hips', 'Spine2', 'Head', 'LeftHand', 'RightHand', 'LeftForeArm', 'RightForeArm', 'LeftLeg', 'RightLeg', 'LeftFoot', 'RightFoot'];
 const _vChao = new THREE.Vector3();
 function ajustarChaoPostura(av, baseY, dt) {
@@ -17587,6 +17597,43 @@ function ajustarChaoPostura(av, baseY, dt) {
   av.offChao = (av.offChao || 0) + (alvo - (av.offChao || 0)) * Math.min(1, dt * 6);
   if (Math.abs(av.offChao) < 0.002 && !prono) { av.offChao = 0; return; }
   av.raiz.position.y = baseY + av.offChao; av.raiz.updateMatrixWorld(true);
+}
+// 20r: cambalhota (abaixado e armado): dois toques rápidos no analógico para a esquerda, direita ou frente.
+// Para trás não tem: vire o personagem e role para a frente. A animação fica no lugar e o jogo anda o personagem pela
+// curva do quadril dela (não atravessa parede)
+const flick = { cat: 'n', ult: null, t: 0 };
+function detectarCambalhota(ix, iy, forca) {
+  const agora = performance.now();
+  let cat = flick.cat;
+  if (forca < 0.3) cat = 'n';
+  else if (forca > 0.7) cat = Math.abs(ix) > Math.abs(iy) ? (ix > 0 ? 'd' : 'e') : (iy > 0 ? 'f' : 't');
+  if (cat !== flick.cat) {
+    if (flick.cat === 'n' && cat !== 'n') {
+      if (flick.ult === cat && agora - flick.t < 420 && cat !== 't') { flick.ult = null; fazerCambalhota(cat); }
+      else { flick.ult = cat; flick.t = agora; }
+    }
+    flick.cat = cat;
+  }
+}
+function fazerCambalhota(cat) {
+  const j = jogador, av = j.avatar, nome = { e: 'rolar_esq', d: 'rolar_dir', f: 'rolar_frente' }[cat];
+  if (!av || !nome || !av.clipes[nome] || performance.now() < (j.posTrans || 0)) return;
+  const vel = 1.25, curva = CURVAS_ROLAR[nome];
+  j.yaw = miraC.ligada ? miraC.yaw : j.yaw;
+  av.tocar(nome, { umaVez: true, fade: 0.1, velocidade: vel });
+  j.rola = { curva, ini: performance.now(), vel, yaw: j.yaw, ix: 0, k: 0 };
+  j.trava = curva[curva.length - 1][0] / vel; j.coberturaAte = 0; j.abxEmPe = false; j.abxParou = false;
+}
+function moverCambalhota(j) {
+  const r = j.rola, t = (performance.now() - r.ini) / 1000 * r.vel, c = r.curva;
+  while (r.k < c.length - 1 && c[r.k + 1][0] <= t) r.k++;
+  const a = c[r.k], b = c[Math.min(c.length - 1, r.k + 1)], f = b[0] > a[0] ? THREE.MathUtils.clamp((t - a[0]) / (b[0] - a[0]), 0, 1) : 1;
+  const x = a[1] + (b[1] - a[1]) * f, z = a[2] + (b[2] - a[2]) * f;
+  const dx = x - (r.px || 0), dz = z - (r.pz || 0); r.px = x; r.pz = z;
+  const sy = Math.sin(r.yaw), cy = Math.cos(r.yaw);   // esquerda = (cos, -sin), frente = (sin, cos)
+  j.pos.x += cy * dx + sy * dz; j.pos.z += -sy * dx + cy * dz;
+  resolverColisao(j.pos, j.raio); j.yaw = r.yaw; j.ultimoMov = performance.now();
+  if (t >= c[c.length - 1][0] || j.trava <= 0) j.rola = null;
 }
 function posturaPode() {
   const j = jogador;
@@ -17618,12 +17665,11 @@ function animRecargaPostura(av, postura, r) {
   if (av.nomeAtual === nome && av.atual) av.atual.time = frac * dur;
 }
 function animPostura(av, j, andando, ix) {
-  if (!andando && performance.now() < (j.coberturaAte || 0)) return;   // atirando da cobertura
+  if (!andando && (performance.now() < (j.coberturaAte || 0) || performance.now() < (j.abxDescendo || 0))) return;   // atirando da cobertura / abaixando de novo
   if (j.armado && recargaAtual(j)) { animRecargaPostura(av, j.postura, recargaAtual(j)); return; }
   if (!andando) { av.tocar(posturaParada(j), { fade: 0.3 }); return; }
-  if (j.postura === 'deitado') { av.tocar(j.rastejaTras ? 'rastejar_tras' : 'rastejar_frente', { velocidade: 1.7 }); return; }
-  if (j.ladoArmado) { av.tocar(ix > 0 ? 'mira_lado_dir' : 'mira_lado_esq', { velocidade: 0.9 }); return; }
-  av.tocar('engatinhar', { velocidade: 1.45 });
+  if (j.postura === 'deitado') { av.tocar('rastejar_frente', { velocidade: 1.9 }); return; }
+  av.tocar(ix > 0 ? 'mira_lado_dir' : 'mira_lado_esq', { velocidade: 1.0 });   // abaixado só anda assim de lado
 }
 // obstáculo para cobertura colado no jogador (veículo, parede ou prédio): o ponto mais perto, ou null
 function obstaculoPerto(raio = 1.7) {
@@ -17702,7 +17748,7 @@ function cameraOmbro(dt) {
   const y = miraC.yaw, p = miraC.pitch, j = jogador;
   _fwdM.set(Math.sin(y) * Math.cos(p), Math.sin(p), Math.cos(y) * Math.cos(p));
   const rx = -Math.cos(y), rz = Math.sin(y), lado = 0.8, dist = j.dentroCasa ? 2.1 : 3.5;
-  const altAlvo = j.postura === 'deitado' ? 0.8 : j.postura === 'abaixado' ? 1.25 : 1.72;   // 20p: abaixado/deitado, a câmera desce junto
+  const altAlvo = j.postura === 'deitado' ? 0.8 : j.postura === 'abaixado' && !j.abxEmPe ? 1.25 : 1.72;   // 20p: abaixado/deitado, a câmera desce junto
   miraC.alt = (miraC.alt ?? altAlvo) + (altAlvo - (miraC.alt ?? altAlvo)) * Math.min(1, dt * 4);
   const piv = new THREE.Vector3(j.pos.x + rx * lado, (j.pos.y || 0) + miraC.alt, j.pos.z + rz * lado);
   const cam = piv.clone().addScaledVector(_fwdM, -dist);
