@@ -60,6 +60,10 @@ export const PERSONAGENS_EVENTO = [   // limitados (Meshy): só o admin dá de p
   { id: 'Cara_Regata', nome: 'Cara de Regata', soPresente: true, bau: true },
   { id: 'Soldado_Experiente', nome: 'Soldado Experiente', soPresente: true, bau: true },
   { id: 'Parceiro_Bairro', nome: 'Parceiro do Bairro', soPresente: true, bau: true },
+  { id: 'Soldado_Deserto', nome: 'Soldado do Deserto', soPresente: true, bau: true },
+  { id: 'Operador_Tatico', nome: 'Operador Tático', soPresente: true, bau: true },
+  { id: 'Vigia_Sombras', nome: 'Vigia das Sombras', soPresente: true, bau: true },
+  { id: 'Operador_Antigas', nome: 'Operador Antigás', soPresente: true, bau: true },
 ];
 
 // grátis ao criar a conta; os outros custam 8.000 na loja de personagens (mesma lista do banco)

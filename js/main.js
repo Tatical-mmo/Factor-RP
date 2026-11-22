@@ -1281,11 +1281,11 @@ const ANIM_MIRA = ['mira_tras_lento', 'mira_tras_rapido', 'mira_lado_esq', 'mira
 // 20p: posturas (abaixado, deitado, engatinhar, rastejar, cobertura, granada abaixado e as transições)
 const ANIM_POSTURA = ['deitado_arma', 'deitado_recarga', 'deitado', 'rastejar_tras', 'rastejar_frente', 'abaixado_arma', 'abaixado_recarga', 'abaixado',
   'levantar_deitado', 'deitar', 'levantar_abaixado', 'abaixar', 'cobertura_esq', 'cobertura_dir', 'granada_abaixado', 'rolar_frente', 'rolar_dir', 'rolar_esq',
-  'abaixar_arma', 'levantar_abaixado_arma', 'agachado_frente', 'agachado_tras'];   // 20s: abaixar armado e andar agachado armado (gerados no Meshy)
+  'abaixar_arma', 'levantar_abaixado_arma', 'agachado_frente', 'agachado_tras', 'agachado_d', 'rastejar_arma'];   // 20t: agachado sem arma e rastejar com arma   // 20s: abaixar armado e andar agachado armado (gerados no Meshy)
 // 20r: deslocamento das cambalhotas (tempo, x = esquerda do personagem, z = frente), tirado do quadril da animação
 const CURVAS_ROLAR = {"rolar_frente":[[0.0,0.0,0.0],[0.1,-0.021,0.044],[0.2,-0.035,0.118],[0.3,-0.041,0.24],[0.4,-0.029,0.425],[0.5,-0.007,0.656],[0.6,0.037,0.922],[0.7,0.072,1.192],[0.8,0.066,1.435],[0.9,0.08,1.556],[1.0,0.088,1.644],[1.1,0.055,1.744],[1.2,0.027,1.833],[1.3,0.003,1.91],[1.4,-0.005,2.008],[1.5,0.004,2.109],[1.6,0.017,2.176],[1.7,0.038,2.213],[1.8,0.059,2.236],[1.9,0.069,2.25],[2.0,0.072,2.261],[2.1,0.073,2.268],[2.2,0.075,2.273],[2.3,0.077,2.274],[2.4,0.08,2.273],[2.5,0.082,2.273]],"rolar_dir":[[0.0,0.0,0.0],[0.1,-0.184,-0.049],[0.2,-0.5,-0.11],[0.3,-0.749,-0.153],[0.4,-1.003,-0.196],[0.5,-1.268,-0.213],[0.6,-1.498,-0.203],[0.7,-1.731,-0.201],[0.8,-1.918,-0.192],[0.9,-2.15,-0.172],[1.0,-2.365,-0.137],[1.1,-2.478,-0.128],[1.2,-2.54,-0.133],[1.3,-2.606,-0.127],[1.4,-2.694,-0.101],[1.5,-2.768,-0.046],[1.6,-2.825,0.003],[1.7,-2.906,0.07],[1.8,-2.98,0.121],[1.9,-3.055,0.172],[2.0,-3.104,0.216],[2.1,-3.129,0.235],[2.2,-3.146,0.239],[2.3,-3.155,0.239],[2.4,-3.165,0.239]],"rolar_esq":[[0.0,0.0,0.0],[0.1,0.184,-0.049],[0.2,0.5,-0.11],[0.3,0.749,-0.153],[0.4,1.003,-0.196],[0.5,1.268,-0.213],[0.6,1.498,-0.203],[0.7,1.731,-0.201],[0.8,1.918,-0.192],[0.9,2.15,-0.172],[1.0,2.365,-0.137],[1.1,2.478,-0.128],[1.2,2.54,-0.133],[1.3,2.606,-0.127],[1.4,2.694,-0.101],[1.5,2.768,-0.046],[1.6,2.825,0.003],[1.7,2.906,0.07],[1.8,2.98,0.121],[1.9,3.055,0.172],[2.0,3.104,0.216],[2.1,3.129,0.235],[2.2,3.146,0.239],[2.3,3.155,0.239],[2.4,3.165,0.239]]};
 for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA, ...ANIM_POSTURA]) ANIM_EXTRAS.add(n);
-const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=4' : 'assets/personagens/animacoes_emotes.glb?v=2');
+const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=5' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
 function obterBaseExtra(arq) {
   if (!basesExtra.has(arq)) basesExtra.set(arq, carregarGLB(arq).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { basesExtra.delete(arq); return null; }));
@@ -3994,7 +3994,7 @@ let conexao = null, online = 1, conectado = false;
 let envioTimer = 0, ultimoEnvio = null, tempoKeepAlive = 0, tempoSalvar = 15;
 const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1, flexao_desce: 1, flexao_sobe: 1, parada: 1, coletar: 1.2, levantar_socorro: 1.6, beber: 1,
   abaixar: 1.8, levantar_abaixado: 1.8, deitar: 2, levantar_deitado: 2, cobertura_esq: 1.3, cobertura_dir: 1.3, granada_abaixado: 1.4, rolar_frente: 1.25, rolar_dir: 1.25, rolar_esq: 1.25, abaixar_arma: 1.3, levantar_abaixado_arma: 1.3 };   // 20p: posturas
-const ANIM_VEL = { walk_shoot: 1.25, rastejar_frente: 1.9, rastejar_tras: 1.7, agachado_frente: 2.2, agachado_tras: 2.2 };
+const ANIM_VEL = { walk_shoot: 1.25, rastejar_frente: 1.9, rastejar_tras: 1.7, agachado_frente: 2.2, agachado_tras: 2.2, agachado_d: 2.4, rastejar_arma: 1.4 };
 
 function conectarMultiplayer(perfil) {
   conexao = rede.conectarCidade(perfil, {
@@ -9295,11 +9295,12 @@ function atualizarJogador(dt) {
   } else {
     let vel = 0;
     // 20r: abaixado, para os lados anda agachado; para frente/trás levanta e anda normal (e abaixa de novo ao parar)
-    const ladoAbx = j.postura === 'abaixado' && Math.abs(ix) > Math.abs(iy) * 1.1;
+    const ladoAbx = j.postura === 'abaixado' && j.armado && Math.abs(ix) > Math.abs(iy) * 1.1;
     const agachadoArm = j.postura === 'abaixado' && j.armado && !ladoAbx;   // 20s: armado anda agachado para frente/trás (sem levantar)
-    j.abxEmPe = j.postura === 'abaixado' && forca > 0.15 && !ladoAbx && !agachadoArm;
-    if (forca > 0.15 && (j.postura === 'deitado' || ladoAbx || agachadoArm)) {
-      vel = j.postura === 'deitado' ? 0.65 : agachadoArm ? 0.6 : 1.0;
+    const agachadoDes = j.postura === 'abaixado' && !j.armado;   // 20t: sem arma anda agachado para qualquer lado (vira para onde vai)
+    j.abxEmPe = false;
+    if (forca > 0.15 && (j.postura === 'deitado' || ladoAbx || agachadoArm || agachadoDes)) {
+      vel = j.postura === 'deitado' ? 0.65 : agachadoArm ? 0.6 : agachadoDes ? 0.55 : 1.0;
       if (joy.ativo) vel *= THREE.MathUtils.clamp(forca * 1.3, 0.5, 1);
       j.rastejaTras = false; j.ladoArmado = ladoAbx; j.agachadoTras = agachadoArm && iy < 0;
       if (ladoAbx || (agachadoArm && (miraC.ligada || iy < 0))) j.yaw = suavizarAngulo(j.yaw, miraC.ligada ? miraC.yaw : Math.atan2(frente.x, frente.z), dt * 8);   // de lado/para trás, olhando para a frente
@@ -9317,9 +9318,7 @@ function atualizarJogador(dt) {
       j.pos.x += dir.x * vel * dt; j.pos.z += dir.z * vel * dt;
       resolverColisao(j.pos, j.raio); j.ultimoMov = performance.now(); j.correndo = correr;
     }
-    if (j.postura === 'abaixado' && vel === 0 && j.abxParou) {   // 20r: parou: abaixa de novo sozinho (sem travar; dá para sair andando)
-      j.abxParou = false; j.abxDescendo = performance.now() + 900; if (av.nomeAtual !== 'abaixado' && av.nomeAtual !== 'abaixado_arma' && !ladoAbx) av.tocar(j.armado ? 'abaixar_arma' : 'abaixar', { umaVez: true, fade: 0.15, velocidade: j.armado ? 2.2 : 2.8 });
-    }
+    if (j.postura === 'abaixado' && vel === 0 && j.abxParou) j.abxParou = false;   // 20t: anda sempre agachado: ao parar só volta à pose parada
     if (miraC.ligada && (!j.postura || j.abxEmPe)) j.yaw = miraC.yaw;   // 20m: com a mira de centro o corpo fica virado para a mira (anda de lado/de costas)
     else if (miraC.ligada && vel === 0) j.yaw = suavizarAngulo(j.yaw, miraC.yaw, dt * 6);   // 20p: abaixado/deitado parado: vira para a mira
     // animação conforme o estado
@@ -17585,7 +17584,7 @@ function balaNaAeronave(b) {
 // Abaixar vira 🛡️ Cobertura: agacha, sai para o lado da mira, atira e volta. Abaixado/deitado é alvo menor.
 // 20q: deitado, o corpo encosta no chão (o modelo de origem flutuava uns centímetros): mede os ossos mais baixos e desce
 // a raiz até eles ficarem na altura do chão. Rastejando/engatinhando ou na transição, a arma fica guardada (nas costas)
-const PRONO = /^(deitado|rastejar|deitar|levantar_deitado)/, ARMA_GUARDADA = /^(rastejar|deitar|levantar_deitado|abaixar$|levantar_abaixado$|rolar)/;   // as versões _arma seguram a arma
+const PRONO = /^(deitado|rastejar|deitar|levantar_deitado)/, ARMA_GUARDADA = /^(rastejar_frente|rastejar_tras|deitar|levantar_deitado|abaixar$|levantar_abaixado$|rolar)/;   // as versões _arma seguram a arma
 const OSSOS_CHAO = ['Hips', 'Spine2', 'Head', 'LeftHand', 'RightHand', 'LeftForeArm', 'RightForeArm', 'LeftLeg', 'RightLeg', 'LeftFoot', 'RightFoot'];
 const _vChao = new THREE.Vector3();
 function ajustarChaoPostura(av, baseY, dt) {
@@ -17671,8 +17670,9 @@ function animPostura(av, j, andando, ix) {
   if (!andando && (performance.now() < (j.coberturaAte || 0) || performance.now() < (j.abxDescendo || 0))) return;   // atirando da cobertura / abaixando de novo
   if (j.armado && recargaAtual(j)) { animRecargaPostura(av, j.postura, recargaAtual(j)); return; }
   if (!andando) { av.tocar(posturaParada(j), { fade: 0.3 }); return; }
-  if (j.postura === 'deitado') { av.tocar('rastejar_frente', { velocidade: 1.9 }); return; }
+  if (j.postura === 'deitado') { if (j.armado) av.tocar('rastejar_arma', { velocidade: 1.4 }); else av.tocar('rastejar_frente', { velocidade: 1.9 }); return; }   // 20t: com arma, rasteja segurando a arma
   if (j.ladoArmado) { av.tocar(ix > 0 ? 'mira_lado_dir' : 'mira_lado_esq', { velocidade: 1.0 }); return; }   // de lado: agachado de lado
+  if (!j.armado) { av.tocar('agachado_d', { velocidade: 2.4 }); return; }   // 20t: sem arma, agachado andando
   av.tocar(j.agachadoTras ? 'agachado_tras' : 'agachado_frente', { velocidade: 2.2 });   // armado: anda agachado
 }
 // obstáculo para cobertura colado no jogador (veículo, parede ou prédio): o ponto mais perto, ou null
