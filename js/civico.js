@@ -1389,10 +1389,10 @@ function adicionarLuzes(g, tipo, chave = null) {
   if (!aereo) {
     const grande = w > 2.2, moto = /^moto/.test(tipo), yf = e.min.y + h * (grande ? 0.22 : moto ? 0.62 : 0.38);
     for (const s of moto ? [0] : [-1, 1]) {   // moto: um farol só
-      sp(M.farol, cx + s * w * 0.34, yf, e.max.z + 0.08, grande ? 0.9 : 0.7);
-      sp(M.lanterna, cx + s * w * 0.4, yf + (grande ? 0.3 : 0.05), e.min.z - 0.08, grande ? 0.6 : 0.5);
+      sp(M.farol, cx + s * w * 0.34, moto ? yf + 0.12 : yf, e.max.z + (moto ? -0.25 : 0.08), grande ? 0.9 : moto ? 0.42 : 0.7);
+      sp(M.lanterna, cx + s * w * 0.4, yf + (grande ? 0.3 : 0.05), e.min.z + (moto ? 0.15 : -0.08), grande ? 0.6 : moto ? 0.3 : 0.5);
     }
-    const comp = grande ? 16 : 12, f = new THREE.Mesh(new THREE.PlaneGeometry(grande ? 6 : 4.8, comp).rotateX(-Math.PI / 2), M.feixe);
+    const comp = grande ? 16 : moto ? 9 : 12, f = new THREE.Mesh(new THREE.PlaneGeometry(grande ? 6 : moto ? 2.6 : 4.8, comp).rotateX(-Math.PI / 2), M.feixe);   // moto: facho mais estreito
     f.position.set(cx, e.min.y + 0.06, e.max.z + comp / 2 - 0.5); f.rotation.y = Math.PI; f.renderOrder = 3; L.add(f);
   } else if (heli) {   // helicóptero: nada nas pás; pisca-pisca na cauda (ponta e em cima da deriva) e um embaixo da barriga
     const t = 0.9;

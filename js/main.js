@@ -383,13 +383,15 @@ function atualizarLuzPoste(dt) {
   }
   const alvoI = 70 * Math.min(1, (noiteAtual - 0.35) / 0.3);
   // troca de poste: apaga devagar, pula, acende devagar
-  if (luzPoste.userData.prox) { luzPoste.intensity = Math.max(0, luzPoste.intensity - dt * 120); if (luzPoste.intensity > 0) return; const [px, pz, py] = luzPoste.userData.prox; luzPoste.userData.prox = null;
+  // 21i: andando rápido (veículo) a luz pulava de poste em poste apagando e acendendo: a tela piscava. Agora pula direto.
+  const rapido = Math.abs(jogador.carro?.vel || 0) > 3;
+  if (luzPoste.userData.prox) { if (!rapido) { luzPoste.intensity = Math.max(0, luzPoste.intensity - dt * 120); if (luzPoste.intensity > 0) return; } const [px, pz, py] = luzPoste.userData.prox; luzPoste.userData.prox = null;
     const h = alturaChao(px, pz); luzPoste.position.set(px, py ?? h + 5.1, pz); luzPoste.target.position.set(px, h, pz); luzPoste.target.updateMatrixWorld(); luzPoste.userData.em = px + ',' + pz; }
   else if (luzPoste.userData.em) luzPoste.intensity = Math.min(alvoI, luzPoste.intensity + dt * 80);
   if ((tPoste -= dt) > 0) return; tPoste = 0.4;
   const f = fo; let m = null, dm = 22;
   for (const L of mundo.LUZES_POSTE) { const d = Math.abs(L[0] - f.x) + Math.abs(L[1] - f.z); if (d < dm) { dm = d; m = L; } }
-  if (!m) { luzPoste.userData.em = null; luzPoste.intensity = Math.max(0, luzPoste.intensity - 0.4 * 80); return; }
+  if (!m) { if (Math.abs(jogador.carro?.vel || 0) > 3) return; luzPoste.userData.em = null; luzPoste.intensity = Math.max(0, luzPoste.intensity - 0.4 * 80); return; }
   if (luzPoste.userData.em !== m[0] + ',' + m[1]) luzPoste.userData.prox = m;
 }
 // quantos segundos somar ao relógio para que agora seja a hora h (o ciclo continua dali)
@@ -1318,7 +1320,7 @@ const ANIM_POSTURA = ['deitado_arma', 'deitado_recarga', 'deitado', 'rastejar_tr
 // 20r: deslocamento das cambalhotas (tempo, x = esquerda do personagem, z = frente), tirado do quadril da animação
 const CURVAS_ROLAR = {"rolar_frente":[[0.0,0.0,0.0],[0.1,-0.021,0.044],[0.2,-0.035,0.118],[0.3,-0.041,0.24],[0.4,-0.029,0.425],[0.5,-0.007,0.656],[0.6,0.037,0.922],[0.7,0.072,1.192],[0.8,0.066,1.435],[0.9,0.08,1.556],[1.0,0.088,1.644],[1.1,0.055,1.744],[1.2,0.027,1.833],[1.3,0.003,1.91],[1.4,-0.005,2.008],[1.5,0.004,2.109],[1.6,0.017,2.176],[1.7,0.038,2.213],[1.8,0.059,2.236],[1.9,0.069,2.25],[2.0,0.072,2.261],[2.1,0.073,2.268],[2.2,0.075,2.273],[2.3,0.077,2.274],[2.4,0.08,2.273],[2.5,0.082,2.273]],"rolar_dir":[[0.0,0.0,0.0],[0.1,-0.184,-0.049],[0.2,-0.5,-0.11],[0.3,-0.749,-0.153],[0.4,-1.003,-0.196],[0.5,-1.268,-0.213],[0.6,-1.498,-0.203],[0.7,-1.731,-0.201],[0.8,-1.918,-0.192],[0.9,-2.15,-0.172],[1.0,-2.365,-0.137],[1.1,-2.478,-0.128],[1.2,-2.54,-0.133],[1.3,-2.606,-0.127],[1.4,-2.694,-0.101],[1.5,-2.768,-0.046],[1.6,-2.825,0.003],[1.7,-2.906,0.07],[1.8,-2.98,0.121],[1.9,-3.055,0.172],[2.0,-3.104,0.216],[2.1,-3.129,0.235],[2.2,-3.146,0.239],[2.3,-3.155,0.239],[2.4,-3.165,0.239]],"rolar_esq":[[0.0,0.0,0.0],[0.1,0.184,-0.049],[0.2,0.5,-0.11],[0.3,0.749,-0.153],[0.4,1.003,-0.196],[0.5,1.268,-0.213],[0.6,1.498,-0.203],[0.7,1.731,-0.201],[0.8,1.918,-0.192],[0.9,2.15,-0.172],[1.0,2.365,-0.137],[1.1,2.478,-0.128],[1.2,2.54,-0.133],[1.3,2.606,-0.127],[1.4,2.694,-0.101],[1.5,2.768,-0.046],[1.6,2.825,0.003],[1.7,2.906,0.07],[1.8,2.98,0.121],[1.9,3.055,0.172],[2.0,3.104,0.216],[2.1,3.129,0.235],[2.2,3.146,0.239],[2.3,3.155,0.239],[2.4,3.165,0.239]]};
 for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA, ...ANIM_POSTURA]) ANIM_EXTRAS.add(n);
-const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=8' : 'assets/personagens/animacoes_emotes.glb?v=2');
+const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=9' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
 function obterBaseExtra(arq) {
   if (!basesExtra.has(arq)) basesExtra.set(arq, carregarGLB(arq).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { basesExtra.delete(arq); return null; }));
@@ -20152,10 +20154,9 @@ function sentarNaMoto(av, mesh, modelo, anim, dt) {
   const b = MOTO_BANCO[modelo] || [0.86, -0.2], raiz = av.raiz;
   mesh.updateMatrixWorld(true);
   const banco = mesh.localToWorld(_vMoto.set(0, b[0] + 0.06, b[1]));
-  raiz.quaternion.copy(mesh.quaternion);
-  if (/^moto_curva/.test(av.nomeAtual)) {   // a animação de curva já deita o corpo: a moto leva menos
-    raiz.rotation.order = 'YXZ'; raiz.rotation.z *= 0.45;
-  }
+  // 21i: mesma ordem de giro da moto (antes copiava o quaternion e reinterpretava: o piloto deitava para o lado errado)
+  const mr = mesh.rotation, curva = /^moto_curva/.test(av.nomeAtual);   // a animação de curva já deita o corpo: a moto leva menos
+  raiz.rotation.set(mr.x, mr.y, mr.z * (curva ? 0.45 : 1), 'YXZ');
   raiz.visible = true; raiz.position.copy(banco); raiz.updateMatrixWorld(true);
   av.mixer.update(dt || 0); raiz.updateMatrixWorld(true);
   const hips = ossosSentar(av).hips;
@@ -20167,6 +20168,17 @@ function animMoto(incl, emp, subindo) {
   if (incl < -0.22) return 'moto_curva_esq';
   if (incl > 0.22) return 'moto_curva_dir';
   return 'moto_pilotar';
+}
+// 21i: a mancha do farol fica no chão, à frente, mesmo com a moto deitada na curva ou empinada
+const _qFarol = new THREE.Quaternion(), _qInv = new THREE.Quaternion(), _vFarol = new THREE.Vector3();
+function farolMoto(mesh) {
+  const L = mesh.getObjectByName('luzes'); if (!L?.visible) return;
+  const f = L.children.find((o) => o.isMesh); if (!f) return;
+  mesh.updateMatrixWorld(true);
+  const yaw = mesh.rotation.y, d = 5.5, x = mesh.position.x + Math.sin(yaw) * d, z = mesh.position.z + Math.cos(yaw) * d;
+  f.position.copy(mesh.worldToLocal(_vFarol.set(x, alturaChao(x, z) + 0.05, z)));
+  _qFarol.setFromAxisAngle(_Y, yaw + Math.PI); _qInv.copy(mesh.quaternion).invert();
+  f.quaternion.copy(_qInv.multiply(_qFarol));
 }
 function girarRodasMoto(mesh, dist) {
   for (const n of ['roda_f', 'roda_t']) { const r = mesh.getObjectByName(n); if (r) r.rotation.x += dist / 0.32; }
@@ -20187,7 +20199,7 @@ function passoMoto(c, dt, acel) {
   mesh.rotation.order = 'YXZ'; mesh.rotation.x = sx - c.emp; mesh.rotation.z = c.incl; void sz;   // a moto não tomba para fora como carro
   const zr = 0.69, dy = zr * Math.sin(c.emp), dz = zr * (Math.cos(c.emp) - 1);
   mesh.position.x += Math.sin(jogador.yaw) * dz; mesh.position.z += Math.cos(jogador.yaw) * dz; mesh.position.y += dy;
-  girarRodasMoto(mesh, v * dt);
+  girarRodasMoto(mesh, v * dt); farolMoto(mesh);
   if (c.subindo > 0) c.subindo -= dt;
   sentarNaMoto(av, mesh, c.modelo, animMoto(c.incl, c.emp, c.subindo), 0);
   if (jogador.arma) jogador.arma.visible = false;
@@ -20196,7 +20208,7 @@ function passoMoto(c, dt, acel) {
 function posarMotoRemota(r, a, dt) {
   const m = r.carro; m.rotation.order = 'YXZ';
   const ud = m.userData; ud.mi = (ud.mi || 0) + ((a.mi || 0) - (ud.mi || 0)) * Math.min(1, dt * 8); ud.me = (ud.me || 0) + ((a.me || 0) - (ud.me || 0)) * Math.min(1, dt * 8);
-  m.rotation.x -= ud.me; m.rotation.z = ud.mi;
+  m.rotation.x -= ud.me; m.rotation.z = ud.mi; farolMoto(m);
   const zr = 0.69; m.position.y += zr * Math.sin(ud.me);
   if (ud.rx !== undefined) girarRodasMoto(m, Math.min(3, Math.hypot(m.position.x - ud.rx, m.position.z - ud.rz)));
   ud.rx = m.position.x; ud.rz = m.position.z;
