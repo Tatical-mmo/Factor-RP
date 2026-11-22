@@ -1313,11 +1313,12 @@ const ANIM_MIRA = ['mira_tras_lento', 'mira_tras_rapido', 'mira_lado_esq', 'mira
 const ANIM_POSTURA = ['deitado_arma', 'deitado_recarga', 'deitado', 'rastejar_tras', 'rastejar_frente', 'abaixado_arma', 'abaixado_recarga', 'abaixado',
   'levantar_deitado', 'deitar', 'levantar_abaixado', 'abaixar', 'cobertura_esq', 'cobertura_dir', 'granada_abaixado', 'rolar_frente', 'rolar_dir', 'rolar_esq',
   'abaixar_arma', 'levantar_abaixado_arma', 'agachado_frente', 'agachado_tras', 'agachado_d', 'rastejar_arma', 'pular_muro', 'pular_muro_parado',
-  'agarrar_muro', 'escalar', 'escalar_esq', 'escalar_dir', 'subir_borda', 'pular_baixo', 'soltar_parede', 'corda_bamba', 'beira_cair', 'cair_chao', 'levantar_queda', 'tentar_escalar'];   // 21d: escalada   // 21a: pular muro baixo   // 20t: agachado sem arma e rastejar com arma   // 20s: abaixar armado e andar agachado armado (gerados no Meshy)
+  'agarrar_muro', 'escalar', 'escalar_esq', 'escalar_dir', 'subir_borda', 'pular_baixo', 'soltar_parede', 'corda_bamba', 'beira_cair', 'cair_chao', 'levantar_queda', 'tentar_escalar',   // 21d: escalada
+  'moto_pilotar', 'moto_curva_dir', 'moto_curva_esq', 'moto_empinar', 'moto_subir', 'moto_descer', 'moto_queda_frente', 'moto_queda_tras'];   // 21h: moto   // 21a: pular muro baixo   // 20t: agachado sem arma e rastejar com arma   // 20s: abaixar armado e andar agachado armado (gerados no Meshy)
 // 20r: deslocamento das cambalhotas (tempo, x = esquerda do personagem, z = frente), tirado do quadril da animação
 const CURVAS_ROLAR = {"rolar_frente":[[0.0,0.0,0.0],[0.1,-0.021,0.044],[0.2,-0.035,0.118],[0.3,-0.041,0.24],[0.4,-0.029,0.425],[0.5,-0.007,0.656],[0.6,0.037,0.922],[0.7,0.072,1.192],[0.8,0.066,1.435],[0.9,0.08,1.556],[1.0,0.088,1.644],[1.1,0.055,1.744],[1.2,0.027,1.833],[1.3,0.003,1.91],[1.4,-0.005,2.008],[1.5,0.004,2.109],[1.6,0.017,2.176],[1.7,0.038,2.213],[1.8,0.059,2.236],[1.9,0.069,2.25],[2.0,0.072,2.261],[2.1,0.073,2.268],[2.2,0.075,2.273],[2.3,0.077,2.274],[2.4,0.08,2.273],[2.5,0.082,2.273]],"rolar_dir":[[0.0,0.0,0.0],[0.1,-0.184,-0.049],[0.2,-0.5,-0.11],[0.3,-0.749,-0.153],[0.4,-1.003,-0.196],[0.5,-1.268,-0.213],[0.6,-1.498,-0.203],[0.7,-1.731,-0.201],[0.8,-1.918,-0.192],[0.9,-2.15,-0.172],[1.0,-2.365,-0.137],[1.1,-2.478,-0.128],[1.2,-2.54,-0.133],[1.3,-2.606,-0.127],[1.4,-2.694,-0.101],[1.5,-2.768,-0.046],[1.6,-2.825,0.003],[1.7,-2.906,0.07],[1.8,-2.98,0.121],[1.9,-3.055,0.172],[2.0,-3.104,0.216],[2.1,-3.129,0.235],[2.2,-3.146,0.239],[2.3,-3.155,0.239],[2.4,-3.165,0.239]],"rolar_esq":[[0.0,0.0,0.0],[0.1,0.184,-0.049],[0.2,0.5,-0.11],[0.3,0.749,-0.153],[0.4,1.003,-0.196],[0.5,1.268,-0.213],[0.6,1.498,-0.203],[0.7,1.731,-0.201],[0.8,1.918,-0.192],[0.9,2.15,-0.172],[1.0,2.365,-0.137],[1.1,2.478,-0.128],[1.2,2.54,-0.133],[1.3,2.606,-0.127],[1.4,2.694,-0.101],[1.5,2.768,-0.046],[1.6,2.825,0.003],[1.7,2.906,0.07],[1.8,2.98,0.121],[1.9,3.055,0.172],[2.0,3.104,0.216],[2.1,3.129,0.235],[2.2,3.146,0.239],[2.3,3.155,0.239],[2.4,3.165,0.239]]};
 for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA, ...ANIM_POSTURA]) ANIM_EXTRAS.add(n);
-const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=7' : 'assets/personagens/animacoes_emotes.glb?v=2');
+const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=8' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
 function obterBaseExtra(arq) {
   if (!basesExtra.has(arq)) basesExtra.set(arq, carregarGLB(arq).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { basesExtra.delete(arq); return null; }));
@@ -1589,7 +1590,7 @@ function alturaChao(x, z) {
 const teclas = new Set();
 const joy = { ativo: false, x: 0, y: 0, id: null };
 const manche = { ativo: false, x: 0, y: 0, id: null };   // avião: x inclina (vira), y puxa (sobe) / empurra (desce)
-const pedais = { esq: false, dir: false, acel: false, freio: false };
+const pedais = { esq: false, dir: false, acel: false, freio: false, empinar: false };
 window.addEventListener('keydown', (e) => {
   const foco = document.activeElement;
   if (foco && (foco.tagName === 'INPUT' || foco.tagName === 'TEXTAREA')) return;
@@ -1724,7 +1725,7 @@ function configurarJoystick() {
     menuRevisaoHeli(c); return;
     c.pairar = !c.pairar; aviso(c.pairar ? '🚁 Pairando: o helicóptero fica parado no ar.' : '🚁 Pairar desligado: parado, ele desce para pousar.', 2.5);
   };
-  for (const [id, k] of [['vEsq', 'esq'], ['vDir', 'dir'], ['vAcel', 'acel'], ['vFreio', 'freio']]) {
+  for (const [id, k] of [['vEsq', 'esq'], ['vDir', 'dir'], ['vAcel', 'acel'], ['vFreio', 'freio'], ['vEmpinar', 'empinar']]) {
     const b = $(id);
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch { /* sem captura */ } pedais[k] = true; b.dataset.dedo = e.pointerId; b.classList.add('ativo'); });
     const solta = () => { pedais[k] = false; delete b.dataset.dedo; b.classList.remove('ativo'); };
@@ -1853,7 +1854,7 @@ function acaoContexto() {
   if (perto(civico.PREFEITURA.jornal, 3.2)) { abrirServico('jornal'); return; }
   if (perto(civico.PREFEITURA.porta, 3.2)) { entrarPublico('prefeitura', salaPrefeitura, civico.PREFEITURA.porta, '🏛️ Prefeitura: gabinete, urna, outdoors e sala de imprensa.'); return; }
   if (perto(civico.PREFEITURA.prf, 3.2)) { entrarPublico('prf', () => salaDelegacia('prf', 1000, 'Posto da PRF', '#2b4fa8'), civico.PREFEITURA.prf, '🚔 Posto da PRF: balcão, procurados e estande de tiro.'); return; }
-  if (perto(civico.CONCESSIONARIA.balcao, 3.2)) { abrirConcessionaria(); return; }
+  if (perto(civico.CONCESSIONARIA.balcao, 3.2)) { abrirConcessionaria(); dublar('vend_oi', { chave: 'vendedor', espera: 60000 }); return; }   // 21g: vendedor
   const carro = meuCarroProximo(); if (carro && !jogador.carregando) { if (carro.d.queimado || veiculoEmChamas('car:' + carro.d.id)) { aviso('🔥 Seu carro queimou: pague o conserto (5.000) na concessionária.', 3.5); return; } entrarCarro(carro); return; }
   { const so = onibusSeqPerto(); if (so !== null) { pegarOnibusSeq(so); return; } }
   { const va = viaturaAbandonadaPerto(); if (va) { roubarViatura(va); return; } }
@@ -2051,6 +2052,7 @@ function entrarCarro(v) {
   if (!jogador.carro.voa) somPartida(jogador.carro);
   jogador.pos.set(v.mesh.position.x, v.mesh.position.y, v.mesh.position.z); jogador.yaw = v.mesh.rotation.y; jogador.alvo = null;
   jogador.avatar.raiz.visible = false;
+  if (civico.CARROS[v.d.modelo]?.moto) entrarMoto(jogador.carro);   // 21h: o piloto aparece em cima da moto
   aviso(`${civico.CARROS[v.d.modelo]?.nome || 'Carro'}: use o controle para dirigir. Toque em Sair para estacionar.`, 3.5);
 }
 function sairCarro() {
@@ -2110,6 +2112,7 @@ function sairCarro() {
   if (c.rua !== undefined) { largarCarroRua(c); return; }
   jogador.carro = null; modoVolante(false);
   c.mesh.position.copy(jogador.pos); c.mesh.rotation.y = jogador.yaw;
+  if (c.moto) sairMoto(c);
   const v = carrosMundo.get(c.id); if (v) { v.d = { ...v.d, x: jogador.pos.x, z: jogador.pos.z, ang: jogador.yaw }; }
   if (v?.d.ladrao && v.d.ladrao === jogador.perfil?.id) ultimoLargado = { ref: 'car:' + c.id, ate: agoraServidor() + 90000 };   // carro arrombado: dá para pôr fogo
   rede.carros.estacionar(c.id, jogador.pos.x, jogador.pos.z, jogador.yaw).catch(() => {});
@@ -2151,13 +2154,13 @@ function dirigir(dt) {
     c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * (volante ? 3.4 + 4 * rapidez : 4.5 + 2 * rapidez));
     // distância entre eixos do próprio modelo (com dois eixos atrás, o efetivo fica mais para trás: vira mais aberto)
     const tc = tipoCabine(), ex = c.mesh ? civico.eixosDe(c.mesh) : null;
-    const eixo = ex && ex.zf - ex.zr > 1.5 ? ex.zf - ex.zr : tc === 'onibus' ? 6.2 : tc === 'caminhao' ? 4.8 : 2.7;
+    const eixo = c.moto ? 1.38 : ex && ex.zf - ex.zr > 1.5 ? ex.zf - ex.zr : tc === 'onibus' ? 6.2 : tc === 'caminhao' ? 4.8 : 2.7;
     // ângulo máximo das rodas (devagar dá para manobrar fechado: ônibus e caminhão viram até ~48°, como os de verdade)
     // e limite de aderência: quanto mais rápido, mais aberta a curva (~0,45 g no carro, ~0,3 g em caminhão/ônibus);
     // o tanque gira sobre as esteiras.
     const tanque = c.modelo === 'tanque', maxEsterco = tc === 'carro' ? 0.68 : 0.84;
-    c.eixoTras = tanque || !ex ? 0 : ex.zr;   // o veículo gira em volta do eixo de trás (a frente é que vira)
-    const aLat = tanque ? 99 : tc === 'carro' ? (c.modelo === 'esportivo' || c.modelo === 'classico' ? 9.5 : 8) : 5;   // 20i: ~0,8 g no carro (antes 0,45 g: a 30 km/h só fazia curva de 14 m)
+    c.eixoTras = c.moto ? -0.69 : tanque || !ex ? 0 : ex.zr;   // o veículo gira em volta do eixo de trás (a frente é que vira)
+    const aLat = c.moto ? 9 : tanque ? 99 : tc === 'carro' ? (c.modelo === 'esportivo' || c.modelo === 'classico' ? 9.5 : 8) : 5;   // 20i: ~0,8 g no carro (antes 0,45 g: a 30 km/h só fazia curva de 14 m)
     let curva = Math.tan(c.volante * maxEsterco) / eixo;
     const curvaMax = aLat / Math.max(1, vAbs * vAbs);
     curva = THREE.MathUtils.clamp(curva, -curvaMax, curvaMax);
@@ -2178,6 +2181,7 @@ function dirigir(dt) {
   if (!c.voa) { derrubarNoCaminho(c); colidirVeiculo(c, dt); resolverColisao(jogador.pos, c.raio || 1.3); }
   const andou = Math.hypot(jogador.pos.x - antes.x, jogador.pos.z - antes.z), esperado = Math.abs(c.vel) * dt;
   if (esperado > 0.01 && andou < esperado * 0.6) {          // bateu
+    if (c.moto && Math.abs(c.vel) > 7) { quedaMoto(c, 'frente'); return; }   // 21h: de moto, o piloto voa
     if (Math.abs(c.vel) > 6 && performance.now() - (c.batida || 0) > 1200) {
       c.batida = performance.now(); tremor = 0.35; if (c.aula) c.aula.batidas++;
       c.dano = Math.min(100, (c.dano || 0) + Math.min(45, Math.abs(c.vel) * 2.2));   // batida forte estraga mais
@@ -2194,6 +2198,7 @@ function dirigir(dt) {
   eixos.inclinar(c.mesh, alturaChao, c.raio > 1.5 ? 1.2 : 0.9);   // ladeira do morro: acompanha o chão
   if (c.modelo === 'caveirao') romperBarricada(c, dt, acel);
   jogador.avatar.raiz.position.copy(jogador.pos);
+  if (c.moto) passoMoto(c, dt, acel);
 }
 
 // ---------------------------------------------------------------- encomendas entre cidades e oficina de parafusos
@@ -2596,7 +2601,16 @@ const gatilho = { segurando: false, avisou: 0 };
 const geoBola = new THREE.SphereGeometry(0.07, 10, 8);
 const geoMancha = new THREE.CircleGeometry(0.35, 14);
 const CORES_TINTA = ['#ff3e6c', '#35d07f', '#3ea8ff', '#ffd23e', '#b05cff', '#ff8a2a'];
+// 21g: central de rádio da polícia (sai do rádio da viatura, um pouco depois da fala do policial)
+function radioCentral(v, nome) {
+  const q = v.obj.position, x = q.x, z = q.z;
+  setTimeout(() => dublar(nome, { x, z, raio: 70, chave: 'central', espera: nome === 'radio_detido' ? 4000 : 25000 }), 2600);
+}
 function atirar(alvo) {
+  if (!jogador.carro && !jogador.perfil?.policial && (performance.now() - (atirar.radio || 0) > 60000)) {   // tiro perto da polícia: a central avisa
+    const v = viaturas.find((x) => x.obj?.visible && Math.hypot(x.obj.position.x - jogador.pos.x, x.obj.position.z - jogador.pos.z) < 70);
+    if (v) { atirar.radio = performance.now(); radioCentral(v, 'radio_disparos'); }
+  }
   if (jogador.carro?.servico === 'tanque') { atirarTanque(); return; }
   if (jogador.granadaNaMao && !jogador.carro && !jogador.passageiro) {   // roda de armas: granada na mão
     lancarGranada();
@@ -2639,7 +2653,7 @@ function atirar(alvo) {
   if (dourada) {
     bolas[bolas.length - 1].pd = true; bolas[bolas.length - 1].m.scale.setScalar(1.6);
     armaPd = { ...armaPd, balas: armaPd.balas - 1 };
-    rede.pd.disparar().then((resta) => { aviso(resta > 0 ? `✨ Arma dourada: ${resta} bala restante.` : '✨ Última bala: a arma dourada sumiu.', 3); if (resta <= 0) { armaPd = { ...armaPd, ativa: false, dono: null }; pintarArma(); } }).catch(() => {});
+    rede.pd.disparar().then((resta) => { aviso(resta > 0 ? `✨ Arma lendária: ${resta} bala restante.` : '✨ Última bala: a arma lendária sumiu.', 3); if (resta <= 0) { armaPd = { ...armaPd, ativa: false, dono: null }; pintarArma(); } }).catch(() => {});
     jogador.recarga = 1.2;
   }
   const r2 = (n) => Math.round(n * 100) / 100;
@@ -3389,6 +3403,7 @@ function atualizarNPCs(dt) {
     const dx = alvo.x - p.x, dz = alvo.z - p.z, d = Math.hypot(dx, dz);
     if (d > 12) p.set(alvo.x, 0.18, alvo.z);                      // voltou da perseguição: retoma a ronda
     else { p.x += dx * Math.min(1, dt * 4); p.z += dz * Math.min(1, dt * 4); }
+    p.y += (alturaChao(p.x, p.z) - p.y) * Math.min(1, dt * 10);   // 21h: calçada alta / plataforma: não afunda
     n.av.raiz.rotation.y = suavizarAngulo(n.av.raiz.rotation.y, alvo.ang, dt * 6);
     n.av.mixer.update(dt);
   }
@@ -3903,7 +3918,7 @@ async function iniciarJogo(perfil) {
   iniciarLogistica();
   celular.iniciarCelular({
     hora: () => { const h = horaAtual || 0; return `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`; }, lugares: lugaresCelular, veiculos: veiculosCelular, marcar: (a) => rastrear(a),
-    abrirJanela: (q) => $(q === 'empresa' ? 'btEmpresa' : 'btCla')?.click(), chamarMecanico, estacionamentoPerto: estacionamentoMaisPerto,
+    abrirJanela: (q) => $(q === 'empresa' ? 'btEmpresa' : 'btCla')?.click(), chamarMecanico, chamarSamu, vida: () => Math.round(jogador.vida ?? 100), estacionamentoPerto: estacionamentoMaisPerto,
     saldoMudou: () => rede.carregarPerfil(jogador.perfil.id).then((p) => { if (p) { jogador.perfil.moedas = p.moedas; atualizarInfo(); } }).catch(() => {}), aoFechar: () => { if (jogador.emote === 'celular') jogador.emote = null; },
     moedas: () => jogador.perfil?.moedas || 0, lojaOnline, comprarOnline, miniaturaCarro,
     online: (id) => remotos.has(id), euId: () => jogador.perfil?.id, aviso, toqueCelular,
@@ -3930,6 +3945,7 @@ async function iniciarJogo(perfil) {
   });
   jornal.iniciarJornal({ perfil: () => jogador.perfil, mudou: () => { tempoJornal = 0.3; tempoTelao = 0; } });
   iniciarGoverno({
+    voz: (n) => dublar(n, { chave: 'vendedor' }),
     perfil: () => jogador.perfil, vestiario: () => vestiario(), treino: () => entrarTreino(), agora: agoraServidor, recarregar: () => { tempoPrefeitura = 0.3; tempoCarros = 0.5; tempoSocial = 0.5; },
     clas: () => [...clasCache.values()], territorios: () => [...territorios.values()].map((v) => v.d),
     minhasEmpresas: () => [...empresas.values()].filter((e) => e.dono === jogador.perfil.id),
@@ -4058,7 +4074,7 @@ let conexao = null, online = 1, conectado = false;
 let envioTimer = 0, ultimoEnvio = null, tempoKeepAlive = 0, tempoSalvar = 15;
 const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1, flexao_desce: 1, flexao_sobe: 1, parada: 1, coletar: 1.2, levantar_socorro: 1.6, beber: 1,
   abaixar: 1.8, levantar_abaixado: 1.8, deitar: 2, levantar_deitado: 2, cobertura_esq: 1.3, cobertura_dir: 1.3, granada_abaixado: 1.4, rolar_frente: 1.25, rolar_dir: 1.25, rolar_esq: 1.25, abaixar_arma: 1.3, levantar_abaixado_arma: 1.3, pular_muro: 1.3, pular_muro_parado: 1.4,
-  agarrar_muro: 1.4, subir_borda: 1.15, pular_baixo: 1.25, soltar_parede: 1, beira_cair: 1.1, cair_chao: 1, levantar_queda: 1.2, tentar_escalar: 1.2 };   // 21d: escalada   // 20p: posturas
+  agarrar_muro: 1.4, subir_borda: 1.15, pular_baixo: 1.25, soltar_parede: 1, beira_cair: 1.1, cair_chao: 1, levantar_queda: 1.2, tentar_escalar: 1.2, moto_subir: 2, moto_descer: 2, moto_queda_frente: 1.25, moto_queda_tras: 1.25 };   // 21d: escalada   // 20p: posturas
 const ANIM_VEL = { walk_shoot: 1.25, rastejar_frente: 1.9, rastejar_tras: 1.7, agachado_frente: 2.2, agachado_tras: 2.2, agachado_d: 2.4, rastejar_arma: 1.4 };
 
 function conectarMultiplayer(perfil) {
@@ -4144,6 +4160,7 @@ function atualizarRemotos(dt) {
   for (const r of remotos.values()) {
     if (!r.av || !r.alvo) continue;
     const raiz = r.av.raiz, a = r.alvo;
+    if (r.naMoto && !(a.cv && /\|moto_/.test(a.cv))) { r.naMoto = false; endireitarPiloto(r.av); }   // 21h: desceu da moto
     if (a.cs || r.esq) atualizarEsquadraRemota(r, a, dt);
     if (a.tr) {   // dentro do trem: a posição vem do horário, igual para todos
       const [li, k, v] = String(a.tr).split('.').map(Number), w = ferrovia.vaga(li, k, v);
@@ -4187,6 +4204,7 @@ function atualizarRemotos(dt) {
       r.carro.visible = !a.iv;   // óvni invisível
       if (mod === 'ambulancia' || mod === 'bombeiros') civico.atualizarSirenes(performance.now() / 1000, r.carro);
       raiz.position.copy(r.carro.position); raiz.visible = false; r.av.mixer.update(dt);
+      if (civico.CARROS[mod]?.moto) { posarMotoRemota(r, a, dt); continue; }   // 21h
       if (sentarNoVeiculo(r.av, r.carro, mod)) { r.arma.visible = false; r.anim = 'idle'; }
       continue;
     }
@@ -4230,9 +4248,9 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), iv: j.carro?.invisivel ? 1 : 0, mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? (j.paraquedas.mesh ? 1 : 2) : 0, ave: j.ave ? (j.ave.tipo === 'corvo' ? 1 : 2) : 0, bd: j.ave?.bando ? 1 : 0, oc: nomeOculto ? 1 : 0, mp: miraC.ligada ? Math.round(miraC.pitch * 20) / 20 : 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), iv: j.carro?.invisivel ? 1 : 0, mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? (j.paraquedas.mesh ? 1 : 2) : 0, ave: j.ave ? (j.ave.tipo === 'corvo' ? 1 : 2) : 0, bd: j.ave?.bando ? 1 : 0, oc: nomeOculto ? 1 : 0, mp: miraC.ligada ? Math.round(miraC.pitch * 20) / 20 : 0, mi: j.carro?.moto ? Math.round((j.carro.incl || 0) * 20) / 20 : 0, me: j.carro?.moto ? Math.round((j.carro.emp || 0) * 20) / 20 : 0 };
   const u = ultimoEnvio;
-  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs || u.iv !== est.iv || u.mh !== est.mh || u.ap !== est.ap || u.sg !== est.sg || u.mp !== est.mp;
+  const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs || u.iv !== est.iv || u.mh !== est.mh || u.ap !== est.ap || u.sg !== est.sg || u.mp !== est.mp || u.mi !== est.mi || u.me !== est.me;
   if (!mudou && tempoKeepAlive > 0) return;
   conexao.enviar('pos', est); ultimoEnvio = est; tempoKeepAlive = 3;
 }
@@ -5978,6 +5996,7 @@ const SOM_AVIAO = { gigante: 'aviaoG', grande: 'aviaoG', medio: 'aviaoM', pequen
 const PERFIL_SOM = {
   popular: 'popular', autoescola: 'popular', esportivo: 'esportivo', presidencial: 'presidencial', suv: 'suv', viatura: 'suv',
   militar: 'jipe', van: 'van', ambulancia: 'van', classico: 'classico',
+  moto_250: 'moto250', moto_650: 'moto650',   // 21h: motos (partida igual, ronco e câmbio próprios)
   caminhao: 'caminhao', caminhao_escola: 'caminhao', caminhao_lixo: 'caminhao', lixo: 'caminhao', bombeiros: 'caminhao', exercito_caminhao: 'caminhao', tanque: 'caminhao',
 };
 function perfilSom(modelo) {
@@ -5985,6 +6004,7 @@ function perfilSom(modelo) {
   if (/^onibus/.test(modelo)) return { p: 'onibusN', ronco: false, tom: 1, marchas: 6 };   // 20z: sons novos (ligando, parado, andando)
   const p = PERFIL_SOM[modelo]; if (!p) return null;
   if (p === 'caminhao') return { p: 'caminhaoN', ronco: false, tom: modelo === 'tanque' ? 0.78 : 1, tomAlto: 0.86, marchas: 6 };   // andar = o do ônibus mais grave
+  if (/^moto/.test(p)) return { p, ronco: true, tom: 1, marchas: 6 };
   return { p, ronco: true, tom: 1, marchas: 5 };
 }
 const perfilDoCarro = (c) => perfilSom(c.caminhao ? (c.tipo || 'caminhao') : c.modelo) || perfilSom(c.servico);
@@ -6209,7 +6229,7 @@ function atualizarChat(dt) {
   if (tempoAmigos <= 0) { tempoAmigos = 45; carregarAmigos(); celular.recarregarNaoLidas(); }
 }
 
-// ---------------------------------------------------------------- ARMA DOURADA (evento): 2 balas, quem morre por ela acorda no cemitério
+// ---------------------------------------------------------------- ARMA LENDÁRIA (evento): 2 balas, quem morre por ela acorda no cemitério
 let armaPd = null, objArmaPd = null, brilhoPd = null;
 function aoArmaPd(a) { armaPd = a; pintarArma(); }
 const tenhoArmaPd = () => !!(armaPd?.ativa && armaPd.dono === jogador.perfil?.id && armaPd.balas > 0);
@@ -6218,7 +6238,7 @@ async function pegarArmaPd() {
   try {
     const b = await rede.pd.pegar(jogador.pos.x, jogador.pos.z);
     armaPd = { ...armaPd, dono: jogador.perfil.id, balas: b }; pintarArma();
-    aviso(`✨ Você pegou a ARMA DOURADA: ${b} balas. Use a arma (Q) para atirar. Quem cair por ela vai para o cemitério; a equipe é imune.`, 6);
+    aviso(`✨ Você pegou a ARMA LENDÁRIA: ${b} balas. Use a arma (Q) para atirar. Quem cair por ela vai para o cemitério; a equipe é imune.`, 6);
     if (!jogador.armado) alternarArma();
   } catch (e) { aviso(e.message); }
 }
@@ -6233,7 +6253,7 @@ function pintarArma() {
   });
 }
 function acertoDourado(id) {
-  rede.pd.acertar(id).then((r) => aviso(r === 'imune' ? '🛡 A equipe é imune à arma dourada.' : '☠️ Atingido pela ARMA DOURADA! Você agora é muito procurado.', 4)).catch((e) => aviso(e.message));
+  rede.pd.acertar(id).then((r) => aviso(r === 'imune' ? '🛡 A equipe é imune à arma lendária.' : '☠️ Atingido pela ARMA LENDÁRIA! Você agora é muito procurado.', 4)).catch((e) => aviso(e.message));
 }
 function atualizarArmaPd(dt) {
   if (!armaPd && !atualizarArmaPd.pediu) { atualizarArmaPd.pediu = true; rede.pd.estado().then((a) => { if (a) aoArmaPd(a); }).catch(() => {}); }
@@ -6752,7 +6772,7 @@ function falarBruxo() {
     { rotulo: '🐦 Virar pássaro durante um ciclo (quando quiser — ótimo para fugir)', fn: pedir('passaro', () => '🐦 Feitiço lançado! Use o botão Extra "🐦 Voar" quando quiser, por 32 minutos.') },
     { rotulo: '⚖️ Ser perdoado de todos os crimes', fn: pedir('perdao', () => '⚖️ Seus crimes sumiram como fumaça. Você está limpo.') },
     { rotulo: '💰 Riqueza: de 1 a 10 milhões de moedas (a sorte decide)', fn: pedir('dinheiro', (r) => `💰 O Bruxo encheu seus bolsos: +${num(r.valor)} moedas!`) },
-    { rotulo: '✨ A arma amarela (dourada), com 2 balas', fn: pedir('arma', () => '✨ A ARMA DOURADA é sua: 2 balas. Saque a arma para usar.') },
+    { rotulo: '✨ A arma lendária (amarela), com 2 balas', fn: pedir('arma', () => '✨ A ARMA LENDÁRIA é sua: 2 balas. Saque a arma para usar.') },
     { rotulo: '🤔 Pensar mais um pouco', fn: () => { aviso('🧙 “Estarei aqui esperando o seu pedido…”', 3); dublar('bruxo_espera'); } },
   ]);
 }
@@ -7526,9 +7546,9 @@ async function morrerLocal(pd = false) {
   telaFim('morte');
   setTimeout(() => { if (j.morto) porPoca(j, j.pos.x, j.pos.z); }, 900);
   const quem = remotos.get(j.ultimoAgressor)?.meta.nome;
-  if (pd) {   // arma dourada: ninguém socorre; 7 s depois acorda no cemitério
+  if (pd) {   // arma lendária: ninguém socorre; 7 s depois acorda no cemitério
     rede.combate.morrer(j.ultimoAgressor || null).catch(() => {});
-    aviso(`☠️ Você foi atingido pela ARMA DOURADA${quem ? ` de ${quem}` : ''}. Vão te enterrar…`, 6);
+    aviso(`☠️ Você foi atingido pela ARMA LENDÁRIA${quem ? ` de ${quem}` : ''}. Vão te enterrar…`, 6);
     clearTimeout(j.timerHospital); j.timerHospital = setTimeout(entrarCeu, 6000);   // 5 min no purgatório
     return;
   }
@@ -7566,6 +7586,24 @@ function acordarNoCemiterio() {
   teleportar(p.x, p.z);
   levantar(100);
   aviso('✝ Você acordou no cemitério…', 4);
+}
+// 21f: 🚑 SAMU no celular: com a vida abaixo de 60%, chama a ambulância; o socorrista cuida de você (vida cheia, 150 moedas)
+let samuAte = 0;
+function chamarSamu() {
+  const j = jogador;
+  if (j.morto) throw new Error('A ambulância já foi chamada.');
+  if ((j.vida ?? 100) >= 60) throw new Error('Só dá para chamar com a vida abaixo de 60%.');
+  if (j.carro || j.passageiro || j.dentroCasa || j.trem || j.esc || j.emCima || j.pos.x >= 1500) throw new Error('A ambulância não consegue chegar aí. Vá para a rua.');
+  if ((j.perfil?.moedas || 0) < 150) throw new Error('Precisa de 150 moedas.');
+  if (performance.now() < samuAte) throw new Error('A ambulância já está a caminho.');
+  const seg = servicos.chamarAmbulancia('samu', { x: j.pos.x, z: j.pos.z }, () => {
+    samuAte = 0; if (jogador.morto) return;
+    rede.saude.tratar().then(() => { jogador.perfil.moedas = Math.max(0, (jogador.perfil.moedas || 0) - 150); atualizarInfo(); }).catch(() => {});
+    jogador.vida = 100; desenharFome(); aviso('🚑 O socorrista cuidou de você: vida cheia. Conta: 150 moedas.', 4);
+  }, 1.5);
+  if (!seg) throw new Error('A ambulância já está a caminho.');
+  samuAte = performance.now() + (seg + 30) * 1000;
+  return `🚑 Ambulância a caminho (~${Math.ceil(seg)} s). Fique onde está.`;
 }
 function medicoOnline() { return [...remotos.values()].some((r) => r.meta?.profissao === 'medico'); }
 function atendidoPeloNpc() {
@@ -8509,8 +8547,8 @@ function atualizarViaturas(dt) {
     }
     if (cacado) {
       const dx = j.pos.x - o.position.x, dz = j.pos.z - o.position.z, d = Math.hypot(dx, dz);
-      if (!v.perseguindo && d < (atacou ? 160 : 90)) { v.perseguindo = true; dublar(`pol_suspeito${viaturas.indexOf(v) % 2 ? '_f' : ''}`, { chave: 'radio', espera: 20000 }); aviso(denuncia ? '🚓 O pedestre chamou a polícia: uma viatura está vindo!' : atacou ? '🚓 Você atirou na polícia: as viaturas estão vindo!' : '🚓 Uma viatura da polícia está atrás de você!', 3); }
-      if (v.perseguindo && d > 220) { v.perseguindo = false; dublar(`pol_perdi${viaturas.indexOf(v) % 2 ? '_f' : ''}`, { chave: 'radio', espera: 8000 }); }
+      if (!v.perseguindo && d < (atacou ? 160 : 90)) { v.perseguindo = true; dublar(`pol_suspeito${viaturas.indexOf(v) % 2 ? '_f' : ''}`, { chave: 'radio', espera: 20000 }); radioCentral(v, viaturas.filter((x) => x.perseguindo).length > 1 ? 'radio_reforco' : 'radio_fuga'); aviso(denuncia ? '🚓 O pedestre chamou a polícia: uma viatura está vindo!' : atacou ? '🚓 Você atirou na polícia: as viaturas estão vindo!' : '🚓 Uma viatura da polícia está atrás de você!', 3); }
+      if (v.perseguindo && d > 220) { v.perseguindo = false; dublar(`pol_perdi${viaturas.indexOf(v) % 2 ? '_f' : ''}`, { chave: 'radio', espera: 8000 }); if (!viaturas.some((x) => x.perseguindo)) radioCentral(v, 'radio_perdido'); }
       if (v.perseguindo) {
         perseguirComViatura(v, o, dt, d);
         if (!v.perseguindo || v.pe) continue;
@@ -8605,7 +8643,7 @@ function perseguirComViatura(v, o, dt, d) {
   dirigirIA(v, o, d < 30 ? { x: j.pos.x - dx / Math.max(1, d) * 3, z: j.pos.z - dz / Math.max(1, d) * 3 } : alvoNaRota(v, o, j), dt, 9);
   if (d < 30) vozViatura(v, 'parado', 10000);
   if (d < 6 && !j.passageiro && !ocupado) {
-    ocupado = true; v.perseguindo = false; vozViatura(v, 'preso');
+    ocupado = true; v.perseguindo = false; vozViatura(v, 'preso'); radioCentral(v, 'radio_detido');
     rede.recompensas.presoPorRobo().then((min) => { if (min) aviso(`🚓 A viatura te alcançou: ${min} min de pena.`, 4); }).catch((e) => aviso(e.message)).finally(() => { ocupado = false; });
   }
 }
@@ -9195,7 +9233,7 @@ function teleportar(x, z) {
 
 function aoComando(c) {
   if (c.tipo === 'teleporte' && c.dados) { teleportar(Number(c.dados.x), Number(c.dados.z)); aviso('Você foi teleportado pela equipe.'); }
-  if (c.tipo === 'aviso' && c.dados?.texto) { aviso(c.dados.texto, 5); atualizarJanelaEmpresa(); }
+  if (c.tipo === 'aviso' && c.dados?.texto) { aviso(String(c.dados.texto).replace(/ARMA DOURADA/g, 'ARMA LENDÁRIA').replace(/arma dourada/gi, 'arma lendária'), 5); atualizarJanelaEmpresa(); }   // 21f: nome novo também nos avisos do servidor
   if (c.tipo === 'socorro') socorrido(c.dados?.medico);
   if (c.tipo === 'medicado') medicado(c.dados?.medico);
   if (c.tipo === 'reviver') { if (jogador.noCeu) voltarDoCeu('⚡ O General Supremo te reviveu.'); else if (jogador.morto) { levantar(100); aviso('⚡ O General Supremo te reviveu.', 4); } }
@@ -9840,6 +9878,7 @@ function atualizarCamera(dt) {
 }
 
 function atualizarHUD(dt) {
+  if (!jogador.carro?.moto && document.body.classList.contains('moto')) { document.body.classList.remove('moto'); pedais.empinar = false; endireitarPiloto(jogador.avatar); }   // 21h: saiu da moto por outro caminho
   { const sg = !!(jogador.carro || jogador.passageiro || jogador.onibus || jogador.voo || jogador.embarcado || modo3D()); if (sg !== document.body.classList.contains('semGirar')) document.body.classList.toggle('semGirar', sg); }   // 21d: dirigindo/3D a câmera já gira sozinha ou arrastando
   tempoMapa -= dt;
   if (tempoMapa <= 0) { tempoMapa = 0.1; desenharMapa(); $('rua').textContent = `${nomeDaRua(jogador.pos.x, jogador.pos.z) || '—'} · ${textoHora()}`; }
@@ -9951,7 +9990,7 @@ function contexto() {
   { const cr = carroRuaProximo(); if (cr !== null && !jogador.carregando) return ['arrombar o carro estacionado (crime)', 'Arrombar']; }
   { const ca = carroAlheioProximo(); if (ca && !jogador.carregando) return jogador.perfil?.policial || jogador.perfil?.prf ? ['devolver o carro roubado ao dono (+300)', 'Recuperar'] : ['arrombar o carro e sair dirigindo (crime)', 'Arrombar']; }
   if (taxi?.modo === 'roubo' && taxi.fase === 'esperando' && Math.hypot(taxi.c.obj.position.x - jogador.pos.x, taxi.c.obj.position.z - jogador.pos.z) < 8) return ['RENDER MOTORISTA: ele leva a carga para o seu território ou casa', 'Render'];
-  if (armaPdPerto()) return ['pegar a ARMA DOURADA (2 balas)', 'Pegar'];
+  if (armaPdPerto()) return ['pegar a ARMA LENDÁRIA (2 balas)', 'Pegar'];
   { const vp = veiculoProximo(); if (vp && !jogador.carregando) return vp.texto; }
   { const sv = servicoProximo(); if (sv) return [sv.modelo === 'ambulancia' ? 'dirigir a ambulância' : civico.DO_EXERCITO.has(sv.modelo) ? `${civico.CARROS[sv.modelo].voa ? 'pilotar' : 'dirigir'} o ${civico.CARROS[sv.modelo].nome.toLowerCase().replace(' do exército', ' do Exército')}` : 'dirigir o caminhão dos bombeiros', 'Dirigir']; }
   if (taxi?.fase === 'esperando' && taxi.modo !== 'roubo' && Math.hypot(taxi.c.obj.position.x - jogador.pos.x, taxi.c.obj.position.z - jogador.pos.z) < 8) return [`embarcar no seu ${NOME_VEICULO[taxi.c.d.tipo]?.toLowerCase() || 'veículo'}`, 'Embarcar'];
@@ -11918,7 +11957,7 @@ function rebocarAbandonados() {
   }
 }
 // ---------------------------------------------------------------- concessionária online 🛒 (111): +15%, entrega no estacionamento
-const MODELOS_ONLINE = ['popular', 'saveiro', 'saveiro_som', 'suv', 'esportivo', 'classico'];
+const MODELOS_ONLINE = ['moto_250', 'moto_650', 'popular', 'saveiro', 'saveiro_som', 'suv', 'esportivo', 'classico'];
 function lojaOnline() {
   return { cores: civico.CORES_CARRO, carros: MODELOS_ONLINE.filter((m) => civico.CARROS[m]).map((m) => ({ id: m, nome: civico.CARROS[m].nome, preco: Math.ceil(civico.CARROS[m].preco * 1.15), kmh: Math.round(civico.CARROS[m].vel * 3.6) })) };
 }
@@ -14529,7 +14568,8 @@ function proximoPontoNome(L, e) {
 }
 async function embarcarOnibus(b) {
   try { await rede.transporte.tarifa(); } catch (e) { aviso(e.message || 'Sem moedas para a passagem (5).', 3); return; }
-  jogador.onibus = { L: b.L, m: b.m, descer: false };
+  jogador.onibus = { L: b.L, m: b.m, descer: false, noPonto: true, terminal: !!(b.e?.baia) };
+  dublar('mot_oi', { chave: 'motorista', espera: 2500 });   // 21g: motorista
   if (jogador.armado) alternarArma();
   jogador.alvo = null; jogador.avatar.raiz.visible = false;
   aviso(`🚌 ${b.L.nome} · −5 moedas. Toque em Descer para saltar no próximo ponto.`, 4);
@@ -14542,10 +14582,18 @@ function seguirOnibus() {
   const atrasoB = estadoBus.get(`${o.L.id}.${((o.m % o.L.k) + o.L.k) % o.L.k}`)?.atraso || 0;
   const e = b?.e || estadoSaida(o.L, o.m, t - atrasoB);
   const tomada = saidasOcupadas.has(`${o.L.id}.${o.m}`) || saidasSequestradas.has(`${o.L.id}.${o.m}`);
+  if (e?.fila && !tomada) dublar('mot_final', { chave: 'motorista' });   // 21g: chegou na rodoviária
   if (!e || tomada || e.fila) { descerOnibus(e ? e.s : o.L.sFila, tomada ? (saidasSequestradas.has(`${o.L.id}.${o.m}`) ? "🔫 O ônibus foi sequestrado! Você desceu." : "🚌 Troca de motorista: desça aqui.") : '🚌 Rodoviária! Fim da linha.'); return; }
   const q = b ? { x: b.x, z: b.z, ang: b.ang } : pontoCaminho(o.L, e.s);
   jogador.pos.set(q.x, alturaChao(q.x, q.z), q.z); jogador.yaw = q.ang; jogador.avatar.raiz.position.copy(jogador.pos);
   o.e = e;
+  // 21g: falas do motorista: fecha as portas ao sair do ponto e anuncia a próxima parada; saindo da plataforma, "segura firme"
+  const noPonto = e.ponto !== undefined || !!e.baia;
+  if (o.noPonto && !noPonto) {
+    dublar(o.terminal ? 'mot_sair' : 'mot_portas', { chave: 'motorista' });
+    const L = o.L, m = o.m; setTimeout(() => { if (jogador.onibus?.L === L && jogador.onibus.m === m) dublar('mot_proxima', { chave: 'motorista' }); }, 7000);
+  }
+  o.noPonto = noPonto; o.terminal = !!e.baia;
   if (e.ponto !== undefined && o.descer && (o.L.tab[e.ponto].sai - (t - atrasoB - horaSaida(o.L, o.m))) > 0.5) descerOnibus(e.s, `🚏 ${o.L.pontos[e.ponto].nome}`);
 }
 function descerOnibus(s, msg) {
@@ -17783,7 +17831,7 @@ function balaNaAeronave(b) {
 // Abaixar vira 🛡️ Cobertura: agacha, sai para o lado da mira, atira e volta. Abaixado/deitado é alvo menor.
 // 20q: deitado, o corpo encosta no chão (o modelo de origem flutuava uns centímetros): mede os ossos mais baixos e desce
 // a raiz até eles ficarem na altura do chão. Rastejando/engatinhando ou na transição, a arma fica guardada (nas costas)
-const PRONO = /^(deitado|rastejar|deitar|levantar_deitado)/, ARMA_GUARDADA = /^(rastejar_frente|rastejar_tras|deitar|levantar_deitado|abaixar$|levantar_abaixado$|rolar|pular_muro|agarrar_muro|escalar|subir_borda|pular_baixo|soltar_parede|corda_bamba|beira_cair|cair_chao|levantar_queda|tentar_escalar)/;   // as versões _arma seguram a arma
+const PRONO = /^(deitado|rastejar|deitar|levantar_deitado)/, ARMA_GUARDADA = /^(rastejar_frente|rastejar_tras|deitar|levantar_deitado|abaixar$|levantar_abaixado$|rolar|pular_muro|agarrar_muro|escalar|subir_borda|pular_baixo|soltar_parede|corda_bamba|beira_cair|cair_chao|levantar_queda|tentar_escalar|moto_)/;   // as versões _arma seguram a arma
 const OSSOS_CHAO = ['Hips', 'Spine2', 'Head', 'LeftHand', 'RightHand', 'LeftForeArm', 'RightForeArm', 'LeftLeg', 'RightLeg', 'LeftFoot', 'RightFoot'];
 const _vChao = new THREE.Vector3();
 function ajustarChaoPostura(av, baseY, dt) {
@@ -19049,7 +19097,7 @@ async function desenharTatica() {
     <div class="botoes">${desviadas.map((d) => `<button data-desv="${d.id}">${jogador.desviada?.id === d.id ? '✔️ ' : ''}${d.item === 'fuzil' ? 'Fuzil' : 'Espingarda'} (${jogador.desviada?.id === d.id ? jogador.desviada.balas : d.balas} balas)</button>`).join('')}</div>`;
   if (souAdmin()) {
     const mortos = [...remotos].filter(([, r]) => r.meta?.ceu || r.meta?.ferido);
-    h += `<div class="sub">☁️ Purgatório e mortos (General Supremo)</div><p class="dica">Reviva qualquer um. No purgatório (arma dourada), chegue perto e ofereça a segunda chance: ele escolhe voltar agora ou com outro nome (+2.000.000).</p>
+    h += `<div class="sub">☁️ Purgatório e mortos (General Supremo)</div><p class="dica">Reviva qualquer um. No purgatório (arma lendária), chegue perto e ofereça a segunda chance: ele escolhe voltar agora ou com outro nome (+2.000.000).</p>
       <div class="botoes"><button id="tCeu">☁️ Ir ao purgatório</button></div>
       <div class="lista">${mortos.length ? mortos.map(([id, r]) => `<div class="linha item"><span class="nm"><b>${esc(r.meta.nome)}</b><small>${r.meta.ceu ? 'no purgatório' : 'caído, esperando socorro'}</small></span><span class="bts"><button data-revive="${id}">⚡ Reviver</button></span></div>`).join('') : '<span class="vazio">Ninguém morto agora.</span>'}</div>`;
   }
@@ -19588,7 +19636,7 @@ function botaoGranadaMira(bt) {
   bt.addEventListener('pointercancel', (ev) => soltarMiraG(ev, true));
 }
 
-// ================================================================= 87: armas desviadas (Seu Tonho), purgatório da arma dourada e lápide
+// ================================================================= 87: armas desviadas (Seu Tonho), purgatório da arma lendária e lápide
 // ---------------------------------------------------------------- armas desviadas: 80 balas e depois são descartadas
 let desviadas = [], tDesv = 0;
 function carregarDesviadas() { if (jogador.perfil) rede.tatica.minhasDesviadas(jogador.perfil.id).then((l) => { desviadas = l || []; }).catch(() => {}); }
@@ -19610,14 +19658,14 @@ async function menuTonho() {
   const est = await rede.tatica.tonhoEstoque();
   const ops = [{ rotulo: '🍬 Jujubas (500 cada)', fn: () => racoes.abrir('comprador') }, { rotulo: '🚀 Pegar minha parte do saque de lançadores (clã)', fn: () => rede.tatica.pegarSaque(jogador.pos.x, jogador.pos.z).then((t) => { aviso(`🚀 Você pegou ${t}. Equipe no 🎯 Tático.`, 4); recarregarInventario(); }).catch((x) => aviso(x.message, 3)) }];
   for (const e of est) ops.push({ rotulo: `${NOME_TONHO[e.item] || e.item} · ${num(e.preco)}${e.qtd ? ` (${e.qtd} no estoque)` : ' (sem estoque)'}`, fn: () => comprarTonho(e) });
-  escolher('📦 Seu Tonho', '"Tenho jujuba e umas armas que caíram do caminhão do Exército. Arma desviada vem com <b>80 balas</b> e depois vira descartável, igual a dourada."', ops);
+  escolher('📦 Seu Tonho', '"Tenho jujuba e umas armas que caíram do caminhão do Exército. Arma desviada vem com <b>80 balas</b> e depois vira descartável, igual à lendária."', ops);
 }
 function comprarTonho(e) {
   if (!e.qtd) { aviso('O Seu Tonho está sem estoque disso agora.', 2.5); return; }
   rede.tatica.comprarTonho(e.item).then(() => { aviso(e.item === 'granada' ? '💣 Granada comprada.' : '🔫 Arma desviada comprada: equipe no 🎯 Tático (80 balas).', 3.5); recarregarInventario(); carregarDesviadas(); }).catch((x) => aviso(x.message, 3));
 }
 
-// ---------------------------------------------------------------- purgatório (arma dourada): 5 min, segunda chance
+// ---------------------------------------------------------------- purgatório (arma lendária): 5 min, segunda chance
 const PURG = { bx: 3000, bz: 3400 };
 const souAdmin = () => jogador.perfil?.cargo === 'admin';
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -19742,8 +19790,8 @@ function montarLapide() {
 }
 async function verLapide() {
   let l = []; try { l = (await rede.tatica.nomesMortos()) || []; } catch { l = []; }
-  escolher('🪦 Nomes que partiram', l.length ? l.map((m) => `✝ <b>${esc(m.nome)}</b> · ${new Date(m.morto_em).toLocaleDateString('pt-BR')}${m.meu ? ' <small>(seu: para reaver, só morrendo de novo pela arma dourada)</small>' : ''}`).join('<br>')
-    : 'Nenhum nome na lápide ainda. Quem morre pela arma dourada e volta com outro nome deixa o antigo aqui: ninguém mais pode usar.', [{ rotulo: 'Ok', fn: () => {} }]);
+  escolher('🪦 Nomes que partiram', l.length ? l.map((m) => `✝ <b>${esc(m.nome)}</b> · ${new Date(m.morto_em).toLocaleDateString('pt-BR')}${m.meu ? ' <small>(seu: para reaver, só morrendo de novo pela arma lendária)</small>' : ''}`).join('<br>')
+    : 'Nenhum nome na lápide ainda. Quem morre pela arma lendária e volta com outro nome deixa o antigo aqui: ninguém mais pode usar.', [{ rotulo: 'Ok', fn: () => {} }]);
 }
 function feridoRemotoPerto(raio) {
   for (const [id, r] of remotos) { const q = posRemoto(r); if (r.meta?.ferido && q && Math.hypot(q.x - jogador.pos.x, q.z - jogador.pos.z) < raio) return { id, nome: r.meta.nome }; }
@@ -20028,6 +20076,13 @@ function passoEscalada(dt, ix, iy, dir, forca) {
   } else if (e.fase === 'tombo') {   // bate no chão e vai de costas
     ry = e.chao;
     if (e.t * 1.3 >= 1.0) { Object.assign(e, { fase: 'levantar', t: 0, vel: 1.2, h2: e.chao }); av.tocar('levantar_queda', { umaVez: true, velocidade: 1.2, fade: 0.25 }); }
+  } else if (e.fase === 'motoVoo') {   // 21h: voou da moto
+    const f = Math.min(1, e.t / e.dur), s = 1 - (1 - f) * (1 - f);
+    const nx = e.bx + e.dx * e.D * s, nz = e.bz + e.dz * e.D * s;
+    j.pos.x = nx; j.pos.z = nz; resolverColisao(j.pos, j.raio);
+    const ch = alturaChao(j.pos.x, j.pos.z); e.chao = ch;
+    ry = ch + (e.y0 - ch) * (1 - f) + Math.sin(Math.PI * f) * e.h;
+    if (ta >= 2.9) { Object.assign(e, { fase: 'levantar', t: 0, vel: 1.2, h2: ch }); av.tocar('levantar_queda', { umaVez: true, velocidade: 1.2, fade: 0.25 }); }
   } else if (e.fase === 'levantar') {
     ry = e.h2;
     if (ta >= 2.35) { const em = j.emCima; j.esc = null; j.pos.y = e.h2; j.emCima = em; if (!em) resolverColisao(j.pos, j.raio); av.tocar('idle', { fade: 0.25 }); }
@@ -20066,6 +20121,108 @@ function encurtarCamera(alvo, pos, dt) {
   for (let i = 1; i <= n; i++) { _qCam.lerpVectors(alvo, pos, i / n); if (pontoEmParede(_qCam)) { f = Math.max(0.1, (i - 1.3) / n); break; } }
   fatorCam = f < fatorCam ? f : fatorCam + (f - fatorCam) * Math.min(1, dt * 3);   // chega na hora, volta devagar
   if (fatorCam < 0.999) pos.lerpVectors(alvo, pos, fatorCam);
+}
+
+// ---------------------------------------------------------------- 21h: motos
+// O piloto aparece sentado (animação própria), a moto deita na curva conforme a velocidade, o botão EMPINAR levanta
+// a frente (segurar demais vira para trás) e batida forte joga o piloto longe: ele cai, levanta e a moto fica deitada.
+const MOTO_ANIMS = ['moto_pilotar', 'moto_curva_dir', 'moto_curva_esq', 'moto_empinar', 'moto_subir', 'moto_descer', 'moto_queda_frente', 'moto_queda_tras'];
+const MOTO_BANCO = { moto_250: [0.86, -0.22], moto_650: [0.9, -0.2] };   // altura e posição (z) do banco no modelo
+const _vMoto = new THREE.Vector3();
+function entrarMoto(c) {
+  const av = jogador.avatar; c.moto = true; c.raio = 0.6; c.incl = 0; c.emp = 0;
+  for (const n of MOTO_ANIMS) av.garantir(n);
+  c.mesh.rotation.order = 'YXZ';
+  document.body.classList.add('moto');
+  av.raiz.visible = true; if (jogador.arma) jogador.arma.visible = false;
+  c.subindo = av.clipes.moto_subir ? 1.5 : 0;
+  if (c.subindo) av.tocar('moto_subir', { umaVez: true, velocidade: 2, fade: 0.1 }); else av.tocar(av.clipes.moto_pilotar ? 'moto_pilotar' : 'idle', { fade: 0.15 });
+}
+function sairMoto(c) {
+  document.body.classList.remove('moto'); pedais.empinar = false;
+  c.mesh.rotation.x = 0; c.mesh.rotation.z = 0.12;   // no descanso, um pouco inclinada
+  for (const n of ['roda_f', 'roda_t']) { const r = c.mesh.getObjectByName(n); if (r) r.rotation.x = r.rotation.x % (Math.PI * 2); }
+  endireitarPiloto(jogador.avatar); jogador.avatar.tocar('idle', { fade: 0.2 });
+}
+function endireitarPiloto(av) { if (!av) return; av.raiz.rotation.set(0, av.raiz.rotation.y, 0); av.raiz.rotation.order = 'XYZ'; }
+// põe o piloto no banco: o quadril vai para o ponto do banco (acompanha a inclinação e a empinada da moto)
+function sentarNaMoto(av, mesh, modelo, anim, dt) {
+  if (!av) return;
+  if (anim && av.nomeAtual !== anim && av.clipes[anim]) av.tocar(anim, { fade: 0.2 });
+  const b = MOTO_BANCO[modelo] || [0.86, -0.2], raiz = av.raiz;
+  mesh.updateMatrixWorld(true);
+  const banco = mesh.localToWorld(_vMoto.set(0, b[0] + 0.06, b[1]));
+  raiz.quaternion.copy(mesh.quaternion);
+  if (/^moto_curva/.test(av.nomeAtual)) {   // a animação de curva já deita o corpo: a moto leva menos
+    raiz.rotation.order = 'YXZ'; raiz.rotation.z *= 0.45;
+  }
+  raiz.visible = true; raiz.position.copy(banco); raiz.updateMatrixWorld(true);
+  av.mixer.update(dt || 0); raiz.updateMatrixWorld(true);
+  const hips = ossosSentar(av).hips;
+  if (hips) { const hp = hips.getWorldPosition(_eixoS); raiz.position.x += banco.x - hp.x; raiz.position.y += banco.y - hp.y; raiz.position.z += banco.z - hp.z; raiz.updateMatrixWorld(true); }
+}
+function animMoto(incl, emp, subindo) {
+  if (subindo > 0) return null;
+  if (emp > 0.15) return 'moto_empinar';
+  if (incl < -0.22) return 'moto_curva_esq';
+  if (incl > 0.22) return 'moto_curva_dir';
+  return 'moto_pilotar';
+}
+function girarRodasMoto(mesh, dist) {
+  for (const n of ['roda_f', 'roda_t']) { const r = mesh.getObjectByName(n); if (r) r.rotation.x += dist / 0.32; }
+}
+function passoMoto(c, dt, acel) {
+  const av = jogador.avatar, mesh = c.mesh, v = c.vel || 0;
+  // deita na curva: tan(inclinação) = v² · curvatura / g = v · (giro por segundo) / g
+  const giro = THREE.MathUtils.clamp(Math.atan2(Math.sin(jogador.yaw - (c.yawAntes ?? jogador.yaw)), Math.cos(jogador.yaw - (c.yawAntes ?? jogador.yaw))) / Math.max(dt, 1e-3), -3, 3);
+  const alvo = Math.abs(v) < 0.6 ? 0.1 : THREE.MathUtils.clamp(-Math.atan(v * giro / 9.8), -0.78, 0.78);
+  c.incl += (alvo - c.incl) * Math.min(1, dt * 6);
+  // empinar: segura o botão (com velocidade); passou do ponto, vira para trás
+  if (pedais.empinar && v > 2.5) c.emp += dt * (acel ? 1.15 : 0.6) * (1 - c.emp * 0.35);
+  else c.emp = Math.max(0, c.emp - dt * (pedais.empinar ? 0.6 : 1.6));
+  if (c.emp > 1.08) { quedaMoto(c, 'tras'); return; }
+  if (c.emp > 0.2) c.vel = Math.min(c.vel, (c.max || civico.CARROS[c.modelo].vel) * 0.85);
+  // aplica: gira em volta do eixo de trás quando empina (a frente sobe, a traseira fica no chão)
+  const sx = mesh.rotation.x, sz = mesh.rotation.z;   // ladeira (eixos.inclinar)
+  mesh.rotation.order = 'YXZ'; mesh.rotation.x = sx - c.emp; mesh.rotation.z = c.incl; void sz;   // a moto não tomba para fora como carro
+  const zr = 0.69, dy = zr * Math.sin(c.emp), dz = zr * (Math.cos(c.emp) - 1);
+  mesh.position.x += Math.sin(jogador.yaw) * dz; mesh.position.z += Math.cos(jogador.yaw) * dz; mesh.position.y += dy;
+  girarRodasMoto(mesh, v * dt);
+  if (c.subindo > 0) c.subindo -= dt;
+  sentarNaMoto(av, mesh, c.modelo, animMoto(c.incl, c.emp, c.subindo), 0);
+  if (jogador.arma) jogador.arma.visible = false;
+}
+// outro jogador de moto: inclinação e empinada vêm dele; o piloto aparece sentado
+function posarMotoRemota(r, a, dt) {
+  const m = r.carro; m.rotation.order = 'YXZ';
+  const ud = m.userData; ud.mi = (ud.mi || 0) + ((a.mi || 0) - (ud.mi || 0)) * Math.min(1, dt * 8); ud.me = (ud.me || 0) + ((a.me || 0) - (ud.me || 0)) * Math.min(1, dt * 8);
+  m.rotation.x -= ud.me; m.rotation.z = ud.mi;
+  const zr = 0.69; m.position.y += zr * Math.sin(ud.me);
+  if (ud.rx !== undefined) girarRodasMoto(m, Math.min(3, Math.hypot(m.position.x - ud.rx, m.position.z - ud.rz)));
+  ud.rx = m.position.x; ud.rz = m.position.z;
+  for (const n of MOTO_ANIMS) r.av.garantir(n);
+  const an = /^moto_/.test(a.a) ? a.a : animMoto(ud.mi, ud.me, 0);
+  sentarNaMoto(r.av, m, r.carroModelo, an, 0); r.anim = an; r.naMoto = true;
+  if (r.arma) r.arma.visible = false;
+}
+// queda: o piloto voa (para frente na batida, para trás no empinar), cai, levanta; a moto fica deitada ali
+function quedaMoto(c, tipo) {
+  const j = jogador, v = Math.abs(c.vel || 0), yaw = j.yaw;
+  document.body.classList.remove('moto'); pedais.empinar = false;
+  j.carro = null; modoVolante(false);
+  c.mesh.rotation.order = 'YXZ'; c.mesh.position.copy(j.pos); c.mesh.position.y = alturaChao(j.pos.x, j.pos.z) + 0.18;
+  c.mesh.rotation.set(0, yaw, tipo === 'tras' ? -1.42 : 1.42);   // deitada de lado
+  const d = carrosMundo.get(c.id); if (d) d.d = { ...d.d, x: j.pos.x, z: j.pos.z, ang: yaw };
+  if (c.id) rede.carros.estacionar(c.id, j.pos.x, j.pos.z, yaw).catch(() => {});
+  tremor = 0.5; sons.tocar('soco_metal', { vol: 0.8 });
+  const frente = tipo !== 'tras', D = frente ? Math.min(9, 1.2 + v * 0.5) : 1.4;
+  const dx = Math.sin(yaw) * (frente ? 1 : -1), dz = Math.cos(yaw) * (frente ? 1 : -1);
+  endireitarPiloto(j.avatar);
+  j.esc = { fase: 'motoVoo', t: 0, vel: 1.25, dx, dz, bx: j.pos.x, bz: j.pos.z, y0: j.pos.y, D, h: frente ? Math.min(1.6, 0.3 + v * 0.08) : 0.2, dur: frente ? 1.1 : 0.7, chao: 0 };
+  j.yaw = frente ? yaw : yaw;   // continua olhando para onde ia
+  j.trava = Math.max(j.trava || 0, 1); danoLocal(Math.min(45, 8 + v * 2));   // (sem a animação de "apanhou" por cima)
+  j.avatar.tocar(frente ? 'moto_queda_frente' : 'moto_queda_tras', { umaVez: true, velocidade: 1.25, fade: 0.06 });
+  aviso(frente ? '💥 Você voou da moto!' : '🏍️ Empinou demais e caiu para trás!', 2.5);
 }
 
 function pular() {

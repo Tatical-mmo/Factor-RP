@@ -10,7 +10,7 @@ const ARQUIVOS = ['sirene_bombeiros', 'sirene_ambulancia', 'sirene_policia', 'he
   ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].flatMap((i) => [`passo_duro_${i}`, `passo_grama_${i}`])];   // 20g: passos um a um (sorteados), não mais um laço
 const SOB_DEMANDA = ['onibus_viagem', 'cidade_ambiente', 'cidade_noite', 'noite_cidades', 'chuva', 'tempestade', 'nevasca', 'aviao_fora', 'aviao_dentro', 'aviao_pequeno', 'aviao_medio', 'onibus_grande', 'onibus_pequeno',
   // motores novos (laços de marcha lenta e de rotação alta), baixados quando tocam pela primeira vez
-  ...['classico', 'popular', 'esportivo', 'presidencial', 'suv', 'jipe', 'van', 'caminhao', 'onibus', 'onibusN', 'caminhaoN', 'aviaoG', 'aviaoGG', 'aviaoM', 'aviaoP'].flatMap((p) => [`${p}_lenta`, `${p}_alto`])];   // 20z: onibusN/caminhaoN = sons novos
+  ...['classico', 'popular', 'esportivo', 'presidencial', 'suv', 'jipe', 'van', 'caminhao', 'onibus', 'onibusN', 'caminhaoN', 'moto250', 'moto650', 'aviaoG', 'aviaoGG', 'aviaoM', 'aviaoP'].flatMap((p) => [`${p}_lenta`, `${p}_alto`])];   // 20z: onibusN/caminhaoN = sons novos
 const CONTINUOS = ['sirene_bombeiros', 'sirene_ambulancia', 'sirene_policia', 'helicoptero_baixo', 'helicoptero_alto', 'trem_andando',
   'passaros', ...SOB_DEMANDA];
 let ac = null, mestre = null, ligado = true;
@@ -19,7 +19,7 @@ try { ligado = localStorage.getItem('fatorSom') !== '0'; } catch { /* sem armaze
 
 // 20u: o avião gigante toca o som do grande duas vezes (uma cópia do laço, começando noutro ponto e num tom um
 // pouquinho diferente), para soar como mais motores
-const APELIDO = { aviaoGG_lenta: 'aviaoG_lenta', aviaoGG_alto: 'aviaoG_alto', toque_celular: 'toque_celular_v2', caminhaoN_alto: 'onibusN_alto', caminhaoN_partida: 'onibusN_partida' };   // 20z: o caminhão usa a partida e o andar do ônibus (mais graves)   // 20l: toque com som de alto-falante de celular
+const APELIDO = { aviaoGG_lenta: 'aviaoG_lenta', aviaoGG_alto: 'aviaoG_alto', toque_celular: 'toque_celular_v2', caminhaoN_alto: 'onibusN_alto', caminhaoN_partida: 'onibusN_partida', moto250_partida: 'moto_partida', moto650_partida: 'moto_partida' };   // 20z: o caminhão usa a partida e o andar do ônibus (mais graves)   // 20l: toque com som de alto-falante de celular
 function carregar(n) {
   if (pedidos.has(n)) return; pedidos.add(n);
   fetch(n.startsWith('vz_') ? `assets/sons/vozes/${n.slice(3)}.mp3?v=1` : `assets/sons/${APELIDO[n] || n}.mp3`).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => {

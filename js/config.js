@@ -64,6 +64,9 @@ export const PERSONAGENS_EVENTO = [   // limitados (Meshy): só o admin dá de p
   { id: 'Operador_Tatico', nome: 'Operador Tático', soPresente: true, bau: true },
   { id: 'Vigia_Sombras', nome: 'Vigia das Sombras', soPresente: true, bau: true },
   { id: 'Operador_Antigas', nome: 'Operador Antigás', soPresente: true, bau: true },
+  { id: 'Renegado_Neon', nome: 'Renegado Neon', soPresente: true, bau: true },
+  { id: 'Sentinela_Neon', nome: 'Sentinela Neon', soPresente: true, bau: true },
+  { id: 'Sentinela_Brasa', nome: 'Sentinela Brasa', soPresente: true, bau: true },
 ];
 
 // grátis ao criar a conta; os outros custam 8.000 na loja de personagens (mesma lista do banco)
@@ -78,7 +81,7 @@ export const MODELOS = [
   'caminhao', 'ovni', 'caca_leve', 'caca_furtivo', 'asa_furtiva', 'missil', 'porta_avioes', 'destroier', 'missil_cruzeiro', 'viatura', 'viatura_pm', 'predio_hospital', 'predio_bombeiros', 'predio_exercito', 'predio_marinha', 'predio_aeronautica', 'predio_area51', 'sacola_lixo', 'helicoptero_resgate', 'helicoptero_bombeiros', 'van_policia', 'caixa', 'arma_paintball', 'algemas',
   'bancada', 'base_cla', 'loja', 'delegacia', 'transportadora', 'casa', 'empresa', 'arvore',
   'carro_classico', 'roda_classico', 'roda_carro', 'roda_esporte', 'roda_suv', 'roda_pesado', 'roda_militar',
-  'van', 'helicoptero', 'carro_popular', 'carro_suv', 'carro_esportivo', 'carro_presidencial', 'robo_motorista', 'ambulancia', 'caminhao_bombeiros',
+  'moto_250', 'moto_650', 'van', 'helicoptero', 'carro_popular', 'carro_suv', 'carro_esportivo', 'carro_presidencial', 'robo_motorista', 'ambulancia', 'caminhao_bombeiros',
   'exercito_jipe', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero_executivo', 'trem', 'navio', 'arvore_comum', 'arvore_pinheiro', 'arvore_palmeira',
   'tanque', 'onibus_amarelo', 'onibus_branco', 'onibus_laranja', 'onibus_brasilsul', 'onibus_viacao', 'caminhao_lixo', 'prop_arvore', 'prop_pinheiro', 'empresa_f0', 'empresa_f1', 'empresa_f2', 'empresa_f3', 'transp_f0', 'transp_f1', 'transp_f2', 'transp_f3', 'fabrica_aberta', 'aero_torre', 'aero_quiosque', 'rodo_cidade', 'obra_cras', 'predio_prefeitura', 'predio_prf', 'npc_bruxo', 'ave_corvo', 'ave_pombo', 'obra_camara', 'obra_varredores', 'aero_terminal', 'aero_hangar', 'aviao_pequeno', 'aviao_medio', 'aviao_grande', 'aviao_gigante', 'onibus_rod_dourado', 'onibus_rod_amarelo', 'onibus_rod_vermelho', 'onibus_rod_branco', 'arma_policia', 'arma_prf', 'arma_exercito', 'arma_militar', 'arma_grande_porte',
   'terminal_rodoviario', 'arvore_carvalho', 'poca_tinta', 'arma_rpg', 'arma_bazuca', 'arma_ponto50', 'foguete',

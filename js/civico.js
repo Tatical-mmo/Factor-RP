@@ -176,6 +176,8 @@ export const CARROS = {
   viatura_civil: { nome: 'Viatura da Polícia Civil', preco: 0, vel: 13 },
   viatura_prf: { nome: 'Viatura da PRF', preco: 0, vel: 14 },
   saveiro: { nome: 'Saveiro', preco: 55000, vel: 11 },
+  moto_250: { nome: 'Moto 250 cc', preco: 18000, vel: 13, moto: true },   // 21h: motos
+  moto_650: { nome: 'Moto 650 cc', preco: 85000, vel: 17.5, moto: true },
   saveiro_som: { nome: 'Saveiro com som', preco: 150000, vel: 10.5 },
   onibus: { nome: 'Ônibus', preco: 0, vel: 12 },
   van: { nome: 'Van', preco: 0, vel: 11 },
@@ -197,7 +199,7 @@ export const CARROS = {
   aviao_gigante: { nome: 'Avião gigante', preco: 0, vel: 70, voa: true },
 };
 // arrancada: segundos para chegar perto da velocidade máxima. Os leves arrancam rápido; ônibus e caminhões, devagar.
-const ARRANCADA = { esportivo: 3, classico: 3, popular: 5, viatura: 5, ambulancia: 5.5, presidencial: 5.5, suv: 6.5, militar: 6.5, van: 6.5,
+const ARRANCADA = { moto_250: 3.6, moto_650: 2.4, esportivo: 3, classico: 3, popular: 5, viatura: 5, ambulancia: 5.5, presidencial: 5.5, suv: 6.5, militar: 6.5, van: 6.5,
   caminhao: 11, caminhao_escola: 11, caminhao_lixo: 11, bombeiros: 11, exercito_caminhao: 11, tanque: 12,
   onibus: 12, onibus_urbano: 12, onibus_apache: 12, onibus_busscar: 12, onibus_executivo: 14, onibus_executivo2: 15, onibus_dois_andares: 15, onibus_articulado: 16,
   onibus_amarelo: 12, onibus_branco: 12, onibus_laranja: 12, onibus_brasilsul: 15, onibus_viacao: 14,
@@ -224,8 +226,8 @@ function bloco(g, m, w, h, d, x, y, z) {
 }
 
 export function iniciar(contexto) { ctx = contexto; }
-const GLB_CARRO = { van: 'van', tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', helicoptero_resgate: 'helicoptero_executivo', helicoptero_bombeiros: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', classico: 'carro_classico', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', caminhao_escola: 'caminhao', caminhao_lixo: 'caminhao_lixo', onibus_urbano: 'onibus_urbano', onibus_executivo: 'onibus_executivo', onibus_executivo2: 'onibus_executivo2', onibus_dois_andares: 'onibus_dois_andares', onibus_apache: 'onibus_apache', onibus_busscar: 'onibus_busscar', onibus_articulado: 'onibus_articulado', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande', aviao_gigante: 'aviao_gigante' };
-const SEM_TINTA = new Set(['onibus_executivo2', 'onibus_dois_andares', 'aviao_pequeno', 'aviao_medio', 'aviao_grande', 'aviao_gigante', 'tanque', 'presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
+const GLB_CARRO = { moto_250: 'moto_250', moto_650: 'moto_650', van: 'van', tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', helicoptero_resgate: 'helicoptero_executivo', helicoptero_bombeiros: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', classico: 'carro_classico', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', caminhao_escola: 'caminhao', caminhao_lixo: 'caminhao_lixo', onibus_urbano: 'onibus_urbano', onibus_executivo: 'onibus_executivo', onibus_executivo2: 'onibus_executivo2', onibus_dois_andares: 'onibus_dois_andares', onibus_apache: 'onibus_apache', onibus_busscar: 'onibus_busscar', onibus_articulado: 'onibus_articulado', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande', aviao_gigante: 'aviao_gigante' };
+const SEM_TINTA = new Set(['moto_250', 'moto_650', 'onibus_executivo2', 'onibus_dois_andares', 'aviao_pequeno', 'aviao_medio', 'aviao_grande', 'aviao_gigante', 'tanque', 'presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
 export function montarPrefeitura() {
@@ -1385,8 +1387,8 @@ function adicionarLuzes(g, tipo, chave = null) {
   const sp = (mat, x, y, z, t) => { const s = new THREE.Sprite(mat); s.position.set(x, y, z); s.scale.set(t, t, t); L.add(s); return s; };
   const w = e.max.x - e.min.x, h = e.max.y - e.min.y, cx = (e.max.x + e.min.x) / 2;
   if (!aereo) {
-    const grande = w > 2.2, yf = e.min.y + h * (grande ? 0.22 : 0.38);
-    for (const s of [-1, 1]) {
+    const grande = w > 2.2, moto = /^moto/.test(tipo), yf = e.min.y + h * (grande ? 0.22 : moto ? 0.62 : 0.38);
+    for (const s of moto ? [0] : [-1, 1]) {   // moto: um farol só
       sp(M.farol, cx + s * w * 0.34, yf, e.max.z + 0.08, grande ? 0.9 : 0.7);
       sp(M.lanterna, cx + s * w * 0.4, yf + (grande ? 0.3 : 0.05), e.min.z - 0.08, grande ? 0.6 : 0.5);
     }
