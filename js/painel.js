@@ -13,9 +13,10 @@ const PODERES = [
   ['teleportar', 'Teleportar'],
   ['imortal', 'Modo imortal'],
   ['invisivel', 'Modo invisível'],
+  ['nome_oculto', 'Esconder o nome (🙈)'],
 ];
 const ACOES = {
-  perdoar: 'perdoou', evento_doacao: 'fez um evento de doação',
+  perdoar: 'perdoou', congelar: 'congelou', descongelar: 'descongelou', forcar_visivel: 'deixou visível à força', evento_doacao: 'fez um evento de doação',
   moedas: 'mudou as moedas de', emprego: 'mudou o emprego de', banir: 'baniu', desbanir: 'desbaniu', algemar: 'algemou', soltar_algemas: 'tirou as algemas de',
   prender: 'prendeu', soltar: 'soltou da cadeia', teleporte: 'teleportou', cargo: 'mudou o cargo de',
   prefeito_nomeado: 'nomeou como prefeito', prefeito_afastado: 'afastou o prefeito', eleicao_convocada: 'convocou eleição extraordinária', salario: 'mudou um salário',  presente_personagem: 'deu um personagem para', evento_personagens: 'mexeu na vitrine do evento', patente: 'mudou a patente de', reset_mapa: 'resetou o mapa',
@@ -126,7 +127,14 @@ async function abrirJogador(id) {
       ${esc(nome)} · ${Number(j.moedas).toLocaleString('pt-BR')} moedas
       ${j.banido && j.banido_motivo ? `<br><small>Motivo do banimento: ${esc(j.banido_motivo)}</small>` : ''}</div></div>`;
 
-  if (eu.cargo === 'admin' && (souEu || equipe) && (j.crimes > 0 || j.recompensa > 0)) h += '<div class="sub">Crimes</div><div class="botoes"><button id="pPerdoar">⚖️ Perdoar todos os crimes</button></div>';
+  // 21c: perdão no topo
+  if ((j.crimes > 0 || j.recompensa > 0) && (eu.cargo === 'admin' || (!souEu && !equipe && pode('prender')))) h += '<div class="sub">Crimes</div><div class="botoes"><button id="pPerdoar">⚖️ Perdoar todos os crimes</button></div>';
+  if (!souEu && pode('banir') && !j.banido && (eu.cargo === 'admin' ? j.cargo !== 'admin' : !equipe)) {
+    h += `<div class="sub">🧊 Estátua (hack)</div><p class="dica">Congela o jogador: todos passam a ver uma estátua parada, e o que ele fizer (andar, atirar, bater) é ignorado.</p><div class="botoes">
+      ${j.congelado ? '<button id="pDescongelar">🔥 Descongelar</button>' : '<button id="pCongelar">🧊 Congelar</button>'}
+      <button id="pCongBan" class="perigo">🧊⛔ Congelar e banir em 30 s</button></div>`;
+  }
+  if (eu.cargo === 'admin' && j.cargo === 'moderador' && (j.invisivel || online?.oc)) h += '<div class="sub">Visibilidade</div><div class="botoes"><button id="pForcarVis">👁️ Forçar visível (corpo e nome)</button></div>';
   if (!souEu && online) h += '<div class="sub">Averiguar</div><div class="botoes"><button id="pAveriguar">👁️ Averiguar (ver o que ele está fazendo)</button></div>';
   if (pode('teleportar')) {
     h += `<div class="sub">Teleporte</div><div class="botoes">
@@ -141,11 +149,13 @@ async function abrirJogador(id) {
     if (pode('algemar')) h += `<div class="sub">Algemas</div><div class="botoes"><button id="pAlgemar">${j.algemado ? 'Tirar as algemas' : 'Algemar'}</button></div>`;
     if (pode('prender')) h += `<div class="sub">Cadeia</div><div class="botoes">
       ${j.pena_seg > 0 ? '<button id="pSoltar">Soltar agora</button>' : '<input id="pMin" type="number" min="1" max="1440" value="7" inputmode="numeric"><button id="pPrender">Prender (min)</button>'}
-      ${j.crimes > 0 || j.recompensa > 0 ? '<button id="pPerdoar">⚖️ Perdoar todos os crimes</button>' : ''}</div>`;
+</div>`;
   }
   if (!souEu && pode('banir') && (eu.cargo === 'admin' ? j.cargo !== 'admin' : !equipe)) {
     h += `<div class="sub">Banimento</div><div class="botoes">
-      ${j.banido ? '<button id="pDesbanir">Desbanir</button>' : '<input id="pMotivo" placeholder="Motivo"><button id="pBanir" class="perigo">Banir</button>'}</div>`;
+      ${j.banido ? '<button id="pDesbanir">Desbanir</button>' : '<input id="pMotivo" placeholder="Motivo"><button id="pBanir" class="perigo">Banir</button>'}</div>
+      <p class="dica">O banimento pega a conta e o aparelho dela (conta nova no mesmo celular também não entra).</p>
+      <div class="sub">Contas no mesmo aparelho ou IP</div><div id="pLigadas" class="dica">Carregando…</div>`;
   }
   if (eu.cargo === 'admin' && !j.banido) {
     h += `<div class="sub">Presentear personagem limitado (você não perde o seu)</div><div class="botoes"><select id="pPresSel">${PERSONAGENS_EVENTO.map((x) => `<option value="${x.id}">${esc(x.nome)}</option>`).join('')}</select><button id="pPresente">🎁 Presentear</button></div>`;
@@ -163,6 +173,7 @@ async function abrirJogador(id) {
   }
   c.innerHTML = h;
   if ($('pCarreiras')) blocoCarreiras(j);
+  if ($('pLigadas')) rede.painel.contasLigadas(j.id).then((l) => { const el = $('pLigadas'); if (!el) return; el.innerHTML = l?.length ? l.map((x) => `<div class="botoes"><span style="flex:1">${esc(x.nome)} · <small>mesmo ${x.via}</small>${x.banido ? ' <i class="tag ruim">banido</i>' : ''}</span><button data-ligada="${x.id}">Abrir</button></div>`).join('') + '<p class="dica">IP é só pista: no celular muita gente divide o mesmo IP.</p>' : 'Nenhuma outra conta encontrada.'; el.querySelectorAll('[data-ligada]').forEach((b) => { b.onclick = () => abrirJogador(b.dataset.ligada); }); }).catch((e) => { const el = $('pLigadas'); if (el) el.textContent = e.message; });
 
   const on = (idb, fn) => { const b = $(idb); if (b) b.onclick = fn; };
   on('pVoltar', () => { selecionado = null; listaJogadores(); });
@@ -177,6 +188,17 @@ async function abrirJogador(id) {
   on('pSoltar', () => executar(() => rede.painel.prender(j.id, 0), `${j.nome} foi solto.`));
   on('pPerdoar', () => executar(() => rede.perdoar(j.id), `${j.nome} foi perdoado.`));
   on('pBanir', () => { if (confirmarDuplo('pBanir')) executar(() => rede.painel.banir(j.id, $('pMotivo').value.trim()), `${j.nome} foi banido.`); });
+  on('pCongelar', () => executar(() => ctx.congelar(j.id, true), `🧊 ${j.nome} virou estátua.`));
+  on('pDescongelar', () => executar(() => ctx.congelar(j.id, false), `🔥 ${j.nome} foi descongelado.`));
+  on('pCongBan', () => {
+    if (!confirmarDuplo('pCongBan', '🧊⛔ Congelar e banir em 30 s')) return;
+    const motivo = ($('pMotivo')?.value || '').trim() || 'Uso de hack';
+    executar(async () => {
+      if (!j.congelado) await ctx.congelar(j.id, true);
+      setTimeout(() => rede.painel.banir(j.id, motivo).then(() => msg(`⛔ ${j.nome} foi banido.`)).catch((e) => msg(e.message, false)), 30000);
+    }, `🧊 ${j.nome} virou estátua. O banimento sai em 30 s (deixe o jogo aberto).`);
+  });
+  on('pForcarVis', () => executar(() => rede.painel.forcarVisivel(j.id), `${j.nome} está visível de novo.`));
   on('pDesbanir', () => executar(() => rede.painel.desbanir(j.id), `${j.nome} foi desbanido.`));
   on('pCargo', () => executar(() => rede.painel.definirCargo(j.id, j.cargo === 'moderador' ? 'jogador' : 'moderador', {}, 0),
     j.cargo === 'moderador' ? `${j.nome} voltou a ser jogador.` : `${j.nome} agora é moderador. Marque os poderes dele abaixo.`));

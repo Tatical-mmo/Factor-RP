@@ -57,6 +57,11 @@ async function aposLogin(s) {
   sessao = s;
   msgLogin('Carregando perfil…', true);
   const perfil = await rede.carregarPerfil(s.user.id);
+  if (await rede.aparelhoBanido()) {   // 21c: aparelho de conta banida não entra (nem com conta nova)
+    await rede.sair(); mostrar('login');
+    msgLogin('Este aparelho foi banido do jogo.');
+    return;
+  }
   if (perfil?.banido) {
     await rede.sair(); mostrar('login');
     msgLogin('Esta conta foi banida.' + (perfil.banido_motivo ? ' Motivo: ' + perfil.banido_motivo : ''));
@@ -706,6 +711,31 @@ function textoSprite(texto, { cor = '#ffffff', fundo = 'rgba(20,24,34,.78)', tam
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true }));
   const k = 0.022 * escala; s.scale.set(w * k, h * k, 1); s.renderOrder = 5;
   return s;
+}
+
+// 21c: nomes de pessoas (players e NPCs) menores e "minimizados": somem aos poucos de longe e voltam inteiros
+// quando a mira cruz para em cima da pessoa
+const ROT_K = 0.55, ROT_PERTO = 22, ROT_LONGE = 34, rotulos = new Set(), _rotP = new THREE.Vector3();
+function rotuloPessoa(s) {
+  if (!s || s.userData.pessoa) return s;
+  s.scale.multiplyScalar(ROT_K); s.userData.pessoa = s.scale.clone(); rotulos.add(s); return s;
+}
+function atualizarRotulos() {
+  const dm = miraC.ligada ? direcaoMira() : null, o = camP.position, cmin = Math.cos(THREE.MathUtils.degToRad(4));
+  const px = jogador.pos.x, pz = jogador.pos.z;
+  for (const s of rotulos) {
+    if (!s.parent) { s.userData.orfao = (s.userData.orfao || 0) + 1; if (s.userData.orfao > 600) rotulos.delete(s); continue; }
+    s.userData.orfao = 0;
+    s.getWorldPosition(_rotP);
+    const d = Math.hypot(_rotP.x - px, _rotP.z - pz);
+    let op = d <= ROT_PERTO ? 1 : d >= ROT_LONGE ? 0 : 1 - (d - ROT_PERTO) / (ROT_LONGE - ROT_PERTO), k = 1;
+    if (dm && d > 1.5) {
+      const x = _rotP.x - o.x, y = _rotP.y - 0.9 - o.y, z = _rotP.z - o.z, L = Math.hypot(x, y, z);
+      if (L < 90 && (x * dm.x + y * dm.y + z * dm.z) / L > cmin) { op = 1; k = 1 / ROT_K; }   // na mira: nome inteiro
+    }
+    if (s.material.opacity !== op) s.material.opacity = op;
+    s.scale.copy(s.userData.pessoa).multiplyScalar(k);
+  }
 }
 
 const placas = [], placasRua = [];
@@ -3760,6 +3790,7 @@ function nomeDaRua(x, z) {
 async function iniciarJogo(perfil) {
   const { nome, personagem: id } = perfil;
   jogador.perfil = perfil;
+  if (perfil.congelado) setTimeout(() => telaCongelado(true), 0);
   if (!introRodando) $('carregando').classList.remove('oculto');   // 20l: durante o vídeo carrega por trás, sem aparecer
   montarChao();
   // um modelo faltando não pode travar o jogo: ele só fica de fora (veículos e prédios têm versão feita por código)
@@ -3819,7 +3850,7 @@ async function iniciarJogo(perfil) {
   jogador.yaw = Math.PI;
   alvoCam.set(jogador.pos.x, 0.9, jogador.pos.z);
   scene.add(av.raiz);
-  jogador.etiqueta = textoSprite(nome, { escala: 0.8, cor: '#f2a33a' }); jogador.etiqueta.position.y = alturaNome(av); av.raiz.add(jogador.etiqueta);
+  jogador.etiqueta = textoSprite(nome, { escala: 0.8, cor: '#f2a33a' }); jogador.etiqueta.position.y = alturaNome(av); av.raiz.add(rotuloPessoa(jogador.etiqueta));
   av.tocar('idle');
   jogador.algemado = !!perfil.algemado; jogador.algemadoPor = perfil.algemado_por || null; mostrarAlgemas(jogador.algemado);
 
@@ -3827,7 +3858,7 @@ async function iniciarJogo(perfil) {
   const robo = await roboP;
   robo.raiz.position.set(contratante.x, 0.18, contratante.z + 2); robo.raiz.rotation.y = Math.PI / 4;
   scene.add(robo.raiz); robo.tocar('idle_long');
-  const rotulo = textoSprite('Contratante', { escala: 0.9, cor: '#ffd23e' }); rotulo.position.y = 2.25; robo.raiz.add(rotulo);
+  const rotulo = textoSprite('Contratante', { escala: 0.9, cor: '#ffd23e' }); rotulo.position.y = 2.25; robo.raiz.add(rotuloPessoa(rotulo));
   const excl = textoSprite('!', { escala: 1.6, cor: '#20160a', fundo: '#ffd23e' }); excl.position.y = 3.0; robo.raiz.add(excl);
   contratante.avatar = robo; contratante.excl = excl;
   // encomenda em andamento continua na mão depois de entrar de novo
@@ -3970,8 +4001,9 @@ async function iniciarJogo(perfil) {
     prefeitoMudou: () => carregarPrefeitura().catch(() => {}),
     climaMudou: async () => { await carregarClima(); conexao?.enviar('clima', {}); },
     climaAgora: () => clima.atual(), climaConfig: () => clima.config(),
-    online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta.nome })),
+    online: () => [...remotos.entries()].map(([id, r]) => ({ id, nome: r.meta.nome, oc: !!r.alvo?.oc })),
     averiguar: (id, nome) => iniciarAveriguar(id, nome),
+    congelar: (id, ligado) => congelarJogador(id, ligado),
     resetFeito: () => { conexao?.enviar('reset', { de: jogador.perfil.id }); setTimeout(() => location.reload(), 2500); },
     configMudou: () => { tempoConfig = 0; }, obrasMudaram: () => { tObras = 0; },
     posicaoDe: (id) => { const r = remotos.get(id); return r?.av?.raiz.visible ? r.av.raiz.position : (r?.alvo || null); },
@@ -4058,11 +4090,12 @@ function conectarMultiplayer(perfil) {
       for (const id of [...remotos.keys()]) if (!lista[id]) removerRemoto(id);
       atualizarInfo();
     },
-    pos: (p) => { const r = remotos.get(p.id); if (r) r.alvo = p; },
-    tiro: (t) => { criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1, !!t.l); const b = bolas[bolas.length - 1]; if (b && t.g != null) { b.g = 9.8 * Number(t.g); if (Number(t.vd) > 0) b.vida = Math.min(6, Number(t.vd)); } },
-    explosao: (e) => receberExplosao(e),
+    pos: (p) => { if (congelados.has(p.id)) return; const r = remotos.get(p.id); if (r) r.alvo = p; },   // estátua: ignora o que ele manda
+    congelar: (e) => receberCongelar(e),
+    tiro: (t) => { if (tiroDeEstatua(t)) return; criarBola(new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(t.vx, t.vy, t.vz), t.c, false, Number(t.s) || 1, !!t.l); const b = bolas[bolas.length - 1]; if (b && t.g != null) { b.g = 9.8 * Number(t.g); if (Number(t.vd) > 0) b.vida = Math.min(6, Number(t.vd)); } },
+    explosao: (e) => { if (!congelados.has(e.de)) receberExplosao(e); },
     voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, dm: (m) => { if (m?.para === jogador.perfil?.id && amigosIds.has(m.de)) celular.mensagemChegou(m.de, remotos.get(m.de)?.meta?.nome); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
-    dano: (d) => receberDano(d), atropelo: (d) => receberAtropelo(d), chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
+    dano: (d) => { if (!congelados.has(d.de)) receberDano(d); }, atropelo: (d) => { if (!congelados.has(d.de)) receberAtropelo(d); }, chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
     toqueCel: (e) => receberToqueCel(e), abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, derrubar: (e) => receberDerrubar(e), danoQueda: (e) => { if (e.alvo === jogador.perfil?.id) danoNoMeuVeiculo(Math.min(40, Math.max(0, +e.d || 0))); }, viacao: () => atualizarEstadoViacao(), somSoco: (e) => sons.tocar(e.k ? 'soco1' : 'soco2', { vol: 0.85, dist: Math.hypot((+e.x || 0) - jogador.pos.x, (+e.z || 0) - jogador.pos.z), raio: 30 }), navio: (e) => receberNavio(e),
     meta: () => metaPresenca(),
   });
@@ -4081,7 +4114,7 @@ function conectarMultiplayer(perfil) {
 // o que o outro jogador mostra: a farda (em serviço) ou o personagem dele
 function skinRemota(meta) { if (ARMADURAS[meta?.arm]) return ARMADURAS[meta.arm].skin; return skinDaFarda('farda' in (meta || {}) ? meta.farda : fardaDe(meta), meta?.patente, meta?.sf) || meta?.personagem; }
 async function adicionarRemoto(id, meta) {
-  const r = { meta, av: null, arma: null, alvo: null, anim: '', caixa: null };
+  const r = { id, meta, av: null, arma: null, alvo: null, anim: '', caixa: null };
   remotos.set(id, r);
   try {
     const sk = skinRemota(meta), pasta = ROBOS.includes(sk) ? 'robos' : 'personagens';
@@ -4089,7 +4122,7 @@ async function adicionarRemoto(id, meta) {
     if (remotos.get(id) !== r) return;          // saiu enquanto carregava
     const arma = clonar('arma_paintball'); av.encaixarArma(arma); arma.visible = false; r.armaCod = 1;
     const et = textoSprite(meta.nome, { escala: 0.8, cor: meta.cargo === 'admin' ? '#ff6b6b' : meta.cargo === 'moderador' ? '#7fb8ff' : '#ffffff' });
-    et.position.y = alturaNome(av); av.raiz.add(et);
+    et.position.y = alturaNome(av); av.raiz.add(rotuloPessoa(et));
     av.raiz.visible = false; scene.add(av.raiz); av.tocar('idle');
     r.av = av; r.arma = arma; r.et = et; r.etCla = null; etiquetaStatus(r);
   } catch (e) { console.warn('jogador remoto não carregou', e); }
@@ -4117,7 +4150,7 @@ function atualizarRemotos(dt) {
         r.arma.visible = false; r.av.mixer.update(dt); continue;
       }
     }
-    if (!!a.oc !== !!r.oc) { r.oc = !!a.oc; if (r.et) r.et.visible = !r.oc; if (r.status) r.status.visible = !r.oc; }   // nome escondido (equipe se passando por NPC)
+    if (!!a.oc !== !!r.oc) { r.oc = !!a.oc; mostrarNomeOculto(r); }   // nome escondido (equipe se passando por NPC): o admin ainda vê, em roxo
     if (!!a.ave !== !!r.eraAve) { if (r.eraAve !== undefined && Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z) < 150) fumacaPreta(a.x, a.y + 0.9, a.z); r.eraAve = !!a.ave; }
     if (a.ave) { mostrarAveRemota(r, a, dt); raiz.visible = false; if (r.arma) r.arma.visible = false; r.av.mixer.update(dt); continue; }
     if (r.ave) { scene.remove(r.ave); r.ave = null; }
@@ -4343,7 +4376,7 @@ function extrasDoLote(l, e, v, fabrica, bx, bz) {
     criarAvatar('personagens', quem).then((av) => {
       if (v.removido) return;
       av.raiz.position.set(rota[0][0], 0.18, rota[0][1]);
-      { const et = textoSprite('👷 Funcionário', { escala: 0.5, fundo: 'rgba(40,60,90,.92)' }); et.position.y = 2.15; av.raiz.add(et); }
+      { const et = textoSprite('👷 Funcionário', { escala: 0.5, fundo: 'rgba(40,60,90,.92)' }); et.position.y = 2.15; av.raiz.add(rotuloPessoa(et)); }
       scene.add(av.raiz);
       av.tocar(fabrica ? 'carry_walk' : 'idle_long');
       robosMundo.push({ av, rota, i: 1, lote: l.id, anda: fabrica });
@@ -4905,7 +4938,7 @@ function etiquetaStatus(r) {
   const fundo = m.ferido ? 'rgba(200,40,40,.95)' : m.recompensa > 0 ? 'rgba(110,0,0,.97)' : inimigo ? 'rgba(140,10,10,.95)' : m.crimes > 0 ? 'rgba(170,30,30,.92)' : m.prefeito ? 'rgba(242,194,48,.95)' : m.policial && m.bope ? 'rgba(15,15,15,.95)' : m.policial ? 'rgba(30,70,160,.92)'
     : m.prf ? 'rgba(20,40,90,.95)' : m.profissao === 'medico' ? 'rgba(240,240,240,.95)' : m.profissao === 'bombeiro' ? 'rgba(200,60,20,.95)' : m.profissao === 'exercito' ? 'rgba(62,78,40,.95)' : 'rgba(40,40,40,.85)';
   r.status = textoSprite(txt, { escala: 0.6, cor: m.prefeito || m.profissao === 'medico' && !m.ferido && !inimigo && !(m.crimes > 0) ? '#20160a' : '#ffffff', fundo });
-  r.status.position.y = alturaNome(r.av) + 0.45; r.av.raiz.add(r.status); if (r.oc) r.status.visible = false;
+  r.status.position.y = alturaNome(r.av) + 0.45; r.av.raiz.add(rotuloPessoa(r.status)); if (r.oc && !souAdmin()) r.status.visible = false;
 }
 
 function aplicarDanoRemoto(id, valor) {
@@ -6572,11 +6605,12 @@ function controleAve() {
   }
   const eq = equipeAve();
   { const b = $('btAve'); if (b) { b.style.display = eq ? '' : 'none'; const t = j.ave ? '🧍' : j.perfil?.cargo === 'admin' ? '🐦‍⬛' : '🐦'; if (b.textContent !== t) b.textContent = t; } }
-  { const o = $('btOculto'); if (o) { o.style.display = eq ? '' : 'none'; const t = nomeOculto ? '🙈' : '👁️'; if (o.textContent !== t) o.textContent = t; } }
+  const podeOc = j.perfil?.cargo === 'admin' || (j.perfil?.cargo === 'moderador' && j.perfil?.poderes?.nome_oculto === true);   // 21c: o admin libera
+  { const o = $('btOculto'); if (o) { o.style.display = podeOc ? '' : 'none'; const t = nomeOculto ? '🙈' : '👁️'; if (o.textContent !== t) o.textContent = t; } }
   { const c = $('aveCtl'); if (c) { const v = j.ave ? 'flex' : 'none'; if (c.style.display !== v) c.style.display = v; } }
   for (const id of ['btGrasnar', 'btBando']) { const b = $(id); if (b) { const v = j.ave?.tipo === 'corvo' ? '' : 'none'; if (b.style.display !== v) b.style.display = v; } }
   { const b = $('btBando'); if (b) { const on = !!j.ave?.bando; b.style.background = on ? 'rgba(130,60,200,.9)' : 'rgba(40,20,60,.8)'; } }
-  if (!eq && nomeOculto) { nomeOculto = false; if (j.etiqueta) j.etiqueta.visible = true; }
+  if (!podeOc && nomeOculto) { nomeOculto = false; if (j.etiqueta) j.etiqueta.visible = true; aviso('👁️ Seu nome voltou a aparecer.', 3); }
   if (j.ave && j.ave.presente && !eq && !presenteAve()) { j.pos.y = alturaChao(j.pos.x, j.pos.z); virarGente('🐦 O feitiço do Bruxo acabou: você voltou a ser gente.'); }
 }
 // botão Extra de quem ganhou o feitiço do Bruxo (a equipe usa o 🐦 fixo)
@@ -6677,7 +6711,7 @@ function mostrarAveRemota(r, a, dt) {
   if (!r.ave || r.aveTipo !== a.ave) {
     if (r.ave) scene.remove(r.ave);
     r.aveTipo = a.ave; r.ave = criarAve(a.ave === 1 ? 'corvo' : 'pombo', a.ave === 1 ? 2 : 1.7); r.ave.position.set(a.x, a.y, a.z); scene.add(r.ave);
-    r.aveEt = textoSprite(r.meta?.nome || '', { escala: 0.55, cor: '#f2a33a' }); r.aveEt.position.y = 0.55; r.ave.add(r.aveEt);
+    r.aveEt = textoSprite(r.meta?.nome || '', { escala: 0.55, cor: '#f2a33a' }); r.aveEt.position.y = 0.55; r.ave.add(rotuloPessoa(r.aveEt));
   }
   r.aveEt.visible = !a.oc;
   const voando = a.y > chaoAve(a.x, a.z) + 0.1;
@@ -7752,7 +7786,7 @@ function montarObraVis(o, ciclo) {
       criarAvatar('personagens', quem).then((av) => {
         if (!obrasVis.has(o.terreno) || obrasVis.get(o.terreno) !== v) return;
         const p = mundoDe(lx, lz); av.raiz.position.set(p.x, 0.18, p.z); av.raiz.rotation.y = T.ang + (k % 2 ? Math.PI : 0);
-        const et = textoSprite('👷 Pedreiro', { escala: 0.45, fundo: 'rgba(190,120,20,.95)' }); et.position.y = 2.15; av.raiz.add(et);
+        const et = textoSprite('👷 Pedreiro', { escala: 0.45, fundo: 'rgba(190,120,20,.95)' }); et.position.y = 2.15; av.raiz.add(rotuloPessoa(et));
         const capacete = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), M('#f2c230')); capacete.position.y = 1.78; av.raiz.add(capacete);
         av.raiz.visible = ehDia(); scene.add(av.raiz); av.tocar(anim, { velocidade: anim === 'arrombar' ? 1.1 : 0.9 });
         v.pedreiros.push(av); avataresObra.add(av);
@@ -7889,7 +7923,7 @@ function criarVarredores() {
   const trechos = [[-50, -60, 50, -60], [-60, 40, -60, -40], [60, -40, 60, 40], [-40, 60, 40, 60]];
   trechos.forEach(([x0, z0, x1, z1], k) => {
     criarAvatar('personagens', PERSONAGENS[(k * 3 + 1) % PERSONAGENS.length].id).then((av) => {
-      const et = textoSprite('🧹 Varredor', { escala: 0.45, fundo: 'rgba(224,122,31,.95)' }); et.position.y = 2.15; av.raiz.add(et);
+      const et = textoSprite('🧹 Varredor', { escala: 0.45, fundo: 'rgba(224,122,31,.95)' }); et.position.y = 2.15; av.raiz.add(rotuloPessoa(et));
       const vassoura = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.4, 6), new THREE.MeshStandardMaterial({ color: '#8a6a3a' })); vassoura.position.set(0.3, 0.7, 0.35); vassoura.rotation.x = 0.6; av.raiz.add(vassoura);
       scene.add(av.raiz); av.tocar('walk', { velocidade: 0.55 });
       varredores.push({ av, a: [x0, z0], b: [x1, z1], t: Math.random(), ida: true });
@@ -7932,7 +7966,7 @@ async function acessoCamara() {
 function npcSala(i, quem, x, z, rot, rotulo) {
   criarAvatar('personagens', quem).then((av) => {
     av.raiz.position.set(i.base.x + x, 0, i.base.z + z); av.raiz.rotation.y = rot;
-    const et = textoSprite(rotulo, { escala: 0.5, fundo: 'rgba(30,110,60,.95)' }); et.position.y = 2.15; av.raiz.add(et);
+    const et = textoSprite(rotulo, { escala: 0.5, fundo: 'rgba(30,110,60,.95)' }); et.position.y = 2.15; av.raiz.add(rotuloPessoa(et));
     scene.add(av.raiz); av.tocar('idle'); avataresObra.add(av);
   }).catch(() => {});
 }
@@ -8060,7 +8094,7 @@ async function criarSoldadosNPC() {
   for (const d of lista) {
     try {
       const av = d.recruta ? await criarAvatar('personagens', civis[soldados.length % civis.length]) : await npcFardado('exercito', soldados.length, 'exercito');
-      const et = textoSprite(d.recruta ? 'Recruta' : 'Exército', { escala: 0.55, fundo: d.recruta ? 'rgba(90,90,90,.9)' : 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+      const et = textoSprite(d.recruta ? 'Recruta' : 'Exército', { escala: 0.55, fundo: d.recruta ? 'rgba(90,90,90,.9)' : 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et));
       av.raiz.visible = false; scene.add(av.raiz);
       if (d.parado) { av.raiz.position.set(d.parado[0], 0.12, d.parado[1]); av.raiz.rotation.y = d.parado[2]; av.tocar('idle'); } else av.tocar(d.corre ? 'run' : 'walk', { velocidade: d.corre ? 1 : 0.8 });
       soldados.push({ av, ...d });
@@ -8134,7 +8168,7 @@ async function montarEsquadra() {
   for (let k = 0; k < 4; k++) {
     try {
       const av = await npcFardado('exercito', k + 3, 'exercito');
-      const et = textoSprite('Exército', { escala: 0.55, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+      const et = textoSprite('Exército', { escala: 0.55, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et));
       av.raiz.visible = false; scene.add(av.raiz); esquadra.soldados.push({ av });
     } catch { /* sem soldado */ }
   }
@@ -8213,7 +8247,7 @@ async function esquadraRemota(r) {
   const e = { jipes: [], soldados: [] };
   for (let k = 0; k < 2; k++) { const m = civico.modeloCarro('militar', '#ffffff'); m.visible = false; scene.add(m); e.jipes.push(m); }
   for (let k = 0; k < 4; k++) {
-    try { const av = await npcFardado('exercito', e.soldados.length + 1, 'exercito'); const et = textoSprite('Exército', { escala: 0.55, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et); av.raiz.visible = false; scene.add(av.raiz); av.tocar('run', { velocidade: 1.1 }); e.soldados.push(av); } catch { /* sem soldado */ }
+    try { const av = await npcFardado('exercito', e.soldados.length + 1, 'exercito'); const et = textoSprite('Exército', { escala: 0.55, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et)); av.raiz.visible = false; scene.add(av.raiz); av.tocar('run', { velocidade: 1.1 }); e.soldados.push(av); } catch { /* sem soldado */ }
   }
   r.esq = e;
 }
@@ -8241,7 +8275,7 @@ async function criarPoliciaNPC() {
     try {
       const av = await npcFardado('policia', k, 'policia');
       scene.add(av.raiz); av.tocar('walk', { velocidade: 0.85 });
-      const et = textoSprite('Polícia', { escala: 0.6, fundo: 'rgba(30,70,160,.92)' }); et.position.y = 2.2; av.raiz.add(et);
+      const et = textoSprite('Polícia', { escala: 0.6, fundo: 'rgba(30,70,160,.92)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et));
       const n = { id: k < 12 ? k + 1 : 21 + (k - 12), policia: true, ordem: k, av, rota, laco: laco(rota), vel: 1.5, fase: k * 41, vida: 100, caido: 0, hostil: 0, tiro: 0 };
       npcs.push(n); const p = patrulha(n); av.raiz.position.set(p.x, 0.18, p.z);
     } catch { /* sem policiais NPC */ }
@@ -8255,7 +8289,7 @@ async function criarPoliciaNPC() {
     try {
       const av = await npcFardado('prf', k + 3, 'prf');
       scene.add(av.raiz); av.tocar('walk', { velocidade: 0.85 });
-      const et = textoSprite('PRF', { escala: 0.6, fundo: 'rgba(20,40,90,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+      const et = textoSprite('PRF', { escala: 0.6, fundo: 'rgba(20,40,90,.95)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et));
       const n = { id: 101 + k, policia: true, prf: true, corTiro: '#3e8cff', av, rota, laco: laco(rota), vel: 1.5, fase: k * 37 + 11, vida: 100, caido: 0, hostil: 0, tiro: 0 };
       npcs.push(n); const pp = patrulha(n); av.raiz.position.set(pp.x, 0.18, pp.z);
     } catch { /* sem PRF NPC */ }
@@ -8607,7 +8641,7 @@ function descerPoliciais(v) {
       if (!v.pe) return; if (av.armaNpc) av.armaNpc.visible = true;
       const lado = k ? -1 : 1, x = o.position.x + rx * 1.6 * lado, z = o.position.z + rz * 1.6 * lado;
       av.raiz.position.set(x, alturaChao(x, z), z); scene.add(av.raiz); av.tocar('run');
-      const et = textoSprite('Polícia', { escala: 0.6, fundo: 'rgba(30,70,160,.92)' }); et.position.y = 2.2; av.raiz.add(et);
+      const et = textoSprite('Polícia', { escala: 0.6, fundo: 'rgba(30,70,160,.92)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et));
       v.pe.robos.push({ av, dentro: false });
     }).catch(() => {});
   }
@@ -9207,6 +9241,8 @@ function aplicarPerfil(novo) {
     setTimeout(async () => { await rede.sair(); location.reload(); }, 5000);
     return;
   }
+  if ((novo.visivel_forcado || 0) > (antigo.visivel_forcado || 0)) { nomeOculto = false; if (jogador.etiqueta) jogador.etiqueta.visible = true; aviso('👁️ O administrador deixou você visível de novo.', 4); }
+  if ('congelado' in novo && !!novo.congelado !== !!antigo.congelado) telaCongelado(!!novo.congelado);
   // o personagem não muda mais ao entrar em serviço (a farda é que mostra): recriar o boneco aqui deixava uma cópia parada
   if (novo.personagem && novo.personagem !== antigo.personagem && novo.personagem !== jogador.avatar?.nomePersonagem) trocarAvatar(skinDoJogador());
   if (novo.policial !== antigo.policial) aviso(novo.policial ? 'Você está em serviço na polícia. Prenda os procurados (em vermelho)!' : 'Você saiu do serviço da polícia.', 4);
@@ -10074,7 +10110,7 @@ function quadroJogo() {
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   diag('remotos/voz');
   atualizarRemotos(dt); atualizarTatica(dt);
-  voz.atualizar(dt); atualizarOficinasJog(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
+  voz.atualizar(dt); atualizarOficinasJog(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarRotulos(); atualizarCongelados(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   diag('ônibus/aviação/rodas');
   atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
@@ -12301,7 +12337,7 @@ function montarComprador() {
     // Seu Tonho: atrás do balcão, de frente para a rua, com nome em cima
     criarAvatar('personagens', 'Seu_Tonho').then((av) => { const y = alturaChao(COMPRADOR.x, COMPRADOR.z);
       av.raiz.position.set(COMPRADOR.x + 3.2, y, COMPRADOR.z + D / 2 + 0.75); av.raiz.rotation.y = 0; scene.add(av.raiz); av.tocar('idle'); compradorMontado.av = av;
-      const nome = textoSprite('Seu Tonho', { escala: 0.45, fundo: 'rgba(40,30,20,.85)' }); nome.position.set(0, 2.25, 0); av.raiz.add(nome);
+      const nome = textoSprite('Seu Tonho', { escala: 0.45, fundo: 'rgba(40,30,20,.85)' }); nome.position.set(0, 2.25, 0); av.raiz.add(rotuloPessoa(nome));
     }).catch((e) => console.warn('Seu Tonho não carregou', e));
   }
   const aberto = !oficialPerto();
@@ -12634,6 +12670,7 @@ function desenharBarraAveriguar() {
       ${pode('teleportar') ? '<button data-av="ir">📍 Ir até ele</button>' : ''}
       ${pode('algemar') ? '<button data-av="algemar">🔗 Algemar</button>' : ''}
       ${pode('prender') ? '<button data-av="prender">🚔 Prender 10 min</button>' : ''}
+      ${pode('banir') ? `<button data-av="congelar">${congelados.has(averiguando.id) ? '🔥 Descongelar' : '🧊 Congelar'}</button>` : ''}
       ${pode('banir') ? '<button data-av="banir" style="background:#8a2525">⛔ Banir</button>' : ''}
       <button data-av="painel">🛡 Abrir no painel</button></div>`;
   bar.querySelectorAll('button').forEach((b) => { b.style.cssText += ';border:0;border-radius:8px;padding:6px 10px;color:#fff;font-weight:700;' + (b.dataset.av === 'banir' ? '' : 'background:#2d3650'); b.onclick = () => acaoAveriguar(b.dataset.av); });
@@ -12651,6 +12688,7 @@ async function acaoAveriguar(a) {
     if (a === 'ir') { const r = remotos.get(alvo.id)?.alvo; if (r) { jogador.dentroCasa = null; teleportar(r.x + 1.2, r.z + 1.2); } encerrarAveriguar(); return; }
     if (a === 'painel') { encerrarAveriguar(); $('btPainel').click(); return; }
     if (a === 'algemar') { await rede.painel.algemar(alvo.id, true); aviso(`🔗 ${alvo.nome} foi algemado.`); return; }
+    if (a === 'congelar') { const on = !congelados.has(alvo.id); await congelarJogador(alvo.id, on); aviso(on ? `🧊 ${alvo.nome} virou estátua.` : `🔥 ${alvo.nome} foi descongelado.`, 3); desenharBarraAveriguar(); return; }
     if (a === 'prender') { await rede.painel.prender(alvo.id, 10); aviso(`🚔 ${alvo.nome} foi preso por 10 min.`); return; }
     if (a === 'banir') {
       escolher(`⛔ Banir ${esc(alvo.nome)}?`, '<input id="avMotivo" placeholder="Motivo do banimento" style="width:100%;padding:8px;border-radius:8px">', [
@@ -13511,9 +13549,94 @@ function nomeComCla(nome, cla, cor) {
   const k = 0.022 * 0.8; s.scale.set(w * k, h * k, 1); s.renderOrder = 5;
   return s;
 }
+// ---------------------------------------------------------------- 21c: moderação
+function mostrarNomeOculto(r) {
+  const adm = souAdmin();
+  if (r.et) { r.et.visible = !r.oc || adm; r.et.material.color.set(r.oc && adm ? '#d08cff' : '#ffffff'); }
+  if (r.status) r.status.visible = !r.oc || adm;
+}
+// troca os materiais do boneco remoto: 'fantasma' (invisível visto pelo admin), 'estatua' (congelado) ou null (normal)
+const _matEstatua = new THREE.MeshStandardMaterial({ color: '#8f9294', roughness: 0.95, metalness: 0.05 });
+function pintarRemoto(r, modo) {
+  if (!r.av || (r.pintura || null) === modo) return;
+  r.pintura = modo;
+  r.av.raiz.traverse((m) => {
+    if (!m.isMesh || m.isSprite) return;
+    if (m.userData.matOrig === undefined) { if (!modo) return; m.userData.matOrig = m.material; }
+    const orig = m.userData.matOrig;
+    if (!modo) { m.material = orig; return; }
+    const um = (x) => {
+      if (modo === 'estatua') return _matEstatua;
+      const c = x.clone(); c.transparent = true; c.opacity = 0.35; c.depthWrite = false; return c;
+    };
+    m.material = Array.isArray(orig) ? orig.map(um) : um(orig);
+  });
+}
+// congelados: id -> { x, z }. Quem prende é o jogo de cada um (ignora posição, tiro e dano dele), então vale até com hack
+const congelados = new Map();
+let tCongelados = 0;
+async function recarregarCongelados() {
+  const l = await rede.congelados();
+  const ids = new Set(l.map((c) => c.id));
+  for (const id of [...congelados.keys()]) if (!ids.has(id)) soltarEstatua(id);
+  for (const c of l) if (!congelados.has(c.id)) congelados.set(c.id, { x: c.congelado_x, z: c.congelado_z });
+}
+function soltarEstatua(id) {
+  congelados.delete(id);
+  const r = remotos.get(id); if (!r?.av) return;
+  r.av.mixer.timeScale = 1; if (r.carro) r.carro.visible = true;
+}
+function receberCongelar(e) {
+  if (!e?.id || e.id === jogador.perfil?.id) return;
+  if (e.on) congelados.set(e.id, { x: e.x, z: e.z }); else soltarEstatua(e.id);
+}
+function tiroDeEstatua(t) {
+  for (const [id, c] of congelados) {
+    const r = remotos.get(id), x = c.x ?? r?.av?.raiz.position.x, z = c.z ?? r?.av?.raiz.position.z;
+    if (x != null && Math.hypot(t.x - x, t.z - z) < 2.5) return true;
+  }
+  return false;
+}
+function atualizarCongelados(dt) {
+  if ((tCongelados -= dt) <= 0) { tCongelados = 20; recarregarCongelados().catch(() => {}); }
+  for (const [id, c] of congelados) {
+    const r = remotos.get(id); if (!r?.av) continue;
+    const raiz = r.av.raiz;
+    if (c.x == null) { c.x = raiz.position.x; c.z = raiz.position.z; }
+    raiz.position.set(c.x, alturaChao(c.x, c.z), c.z); raiz.visible = true;
+    r.av.mixer.timeScale = 0;                         // parado na pose em que estava
+    if (r.carro) r.carro.visible = false; if (r.arma) r.arma.visible = false;
+    if (r.et) r.et.visible = true;
+  }
+}
+async function congelarJogador(id, ligado) {
+  const r = remotos.get(id), p = r?.av?.raiz.visible ? r.av.raiz.position : r?.alvo;
+  const x = p ? Math.round(p.x * 100) / 100 : null, z = p ? Math.round(p.z * 100) / 100 : null;
+  await rede.painel.congelar(id, ligado, x, z);
+  receberCongelar({ id, on: ligado, x, z });
+  conexao?.enviar('congelar', { id, on: ligado, x, z });
+}
+// tela de quem foi congelado (o jogo dos outros já o mostra como estátua)
+window.addEventListener('keydown', (e) => { if (jogador.congelado) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+function telaCongelado(on) {
+  jogador.congelado = on;
+  let el = $('telaCongelado');
+  if (on && !el) {
+    el = document.createElement('div'); el.id = 'telaCongelado';
+    el.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(150,200,230,.28);backdrop-filter:grayscale(1);display:flex;align-items:center;justify-content:center;color:#fff;font:700 18px system-ui;text-align:center;padding:24px;text-shadow:0 2px 6px #000';
+    el.textContent = '🧊 Você foi congelado pela administração.';
+    for (const ev of ['pointerdown', 'touchstart', 'keydown', 'click']) el.addEventListener(ev, (e) => { e.stopPropagation(); e.preventDefault(); }, { passive: false });
+    document.body.appendChild(el);
+  }
+  if (el) el.style.display = on ? 'flex' : 'none';
+  if (on) { jogador.alvo = null; aviso('🧊 Você foi congelado pela administração.', 5); }
+}
+
 function trocarNome(av, antigo, nome, cla, cor) {
   if (antigo) av.raiz.remove(antigo);
-  const s = nomeComCla(nome, cla, cor); s.position.y = alturaNome(av); av.raiz.add(s); return s;
+  const s = nomeComCla(nome, cla, cor); s.position.y = alturaNome(av); av.raiz.add(rotuloPessoa(s));
+  if (antigo) { s.visible = antigo.visible; s.material.color.copy(antigo.material.color); }   // mantém nome escondido / cor do admin
+  return s;
 }
 let tempoNomes = 0;
 function atualizarNomesCla(dt) {
@@ -14584,7 +14707,7 @@ function atualizarFiscal(dt, t) {
     atualizarFiscal.criando = true;
     criarAvatar('personagens', PERSONAGENS[11 % PERSONAGENS.length].id).then((av) => {
       av.raiz.position.set(PONTO_FISCAL.x, 0.44, PONTO_FISCAL.z); scene.add(av.raiz);
-      const et = textoSprite('🧾 Fiscal', { escala: 0.5, fundo: 'rgba(46,158,87,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+      const et = textoSprite('🧾 Fiscal', { escala: 0.5, fundo: 'rgba(46,158,87,.95)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et));
       fiscalNpc = { av, anim: '' };
     }).catch(() => {});
   }
@@ -14790,7 +14913,7 @@ function montarAutoescola() {
   mundo.addCol({ tipo: 'caixa', x0: A.x1 - 6, x1: A.x1 - 4, z0: -14.2, z1: -9.8 });
   criarAvatar('personagens', PERSONAGENS[5 % PERSONAGENS.length].id).then((av) => {
     av.raiz.position.set(A.atendente.x, y, A.atendente.z); av.raiz.rotation.y = 0; av.tocar('idle'); scene.add(av.raiz);
-    const et = textoSprite('Instrutor', { escala: 0.5, fundo: 'rgba(232,137,28,.95)' }); et.position.y = 2.2; av.raiz.add(et); atendentes.push(av);
+    const et = textoSprite('Instrutor', { escala: 0.5, fundo: 'rgba(232,137,28,.95)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et)); atendentes.push(av);
   }).catch(() => {});
 }
 // ================================================================= coleta de lixo: Central de Reciclagem, setores, lixeiras e caminhões
@@ -14875,7 +14998,7 @@ function garisDe(dono) {
   if (dono.garis.length || dono.criandoGaris) return dono.garis;
   dono.criandoGaris = true;
   ROUPA_GARI.forEach((id, k) => criarAvatar('personagens', id).then((av) => {
-    const et = textoSprite('Gari', { escala: 0.45, fundo: 'rgba(232,137,28,.95)' }); et.position.y = 2.1; av.raiz.add(et);
+    const et = textoSprite('Gari', { escala: 0.45, fundo: 'rgba(232,137,28,.95)' }); et.position.y = 2.1; av.raiz.add(rotuloPessoa(et));
     // saco de lixo (sacola_lixo.glb) na mão: aparece só quando ele leva os sacos da lixeira até o caminhão
     let sacola = null;
     if (modelos.sacola_lixo) { sacola = new THREE.Group(); const sc = clonar('sacola_lixo'); sc.scale.setScalar(0.55); sc.position.y = 0.25; sacola.add(sc); sacola.position.set(-0.32, 0.55, 0.22); sacola.visible = false; av.raiz.add(sacola); }
@@ -15251,14 +15374,14 @@ function montarAtendentes() {
     if (!a.atendente) return;
     criarAvatar('personagens', ids[(k * 7 + 3) % ids.length]).then((av) => {
       av.raiz.position.set(a.atendente.x, alturaChao(a.atendente.x, a.atendente.z), a.atendente.z); av.raiz.rotation.y = a.atendente.yaw; av.tocar('idle'); scene.add(av.raiz);
-      const et = textoSprite('Atendente', { escala: 0.5, fundo: 'rgba(43,95,168,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+      const et = textoSprite('Atendente', { escala: 0.5, fundo: 'rgba(43,95,168,.95)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et));
       atendentes.push(av);
     }).catch(() => {});
   });
   // mecânico do hangar (NPC): faz a revisão dos aviões da frota, cobrando do piloto
   criarAvatar('personagens', ids[11 % ids.length]).then((av) => {
     const m = MECANICO_HANGAR; av.raiz.position.set(m.x, alturaChao(m.x, m.z), m.z); av.raiz.rotation.y = Math.PI; av.tocar('idle'); scene.add(av.raiz);
-    const et = textoSprite('🔧 Mecânico', { escala: 0.5, fundo: 'rgba(200,120,20,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+    const et = textoSprite('🔧 Mecânico', { escala: 0.5, fundo: 'rgba(200,120,20,.95)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et));
     atendentes.push(av);
   }).catch(() => {});
 }
@@ -16233,7 +16356,7 @@ function atualizarBandidos() {
     if (presosNpc.has(c)) continue;
     const cr = crimeDoCiclo(c); if (!cr || cr.n.bandido || cr.n.algemado) continue;
     if (agoraServidor() / 1000 - c * CICLO_CRIME > FUGA) continue;
-    const placa = textoSprite('🦹 LADRÃO', { escala: 0.6, fundo: 'rgba(170,30,30,.95)' }); placa.position.y = 2.6; cr.n.av.raiz.add(placa);
+    const placa = textoSprite('🦹 LADRÃO', { escala: 0.6, fundo: 'rgba(170,30,30,.95)' }); placa.position.y = 2.6; cr.n.av.raiz.add(rotuloPessoa(placa));
     cr.n.bandido = { ciclo: c, rota: cr.rota, placa, loja: cr.loja }; cr.n.av.tocar('run', { fade: 0.2 });
     if (ultimoAlertaCrime !== c && papelDe(jogador.perfil) && ['policia', 'prf', 'exercito'].includes(papelDe(jogador.perfil))) {
       ultimoAlertaCrime = c; aviso('🚨 Assalto numa loja! O ladrão está fugindo pelas ruas: prenda ele (+300).', 5);
@@ -16973,7 +17096,7 @@ async function criarGuarda(B, d, idx) {
     // uma arma só (antes vinha a do fardado e mais esta: ficavam duas, uma solta ao lado)
     const av = await npcFardado('exercito', idx + 4, 'militar', B.id === 'naval' ? 'marinha' : B.id === 'aerea' ? 'aeronautica' : 'exercito');
     if (idx >= B.pedidos) return;   // o número diminuiu enquanto carregava
-    const et = textoSprite(B.rotulo || 'Exército', { escala: 0.5, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+    const et = textoSprite(B.rotulo || 'Exército', { escala: 0.5, fundo: 'rgba(62,78,40,.95)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et));
     av.arma = av.armaNpc || null;
     av.raiz.visible = false; scene.add(av.raiz);
     const s = { av, ...d };
@@ -18162,7 +18285,7 @@ function testeDefesa(base, tipo) {
     teste.pos = new THREE.Vector3(g.x + fx * 60, 0, g.z + fz * 60); teste.alvo = new THREE.Vector3(g.x - fx * 30, 0, g.z - fz * 30);
     criarAvatar('personagens', 'Seu_Tonho').then((av) => {
       if (!teste) return; teste.av = av; av.raiz.position.copy(teste.pos); scene.add(av.raiz); av.tocar('walk', { velocidade: 1.8 });
-      const et = textoSprite('INVASOR (teste)', { escala: 0.5, fundo: 'rgba(170,30,30,.95)' }); et.position.y = 2.3; av.raiz.add(et);
+      const et = textoSprite('INVASOR (teste)', { escala: 0.5, fundo: 'rgba(170,30,30,.95)' }); et.position.y = 2.3; av.raiz.add(rotuloPessoa(et));
     }).catch(() => { teste.log.push('não carregou o invasor'); });
   } else {
     const ar = tipo === 'heli', d = ar ? 400 : 520, mod = ar ? 'helicoptero' : 'aviao_pequeno';
@@ -18272,7 +18395,7 @@ function montarNavios() {
 async function criarGuardasNavio(n, k) {
   for (let i = 0; i < k; i++) {
     try {
-      const av = await npcFardado('exercito', i + 5, 'militar', 'marinha'); const et = textoSprite('Marinha', { escala: 0.5, fundo: 'rgba(24,52,96,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+      const av = await npcFardado('exercito', i + 5, 'militar', 'marinha'); const et = textoSprite('Marinha', { escala: 0.5, fundo: 'rgba(24,52,96,.95)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et));
       scene.add(av.raiz); av.tocar('idle'); n.guardas.push({ av, lx: (i % 2 ? 1 : -1) * (n.id === 'porta' ? 9 : 3), lz: (i < 2 ? -0.3 : 0.3) * n.comp });
     } catch { /* sem guarda */ }
   }
@@ -18824,7 +18947,12 @@ function tiqueTatica(dt) {
     else if (performance.now() > trocaEspera.ate) { trocaEspera = null; aviso('A troca não completou: você ficou a pé.', 3); }
   }
   // equipe invisível: some para os outros jogadores (a equipe continua vendo)
-  if (!souEquipe()) for (const r of remotos.values()) if (r.meta?.invis && r.av) { r.av.raiz.visible = false; if (r.status) r.status.visible = false; }
+  // 21c: só o administrador vê a equipe invisível, e meio translúcida (fantasma)
+  { const adm = souAdmin(); for (const r of remotos.values()) if (r.av) {
+    const inv = !!r.meta?.invis;
+    if (inv && !adm) { r.av.raiz.visible = false; if (r.status) r.status.visible = false; if (r.et) r.et.visible = false; }
+    pintarRemoto(r, congelados.has(r.id) ? 'estatua' : inv && adm ? 'fantasma' : null);
+  } }
   // BOPE e invisível mudaram no perfil: avisa os outros
   const m = `${!!jogador.perfil.bope}|${!!jogador.perfil.invisivel}`;
   if (m !== ultimoMeta) { if (ultimoMeta) conexao?.rastrear(metaPresenca()); ultimoMeta = m; }
@@ -19117,7 +19245,7 @@ function criarBotBope(c, op, reforco) {
   npcFardado('bope', i + 2, 'fuzil').then((av) => {
     if (opBope !== op || b.removido) return;
     b.av = av; av.raiz.visible = false; scene.add(av.raiz);
-    const et = textoSprite('💀 BOPE', { escala: 0.55, fundo: 'rgba(8,8,8,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+    const et = textoSprite('💀 BOPE', { escala: 0.55, fundo: 'rgba(8,8,8,.95)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et));
     try { vestir(av, 'bope'); } catch { /* sem farda */ }
     if (b.fora) { colocarNaPorta(b); npcs.push(b); av.tocar('run'); }
   }).catch(() => {});
@@ -19309,7 +19437,7 @@ function receberBope(e) {
       npcFardado('bope', i + 2, 'fuzil').then((av) => {
         if (!fantasmasBope.has(e.op)) return;
         g.av = av; scene.add(av.raiz); av.raiz.position.set(x, alturaChao(x, z), z);
-        const et = textoSprite('💀 BOPE', { escala: 0.55, fundo: 'rgba(8,8,8,.95)' }); et.position.y = 2.2; av.raiz.add(et);
+        const et = textoSprite('💀 BOPE', { escala: 0.55, fundo: 'rgba(8,8,8,.95)' }); et.position.y = 2.2; av.raiz.add(rotuloPessoa(et));
         try { vestir(av, 'bope'); } catch { /* sem farda */ }
       }).catch(() => {});
     }

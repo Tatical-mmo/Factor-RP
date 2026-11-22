@@ -54,6 +54,21 @@ export async function trocarSenha(senha) {
 }
 export function aoRecuperarSenha(fn) { sb.auth.onAuthStateChange((ev, s) => { if (ev === 'PASSWORD_RECOVERY') fn(s); }); }
 
+// 143: código do aparelho (fica no celular) — o ban pega o aparelho, não só a conta
+export function codigoAparelho() {
+  try {
+    let c = localStorage.getItem('fator_aparelho');
+    if (!c || c.length < 8) { c = (globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`); localStorage.setItem('fator_aparelho', c); }
+    return c;
+  } catch { return null; }
+}
+export async function aparelhoBanido() {
+  const c = codigoAparelho(); if (!c) return false;
+  try { const { data, error } = await sb.rpc('checar_aparelho', { p_aparelho: c }); return !error && data === true; } catch { return false; }
+}
+export async function congelados() {
+  try { const { data } = await sb.from('perfis').select('id,congelado_x,congelado_z').eq('congelado', true).limit(50); return data || []; } catch { return []; }
+}
 export async function carregarPerfil(id) {
   const { data, error } = await sb.from('perfis').select('*').eq('id', id).maybeSingle();
   if (error) throw new Error(traduzir(error));
@@ -118,6 +133,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'viacao' }, ({ payload }) => eventos.viacao?.(payload));
   canal.on('broadcast', { event: 'danoQueda' }, ({ payload }) => eventos.danoQueda?.(payload));
   canal.on('broadcast', { event: 'missil' }, ({ payload }) => eventos.missil?.(payload));
+  canal.on('broadcast', { event: 'congelar' }, ({ payload }) => eventos.congelar?.(payload));
   canal.on('broadcast', { event: 'travado' }, ({ payload }) => eventos.travado?.(payload));
   canal.on('broadcast', { event: 'missilAcerto' }, ({ payload }) => eventos.missilAcerto?.(payload));
   canal.on('broadcast', { event: 'abducao' }, ({ payload }) => eventos.abducao?.(payload));
@@ -361,6 +377,7 @@ function traduzirRpc(m) {
     'jogador nao esta algemado': 'Esse jogador não está algemado.',
     'so o prefeito': 'Só o prefeito pode fazer isso.',
     'voce nao pode banir esse jogador': 'Você não pode banir esse jogador.',
+    'voce nao pode congelar esse jogador': 'Você não pode congelar esse jogador.',
     'voce nao pode desbanir esse jogador': 'Você não pode desbanir esse jogador.',
     'voce nao pode algemar esse jogador': 'Você não pode algemar esse jogador.',
     'voce nao pode prender esse jogador': 'Você não pode prender esse jogador.',
@@ -692,6 +709,10 @@ export const painel = {
   promover: (id, carreira, nivel) => rpc('admin_promover', { p_jogador: id, p_carreira: carreira, p_nivel: nivel }),
   definirEmprego: (id, emprego) => rpc('admin_definir_emprego', { p_jogador: id, p_emprego: emprego }),
   banir: (alvo, motivo) => rpc('admin_banir', { alvo, motivo }),
+  // 143: estátua, visível à força, contas no mesmo aparelho/IP
+  congelar: (alvo, ligado, x, z) => rpc('admin_congelar', { alvo, ligado, px: x ?? null, pz: z ?? null }),
+  forcarVisivel: (alvo) => rpc('admin_forcar_visivel', { alvo }),
+  contasLigadas: (alvo) => rpc('admin_contas_ligadas', { alvo }),
   desbanir: (alvo) => rpc('admin_desbanir', { alvo }),
   algemar: (alvo, ligado) => rpc('admin_algemar', { alvo, ligado }),
   prender: (alvo, minutos) => rpc('admin_prender', { alvo, minutos }),
