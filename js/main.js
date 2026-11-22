@@ -17866,6 +17866,7 @@ function atualizarMiraManual(dt = 0.016) {
     }
   }
   cruzDaMira(miraC.ligada);
+  if (miraC.ligada !== document.body.classList.contains('miraCentro')) document.body.classList.toggle('miraCentro', miraC.ligada);   // 20x: na câmera de ombro some o girar (o dedo já gira)
 }
 // ---- ponto 50 do helicóptero do Exército: mira livre (arrastar na tela), qualquer direção, independente do nariz
 const p50 = { ativo: false, yaw: 0, pitch: -0.25, t: 0, atirando: false, arma: null, linha: null };
