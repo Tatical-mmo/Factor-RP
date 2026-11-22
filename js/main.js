@@ -1282,7 +1282,7 @@ const ANIM_MIRA = ['mira_tras_lento', 'mira_tras_rapido', 'mira_lado_esq', 'mira
 const ANIM_POSTURA = ['deitado_arma', 'deitado_recarga', 'deitado', 'rastejar_tras', 'rastejar_frente', 'abaixado_arma', 'abaixado_recarga', 'abaixado', 'engatinhar',
   'levantar_deitado', 'deitar', 'levantar_abaixado', 'abaixar', 'cobertura_esq', 'cobertura_dir', 'granada_abaixado'];
 for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA, ...ANIM_POSTURA]) ANIM_EXTRAS.add(n);
-const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=1' : 'assets/personagens/animacoes_emotes.glb?v=2');
+const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=2' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
 function obterBaseExtra(arq) {
   if (!basesExtra.has(arq)) basesExtra.set(arq, carregarGLB(arq).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { basesExtra.delete(arq); return null; }));
@@ -3991,7 +3991,7 @@ let conexao = null, online = 1, conectado = false;
 let envioTimer = 0, ultimoEnvio = null, tempoKeepAlive = 0, tempoSalvar = 15;
 const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1, flexao_desce: 1, flexao_sobe: 1, parada: 1, coletar: 1.2, levantar_socorro: 1.6, beber: 1,
   abaixar: 1.8, levantar_abaixado: 1.8, deitar: 2, levantar_deitado: 2, cobertura_esq: 1.3, cobertura_dir: 1.3, granada_abaixado: 1.4 };   // 20p: posturas
-const ANIM_VEL = { walk_shoot: 1.25, engatinhar: 1.8, rastejar_frente: 1.7, rastejar_tras: 1.7 };
+const ANIM_VEL = { walk_shoot: 1.25, engatinhar: 1.45, rastejar_frente: 1.7, rastejar_tras: 1.7 };
 
 function conectarMultiplayer(perfil) {
   conexao = rede.conectarCidade(perfil, {
@@ -4144,6 +4144,8 @@ function atualizarRemotos(dt) {
     r.av.mixer.update(dt);
     garrafaNaMao(r.av, r.anim === 'beber'); celularNaMao(r.av, r.anim === 'celular');
     raiz.updateMatrixWorld(true);
+    ajustarChaoPostura(r.av, raiz.position.y - (r.av.offChao || 0), dt);
+    if (a.ar && r.arma) r.arma.visible = !ARMA_GUARDADA.test(r.av.nomeAtual || '');
     if (a.mp && a.ar) inclinarColuna(r.av, a.mp);   // mira manual de quem está longe: o corpo inclina igual
     if (a.mh) posarAperto(r.av);
     if (r.caixa) posicionarCaixa(r.av, r.caixa, raiz.rotation.y);
@@ -9288,7 +9290,7 @@ function atualizarJogador(dt) {
   } else {
     let vel = 0;
     if (forca > 0.15 && j.postura) {   // 20p: abaixado engatinha, deitado rasteja (devagar; sem correr)
-      vel = j.postura === 'deitado' ? 0.55 : 0.9;
+      vel = j.postura === 'deitado' ? 0.55 : 0.75;
       if (joy.ativo) vel *= THREE.MathUtils.clamp(forca * 1.3, 0.5, 1);
       j.rastejaTras = j.postura === 'deitado' && iy < 0 && -iy >= Math.abs(ix);   // deitado, para trás: rasteja de costas olhando para a frente
       j.ladoArmado = j.postura === 'abaixado' && j.armado && miraC.ligada && Math.abs(ix) > Math.abs(iy);
@@ -9368,6 +9370,8 @@ function atualizarJogador(dt) {
   if (av.colunaAntes) { av.coluna.quaternion.copy(av.colunaAntes); av.colunaAntes = null; }
   av.mixer.update(dt);
   av.raiz.updateMatrixWorld(true);
+  ajustarChaoPostura(av, j.pos.y + (j.puloY || 0), dt);
+  if (j.arma && j.armado) j.arma.visible = !ARMA_GUARDADA.test(av.nomeAtual || '');
   inclinarMira(av);
   if (j.aperto) posarAperto(av);
 
@@ -17567,6 +17571,23 @@ function balaNaAeronave(b) {
 // ---- posturas (20p): 🧎 Abaixar e 🪖 Deitar. Abaixado engatinha, deitado rasteja (para trás, de costas olhando para a
 // frente). Com arma: pose de tiro ajoelhado/deitado e recarga própria. Encostado num veículo ou parede, com arma, o
 // Abaixar vira 🛡️ Cobertura: agacha, sai para o lado da mira, atira e volta. Abaixado/deitado é alvo menor.
+// 20q: deitado, o corpo encosta no chão (o modelo de origem flutuava uns centímetros): mede os ossos mais baixos e desce
+// a raiz até eles ficarem na altura do chão. Rastejando/engatinhando ou na transição, a arma fica guardada (nas costas)
+const PRONO = /^(deitado|rastejar|deitar|levantar_deitado)/, ARMA_GUARDADA = /^(rastejar|engatinhar|deitar|levantar_deitado|abaixar|levantar_abaixado)/;
+const OSSOS_CHAO = ['Hips', 'Spine2', 'Head', 'LeftHand', 'RightHand', 'LeftForeArm', 'RightForeArm', 'LeftLeg', 'RightLeg', 'LeftFoot', 'RightFoot'];
+const _vChao = new THREE.Vector3();
+function ajustarChaoPostura(av, baseY, dt) {
+  const prono = PRONO.test(av.nomeAtual || '');
+  let alvo = 0;
+  if (prono) {
+    av.ossosChao ||= OSSOS_CHAO.map((n) => av.raiz.getObjectByName('mixamorig' + n) || av.raiz.getObjectByName('mixamorig:' + n)).filter(Boolean);
+    let min = Infinity; for (const o of av.ossosChao) { o.getWorldPosition(_vChao); if (_vChao.y < min) min = _vChao.y; }
+    if (min < Infinity) alvo = THREE.MathUtils.clamp(baseY + 0.07 - (min - av.raiz.position.y + baseY), -0.45, 0.05);
+  }
+  av.offChao = (av.offChao || 0) + (alvo - (av.offChao || 0)) * Math.min(1, dt * 6);
+  if (Math.abs(av.offChao) < 0.002 && !prono) { av.offChao = 0; return; }
+  av.raiz.position.y = baseY + av.offChao; av.raiz.updateMatrixWorld(true);
+}
 function posturaPode() {
   const j = jogador;
   return !!(j.avatar && !j.morto && !j.carro && !j.passageiro && !j.ave && !j.trem && !j.onibus && !j.voo && !j.paraquedas && !j.embarcado && !j.carregando && !j.algemado && !j.rendido && !j.pulo && !j.abducao && !correTropa);
@@ -17602,7 +17623,7 @@ function animPostura(av, j, andando, ix) {
   if (!andando) { av.tocar(posturaParada(j), { fade: 0.3 }); return; }
   if (j.postura === 'deitado') { av.tocar(j.rastejaTras ? 'rastejar_tras' : 'rastejar_frente', { velocidade: 1.7 }); return; }
   if (j.ladoArmado) { av.tocar(ix > 0 ? 'mira_lado_dir' : 'mira_lado_esq', { velocidade: 0.9 }); return; }
-  av.tocar('engatinhar', { velocidade: 1.8 });
+  av.tocar('engatinhar', { velocidade: 1.45 });
 }
 // obstáculo para cobertura colado no jogador (veículo, parede ou prédio): o ponto mais perto, ou null
 function obstaculoPerto(raio = 1.7) {
