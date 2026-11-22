@@ -1312,11 +1312,12 @@ const ANIM_MIRA = ['mira_tras_lento', 'mira_tras_rapido', 'mira_lado_esq', 'mira
 // 20p: posturas (abaixado, deitado, engatinhar, rastejar, cobertura, granada abaixado e as transições)
 const ANIM_POSTURA = ['deitado_arma', 'deitado_recarga', 'deitado', 'rastejar_tras', 'rastejar_frente', 'abaixado_arma', 'abaixado_recarga', 'abaixado',
   'levantar_deitado', 'deitar', 'levantar_abaixado', 'abaixar', 'cobertura_esq', 'cobertura_dir', 'granada_abaixado', 'rolar_frente', 'rolar_dir', 'rolar_esq',
-  'abaixar_arma', 'levantar_abaixado_arma', 'agachado_frente', 'agachado_tras', 'agachado_d', 'rastejar_arma', 'pular_muro', 'pular_muro_parado'];   // 21a: pular muro baixo   // 20t: agachado sem arma e rastejar com arma   // 20s: abaixar armado e andar agachado armado (gerados no Meshy)
+  'abaixar_arma', 'levantar_abaixado_arma', 'agachado_frente', 'agachado_tras', 'agachado_d', 'rastejar_arma', 'pular_muro', 'pular_muro_parado',
+  'agarrar_muro', 'escalar', 'escalar_esq', 'escalar_dir', 'subir_borda', 'pular_baixo', 'soltar_parede', 'corda_bamba', 'beira_cair', 'cair_chao', 'levantar_queda', 'tentar_escalar'];   // 21d: escalada   // 21a: pular muro baixo   // 20t: agachado sem arma e rastejar com arma   // 20s: abaixar armado e andar agachado armado (gerados no Meshy)
 // 20r: deslocamento das cambalhotas (tempo, x = esquerda do personagem, z = frente), tirado do quadril da animação
 const CURVAS_ROLAR = {"rolar_frente":[[0.0,0.0,0.0],[0.1,-0.021,0.044],[0.2,-0.035,0.118],[0.3,-0.041,0.24],[0.4,-0.029,0.425],[0.5,-0.007,0.656],[0.6,0.037,0.922],[0.7,0.072,1.192],[0.8,0.066,1.435],[0.9,0.08,1.556],[1.0,0.088,1.644],[1.1,0.055,1.744],[1.2,0.027,1.833],[1.3,0.003,1.91],[1.4,-0.005,2.008],[1.5,0.004,2.109],[1.6,0.017,2.176],[1.7,0.038,2.213],[1.8,0.059,2.236],[1.9,0.069,2.25],[2.0,0.072,2.261],[2.1,0.073,2.268],[2.2,0.075,2.273],[2.3,0.077,2.274],[2.4,0.08,2.273],[2.5,0.082,2.273]],"rolar_dir":[[0.0,0.0,0.0],[0.1,-0.184,-0.049],[0.2,-0.5,-0.11],[0.3,-0.749,-0.153],[0.4,-1.003,-0.196],[0.5,-1.268,-0.213],[0.6,-1.498,-0.203],[0.7,-1.731,-0.201],[0.8,-1.918,-0.192],[0.9,-2.15,-0.172],[1.0,-2.365,-0.137],[1.1,-2.478,-0.128],[1.2,-2.54,-0.133],[1.3,-2.606,-0.127],[1.4,-2.694,-0.101],[1.5,-2.768,-0.046],[1.6,-2.825,0.003],[1.7,-2.906,0.07],[1.8,-2.98,0.121],[1.9,-3.055,0.172],[2.0,-3.104,0.216],[2.1,-3.129,0.235],[2.2,-3.146,0.239],[2.3,-3.155,0.239],[2.4,-3.165,0.239]],"rolar_esq":[[0.0,0.0,0.0],[0.1,0.184,-0.049],[0.2,0.5,-0.11],[0.3,0.749,-0.153],[0.4,1.003,-0.196],[0.5,1.268,-0.213],[0.6,1.498,-0.203],[0.7,1.731,-0.201],[0.8,1.918,-0.192],[0.9,2.15,-0.172],[1.0,2.365,-0.137],[1.1,2.478,-0.128],[1.2,2.54,-0.133],[1.3,2.606,-0.127],[1.4,2.694,-0.101],[1.5,2.768,-0.046],[1.6,2.825,0.003],[1.7,2.906,0.07],[1.8,2.98,0.121],[1.9,3.055,0.172],[2.0,3.104,0.216],[2.1,3.129,0.235],[2.2,3.146,0.239],[2.3,3.155,0.239],[2.4,3.165,0.239]]};
 for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA, ...ANIM_POSTURA]) ANIM_EXTRAS.add(n);
-const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=6' : 'assets/personagens/animacoes_emotes.glb?v=2');
+const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=7' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
 function obterBaseExtra(arq) {
   if (!basesExtra.has(arq)) basesExtra.set(arq, carregarGLB(arq).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { basesExtra.delete(arq); return null; }));
@@ -3273,13 +3274,13 @@ function manchar(p, normal, cor) {
 const _vMeio = new THREE.Vector3(), _rcTopo = new THREE.Raycaster();
 // altura de verdade de uma parede/muro (os colisores não guardam): um raio de cima para baixo nos modelos do mapa,
 // medido uma vez por colisor e guardado (c.top). Usado no pulo (muro baixo × alto) e nas balas (por cima do muro passa)
-function medirTopo(x, z) {
+function medirTopo(x, z, teto = 12) {
   const chao = alturaChao(x, z);
-  _rcTopo.set(new THREE.Vector3(x, chao + 12, z), new THREE.Vector3(0, -1, 0)); _rcTopo.far = 12.2; _rcTopo.camera = camP;
+  _rcTopo.set(new THREE.Vector3(x, chao + teto, z), new THREE.Vector3(0, -1, 0)); _rcTopo.far = teto + 0.2; _rcTopo.camera = camP;
   const ign = (o) => { for (let k = o; k; k = k.parent) if (k === jogador.avatar?.raiz || k.userData?.efeito || k.isSprite) return true; return false; };
   for (const h of _rcTopo.intersectObjects(scene.children, true)) {
     if (!h.object.isMesh || !h.object.visible || ign(h.object) || h.object.material?.transparent && h.object.material.opacity < 0.5) continue;
-    if (h.point.y > chao + 0.15) return h.point.y;
+    if (h.point.y > chao + 0.15) { medirTopo.obj = h.object; return h.point.y; }
   }
   return null;
 }
@@ -3847,6 +3848,7 @@ async function iniciarJogo(perfil) {
   if (jogador.pena > 0 && cadeia) { const c = posCela(); jogador.pos.set(c.x, 0, c.z); jogador.dentroCasa = 'carceragem'; jogador.saidaSala = { x: cadeia.x + 4.5, z: cadeia.z }; }
   resolverColisao(jogador.pos, jogador.raio);
   jogador.pos.y = alturaChao(jogador.pos.x, jogador.pos.z);
+  setTimeout(() => { for (const n of ESC_ANIMS) jogador.avatar?.garantir(n); }, 7000);   // 21d: escalada pronta antes do primeiro pulo
   jogador.yaw = Math.PI;
   alvoCam.set(jogador.pos.x, 0.9, jogador.pos.z);
   scene.add(av.raiz);
@@ -4055,7 +4057,8 @@ const remotos = new Map();     // id -> { meta, av, arma, alvo, anim, caixa }
 let conexao = null, online = 1, conectado = false;
 let envioTimer = 0, ultimoEnvio = null, tempoKeepAlive = 0, tempoSalvar = 15;
 const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1, flexao_desce: 1, flexao_sobe: 1, parada: 1, coletar: 1.2, levantar_socorro: 1.6, beber: 1,
-  abaixar: 1.8, levantar_abaixado: 1.8, deitar: 2, levantar_deitado: 2, cobertura_esq: 1.3, cobertura_dir: 1.3, granada_abaixado: 1.4, rolar_frente: 1.25, rolar_dir: 1.25, rolar_esq: 1.25, abaixar_arma: 1.3, levantar_abaixado_arma: 1.3, pular_muro: 1.3, pular_muro_parado: 1.4 };   // 20p: posturas
+  abaixar: 1.8, levantar_abaixado: 1.8, deitar: 2, levantar_deitado: 2, cobertura_esq: 1.3, cobertura_dir: 1.3, granada_abaixado: 1.4, rolar_frente: 1.25, rolar_dir: 1.25, rolar_esq: 1.25, abaixar_arma: 1.3, levantar_abaixado_arma: 1.3, pular_muro: 1.3, pular_muro_parado: 1.4,
+  agarrar_muro: 1.4, subir_borda: 1.15, pular_baixo: 1.25, soltar_parede: 1, beira_cair: 1.1, cair_chao: 1, levantar_queda: 1.2, tentar_escalar: 1.2 };   // 21d: escalada   // 20p: posturas
 const ANIM_VEL = { walk_shoot: 1.25, rastejar_frente: 1.9, rastejar_tras: 1.7, agachado_frente: 2.2, agachado_tras: 2.2, agachado_d: 2.4, rastejar_arma: 1.4 };
 
 function conectarMultiplayer(perfil) {
@@ -9174,6 +9177,7 @@ function montarLocais() {
 }
 
 function teleportar(x, z) {
+  jogador.esc = null; jogador.emCima = null;   // 21d
   if (jogador.ave) virarGente();
   if (jogador.embarcado) { if (jogador.embarcado.leme) largarLeme(); jogador.embarcado = null; conexao?.rastrear(metaPresenca()); }
   if (jogador.carro) sairCarro();
@@ -9360,6 +9364,7 @@ function atualizarJogador(dt) {
     return;
   }
   if (j.carro) { if (!j.carro.taxi) dirigir(dt); av.mixer.update(dt); if (!j.carro || !sentarNoVeiculo(av, j.carro.mesh, j.carro.modelo)) av.raiz.updateMatrixWorld(true); return; }
+  if (j.esc) { passoEscalada(dt, ix, iy, dir, forca); return; }   // 21d: escalando, descendo, caindo da beira
   if (correTropa) {
     if (forca > 0.15 || j.morto || j.trava > 0) pararTropa('Você saiu da corrida da tropa.');
     else { correrComTropa(dt); av.tocar('run', { velocidade: 0.8 }); av.raiz.position.copy(j.pos); av.raiz.rotation.y = j.yaw; av.mixer.update(dt); av.raiz.updateMatrixWorld(true); return; }
@@ -9387,8 +9392,10 @@ function atualizarJogador(dt) {
       j.rastejaTras = false; j.ladoArmado = ladoAbx; j.agachadoTras = agachadoArm && iy < 0;
       if (ladoAbx || (agachadoArm && (miraC.ligada || iy < 0))) j.yaw = suavizarAngulo(j.yaw, miraC.ligada ? miraC.yaw : Math.atan2(frente.x, frente.z), dt * 8);   // de lado/para trás, olhando para a frente
       else j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 5);   // deitado: rasteja para onde o analógico manda (pode fazer a volta)
+      const ox = j.pos.x, oz = j.pos.z;
       j.pos.x += dir.x * vel * dt; j.pos.z += dir.z * vel * dt;
-      resolverColisao(j.pos, j.raio); j.ultimoMov = performance.now(); j.correndo = false; j.coberturaAte = 0; j.abxParou = true;
+      if (j.emCima) moverEmCima(j, ox, oz); else resolverColisao(j.pos, j.raio);
+      j.ultimoMov = performance.now(); j.correndo = false; j.coberturaAte = 0; j.abxParou = true;
     } else if (forca > 0.15) {
       if (j.abxEmPe) { j.coberturaAte = 0; j.abxParou = true; }
       vel = j.carregando ? VELOCIDADE.carregando : j.armado ? (correr && turbinado() ? VELOCIDADE.correr * 0.92 : VELOCIDADE.armado) : correr ? VELOCIDADE.correr : VELOCIDADE.andar;
@@ -9396,9 +9403,12 @@ function atualizarJogador(dt) {
       if (correr && jogador.armadura) vel *= 1 + ARMADURAS[jogador.armadura.modelo].bonus;   // armadura: corre até 15% mais
       if (joy.ativo && !correr) vel *= THREE.MathUtils.clamp(forca * 1.3, 0.5, 1);
       vel *= fatorVelocidade();
+      if (j.emCima?.estreito && !j.armado) vel = Math.min(vel, 0.8);   // 21d: em cima do muro anda devagar (corda bamba)
       j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 12);
+      const ox = j.pos.x, oz = j.pos.z;
       j.pos.x += dir.x * vel * dt; j.pos.z += dir.z * vel * dt;
-      resolverColisao(j.pos, j.raio); j.ultimoMov = performance.now(); j.correndo = correr;
+      if (j.emCima) moverEmCima(j, ox, oz); else resolverColisao(j.pos, j.raio);
+      j.ultimoMov = performance.now(); j.correndo = correr;
     }
     if (j.postura === 'abaixado' && vel === 0 && j.abxParou) j.abxParou = false;   // 20t: anda sempre agachado: ao parar só volta à pose parada
     if (miraC.ligada && (!j.postura || j.abxEmPe)) j.yaw = miraC.yaw;   // 20m: com a mira de centro o corpo fica virado para a mira (anda de lado/de costas)
@@ -9417,6 +9427,7 @@ function atualizarJogador(dt) {
         else av.tocar(ix > 0 ? 'mira_lado_dir' : 'mira_lado_esq', { velocidade: 1 });
       }
       else if (j.armado) { if (correr && turbinado()) av.tocar('corrida_rifle', { velocidade: 1 }); else av.tocar('walk_shoot', { velocidade: 1.25 }); }
+      else if (j.emCima?.estreito && !j.armado) av.tocar('corda_bamba', { velocidade: 1.2 });
       else if (correr) av.tocar(animCorrida(), { velocidade: 1 });
       else av.tocar('walk', { velocidade: vel / VELOCIDADE.andar });
     } else {
@@ -9446,7 +9457,7 @@ function atualizarJogador(dt) {
   if (j.emote === 'celular' && forca > 0.15) celular.fechar();   // andou: guarda o celular
   celularNaMao(j.avatar, j.avatar?.nomeAtual === 'celular');
   garrafaNaMao(j.avatar, j.avatar?.nomeAtual === 'beber' && j.emote === 'beber');
-  if (!j.pulo) resolverColisao(j.pos, j.raio);   // pulando por cima de um obstáculo: a colisão volta no fim do pulo
+  if (!j.pulo && !j.emCima) resolverColisao(j.pos, j.raio);   // pulando por cima de um obstáculo: a colisão volta no fim do pulo
   if (j.dentroCasa) limitarInterior(j.pos);
   if (j.pena > 0 && cadeia) {
     if (j.dentroCasa !== 'carceragem') { const c = posCela(); teleportar(c.x, c.z); }
@@ -9457,7 +9468,7 @@ function atualizarJogador(dt) {
       rede.cumprirPena().then((r) => { if (typeof r === 'number') { j.pena = r; if (r <= 0) solto(); } }).catch(() => {});
     }
   }
-  j.pos.y = THREE.MathUtils.lerp(j.pos.y, alturaChao(j.pos.x, j.pos.z), Math.min(1, dt * 12));
+  j.pos.y = THREE.MathUtils.lerp(j.pos.y, j.emCima ? j.emCima.y : alturaChao(j.pos.x, j.pos.z), Math.min(1, dt * 12));
   av.raiz.position.copy(j.pos); av.raiz.position.y += j.puloY || 0;
   endireitar(av); av.raiz.rotation.y = j.yaw;
   if (av.colunaAntes) { av.coluna.quaternion.copy(av.colunaAntes); av.colunaAntes = null; }
@@ -9754,6 +9765,7 @@ function atualizarCamera3D(dt) {
     const dist = v ? Math.max(olhar.dist, aereo ? 26 : 12) : olhar.dist;
     camP.position.set(alvo.x - Math.sin(olhar.yaw) * Math.cos(olhar.incl) * dist, alvo.y + Math.sin(olhar.incl) * dist, alvo.z - Math.cos(olhar.yaw) * Math.cos(olhar.incl) * dist);
     const chao = alturaChao(camP.position.x, camP.position.z) + 0.6; if (camP.position.y < chao) camP.position.y = chao;
+    if (!v) encurtarCamera(alvo, camP.position, dt);   // 21d: não atravessa paredes
     camP.lookAt(alvo);
   }
   if (tremor > 0) { tremor -= dt; camP.position.x += (Math.random() - 0.5) * tremor; camP.position.y += (Math.random() - 0.5) * tremor; }
@@ -9828,6 +9840,7 @@ function atualizarCamera(dt) {
 }
 
 function atualizarHUD(dt) {
+  { const sg = !!(jogador.carro || jogador.passageiro || jogador.onibus || jogador.voo || jogador.embarcado || modo3D()); if (sg !== document.body.classList.contains('semGirar')) document.body.classList.toggle('semGirar', sg); }   // 21d: dirigindo/3D a câmera já gira sozinha ou arrastando
   tempoMapa -= dt;
   if (tempoMapa <= 0) { tempoMapa = 0.1; desenharMapa(); $('rua').textContent = `${nomeDaRua(jogador.pos.x, jogador.pos.z) || '—'} · ${textoHora()}`; }
   const [dica, botao] = contexto();
@@ -14483,13 +14496,13 @@ function atualizarOnibus(dt) {
   // motor: o seu (dirigindo ou de passageiro) ou o do sistema que passa perto
   // (o ônibus que você dirige toca em somMotores)
   // som de viagem (motor a diesel e estrada) só com o ônibus andando; parado no ponto ou esperando na rodoviária, silêncio
-  if (jogador.onibus) { const b = onibusNpc.find((x) => x.ativo && x.L === jogador.onibus.L && x.m === jogador.onibus.m); if (b && !b.parado) sons.continuo('onibus_viagem', 0.55); }
+  // 21d: sons novos também nos ônibus das linhas (antes só no que você dirige): andando e ligado parado
+  if (jogador.onibus) { const b = onibusNpc.find((x) => x.ativo && x.L === jogador.onibus.L && x.m === jogador.onibus.m); if (b) sons.continuo(b.parado ? 'onibusN_lenta' : 'onibusN_alto', b.parado ? 0.3 : 0.5, 0.95); }
   for (const b of onibusNpc) {
-    if (!b.ativo) continue;
-    const d = Math.hypot(b.x - jogador.pos.x, b.z - jogador.pos.z);
-    if (b.parado !== b.paradoAntes) { if (b.paradoAntes && d < 50) sons.tocar('onibus_ronco', { vol: 0.55, dist: d, raio: 50 }); b.paradoAntes = b.parado; }   // arrancada ao sair do ponto
-    if (b.parado || !andando(b.mesh)) continue;   // parado (ponto, rodoviária, trânsito) fica quieto
-    sons.continuo('onibus_viagem', 0.5 * sons.perto(d, 55));
+    if (!b.ativo || !b.mesh.visible) continue;
+    const d = Math.hypot(b.x - jogador.pos.x, b.z - jogador.pos.z); if (d > 60) continue;
+    if (b.parado || !andando(b.mesh)) sons.continuo('onibusN_lenta', 0.3 * sons.perto(d, 30));   // ligado parado (ponto, plataforma)
+    else sons.continuo('onibusN_alto', 0.45 * sons.perto(d, 55), 0.95);
   }
 }
 // ônibus do sistema empurram quem está no caminho (três círculos ao longo do comprimento)
@@ -17770,7 +17783,7 @@ function balaNaAeronave(b) {
 // Abaixar vira 🛡️ Cobertura: agacha, sai para o lado da mira, atira e volta. Abaixado/deitado é alvo menor.
 // 20q: deitado, o corpo encosta no chão (o modelo de origem flutuava uns centímetros): mede os ossos mais baixos e desce
 // a raiz até eles ficarem na altura do chão. Rastejando/engatinhando ou na transição, a arma fica guardada (nas costas)
-const PRONO = /^(deitado|rastejar|deitar|levantar_deitado)/, ARMA_GUARDADA = /^(rastejar_frente|rastejar_tras|deitar|levantar_deitado|abaixar$|levantar_abaixado$|rolar|pular_muro)/;   // as versões _arma seguram a arma
+const PRONO = /^(deitado|rastejar|deitar|levantar_deitado)/, ARMA_GUARDADA = /^(rastejar_frente|rastejar_tras|deitar|levantar_deitado|abaixar$|levantar_abaixado$|rolar|pular_muro|agarrar_muro|escalar|subir_borda|pular_baixo|soltar_parede|corda_bamba|beira_cair|cair_chao|levantar_queda|tentar_escalar)/;   // as versões _arma seguram a arma
 const OSSOS_CHAO = ['Hips', 'Spine2', 'Head', 'LeftHand', 'RightHand', 'LeftForeArm', 'RightForeArm', 'LeftLeg', 'RightLeg', 'LeftFoot', 'RightFoot'];
 const _vChao = new THREE.Vector3();
 function ajustarChaoPostura(av, baseY, dt) {
@@ -17947,6 +17960,7 @@ function cameraOmbro(dt) {
   let lim = L;
   for (const pr of predios) { if (Math.abs(pr.caixa.min.x - piv.x) > 60 && Math.abs(pr.caixa.max.x - piv.x) > 60) continue; if (_rayM.intersectBox(pr.caixa, _hitM)) { const t = piv.distanceTo(_hitM); if (t < lim) lim = Math.max(0.6, t - 0.3); } }
   if (lim < L) cam.copy(piv).addScaledVector(_dirM, lim);
+  encurtarCamera(piv, cam, dt);   // 21d: muros também (antes só prédios)
   const chao = alturaChao(cam.x, cam.z) + 0.35; if (cam.y < chao) cam.y = chao;
   camP.position.copy(cam);
   if (Math.abs(camP.fov - 60) > 0.5) { camP.fov += (60 - camP.fov) * Math.min(1, dt * 5); camP.updateProjectionMatrix(); }
@@ -19802,13 +19816,227 @@ function alturaVeiculoEm(x, z) {
   }
   return h;
 }
+// ---------------------------------------------------------------- 21d: escalada
+// Muro alto (mais de 1,6 m) e paredes até 3 andares: Pular perto agarra a parede no ar; o analógico sobe, desce e vai
+// para os lados; na borda ele sobe o corpo e fica em cima. Em cima: anda (corda bamba no muro fino), Pular desce,
+// passar da beira faz perder o equilíbrio e cair. Mais alto que 3 andares ou com beiral: tenta e cai.
+const ESC_ANIMS = ['agarrar_muro', 'escalar', 'escalar_esq', 'escalar_dir', 'subir_borda', 'pular_baixo', 'soltar_parede', 'corda_bamba', 'beira_cair', 'cair_chao', 'levantar_queda', 'tentar_escalar'];
+const CURVAS_ESC = {"subir_borda":[[0.0,0.0],[0.1,0.045],[0.2,0.134],[0.3,0.235],[0.4,0.317],[0.5,0.398],[0.6,0.495],[0.7,0.585],[0.8,0.621],[0.9,0.621],[1.0,0.628],[1.1,0.626],[1.2,0.621],[1.3,0.61],[1.4,0.606],[1.5,0.611],[1.6,0.637],[1.7,0.662],[1.8,0.669],[1.9,0.669]],"pular_baixo":[[0.0,0.0],[0.1,-0.0],[0.2,-0.003],[0.3,0.0],[0.4,0.016],[0.5,0.037],[0.6,0.067],[0.7,0.116],[0.8,0.179],[0.9,0.26],[1.0,0.366],[1.1,0.487],[1.2,0.604],[1.3,0.719],[1.4,0.835],[1.5,0.895],[1.6,0.926],[1.7,0.94],[1.8,0.95],[1.9,0.956],[2.0,0.959],[2.1,0.964],[2.2,0.971],[2.3,0.979],[2.4,0.98],[2.5,0.974],[2.6,0.973],[2.7,0.974],[2.8,0.974],[2.9,0.974],[3.0,0.975],[3.1,0.975],[3.2,0.975]],"soltar_parede":[[0.0,0.0],[0.1,-0.019],[0.2,-0.054],[0.3,-0.099],[0.4,-0.146],[0.5,-0.174],[0.6,-0.187],[0.7,-0.263],[0.8,-0.413],[0.9,-0.583],[1.0,-0.742],[1.1,-0.929],[1.2,-1.171]],"beira_cair":[[0.0,0.0],[0.1,0.003],[0.2,0.007],[0.3,0.016],[0.4,0.027],[0.5,0.04],[0.6,0.056],[0.7,0.071],[0.8,0.088],[0.9,0.103],[1.0,0.118],[1.1,0.133],[1.2,0.146],[1.3,0.16],[1.4,0.176],[1.5,0.196],[1.6,0.225],[1.7,0.261],[1.8,0.297],[1.9,0.336],[2.0,0.381],[2.1,0.432],[2.2,0.49],[2.3,0.56],[2.4,0.644],[2.5,0.734],[2.6,0.829],[2.7,0.926],[2.8,1.023]],"tentar_escalar":[[0.0,0.0],[0.1,0.003],[0.2,0.006],[0.3,0.007],[0.4,0.009],[0.5,0.016],[0.6,0.019],[0.7,-0.001],[0.8,-0.037],[0.9,-0.066],[1.0,-0.094],[1.1,-0.113],[1.2,-0.117],[1.3,-0.128],[1.4,-0.119],[1.5,-0.087],[1.6,-0.05],[1.7,-0.018],[1.8,-0.013],[1.9,-0.018],[2.0,-0.02],[2.1,-0.024],[2.2,-0.049],[2.3,-0.106],[2.4,-0.16],[2.5,-0.187],[2.6,-0.2],[2.7,-0.223],[2.8,-0.227],[2.9,-0.196],[3.0,-0.162],[3.1,-0.159],[3.2,-0.182],[3.3,-0.201],[3.4,-0.203],[3.5,-0.207],[3.6,-0.232],[3.7,-0.229],[3.8,-0.228],[3.9,-0.251],[4.0,-0.322],[4.1,-0.453],[4.2,-0.568]]};
+const ESC_MAX = 9.6, ESC_SUBIDA = 0.61, ESC_LADO = 0.45;
+function curvaEsc(nome, t) {
+  const c = CURVAS_ESC[nome]; if (!c) return 0;
+  if (t <= c[0][0]) return c[0][1];
+  for (let k = 1; k < c.length; k++) if (c[k][0] >= t) { const a = c[k - 1], b = c[k]; return a[1] + (b[1] - a[1]) * (t - a[0]) / Math.max(1e-6, b[0] - a[0]); }
+  return c[c.length - 1][1];
+}
+const escK = (av) => (av?.altura || 1.75) / 1.7;
+function escPronto(av) {
+  const ok = ESC_ANIMS.every((n) => av?.clipes?.[n]);
+  if (!ok && av) for (const n of ESC_ANIMS) av.garantir(n);
+  return ok;
+}
+// altura do alto da parede num ponto (colisor que sabe a altura, prédio ou medida pela malha)
+function alturaParede(x, z) {
+  let t = medirTopo(x, z, 40);   // a malha de verdade primeiro (a caixa do prédio pode ser maior que o telhado)
+  if (t == null) t = topoEm(x, z);
+  if (t == null) for (const pr of predios) { const b = pr.caixa; if (x > b.min.x && x < b.max.x && z > b.min.z && z < b.max.z) t = Math.max(t ?? -1e9, b.max.y); }
+  return t;
+}
+function tentarEscalada(j) {
+  const av = j.avatar; if (!escPronto(av) || j.carregando) return false;
+  // de frente para a parede: endireita para o eixo mais perto (muros e prédios são alinhados) se estiver quase de frente
+  let yaw = j.yaw; const q = Math.round(yaw / (Math.PI / 2)) * (Math.PI / 2); if (Math.abs(Math.atan2(Math.sin(yaw - q), Math.cos(yaw - q))) < 0.5) yaw = q;
+  const dx = Math.sin(yaw), dz = Math.cos(yaw), x0 = j.pos.x, z0 = j.pos.z;
+  let ini = null; for (let d = 0.3; d <= 1.6; d += 0.1) if (bloqueado(x0 + dx * d, z0 + dz * d, true)) { ini = d; break; }
+  if (ini === null) return false;
+  if (alturaVeiculoEm(x0 + dx * (ini + 0.3), z0 + dz * (ini + 0.3)) != null) return false;   // veículo: fica com o pulo de antes
+  const face = ini + 0.25, chao = alturaChao(x0, z0);
+  const top = alturaParede(x0 + dx * (face + 0.15), z0 + dz * (face + 0.15));
+  if (top == null || top - chao <= 1.6) return false;   // baixo: pulo de muro normal
+  const k = escK(av);
+  // beiral: alguma coisa por cima, um pouco para fora da parede (laje que avança)
+  const fora = medirTopo(x0 + dx * (face - 0.45), z0 + dz * (face - 0.45), top - chao + 2);
+  const beiral = fora != null && fora > chao + 2.2 && fora < top + 1.2;
+  if (j.armado) alternarArmaForcado(false);
+  j.yaw = yaw; j.alvo = null; j.pulo = null; j.puloY = 0;
+  const e = { t: 0, dx, dz, top, chao, face, x0, z0, wx: x0 + dx * (face - 0.4), wz: z0 + dz * (face - 0.4) };
+  if (top - chao > ESC_MAX || beiral) {   // não dá: tenta e cai de costas
+    Object.assign(e, { fase: 'tentar', vel: 1.2 });
+    av.tocar('tentar_escalar', { umaVez: true, velocidade: e.vel, fade: 0.12 });
+    aviso(beiral ? '🧱 O beiral não deixa subir por aqui.' : '🧱 Alto demais para escalar.', 2.5);
+  } else {
+    const mao = Math.min(top, chao + 2.45 * k);
+    Object.assign(e, { fase: 'agarrar', vel: 1.4, mao, y0: j.pos.y, yPend: Math.max(chao, mao - 2.04 * k) });
+    av.tocar('agarrar_muro', { umaVez: true, velocidade: e.vel, fade: 0.08 });
+  }
+  j.esc = e; sons.tocar?.('soco', { vol: 0.15 });
+  return true;
+}
+function soltarDaParede(j) {
+  const e = j.esc; if (!e) return;
+  Object.assign(e, { fase: 'soltar', t: 0, vel: 1, y0: j.pos.y, bx: j.pos.x, bz: j.pos.z });
+  j.avatar.tocar('soltar_parede', { umaVez: true, velocidade: 1, fade: 0.08 });
+}
+// superfície em cima (telhado/muro) perto da altura y: primeiro só no objeto onde está (rápido), depois na cena
+const _rcSup = new THREE.Raycaster(), _vSup = new THREE.Vector3(), _vBaixo = new THREE.Vector3(0, -1, 0);
+function superficie(x, z, y, obj) {
+  const chao = alturaChao(x, z);
+  _rcSup.set(_vSup.set(x, y + 2.5, z), _vBaixo); _rcSup.far = Math.max(0.5, y + 2.5 - chao); _rcSup.camera = camP;
+  const ign = (o) => { for (let k = o; k; k = k.parent) if (k === jogador.avatar?.raiz || k.userData?.efeito || k.isSprite) return true; return false; };
+  const ver = (lista) => { for (const h of lista) { if (!h.object.isMesh || !h.object.visible || ign(h.object)) continue; if (h.point.y > chao + 0.15) return h; return null; } return null; };
+  if (obj?.parent) { const h = ver(_rcSup.intersectObject(obj, true)); if (h && Math.abs(h.point.y - y) < 0.6) return { y: h.point.y, obj: h.object }; }
+  const h = ver(_rcSup.intersectObjects(scene.children, true));
+  return h ? { y: h.point.y, obj: h.object } : null;
+}
+function moverEmCima(j, ox, oz) {
+  const ec = j.emCima;
+  if (ec.ux == null) { ec.ux = ox; ec.uz = oz; }
+  if (Math.hypot(j.pos.x - (ec.ux ?? ox), j.pos.z - (ec.uz ?? oz)) < 0.12) return;   // mede a cada ~12 cm
+  const s = superficie(j.pos.x, j.pos.z, ec.y, ec.obj);
+  if (s && Math.abs(s.y - ec.y) < 0.7) {   // telhado inclinado sobe ~1 m por metro
+    ec.y = s.y; ec.obj = s.obj; ec.ux = j.pos.x; ec.uz = j.pos.z;
+    // muro fino: dos dois lados não tem chão na mesma altura → corda bamba
+    const px = Math.cos(j.yaw) * 0.45, pz = -Math.sin(j.yaw) * 0.45;
+    const a = superficie(j.pos.x + px, j.pos.z + pz, ec.y, ec.obj), b = superficie(j.pos.x - px, j.pos.z - pz, ec.y, ec.obj);
+    ec.estreito = !(a && Math.abs(a.y - ec.y) < 0.4) && !(b && Math.abs(b.y - ec.y) < 0.4);
+    return;
+  }
+  j.pos.x = ox; j.pos.z = oz;
+  if (s && s.y > ec.y) return;   // parede mais alta em cima do telhado: só não passa
+  cairDaBeira(j);                // passou da beira: perde o equilíbrio e cai
+}
+function alturaPouso(x, z, y) { const s = superficie(x, z, y - 0.6, null); return s && s.y < y - 0.6 ? s.y : alturaChao(x, z); }
+function cairDaBeira(j) {
+  const dx = Math.sin(j.yaw), dz = Math.cos(j.yaw), y = j.emCima.y;
+  const h2 = alturaPouso(j.pos.x + dx * 1.1, j.pos.z + dz * 1.1, y);
+  j.esc = { fase: 'beira', t: 0, vel: 1.1, dx, dz, bx: j.pos.x, bz: j.pos.z, y0: y, h2, chao: h2 };
+  j.emCima = null; j.alvo = null;
+  if (j.armado) alternarArmaForcado(false);
+  j.avatar.tocar('beira_cair', { umaVez: true, velocidade: 1.1, fade: 0.15 });
+}
+function pularEmCima(j) {
+  const dx = Math.sin(j.yaw), dz = Math.cos(j.yaw), y = j.emCima.y;
+  const s = superficie(j.pos.x + dx * 1.2, j.pos.z + dz * 1.2, y, j.emCima.obj);
+  if (s && Math.abs(s.y - y) < 0.6) {   // ainda é telhado: pulinho no lugar
+    j.pulo = { t: 0, de: { x: j.pos.x, z: j.pos.z }, dur: 1.0, h: 0.3, para: { x: j.pos.x, z: j.pos.z } }; j.trava = 1.0;
+    j.avatar.tocar('pular', { umaVez: true, velocidade: 2.3, fade: 0.08 }); return;
+  }
+  const h2 = alturaPouso(j.pos.x + dx * 1.05, j.pos.z + dz * 1.05, y);
+  if (j.armado) alternarArmaForcado(false);
+  j.esc = { fase: 'descer', t: 0, vel: 1.25, dx, dz, bx: j.pos.x, bz: j.pos.z, y0: y, h2, chao: h2 };
+  j.emCima = null; j.alvo = null;
+  j.avatar.tocar('pular_baixo', { umaVez: true, velocidade: 1.25, fade: 0.1 });
+}
+function pousou(j, e) {   // terminou uma descida: se caiu num telhado mais baixo, continua "em cima"
+  const s = superficie(j.pos.x, j.pos.z, e.h2, null);
+  j.pos.y = e.h2; j.emCima = s && Math.abs(s.y - e.h2) < 0.2 && e.h2 > alturaChao(j.pos.x, j.pos.z) + 0.3 ? { y: s.y, obj: s.obj } : null;
+}
+function passoEscalada(dt, ix, iy, dir, forca) {
+  const j = jogador, av = j.avatar, e = j.esc, k = escK(av);
+  if (j.morto || !av) { j.esc = null; j.pos.y = alturaChao(j.pos.x, j.pos.z); return; }
+  e.t += dt; const ta = e.t * e.vel;   // tempo na animação
+  const sm = (a, b, x) => THREE.MathUtils.smoothstep(x, a, b);
+  let ry = j.pos.y;
+  if (e.fase === 'agarrar') {   // pula e agarra: vai até a parede subindo
+    const f = sm(0, 0.55, ta);
+    j.pos.x = e.x0 + (e.wx - e.x0) * f; j.pos.z = e.z0 + (e.wz - e.z0) * f;
+    ry = e.y0 + (e.yPend - e.y0) * sm(0, 0.45, ta);
+    if (ta >= 1.9) {
+      if (e.mao >= e.top - 0.05) { Object.assign(e, { fase: 'borda', t: 0, vel: 1.15 }); iniciarBorda(j, e); }
+      else { Object.assign(e, { fase: 'parede', t: 0, vel: 1, ry }); av.tocar('escalar', { fade: 0.25 }); }
+    }
+  } else if (e.fase === 'parede') {
+    const rx = -e.dz, rz = e.dx;   // direita do personagem (de frente para a parede)
+    const lado = dir.x * rx + dir.z * rz;
+    let anim = 'escalar', vel = 0;
+    if (forca > 0.25 && Math.abs(lado) > Math.abs(iy) && Math.abs(lado) > 0.3) {   // para os lados
+      const s = Math.sign(lado), nx = j.pos.x + rx * s * ESC_LADO * k * dt, nz = j.pos.z + rz * s * ESC_LADO * k * dt;
+      if (bloqueado(nx + e.dx * 0.8, nz + e.dz * 0.8, true) && !bloqueado(nx - e.dx * 0.05, nz - e.dz * 0.05, true)) {
+        j.pos.x = nx; j.pos.z = nz;
+        if (Math.hypot(nx - (e.ux ?? nx + 1), nz - (e.uz ?? nz)) > 0.3) { e.ux = nx; e.uz = nz; const t = alturaParede(nx + e.dx * 0.55, nz + e.dz * 0.55); if (t != null) e.top = t; }
+      }
+      anim = s > 0 ? 'escalar_dir' : 'escalar_esq'; vel = 1.2;
+    } else if (forca > 0.25 && iy > 0.3) { e.mao += ESC_SUBIDA * k * dt; vel = 1.3; }
+    else if (forca > 0.25 && iy < -0.3) { e.mao -= ESC_SUBIDA * k * dt; vel = -1.3; }
+    av.tocar(anim, { velocidade: vel, fade: 0.2 });
+    const alcance = (anim === 'escalar' ? 1.75 : 1.28) * k;
+    e.ry += (e.mao - alcance - e.ry) * Math.min(1, dt * 6); ry = e.ry;
+    if (e.mao >= e.top - 0.02) { Object.assign(e, { fase: 'borda', t: 0, vel: 1.15 }); iniciarBorda(j, e); }
+    else if (e.mao - 1.75 * k <= e.chao + 0.02 && iy < -0.3) { j.esc = null; j.pos.y = e.chao; av.tocar('idle', { fade: 0.25 }); return posarEsc(j, av, dt, e.chao); }
+  } else if (e.fase === 'borda') {   // sobe o corpo e fica em cima
+    const zf = curvaEsc('subir_borda', ta) / 0.669;
+    j.pos.x = e.bx + (e.cx - e.bx) * Math.min(1, zf); j.pos.z = e.bz + (e.cz - e.bz) * Math.min(1, zf);
+    ry = e.top - 1.73 * k;
+    if (ta >= 1.95) { j.esc = null; const sf = superficie(e.cx, e.cz, e.top + 0.5, null), yt = sf && Math.abs(sf.y - e.top) < 1.2 ? sf.y : e.top; j.pos.set(e.cx, yt, e.cz); j.emCima = { y: yt, obj: sf?.obj || e.obj }; av.tocar('idle', { fade: 0.2 }); return posarEsc(j, av, dt, e.top); }
+  } else if (e.fase === 'soltar') {   // empurra a parede e cai de pé
+    const z = curvaEsc('soltar_parede', ta);
+    j.pos.x = e.bx + e.dx * z; j.pos.z = e.bz + e.dz * z;
+    ry = e.y0 + (e.chao - e.y0) * sm(0.55, 1.25, ta);
+    if (ta >= 1.25) { j.esc = null; j.pos.y = e.chao; resolverColisao(j.pos, j.raio); return posarEsc(j, av, dt, e.chao); }
+  } else if (e.fase === 'descer') {   // pula de cima do muro/telhado
+    const z = curvaEsc('pular_baixo', ta);
+    j.pos.x = e.bx + e.dx * z; j.pos.z = e.bz + e.dz * z;
+    ry = (e.y0 - 0.63 * k) + (e.h2 - (e.y0 - 0.63 * k)) * sm(1.1, 1.6, ta);
+    if (ta >= 2.2) { j.esc = null; pousou(j, e); if (!j.emCima) resolverColisao(j.pos, j.raio); return posarEsc(j, av, dt, j.pos.y); }
+  } else if (e.fase === 'beira') {   // equilibra, não segura e cai
+    const z = curvaEsc('beira_cair', ta);
+    j.pos.x = e.bx + e.dx * z; j.pos.z = e.bz + e.dz * z;
+    ry = (e.y0 - 0.2 * k) + (e.h2 - (e.y0 - 0.2 * k)) * sm(2.15, 2.85, ta);
+    if (ta >= 2.85) { Object.assign(e, { fase: 'levantar', t: 0, vel: 1.2 }); pousou(j, e); ry = e.h2; av.tocar('levantar_queda', { umaVez: true, velocidade: 1.2, fade: 0.2 }); }
+  } else if (e.fase === 'tentar') {   // tentou subir onde não dá e caiu de costas
+    const z = curvaEsc('tentar_escalar', ta);
+    j.pos.x = e.x0 + e.dx * z; j.pos.z = e.z0 + e.dz * z; ry = e.chao;
+    if (ta >= 4.2) { Object.assign(e, { fase: 'levantar', t: 0, vel: 1.2, h2: e.chao }); av.tocar('levantar_queda', { umaVez: true, velocidade: 1.2, fade: 0.2 }); }
+  } else if (e.fase === 'levantar') {
+    ry = e.h2;
+    if (ta >= 2.35) { const em = j.emCima; j.esc = null; j.pos.y = e.h2; j.emCima = em; if (!em) resolverColisao(j.pos, j.raio); av.tocar('idle', { fade: 0.25 }); }
+  }
+  j.pos.y = ry; j.trava = Math.max(j.trava || 0, 0.05);
+  return posarEsc(j, av, dt, ry);
+}
+function iniciarBorda(j, e) {
+  const k = escK(j.avatar);
+  // onde ficar em cima: muro fino → no meio dele; telhado → um pouco para dentro
+  const t2 = alturaParede(e.wx + e.dx * 0.95, e.wz + e.dz * 0.95);
+  const dentro = t2 != null && Math.abs(t2 - e.top) < 0.4 ? 0.55 : 0.15;
+  e.bx = j.pos.x; e.bz = j.pos.z;
+  e.cx = j.pos.x + e.dx * (0.4 + dentro); e.cz = j.pos.z + e.dz * (0.4 + dentro);
+  medirTopo(e.cx, e.cz, 40); e.obj = medirTopo.obj;
+  j.avatar.tocar('subir_borda', { umaVez: true, velocidade: e.vel, fade: 0.2 });
+  void k;
+}
+function posarEsc(j, av, dt, ry) {
+  av.raiz.position.set(j.pos.x, ry, j.pos.z); av.raiz.rotation.y = j.yaw;
+  av.mixer.update(dt); av.raiz.updateMatrixWorld(true);
+  if (j.arma) j.arma.visible = false;
+}
+// câmera 3D/ombro: parede entre a câmera e o personagem → a câmera chega na frente da parede (não atravessa)
+const _qCam = new THREE.Vector3();
+function pontoEmParede(q) {
+  let achou = false;
+  const ver = (lista) => { if (achou) return; for (const c of lista) { if (c.tipo !== 'caixa' || c.off) continue; if (q.x > c.x0 - 0.1 && q.x < c.x1 + 0.1 && q.z > c.z0 - 0.1 && q.z < c.z1 + 0.1 && q.y < topoColisor(c)) { achou = true; return; } } };
+  ver(colisores); if (!achou) mundo.colidir(q, 0.1, (l) => ver(l));
+  if (!achou) for (const pr of predios) { const b = pr.caixa; if (q.x > b.min.x && q.x < b.max.x && q.z > b.min.z && q.z < b.max.z && q.y > b.min.y && q.y < b.max.y) { achou = true; break; } }
+  return achou;
+}
+let fatorCam = 1;
+function encurtarCamera(alvo, pos, dt) {
+  const n = 14; let f = 1;
+  for (let i = 1; i <= n; i++) { _qCam.lerpVectors(alvo, pos, i / n); if (pontoEmParede(_qCam)) { f = Math.max(0.1, (i - 1.3) / n); break; } }
+  fatorCam = f < fatorCam ? f : fatorCam + (f - fatorCam) * Math.min(1, dt * 3);   // chega na hora, volta devagar
+  if (fatorCam < 0.999) pos.lerpVectors(alvo, pos, fatorCam);
+}
+
 function pular() {
   const j = jogador;
+  if (j.esc) { if (j.esc.fase === 'parede' || j.esc.fase === 'agarrar') soltarDaParede(j); return; }   // 21d: escalando, o Pular solta
   if (j.postura) { mudarPostura(null); return; }   // 20p: abaixado/deitado, o Pular levanta
   if (!j.avatar || j.ave || j.morto || j.carro || j.passageiro || j.onibus || j.voo || j.trem || j.pulo || j.trava > 0 || j.algemado || j.rendido || j.paraquedas || j.pena > 0 || j.ferido) return;
   if (j.carregando) { aviso('Solte a caixa antes de pular.', 2); return; }
   const dx = Math.sin(j.yaw), dz = Math.cos(j.yaw), x0 = j.pos.x, z0 = j.pos.z, av = j.avatar;
   const correndo = performance.now() - (j.ultimoMov || 0) < 250;
+  if (j.emCima) { pularEmCima(j); return; }   // 21d: em cima do muro/telhado
+  if (tentarEscalada(j)) return;               // 21d: muro alto ou parede: agarra e escala
   let ini = null, fim = null;
   for (let d = 0.45; d <= 4.6; d += 0.15) {
     const b = bloqueado(x0 + dx * d, z0 + dz * d);
@@ -19868,7 +20096,7 @@ function passoPulo(dt) {
   j.puloY = Math.sin(Math.PI * Math.min(1, pl.agarra ? k * 1.05 : k)) * pl.h;
   j.trava = Math.max(j.trava, 0.05);
   if (k >= 1) {
-    j.pulo = null; j.puloY = 0; j.trava = 0; resolverColisao(j.pos, j.raio);
+    j.pulo = null; j.puloY = 0; j.trava = 0; if (!j.emCima) resolverColisao(j.pos, j.raio);
     if (pl.voo) { j.trava = 0.9; tremor = Math.max(tremor, 0.6); aplicarDanoAoCair(); }   // arremessado pela explosão: cai, demora a levantar
   }
 }
