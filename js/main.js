@@ -481,9 +481,23 @@ manager.onProgress = (_url, carregados, total) => {
 const loader = new GLTFLoader(manager);
 loader.setMeshoptDecoder(MeshoptDecoder);
 const cacheGLTF = new Map();
+// 21k: alguns modelos (Meshy) vêm com normais zeradas: a luz calcula NaN nesse pixel e o brilho (bloom) espalha o
+// NaN pela tela inteira, que pisca preta (à noite, com o poste aceso, acontecia o tempo todo de moto). Troca por "para cima".
+function normaisSaudaveis(raiz) {
+  raiz?.traverse((o) => {
+    const n = o.isMesh && o.geometry?.attributes?.normal; if (!n || n.userData?.ok || !n.array || n.normalized) return;
+    const a = n.array; let ruins = 0;
+    for (let i = 0; i < a.length; i += 3) {
+      const x = a[i], y = a[i + 1], z = a[i + 2], l = x * x + y * y + z * z;
+      if (!(l > 1e-12) || !Number.isFinite(l)) { a[i] = 0; a[i + 1] = 1; a[i + 2] = 0; ruins++; }
+    }
+    if (ruins) n.needsUpdate = true;
+    n.userData = { ...(n.userData || {}), ok: true };
+  });
+}
 function carregarGLB(url) {
   if (!cacheGLTF.has(url)) {
-    const p = loader.loadAsync(url); cacheGLTF.set(url, p);
+    const p = loader.loadAsync(url).then((g) => { normaisSaudaveis(g.scene); return g; }); cacheGLTF.set(url, p);
     // (16aw) não sobe mais todas as texturas de uma vez: com ~200 modelos isso enchia a memória de vídeo e o
     // celular fechava a aba. Cada textura vai para a placa só quando o modelo aparece na tela.
   }

@@ -56,6 +56,11 @@ function montarComposer() {
     comp = new EffectComposer(R);
     passeRender = new RenderPass(cena, null);
     bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.55, 1.0);
+    // 21k: um pixel NaN/infinito (normal zerada, luz forte à noite) entrava no brilho e o desfoque espalhava pela tela
+    // inteira, que piscava preta. O filtro do brilho agora joga esses pixels fora.
+    { const m = bloom.materialHighPassFilter; if (m?.fragmentShader?.includes('vec4 texel = texture2D( tDiffuse, vUv );')) {
+      m.fragmentShader = m.fragmentShader.replace('vec4 texel = texture2D( tDiffuse, vUv );', 'vec4 texel = texture2D( tDiffuse, vUv ); if ( isnan( texel.r ) || isnan( texel.g ) || isnan( texel.b ) || isinf( texel.r ) || isinf( texel.g ) || isinf( texel.b ) ) texel = vec4( 0.0 ); texel = min( texel, vec4( 32.0 ) );');
+      m.needsUpdate = true; } }
     cor = new ShaderPass(COR);
     saida = new OutputPass();
     comp.addPass(passeRender); comp.addPass(bloom); comp.addPass(saida); comp.addPass(cor);
