@@ -4113,7 +4113,7 @@ function atualizarRemotos(dt) {
         // o motor dele pegando, se for perto (o avião só se estiver no chão)
         const d = Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z), av = /^aviao_/.test(mod), pf = perfilSom(mod);
         if (av && (a.y || 0) - alturaChao(a.x, a.z) < 1 && d < 150) sons.tocar(`${SOM_AVIAO[mod.slice(6)]}_partida`, { vol: 0.8, dist: d, raio: 150 });
-        else if (pf && d < 60) sons.tocar(`${pf.p}_partida`, { vol: 0.6, dist: d, raio: 60, velocidade: pf.tom });
+        else if (pf && d < 60) sons.tocar(`${pf.p}_partida`, { vol: 0.6, dist: d, raio: 60, velocidade: pf.tom * (pf.tomAlto || 1) });
       }
       const kc = Math.min(1, dt * 10);
       r.carro.position.x += (a.x - r.carro.position.x) * kc; r.carro.position.y += (a.y - r.carro.position.y) * kc; r.carro.position.z += (a.z - r.carro.position.z) * kc;
@@ -5917,44 +5917,60 @@ const PERFIL_SOM = {
 };
 function perfilSom(modelo) {
   if (!modelo) return null;
-  if (/^onibus/.test(modelo)) return { p: 'onibus', ronco: true, tom: 1 };
+  if (/^onibus/.test(modelo)) return { p: 'onibusN', ronco: false, tom: 1, marchas: 6 };   // 20z: sons novos (ligando, parado, andando)
   const p = PERFIL_SOM[modelo]; if (!p) return null;
-  return { p, ronco: p !== 'caminhao', tom: modelo === 'tanque' ? 0.78 : 1 };
+  if (p === 'caminhao') return { p: 'caminhaoN', ronco: false, tom: modelo === 'tanque' ? 0.78 : 1, tomAlto: 0.86, marchas: 6 };   // andar = o do ônibus mais grave
+  return { p, ronco: true, tom: 1, marchas: 5 };
 }
 const perfilDoCarro = (c) => perfilSom(c.caminhao ? (c.tipo || 'caminhao') : c.modelo) || perfilSom(c.servico);
-function somPartida(c, op = {}) { const pf = c && perfilDoCarro(c); sons.tocar(pf ? `${pf.p}_partida` : 'carro_partida', { vol: pf ? 0.7 : 0.6, velocidade: pf?.tom || 1, ...op }); }
+function somPartida(c, op = {}) { const pf = c && perfilDoCarro(c); sons.tocar(pf ? `${pf.p}_partida` : 'carro_partida', { vol: pf ? 0.7 : 0.6, velocidade: (pf?.tom || 1) * (pf?.tomAlto || 1), ...op }); }
+// 20z: câmbio automático só no som. A velocidade vira uma marcha (as primeiras mais curtas) e uma rotação dentro dela:
+// o tom sobe até a troca e cai na marcha seguinte, com um "respiro" curto no volume. Reduzindo, desce as marchas.
+function cambioSom(st, k, n) {
+  const lim = (i) => Math.pow(i / n, 1.25);   // fim de cada marcha (fração da velocidade máxima)
+  let g = st.marcha || 1;
+  while (g < n && k > lim(g) + 0.01) { g++; st.troca = performance.now(); }
+  while (g > 1 && k < lim(g - 1) - 0.03) { g--; st.troca = performance.now(); }
+  st.marcha = g;
+  const a = g === 1 ? 0 : lim(g - 1), b = lim(g), r = THREE.MathUtils.clamp((k - a) / Math.max(0.01, b - a), 0, 1);
+  const dtT = performance.now() - (st.troca || 0), respiro = dtT < 220 ? 0.55 + 0.45 * (dtT / 220) : 1;
+  return { r, g, respiro };
+}
+function motorSom(pf, st, k, pe, vol = 1) {   // toca marcha lenta e rotação (com o câmbio) para um veículo
+  const parado = 1 - THREE.MathUtils.smoothstep(k + (pe ? 0.06 : 0), 0.015, 0.1);
+  const cb = cambioSom(st, k, pf.marchas || 5);
+  const rot = (0.74 + 0.5 * cb.r + 0.035 * cb.g) * pf.tom * (pf.tomAlto || 1);
+  sons.continuo(`${pf.p}_lenta`, vol * 0.5 * parado, pf.tom);
+  sons.continuo(`${pf.p}_alto`, vol * (0.2 + 0.4 * k + (pe ? 0.08 : 0)) * (1 - parado) * cb.respiro, rot);
+}
 function somMotores(dist) {
   const c = jogador.carro;
   if (c && !c.voa) {
     const pf = perfilDoCarro(c);
-    if (pf?.p === 'onibus') {   // ônibus: som de viagem só andando; parado (ponto, rodoviária) fica em silêncio
-      const max = c.max || 12, k = THREE.MathUtils.clamp(Math.abs(c.vel || 0) / max, 0, 1);
-      if (Math.abs(c.vel || 0) > 0.4) sons.continuo('onibus_viagem', 0.25 + 0.35 * k, 0.85 + 0.25 * k);
-      const pe = pedais.acel || teclas.has('w') || teclas.has('arrowup') || (Math.abs(joy.y) > 0.3 && !TOQUE), agora = performance.now();
-      if (pe && !c.peAntes && k < 0.12 && agora - (c.ultRonco || 0) > 9000) { c.ultRonco = agora; sons.tocar('onibus_ronco', { vol: 0.6 }); }   // arrancada
-      c.peAntes = pe;
-    } else if (pf) {   // parado: marcha lenta; acelerando: entra a rotação alta e o tom sobe; pisar devagar dá uma acelerada
+    if (pf) {
       const max = c.max || civico.CARROS[c.modelo]?.vel || 11, k = THREE.MathUtils.clamp(Math.abs(c.vel || 0) / max, 0, 1);
       const pe = pedais.acel || teclas.has('w') || teclas.has('arrowup') || (Math.abs(joy.y) > 0.3 && !TOQUE);
-      const alto = THREE.MathUtils.smoothstep(k + (pe ? 0.25 : 0), 0.08, 0.55);
-      sons.continuo(`${pf.p}_lenta`, 0.5 * (1 - alto), (1 + 0.35 * k) * pf.tom);
-      sons.continuo(`${pf.p}_alto`, 0.15 + 0.5 * alto, (0.72 + 0.45 * k) * pf.tom);
+      motorSom(pf, c, k, pe);
       const agora = performance.now();
-      if (pf.ronco && pe && !c.peAntes && k < (pf.p === 'onibus' ? 0.12 : 0.3) && agora - (c.ultRonco || 0) > (pf.p === 'onibus' ? 9000 : 5000)) { c.ultRonco = agora; sons.tocar(`${pf.p}_ronco`, { vol: 0.6 }); }
+      if (pf.ronco && pe && !c.peAntes && k < 0.3 && agora - (c.ultRonco || 0) > 5000) { c.ultRonco = agora; sons.tocar(`${pf.p}_ronco`, { vol: 0.6 }); }
       c.peAntes = pe;
     }
   }
-  // outros jogadores: andando = rotação alta, parado perto = marcha lenta
+  // outros jogadores: a velocidade sai do quanto o carro andou; o mesmo câmbio no som
+  const agora = performance.now();
   for (const r of remotos.values()) {
     if (!r.carro || civico.CARROS[r.carroModelo]?.voa) continue;
     const pf = perfilSom(r.carroModelo); if (!pf) continue;
-    const d = dist(r.carro);
-    if (pf.p === 'onibus') { if (andando(r.carro)) sons.continuo('onibus_viagem', 0.5 * sons.perto(d, 55)); continue; }   // ônibus parado não faz som
-    if (andando(r.carro)) sons.continuo(`${pf.p}_alto`, 0.4 * sons.perto(d, 45), 0.85 * pf.tom); else sons.continuo(`${pf.p}_lenta`, 0.3 * sons.perto(d, 25), pf.tom);
+    const ud = r.carro.userData, q = r.carro.position;
+    if (ud.sx !== undefined) { const dtq = Math.max(0.016, (agora - ud.st) / 1000), v = Math.hypot(q.x - ud.sx, q.z - ud.sz) / dtq; ud.sv = (ud.sv || 0) + (Math.min(v, 60) - (ud.sv || 0)) * 0.15; }
+    ud.sx = q.x; ud.sz = q.z; ud.st = agora;
+    const d = dist(r.carro), perto = sons.perto(d, 45); if (perto <= 0.001) continue;
+    const max = civico.CARROS[r.carroModelo]?.vel || 12, k = THREE.MathUtils.clamp((ud.sv || 0) / max, 0, 1);
+    motorSom(pf, ud, k, false, 0.75 * perto);
   }
   for (const v of caminhoes.values()) {
     if (v.d.tipo === 'helicoptero' || !v.obj?.visible || jogador.carro?.caminhao === v.d.id || !andando(v.obj)) continue;
-    sons.continuo(v.d.tipo === 'van' ? 'van_alto' : 'caminhao_alto', 0.35 * sons.perto(dist(v.obj), 45), 0.9);
+    sons.continuo(v.d.tipo === 'van' ? 'van_alto' : 'caminhaoN_alto', 0.35 * sons.perto(dist(v.obj), 45), v.d.tipo === 'van' ? 0.9 : 0.8);
   }
 }
 // cidade grande ao fundo e passarinhos nas cidades menores, nas praças e na mata (somem com chuva)
@@ -11691,6 +11707,23 @@ function menuOficina(o) {
   }
   const meus = [...carrosMundo.values()].filter((v) => v.d.dono === jogador.perfil.id && !v.d.ladrao && v.mesh.visible && Math.hypot(v.mesh.position.x - o.vaga.x, v.mesh.position.z - o.vaga.z) < 14);
   dublar('oficina_oi', { chave: 'oficina', espera: 15000 });
+  // 20z: carro roubado (de outro jogador) na vaga: dá para regularizar e ficar com ele por 50% do preço da concessionária
+  const roub = [...carrosMundo.values()].filter((v) => v.d.ladrao === jogador.perfil.id && v.d.dono !== jogador.perfil.id && (v.mesh.visible || jogador.carro?.id === v.d.id)
+    && Math.hypot((jogador.carro?.id === v.d.id ? jogador.pos.x : v.mesh.position.x) - o.vaga.x, (jogador.carro?.id === v.d.id ? jogador.pos.z : v.mesh.position.z) - o.vaga.z) < 14);
+  if (roub.length) {
+    const v = roub[0], nome = civico.CARROS[v.d.modelo]?.nome || 'carro', custo = Math.ceil((civico.CARROS[v.d.modelo]?.preco || 0) * 0.5);
+    if (custo > 0) {
+      escolher(`🔧 ${o.nome}`, `Esse ${nome} é roubado. O mecânico "esquenta" a documentação e ele passa a ser <b>seu</b> por <b>${custo.toLocaleString('pt-BR')}</b> moedas (50% do preço da concessionária). O antigo dono perde o carro.`, [
+        { rotulo: `🔧 Regularizar (${custo.toLocaleString('pt-BR')})`, fn: () => rede.carros.regularizar(v.d.id).then((r) => {
+          v.d = { ...v.d, dono: jogador.perfil.id, ladrao: null }; if (jogador.carro?.id === v.d.id) jogador.carro.salvar = 1;
+          jogador.perfil.moedas = Math.max(0, (jogador.perfil.moedas || 0) - (r || custo)); atualizarInfo(); tempoCarros = 0; dublar('oficina_pronto');
+          aviso(`🔧 ${nome} regularizado! Agora ele é seu (${(r || custo).toLocaleString('pt-BR')} moedas).`, 4);
+        }).catch((e) => aviso(e.message, 3)) },
+        { rotulo: 'Agora não', fn: () => {} },
+      ]);
+      return;
+    }
+  }
   if (!meus.length) { aviso(`Traga o seu carro até a vaga da ${o.nome} (dentro do galpão). ${o.texto}`, 4.5); return; }
   const servico = (v, nome, fn) => fn().then((r) => {
     v.d = { ...v.d, cor: r.cor, motor: r.motor, blindado: r.blindado, blind_hp: r.blindado ? 1 : v.d.blind_hp, oficina_ate: r.pronto };

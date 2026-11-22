@@ -381,6 +381,7 @@ function traduzirRpc(m) {
     'nenhuma caixa embalada': 'Essa caixa não foi embalada por você.',
     'entrega rapida demais': 'Entrega rápida demais. Tente de novo em instantes.',
     'moedas insuficientes': 'Moedas insuficientes.',
+    'esse carro nao esta com voce': 'Esse carro não está com você.', 'esse carro nao pode ser regularizado': 'Esse carro não pode ser regularizado.',
     'aviao ja revisado': 'Já está revisado.',
     'helicoptero invalido': 'Helicóptero inválido.',
     'so mecanicos': 'Só mecânicos fazem a revisão.',
@@ -766,6 +767,7 @@ export const carros = {
   roubar: (id) => rpc('roubar_carro', { p_carro: id }),
   bloquear: (id) => rpc('bloquear_carro', { p_carro: id }),
   liberar: (id) => rpc('liberar_carro', { p_carro: id }),
+  regularizar: (id) => rpc('regularizar_carro', { p_carro: id }),   // 20z: roubado vira seu no mecânico (50%)
 };
 export const carreiras = {
   turno: (x, z) => rpc('bater_turno', { p_x: x, p_z: z }),
