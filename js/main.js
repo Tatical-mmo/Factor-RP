@@ -1171,7 +1171,8 @@ class Avatar {
     m.z = Math.max(m.z, 0.14 * h + 0.12);                           // sempre na frente do corpo
     // 20y: na recarga a arma acompanha a mão direita (posição e inclinação). A inclinação é a diferença entre a mão
     // agora e a mão na pose normal com a arma (guardada enquanto não está recarregando); entra e sai suave.
-    const recar = /^recarga_|_recarga$/.test(this.nomeAtual || '');   // 20p: recarga abaixado/deitado também
+    // 20p: recarga abaixado/deitado também. 20w: abaixado/deitado/rastejando com arma, a arma vai na mão (antes ficava na altura do peito em pé, voando)
+    const recar = /^recarga_|_recarga$|^(deitado_arma|rastejar_arma|abaixado_arma|abaixar_arma|levantar_abaixado_arma|agachado_frente|agachado_tras|cobertura_|granada_abaixado)/.test(this.nomeAtual || '');
     this._rk = (this._rk || 0) + ((recar ? 1 : 0) - (this._rk || 0)) * 0.18;
     this.raiz.getWorldQuaternion(_qRaizArma).invert();
     _qMaoArma.copy(_qRaizArma).multiply(this.maoD.getWorldQuaternion(_qTmpArma));   // mão no espaço do personagem
@@ -3733,7 +3734,7 @@ async function iniciarJogo(perfil) {
   if (!introRodando) $('carregando').classList.remove('oculto');   // 20l: durante o vídeo carrega por trás, sem aparecer
   montarChao();
   // um modelo faltando não pode travar o jogo: ele só fica de fora (veículos e prédios têm versão feita por código)
-  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_exercito' ? '?v=aberto19f' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau2' : m === 'empresa_f3' ? '?v=sede18q' : m === 'empresa_f2' ? '?v=sede19b' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
+  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_exercito' ? '?v=aberto19f' : m === 'onibus_rod_branco' ? '?v=sem20w' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau2' : m === 'empresa_f3' ? '?v=sede18q' : m === 'empresa_f2' ? '?v=sede19b' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
   const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
   const skin = id;   // em serviço o policial continua com o próprio personagem (a farda mostra a corporação)
   const avatarP = criarAvatar(ROBOS.includes(skin) ? 'robos' : pastaJogador, skin);

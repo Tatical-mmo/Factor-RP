@@ -837,6 +837,11 @@ export const RODAS = {
   onibus_laranja: { estilo: 'pesado', eixos: [[-2.35, 0.52], [3.35, 0.52]], cy: 0.52, xo: 1.2, xi: 0.8, corte: [1.22, 0.45, 0.25] },
   onibus_brasilsul: { estilo: 'pesado', eixos: [[-3.9, 0.52], [-2.65, 0.52], [4.5, 0.52]], cy: 0.52, xo: 1.28, xi: 0.86, corte: [1.22, 0.45, 0.25] },
   onibus_viacao: { estilo: 'pesado', eixos: [[-4.0, 0.52], [-2.5, 0.52], [4.7, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  // 20w: ônibus da Viação (rodoviários): medidos no tamanho do jogo — antes não tinham rodas que giram/viram nem a dinâmica dos outros
+  onibus_rod_dourado: { estilo: 'pesado', eixos: [[-3.43, 0.5], [-2.14, 0.5], [4.47, 0.5]], cy: 0.5, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_amarelo: { estilo: 'pesado', eixos: [[-3.55, 0.5], [-2.11, 0.5], [4.34, 0.5]], cy: 0.5, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_vermelho: { estilo: 'pesado', eixos: [[-2.14, 0.48], [3.75, 0.48]], cy: 0.48, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_branco: { estilo: 'pesado', eixos: [[-1.9, 0.45], [3.39, 0.45]], cy: 0.45, xo: 1.25, xi: 0.85, corte: [1.22, 0.45, 0.25] },
   // carros novos (Meshy) das lojas e das polícias: medidos no tamanho do jogo (18l)
   saveiro: { estilo: 'carro', eixos: [[-1.22, 0.355], [1.43, 0.355]], cy: 0.36, xo: 0.93, xi: 0.62, corte: [1.1, 0.06, 0.08] },
   saveiro_som: { estilo: 'esporte', eixos: [[-1.24, 0.3], [1.41, 0.3]], cy: 0.3, xo: 0.92, xi: 0.6, corte: [1.12, 0.06, 0.08] },
