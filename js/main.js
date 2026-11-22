@@ -2052,7 +2052,6 @@ function entrarCarro(v) {
   if (!jogador.carro.voa) somPartida(jogador.carro);
   jogador.pos.set(v.mesh.position.x, v.mesh.position.y, v.mesh.position.z); jogador.yaw = v.mesh.rotation.y; jogador.alvo = null;
   jogador.avatar.raiz.visible = false;
-  if (civico.CARROS[v.d.modelo]?.moto) entrarMoto(jogador.carro);   // 21h: o piloto aparece em cima da moto
   aviso(`${civico.CARROS[v.d.modelo]?.nome || 'Carro'}: use o controle para dirigir. Toque em Sair para estacionar.`, 3.5);
 }
 function sairCarro() {
@@ -2134,6 +2133,7 @@ function sairCarroLocal() {
 // direção arcade: o controle aponta para onde o carro deve ir (como andar a pé)
 function dirigir(dt) {
   const c = jogador.carro, max = c.max || civico.CARROS[c.modelo]?.vel || 15;
+  if (civico.CARROS[c.modelo]?.moto && !c.moto) entrarMoto(c);   // 21i: moto de qualquer jeito (teste de veículos do admin, roubada…): piloto em cima
   if (c.dano === undefined) { c.dano = danoGuardado(c); if (c.dano >= 50) veicFumando.add(c); }
   if (c.voa !== voandoUI) { voandoUI = !!c.voa; document.body.classList.toggle('voando', voandoUI); }
   if (c.jato) { pilotarJato(c, dt); return; }
@@ -20213,7 +20213,8 @@ function quedaMoto(c, tipo) {
   c.mesh.rotation.order = 'YXZ'; c.mesh.position.copy(j.pos); c.mesh.position.y = alturaChao(j.pos.x, j.pos.z) + 0.18;
   c.mesh.rotation.set(0, yaw, tipo === 'tras' ? -1.42 : 1.42);   // deitada de lado
   const d = carrosMundo.get(c.id); if (d) d.d = { ...d.d, x: j.pos.x, z: j.pos.z, ang: yaw };
-  if (c.id) rede.carros.estacionar(c.id, j.pos.x, j.pos.z, yaw).catch(() => {});
+  if (typeof c.id === 'number') rede.carros.estacionar(c.id, j.pos.x, j.pos.z, yaw).catch(() => {});
+  if (c.teste) setTimeout(() => scene.remove(c.mesh), 30000);   // moto de teste do admin: some depois
   tremor = 0.5; sons.tocar('soco_metal', { vol: 0.8 });
   const frente = tipo !== 'tras', D = frente ? Math.min(9, 1.2 + v * 0.5) : 1.4;
   const dx = Math.sin(yaw) * (frente ? 1 : -1), dz = Math.cos(yaw) * (frente ? 1 : -1);
