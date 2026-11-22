@@ -70,6 +70,15 @@ function atualizarToque() {
   }
 }
 export const tocaDoJogo = () => !!(ac && ligado);
+// 20u: "tic" do acerto (gerado na hora, curtinho e baixo; só quem atirou ouve)
+let tTic = 0;
+export function ticAcerto() {
+  if (!ac || !ligado || ac.currentTime - tTic < 0.05) return; tTic = ac.currentTime;
+  const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+  o.type = 'triangle'; o.frequency.setValueAtTime(2100, t); o.frequency.exponentialRampToValueAtTime(1300, t + 0.05);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+  o.connect(g); g.connect(mestre); o.start(t); o.stop(t + 0.08);
+}
 // som da tela de APAGADO / EM CANA: toca cheio e abaixa o resto do jogo por alguns segundos
 export function tocarTela(nome, seg = 3.5) {
   if (!ac || !ligado) return;

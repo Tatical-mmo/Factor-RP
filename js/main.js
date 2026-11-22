@@ -5009,7 +5009,7 @@ function acertoNoAlvo(b) {
 function acertoDaBola(b) {
   const p = b.m.position;
   if (cacada && esquadra.pronto) {   // atirou nos soldados da caçada: eles revidam
-    for (const u of esquadra.soldados) { const q = u.av.raiz.position; if (u.av.raiz.visible && Math.hypot(p.x - q.x, p.z - q.z) < 0.6 && p.y > q.y && p.y < q.y + 2) { esquadra.hostil = 60; manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); aviso('🎖️ Você atirou no Exército: os soldados estão revidando!', 2.5); return true; } }
+    for (const u of esquadra.soldados) { const q = u.av.raiz.position; if (u.av.raiz.visible && Math.hypot(p.x - q.x, p.z - q.z) < 0.6 && p.y > q.y && p.y < q.y + 2) { marcarAcerto(); esquadra.hostil = 60; manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); aviso('🎖️ Você atirou no Exército: os soldados estão revidando!', 2.5); return true; } }
     for (const u of esquadra.jipes) { const q = u.obj.position; if (u.obj.visible && Math.hypot(p.x - q.x, p.z - q.z) < 2.2 && p.y < q.y + 2.5) { esquadra.hostil = 60; manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; } }
   }
   if (b.tanque) return acertoTanque(b);
@@ -5017,14 +5017,14 @@ function acertoDaBola(b) {
   for (const n of npcs) {
     if (!n.policia) continue;
     const q = n.av.raiz.position;
-    if (n.caido <= 0 && Math.hypot(p.x - q.x, p.z - q.z) < 0.55 && p.y > q.y + 0.1 && p.y < q.y + 2) { acertarPoliciaNPC(n, b.pd ? 100 : b.dano || 20); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
+    if (n.caido <= 0 && Math.hypot(p.x - q.x, p.z - q.z) < 0.55 && p.y > q.y + 0.1 && p.y < q.y + 2) { marcarAcerto(); acertarPoliciaNPC(n, b.pd ? 100 : b.dano || 20); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
   }
   for (const n of npcs) {   // moradores da rua
     if (!n.civil || n.caido > 0 || !n.av.raiz.visible) continue;
     const q = n.av.raiz.position;
-    if (Math.hypot(p.x - q.x, p.z - q.z) < 0.5 && p.y > q.y + 0.1 && p.y < q.y + 1.9) { acertarCivil(n, b.pd ? 100 : b.dano || 20); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
+    if (Math.hypot(p.x - q.x, p.z - q.z) < 0.5 && p.y > q.y + 0.1 && p.y < q.y + 1.9) { marcarAcerto(); acertarCivil(n, b.pd ? 100 : b.dano || 20); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
   }
-  if (fantasmasBope.size && acertoFantasmaBope(p, b.pd ? 100 : b.dano || 20)) { manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
+  if (fantasmasBope.size && acertoFantasmaBope(p, b.pd ? 100 : b.dano || 20)) { marcarAcerto(); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
   for (const [id, r] of remotos) {
     if (r.carroModelo !== 'caveirao' || !r.carro || id === jogador.passageiro?.piloto) continue;
     const q = r.carro.position;
@@ -5043,7 +5043,7 @@ function acertoDaBola(b) {
     const q = r.av.raiz.position, pn = r.av.nomeAtual || '';
     const deit = /^(deitado|rastejar|deitar)/.test(pn), abx = /^(abaixado|abaixar|agachado|cobertura|granada_abaixado)/.test(pn);   // 20p: abaixado/deitado é alvo menor
     if (Math.hypot(p.x - q.x, p.z - q.z) < (deit ? 0.85 : 0.5) && p.y > q.y + 0.05 && p.y < q.y + (deit ? 0.55 : abx ? 1.25 : 1.9)) {
-      if (b.pd) acertoDourado(id); else { aplicarDanoRemoto(id, b.dano || 20); if (b.critico) aviso('💥 Acerto crítico!', 1.2); }
+      marcarAcerto(); if (b.pd) acertoDourado(id); else { aplicarDanoRemoto(id, b.dano || 20); if (b.critico) aviso('💥 Acerto crítico!', 1.2); }
       if (ARMADURAS[r.meta?.arm]) faiscar(p.clone()); else manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor);   // armadura: faísca em vez de tinta
       return true;
     }
@@ -17827,14 +17827,21 @@ function velocidadeParaMira(boca, V, grav, A) {
   return dir.divideScalar(L).multiplyScalar(V).add(new THREE.Vector3(0, 0.5 * 9.8 * grav * QUEDA_CENTRO * t, 0));
 }
 const QUEDA_CENTRO = 0.2;
+// 20u: acerto em jogador, NPC ou soldado: a cruz pisca vermelha com um X em volta (~0,4 s) e toca um "tic" baixo
+function marcarAcerto() {
+  if (!miraC.ligada) return;
+  const el = $('miraCentro'); miraC.acertoAte = performance.now() + 400;
+  if (el) { el.classList.remove('acerto'); void el.offsetWidth; el.classList.add('acerto'); }   // reinicia a piscada a cada acerto
+  sons.ticAcerto?.();
+}
 function cruzDaMira(on) {
   let el = $('miraCentro');
   if (!el) {
     if (!on) return;
-    el = document.createElement('div'); el.id = 'miraCentro'; el.innerHTML = '<i class="c"></i><i class="b"></i><i class="e"></i><i class="d"></i><b></b>'; document.body.appendChild(el);
+    el = document.createElement('div'); el.id = 'miraCentro'; el.innerHTML = '<i class="c"></i><i class="b"></i><i class="e"></i><i class="d"></i><b></b><s class="x1"></s><s class="x2"></s><s class="x3"></s><s class="x4"></s>'; document.body.appendChild(el);
   }
   el.classList.toggle('oculto', !on);
-  if (on) el.classList.toggle('alvo', miraC.tipo === 'pessoa' || miraC.tipo === 'veiculo' || !!miraC.perto);
+  if (on) { const ac = performance.now() < (miraC.acertoAte || 0); if (ac !== el.classList.contains('acerto')) el.classList.toggle('acerto', ac); }   // 20u: vermelha só quando acerta
 }
 function atualizarMiraManual(dt = 0.016) {
   if (jogador.granadaNaMao && (jogador.carro || jogador.passageiro || jogador.morto)) { jogador.granadaNaMao = false; const bt = $('btTiro'); if (bt) { bt.innerHTML = 'Atirar'; bt.classList.toggle('oculto', !jogador.armado); } }

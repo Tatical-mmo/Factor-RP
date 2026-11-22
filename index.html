@@ -59,7 +59,12 @@
   #miraCentro i.c, #miraCentro i.b { left:14px; width:2px; height:8px; } #miraCentro i.c { top:0; } #miraCentro i.b { bottom:0; }
   #miraCentro i.e, #miraCentro i.d { top:14px; height:2px; width:8px; } #miraCentro i.e { left:0; } #miraCentro i.d { right:0; }
   #miraCentro b { position:absolute; left:13.5px; top:13.5px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,.95); box-shadow:0 0 2px rgba(0,0,0,.8); }
-  #miraCentro.alvo i, #miraCentro.alvo b { background:#ff3b3b; }
+  #miraCentro.acerto i, #miraCentro.acerto b { background:#ff3030; }
+  #miraCentro s { position:absolute; left:14px; top:14px; width:2px; height:9px; background:#ff3030; box-shadow:0 0 2px rgba(0,0,0,.8); opacity:0; transform-origin:1px 0; }
+  #miraCentro.acerto s { animation:miraX .4s ease-out forwards; }
+  #miraCentro s.x1 { transform:rotate(45deg) translateY(9px); } #miraCentro s.x2 { transform:rotate(135deg) translateY(9px); }
+  #miraCentro s.x3 { transform:rotate(225deg) translateY(9px); } #miraCentro s.x4 { transform:rotate(315deg) translateY(9px); }
+  @keyframes miraX { 0% { opacity:1; } 70% { opacity:1; } 100% { opacity:0; } }
   #intro { position:fixed; inset:0; z-index:45; overflow:hidden; transition:opacity .6s ease; display:flex; align-items:center; justify-content:center;
     background:radial-gradient(ellipse at 50% 45%, #1d1f20 0%, #151616 45%, #0e0f0f 100%); }
   #intro.saindo { opacity:0; }
@@ -356,35 +361,35 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261120t",
-  "./js/mundo.js": "./js/mundo.js?v=20261120t",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261120t",
-  "./js/cla.js": "./js/cla.js?v=20261120t",
-  "./js/config.js": "./js/config.js?v=20261120t",
-  "./js/empresa.js": "./js/empresa.js?v=20261120t",
-  "./js/loja.js": "./js/loja.js?v=20261120t",
-  "./js/painel.js": "./js/painel.js?v=20261120t",
-  "./js/rede.js": "./js/rede.js?v=20261120t",
-  "./js/sedes.js": "./js/sedes.js?v=20261120t",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261120t",
-  "./js/civico.js": "./js/civico.js?v=20261120t",
-  "./js/ovni.js": "./js/ovni.js?v=20261120t",
-  "./js/jato.js": "./js/jato.js?v=20261120t",
-  "./js/governo.js": "./js/governo.js?v=20261120t",
-  "./js/servicos.js": "./js/servicos.js?v=20261120t",
-  "./js/sons.js": "./js/sons.js?v=20261120t",
-  "./js/voz.js": "./js/voz.js?v=20261120t",
-  "./js/clima.js": "./js/clima.js?v=20261120t",
-  "./js/ceu.js": "./js/ceu.js?v=20261120t",
-  "./js/semaforos.js": "./js/semaforos.js?v=20261120t",
-  "./js/cabine.js": "./js/cabine.js?v=20261120t",
-  "./js/eixos.js": "./js/eixos.js?v=20261120t",
-  "./js/racoes.js": "./js/racoes.js?v=20261120t",
-  "./js/logos.js": "./js/logos.js?v=20261120t",
-  "./js/celular.js": "./js/celular.js?v=20261120t",
-  "./js/jornal.js": "./js/jornal.js?v=20261120t",
-  "./js/visual.js": "./js/visual.js?v=20261120t",
-  "./js/tutorial.js": "./js/tutorial.js?v=20261120t"
+  "./js/main.js": "./js/main.js?v=20261120u",
+  "./js/mundo.js": "./js/mundo.js?v=20261120u",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261120u",
+  "./js/cla.js": "./js/cla.js?v=20261120u",
+  "./js/config.js": "./js/config.js?v=20261120u",
+  "./js/empresa.js": "./js/empresa.js?v=20261120u",
+  "./js/loja.js": "./js/loja.js?v=20261120u",
+  "./js/painel.js": "./js/painel.js?v=20261120u",
+  "./js/rede.js": "./js/rede.js?v=20261120u",
+  "./js/sedes.js": "./js/sedes.js?v=20261120u",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261120u",
+  "./js/civico.js": "./js/civico.js?v=20261120u",
+  "./js/ovni.js": "./js/ovni.js?v=20261120u",
+  "./js/jato.js": "./js/jato.js?v=20261120u",
+  "./js/governo.js": "./js/governo.js?v=20261120u",
+  "./js/servicos.js": "./js/servicos.js?v=20261120u",
+  "./js/sons.js": "./js/sons.js?v=20261120u",
+  "./js/voz.js": "./js/voz.js?v=20261120u",
+  "./js/clima.js": "./js/clima.js?v=20261120u",
+  "./js/ceu.js": "./js/ceu.js?v=20261120u",
+  "./js/semaforos.js": "./js/semaforos.js?v=20261120u",
+  "./js/cabine.js": "./js/cabine.js?v=20261120u",
+  "./js/eixos.js": "./js/eixos.js?v=20261120u",
+  "./js/racoes.js": "./js/racoes.js?v=20261120u",
+  "./js/logos.js": "./js/logos.js?v=20261120u",
+  "./js/celular.js": "./js/celular.js?v=20261120u",
+  "./js/jornal.js": "./js/jornal.js?v=20261120u",
+  "./js/visual.js": "./js/visual.js?v=20261120u",
+  "./js/tutorial.js": "./js/tutorial.js?v=20261120u"
 } }
 </script>
 </head>
@@ -605,7 +610,7 @@
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
 <div id="telaFim"><b></b></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 22/11 · Agachado, rastejar armado e 4 skins (20t)</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 22/11 · Marcador de acerto (20u)</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {
