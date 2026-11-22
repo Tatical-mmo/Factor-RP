@@ -19847,10 +19847,15 @@ function tentarEscalada(j) {
   // de frente para a parede: endireita para o eixo mais perto (muros e prédios são alinhados) se estiver quase de frente
   let yaw = j.yaw; const q = Math.round(yaw / (Math.PI / 2)) * (Math.PI / 2); if (Math.abs(Math.atan2(Math.sin(yaw - q), Math.cos(yaw - q))) < 0.5) yaw = q;
   const dx = Math.sin(yaw), dz = Math.cos(yaw), x0 = j.pos.x, z0 = j.pos.z;
-  let ini = null; for (let d = 0.3; d <= 1.6; d += 0.1) if (bloqueado(x0 + dx * d, z0 + dz * d, true)) { ini = d; break; }
+  // 21e: acha a parede com precisão (passo de 3 cm; bloqueado trava a 0,3 m dela). Só agarra encostado ou quase
+  // (até ~0,9 m): de longe sem encostar não agarra; colado demais, recua para não entrar na parede
+  const bl = (d) => bloqueado(x0 + dx * d, z0 + dz * d, true);
+  let ini = null;
+  if (bl(0)) { for (let d = 0; d >= -0.4; d -= 0.03) if (!bl(d)) { ini = d + 0.03; break; } if (ini === null) ini = -0.3; }
+  else for (let d = 0.03; d <= 0.6; d += 0.03) if (bl(d)) { ini = d; break; }
   if (ini === null) return false;
   if (alturaVeiculoEm(x0 + dx * (ini + 0.3), z0 + dz * (ini + 0.3)) != null) return false;   // veículo: fica com o pulo de antes
-  const face = ini + 0.25, chao = alturaChao(x0, z0);
+  const face = ini + 0.3, chao = alturaChao(x0, z0);
   const top = alturaParede(x0 + dx * (face + 0.15), z0 + dz * (face + 0.15));
   if (top == null || top - chao <= 1.6) return false;   // baixo: pulo de muro normal
   const k = escK(av);
@@ -19927,6 +19932,25 @@ function pularEmCima(j) {
   j.emCima = null; j.alvo = null;
   j.avatar.tocar('pular_baixo', { umaVez: true, velocidade: 1.25, fade: 0.1 });
 }
+// 21e: salto longo de um lugar alto para outro: procura onde cair à frente (2 a 5 m); errou, cai no chão e levanta
+function saltoLongo(j) {
+  const dx = Math.sin(j.yaw), dz = Math.cos(j.yaw), y = j.emCima.y, x0 = j.pos.x, z0 = j.pos.z;
+  let alvo = null;
+  for (let d = 2; d <= 5.01; d += 0.25) {
+    const s = superficie(x0 + dx * d, z0 + dz * d, y + 0.5, null);
+    if (s && s.y <= y + 0.6 && s.y >= y - 3 && s.y > alturaChao(x0 + dx * d, z0 + dz * d) + 0.5) {   // outro telhado/muro: cai um pouco para dentro
+      const d2 = Math.min(5.3, d + 0.5), s2 = superficie(x0 + dx * d2, z0 + dz * d2, s.y + 0.4, s.obj);
+      alvo = s2 && Math.abs(s2.y - s.y) < 0.7 ? { d: d2, y: s2.y, obj: s2.obj } : { d, y: s.y, obj: s.obj }; break;
+    }
+    if (bloqueado(x0 + dx * d, z0 + dz * d, true) && (alturaParede(x0 + dx * d, z0 + dz * d) ?? 0) > y + 0.6) break;   // parede mais alta no caminho
+  }
+  if (j.armado) alternarArmaForcado(false);
+  const D = alvo ? alvo.d : 3.2;
+  j.esc = { fase: 'saltar', t: 0, vel: 1, dx, dz, bx: x0, bz: z0, y0: y, D, alvo, dur: 0.75 + D * 0.06 };
+  j.emCima = null; j.alvo = null;
+  j.avatar.tocar(j.avatar.clipes.pular_movendo ? 'pular_movendo' : 'salto', { umaVez: true, velocidade: 1.1, fade: 0.06 });
+  sons.tocar?.('soco', { vol: 0.15 });
+}
 function pousou(j, e) {   // terminou uma descida: se caiu num telhado mais baixo, continua "em cima"
   const s = superficie(j.pos.x, j.pos.z, e.h2, null);
   j.pos.y = e.h2; j.emCima = s && Math.abs(s.y - e.h2) < 0.2 && e.h2 > alturaChao(j.pos.x, j.pos.z) + 0.3 ? { y: s.y, obj: s.obj } : null;
@@ -19987,6 +20011,23 @@ function passoEscalada(dt, ix, iy, dir, forca) {
     const z = curvaEsc('tentar_escalar', ta);
     j.pos.x = e.x0 + e.dx * z; j.pos.z = e.z0 + e.dz * z; ry = e.chao;
     if (ta >= 4.2) { Object.assign(e, { fase: 'levantar', t: 0, vel: 1.2, h2: e.chao }); av.tocar('levantar_queda', { umaVez: true, velocidade: 1.2, fade: 0.2 }); }
+  } else if (e.fase === 'saltar') {   // no ar: arco até o outro lado
+    const f = Math.min(1, e.t / e.dur), yAlvo = e.alvo ? e.alvo.y : e.y0 - 1.2;
+    j.pos.x = e.bx + e.dx * e.D * f; j.pos.z = e.bz + e.dz * e.D * f;
+    ry = e.y0 + (yAlvo - e.y0) * f + Math.sin(Math.PI * f) * 0.9;
+    if (f >= 1) {
+      if (e.alvo) { j.esc = null; j.pos.y = e.alvo.y; j.emCima = { y: e.alvo.y, obj: e.alvo.obj }; av.tocar('idle', { fade: 0.25 }); return posarEsc(j, av, dt, e.alvo.y); }
+      const chao = alturaChao(j.pos.x, j.pos.z);
+      Object.assign(e, { fase: 'caindo', t: 0, vy: -2.5, ry, chao, h2: chao });
+      av.tocar('queda_livre', { fade: 0.15 });
+    }
+  } else if (e.fase === 'caindo') {   // errou o salto: cai até o chão
+    e.vy -= 9.8 * dt; e.ry = Math.max(e.chao, e.ry + e.vy * dt); ry = e.ry;
+    j.pos.x += e.dx * 1.5 * dt; j.pos.z += e.dz * 1.5 * dt;
+    if (e.ry <= e.chao) { resolverColisao(j.pos, j.raio); Object.assign(e, { fase: 'tombo', t: 0, vel: 1.3 }); av.tocar('cair_chao', { umaVez: true, velocidade: 1.3, fade: 0.08 }); }
+  } else if (e.fase === 'tombo') {   // bate no chão e vai de costas
+    ry = e.chao;
+    if (e.t * 1.3 >= 1.0) { Object.assign(e, { fase: 'levantar', t: 0, vel: 1.2, h2: e.chao }); av.tocar('levantar_queda', { umaVez: true, velocidade: 1.2, fade: 0.25 }); }
   } else if (e.fase === 'levantar') {
     ry = e.h2;
     if (ta >= 2.35) { const em = j.emCima; j.esc = null; j.pos.y = e.h2; j.emCima = em; if (!em) resolverColisao(j.pos, j.raio); av.tocar('idle', { fade: 0.25 }); }
@@ -20035,7 +20076,12 @@ function pular() {
   if (j.carregando) { aviso('Solte a caixa antes de pular.', 2); return; }
   const dx = Math.sin(j.yaw), dz = Math.cos(j.yaw), x0 = j.pos.x, z0 = j.pos.z, av = j.avatar;
   const correndo = performance.now() - (j.ultimoMov || 0) < 250;
-  if (j.emCima) { pularEmCima(j); return; }   // 21d: em cima do muro/telhado
+  if (j.emCima) {   // 21d: em cima do muro/telhado. 21e: dois toques = salto longo para outro telhado
+    const agora = performance.now();
+    if (j.toqueCima && agora - j.toqueCima.t < 350) { clearTimeout(j.toqueCima.id); j.toqueCima = null; saltoLongo(j); return; }
+    j.toqueCima = { t: agora, id: setTimeout(() => { j.toqueCima = null; if (j.emCima && !j.esc && !j.pulo) pularEmCima(j); }, 300) };
+    return;
+  }
   if (tentarEscalada(j)) return;               // 21d: muro alto ou parede: agarra e escala
   let ini = null, fim = null;
   for (let d = 0.45; d <= 4.6; d += 0.15) {

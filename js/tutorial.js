@@ -1,6 +1,8 @@
 // Tutorial do jogo: aparece sozinho na primeira vez que o jogador entra e pode ser revisto no menu (📖 Tutorial).
 // Páginas curtas (cabem na tela do celular), com Voltar / Próximo / Pular.
-const CHAVE = 'fator_tutorial_v1';
+import * as sons from './sons.js';
+const CHAVE = 'fator_tutorial_v1', CHAVE_VOZ = 'fator_tutorial_voz';
+let comVoz = true; try { comVoz = localStorage.getItem(CHAVE_VOZ) !== '0'; } catch { /* nada */ }
 
 const PAGINAS = [
   { ic: '👋', t: 'Bem-vindo a Fator RP', h: `<p>Uma cidade brasileira online: você mora, trabalha, abre empresa, faz política… ou se mete em confusão. Tudo o que você faz fica salvo e os outros jogadores veem.</p>
@@ -8,9 +10,10 @@ const PAGINAS = [
   { ic: '🎮', t: 'Controles', h: `<ul>
     <li><b>Joystick</b> (canto esquerdo): anda. Puxe até o fim para correr.</li>
     <li><b>Botão de ação</b>: muda com o lugar — Entrar, Pegar, Dirigir, Comprar, Socorrer… Chegue perto das coisas e veja o que ele diz.</li>
-    <li><b>Soco</b>, <b>Arma</b> e <b>🦘 Pular</b> (pula muretas e carros baixos).</li>
-    <li><b>Extra</b>: aparece quando dá para fazer algo especial ali (como crimes de clã).</li>
-    <li><b>⟲ ⟳</b> giram a câmera. <b>💬</b> abre o chat e <b>☰</b> o menu.</li>
+    <li><b>🦘 Pular</b>: passa muros baixos e carros; perto de muro alto ou parede, agarra e <b>escala</b> (o joystick sobe e vai para os lados).</li>
+    <li><b>Abaixar</b> e <b>Deitar</b>: para se proteger. Com a arma na mão, a câmera vai para o ombro e a mira fica no centro.</li>
+    <li><b>Soco</b>, <b>Arma</b> e <b>Extra</b> (aparece quando dá para fazer algo especial ali, como crimes de clã).</li>
+    <li>Arraste a tela (ou use <b>⟲ ⟳</b> na câmera de cima) para girar a câmera. <b>💬</b> abre o chat e <b>☰</b> o menu.</li>
     <li>No computador: <b>WASD</b> anda, <b>E</b> ação, <b>Q</b> arma, <b>espaço</b> pula, <b>Enter</b> chat.</li></ul>` },
   { ic: '❤️', t: 'Vida e fome', h: `<ul>
     <li>Fique de olho nas barras de <b>Vida</b> e <b>Fome</b>. Com fome você fica lento: coma (chocolate, cereal) da <b>Loja</b>.</li>
@@ -47,8 +50,8 @@ const PAGINAS = [
     <li>Cada crime dá <b>estrelas ★</b>: a polícia, a PRF e os robôs vão atrás de você. Preso, você cumpre pena ou paga fiança.</li>
     <li>Escondido e sem perseguição, as estrelas somem com o tempo.</li></ul>` },
   { ic: '✨', t: 'Eventos e segredos', h: `<ul>
-    <li><b>Arma dourada</b>: a equipe esconde em algum lugar da cidade. Quem achar tem 2 balas poderosas, e quem cai vai para o purgatório.</li>
-    <li><b>Pedra preciosa</b>: quem achar invoca o <b>Bruxo</b>, que concede UM pedido: voar como pássaro, perdão dos crimes, uma fortuna ou a arma dourada.</li>
+    <li><b>Arma lendária</b>: a equipe esconde em algum lugar da cidade. Quem achar tem 2 balas poderosas, e quem cai vai para o purgatório.</li>
+    <li><b>Pedra preciosa</b>: quem achar invoca o <b>Bruxo</b>, que concede UM pedido: voar como pássaro, perdão dos crimes, uma fortuna ou a arma lendária.</li>
     <li>Fique atento aos avisos de <b>EVENTO</b> e ao <b>📰 Jornal</b>. A cidade ainda guarda outros mistérios…</li></ul>` },
   { ic: '🎉', t: 'Pronto para começar!', h: `<p>Dicas para o começo:</p><ul>
     <li>Arrume um emprego no <b>💼 Trabalho</b> para ganhar dinheiro desde o início.</li>
@@ -63,11 +66,13 @@ function montar() {
   el.innerHTML = `<div class="topo"><b id="tutTitulo"></b><button id="tutFechar" aria-label="Fechar">✕</button></div>
     <div class="conteudo" id="tutConteudo" style="font-size:15px;line-height:1.5"></div>
     <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--borda)">
+      <button id="tutVoz" aria-label="Narração" style="padding:10px 12px;border-radius:9px;border:0;background:#2d3650;color:#fff;font-size:16px"></button>
       <button id="tutVoltar" style="padding:10px 14px;border-radius:9px;border:0;background:#2d3650;color:#fff;font-weight:700">‹ Voltar</button>
       <div id="tutPontos" style="flex:1;text-align:center;letter-spacing:3px;color:#7d879c"></div>
       <button id="tutProximo" style="padding:10px 16px;border-radius:9px;border:0;background:#e9a23b;color:#20160a;font-weight:800">Próximo ›</button></div>`;
   document.body.appendChild(el);
   el.querySelector('#tutFechar').onclick = fechar;
+  el.querySelector('#tutVoz').onclick = () => { comVoz = !comVoz; try { localStorage.setItem(CHAVE_VOZ, comVoz ? '1' : '0'); } catch { /* nada */ } desenhar(); };
   el.querySelector('#tutVoltar').onclick = () => { if (pag > 0) { pag--; desenhar(); } };
   el.querySelector('#tutProximo').onclick = () => { if (pag < PAGINAS.length - 1) { pag++; desenhar(); } else fechar(); };
 }
@@ -81,10 +86,15 @@ function desenhar() {
   el.querySelector('#tutProximo').textContent = pag === PAGINAS.length - 1 ? 'Começar a jogar ✓' : 'Próximo ›';
   el.querySelector('#tutFechar').textContent = pag === PAGINAS.length - 1 ? '✕' : 'Pular';
   el.querySelector('#tutFechar').style.fontSize = pag === PAGINAS.length - 1 ? '20px' : '14px';
+  el.querySelector('#tutVoz').textContent = comVoz ? '🔊' : '🔇';
+  // 21e: narração da página (para ao mudar de página ou fechar)
+  const voz = `tut_${String(pag + 1).padStart(2, '0')}`;
+  if (comVoz && falando !== voz) { falando = voz; sons.narrar(voz); } else if (!comVoz) { falando = null; sons.pararNarracao(); }
 }
+let falando = null;
 let aoFechar = null;
-function fechar() { el?.classList.add('oculto'); try { localStorage.setItem(CHAVE, '1'); } catch { /* sem armazenamento */ } aoFechar?.(); aoFechar = null; }
-export function abrirTutorial() { if (!el) montar(); pag = 0; el.classList.remove('oculto'); desenhar(); }
+function fechar() { falando = null; sons.pararNarracao(); el?.classList.add('oculto'); try { localStorage.setItem(CHAVE, '1'); } catch { /* sem armazenamento */ } aoFechar?.(); aoFechar = null; }
+export function abrirTutorial() { if (!el) montar(); pag = 0; falando = null; el.classList.remove('oculto'); desenhar(); }
 // abre sozinho uma vez por jogador: a conta guarda que ele já viu (vistoNaConta). Conta antiga sem essa marca usa a do
 // aparelho; conta nova sempre vê. Ao fechar (ou pular), marcaVisto grava na conta. Dá para rever em ☰ → 📖 Tutorial.
 export function tutorialPrimeiraVez(contaNova, vistoNaConta = false, marcaVisto = null) {

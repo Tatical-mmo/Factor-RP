@@ -88,6 +88,27 @@ export function tocarTela(nome, seg = 3.5) {
   mestre.gain.cancelScheduledValues(t); mestre.gain.setValueAtTime(mestre.gain.value, t);
   mestre.gain.linearRampToValueAtTime(0.18, t + 0.3); mestre.gain.setValueAtTime(0.18, t + seg); mestre.gain.linearRampToValueAtTime(ligado ? 0.8 : 0, t + seg + 1.2);
 }
+// 21e: narração (tutorial): uma fala por vez, interrompível; abaixa os outros sons enquanto fala
+let narr = null, narrQuer = null;
+export function narrar(nome) {
+  pararNarracao(); narrQuer = nome;
+  if (!ac) iniciarAudio();
+  if (!ac || !ligado) return;
+  const n = 'vz_' + nome;
+  if (!buffers[n]) { carregar(n); const t0 = performance.now(); const espera = () => { if (narrQuer !== nome) return; if (buffers[n]) narrar(nome); else if (performance.now() - t0 < 8000) setTimeout(espera, 150); }; setTimeout(espera, 150); return; }
+  const src = ac.createBufferSource(), g = ac.createGain(), t = ac.currentTime;
+  src.buffer = buffers[n]; g.gain.value = 1; src.connect(g); g.connect(ac.destination); src.start();
+  mestre.gain.cancelScheduledValues(t); mestre.gain.setValueAtTime(mestre.gain.value, t); mestre.gain.linearRampToValueAtTime(ligado ? 0.25 : 0, t + 0.3);
+  src.onended = () => { if (narr?.src === src) pararNarracao(); };
+  narr = { src, g };
+}
+export function pararNarracao() {
+  narrQuer = null;
+  if (!narr) return;
+  const { src } = narr; narr = null;
+  try { src.onended = null; src.stop(); } catch { /* já parou */ }
+  if (ac) { const t = ac.currentTime; mestre.gain.cancelScheduledValues(t); mestre.gain.setValueAtTime(mestre.gain.value, t); mestre.gain.linearRampToValueAtTime(ligado ? 0.8 : 0, t + 0.6); }
+}
 // efeito único; dist em metros (som some a partir de "raio")
 export function tocar(nome, { vol = 1, dist = 0, raio = 60, velocidade = 1 } = {}) {
   if (!ac || !ligado) return;
