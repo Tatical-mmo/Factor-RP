@@ -1171,7 +1171,7 @@ class Avatar {
     m.z = Math.max(m.z, 0.14 * h + 0.12);                           // sempre na frente do corpo
     // 20y: na recarga a arma acompanha a mão direita (posição e inclinação). A inclinação é a diferença entre a mão
     // agora e a mão na pose normal com a arma (guardada enquanto não está recarregando); entra e sai suave.
-    const recar = /^recarga_/.test(this.nomeAtual || '');
+    const recar = /^recarga_|_recarga$/.test(this.nomeAtual || '');   // 20p: recarga abaixado/deitado também
     this._rk = (this._rk || 0) + ((recar ? 1 : 0) - (this._rk || 0)) * 0.18;
     this.raiz.getWorldQuaternion(_qRaizArma).invert();
     _qMaoArma.copy(_qRaizArma).multiply(this.maoD.getWorldQuaternion(_qTmpArma));   // mão no espaço do personagem
@@ -1278,8 +1278,11 @@ function skinDaFarda(papel, patente, sexo) {
 }
 // 20o: andando com a mira de centro: para trás (devagar e rápido) e de lado agachado (a direita é a esquerda espelhada)
 const ANIM_MIRA = ['mira_tras_lento', 'mira_tras_rapido', 'mira_lado_esq', 'mira_lado_dir'];
-for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA]) ANIM_EXTRAS.add(n);
-const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : 'assets/personagens/animacoes_emotes.glb?v=2');
+// 20p: posturas (abaixado, deitado, engatinhar, rastejar, cobertura, granada abaixado e as transições)
+const ANIM_POSTURA = ['deitado_arma', 'deitado_recarga', 'deitado', 'rastejar_tras', 'rastejar_frente', 'abaixado_arma', 'abaixado_recarga', 'abaixado', 'engatinhar',
+  'levantar_deitado', 'deitar', 'levantar_abaixado', 'abaixar', 'cobertura_esq', 'cobertura_dir', 'granada_abaixado'];
+for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA, ...ANIM_POSTURA]) ANIM_EXTRAS.add(n);
+const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=1' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
 function obterBaseExtra(arq) {
   if (!basesExtra.has(arq)) basesExtra.set(arq, carregarGLB(arq).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { basesExtra.delete(arq); return null; }));
@@ -1696,7 +1699,7 @@ function configurarJoystick() {
     b.addEventListener('pointerup', solta); b.addEventListener('pointercancel', solta); b.addEventListener('lostpointercapture', solta);
   }
   toque('btAcao', acaoContexto); toque('btSoco', socar); toque('btArma', botaoArma); toque('btAlgema', acaoAlgema); toque('btCrime', acaoCrime);
-  toque('btPular', pular); toque('btRender', renderSe);
+  toque('btPular', pular); toque('btRender', renderSe); toque('btAbaixar', tocarAbaixar); toque('btDeitar', tocarDeitar);   // 20p
   toque('btRecarregar', () => trocarPente());
   toque('btTiro', () => { gatilho.segurando = true; gatilho.alvo = null; atirar(null); });
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) $('btTiro').addEventListener(ev, () => { gatilho.segurando = false; }); toque('btGiraE', () => girarCamera(-1)); toque('btGiraD', () => girarCamera(1));
@@ -2646,7 +2649,7 @@ function criarBola(pos, vel, cor, minha = false, escala = 1, laser = false) {
     m = new THREE.Mesh(geoBola, new THREE.MeshStandardMaterial({ color: cor, roughness: 0.3 }));
     m.position.copy(pos); m.scale.setScalar(escala); scene.add(m);
   }
-  bolas.push({ m, v: vel.clone(), vida: escala >= 3 ? 2.5 : 2, cor, minha, tanque: escala >= 3, laser, ini: laser ? pos.clone() : null });
+  bolas.push({ m, v: vel.clone(), vida: escala >= 3 ? 2.5 : 2, cor, minha, tanque: escala >= 3, laser, ini: laser ? pos.clone() : null, orig: pos.clone() });
 }
 // ---------------------------------------------------------------- tanque: canhão de tinta que explode veículos
 let recargaTanque = 0;
@@ -3986,8 +3989,9 @@ function atualizarInfo() {
 const remotos = new Map();     // id -> { meta, av, arma, alvo, anim, caixa }
 let conexao = null, online = 1, conectado = false;
 let envioTimer = 0, ultimoEnvio = null, tempoKeepAlive = 0, tempoSalvar = 15;
-const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1, flexao_desce: 1, flexao_sobe: 1, parada: 1, coletar: 1.2, levantar_socorro: 1.6, beber: 1 };
-const ANIM_VEL = { walk_shoot: 1.25 };
+const ANIM_UMA_VEZ = { pegar: 1.5, punch_left: 1.7, punch_right: 1.7, hit: 1.4, death: 1, flexao_desce: 1, flexao_sobe: 1, parada: 1, coletar: 1.2, levantar_socorro: 1.6, beber: 1,
+  abaixar: 1.8, levantar_abaixado: 1.8, deitar: 2, levantar_deitado: 2, cobertura_esq: 1.3, cobertura_dir: 1.3, granada_abaixado: 1.4 };   // 20p: posturas
+const ANIM_VEL = { walk_shoot: 1.25, engatinhar: 1.8, rastejar_frente: 1.7, rastejar_tras: 1.7 };
 
 function conectarMultiplayer(perfil) {
   conexao = rede.conectarCidade(perfil, {
@@ -5021,10 +5025,19 @@ function acertoDaBola(b) {
     const q = r.carro.position;
     if (Math.hypot(p.x - q.x, p.z - q.z) < 2.6 && p.y < q.y + 3.2) { conexao?.enviar('tatica', { k: 'bl', alvo: id, v: Math.round((b.dano || 20) * 0.3), de: jogador.perfil.id }); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
   }
+  // 20p: veículo no caminho segura a bala (cobertura atrás de carro de verdade). Só depois de 1,2 m do cano, para quem
+  // atira encostado no carro não acertar o próprio
+  if (b.orig && Math.hypot(p.x - b.orig.x, p.z - b.orig.z) > 1.2) {
+    const bloq = (q) => q && Math.hypot(p.x - q.x, p.z - q.z) < 1.5 && p.y < q.y + 1.35;
+    for (const v of carrosMundo.values()) if (v.mesh?.visible && bloq(v.mesh.position)) { manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
+    for (const v of viaturas) if (v.obj?.visible && bloq(v.obj.position)) { manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
+    for (const [, r] of remotos) if (r.carro && r.carroModelo !== 'caveirao' && bloq(r.carro.position)) { manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
+  }
   for (const [id, r] of remotos) {
     if (!r.av?.raiz.visible) continue;
-    const q = r.av.raiz.position;
-    if (Math.hypot(p.x - q.x, p.z - q.z) < 0.5 && p.y > q.y + 0.1 && p.y < q.y + 1.9) {
+    const q = r.av.raiz.position, pn = r.av.nomeAtual || '';
+    const deit = /^(deitado|rastejar|deitar)/.test(pn), abx = /^(abaixado|abaixar|engatinhar|cobertura|granada_abaixado)/.test(pn);   // 20p: abaixado/deitado é alvo menor
+    if (Math.hypot(p.x - q.x, p.z - q.z) < (deit ? 0.85 : 0.5) && p.y > q.y + 0.05 && p.y < q.y + (deit ? 0.55 : abx ? 1.25 : 1.9)) {
       if (b.pd) acertoDourado(id); else { aplicarDanoRemoto(id, b.dano || 20); if (b.critico) aviso('💥 Acerto crítico!', 1.2); }
       if (ARMADURAS[r.meta?.arm]) faiscar(p.clone()); else manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor);   // armadura: faísca em vez de tinta
       return true;
@@ -9274,7 +9287,16 @@ function atualizarJogador(dt) {
     j.trava -= dt;
   } else {
     let vel = 0;
-    if (forca > 0.15) {
+    if (forca > 0.15 && j.postura) {   // 20p: abaixado engatinha, deitado rasteja (devagar; sem correr)
+      vel = j.postura === 'deitado' ? 0.55 : 0.9;
+      if (joy.ativo) vel *= THREE.MathUtils.clamp(forca * 1.3, 0.5, 1);
+      j.rastejaTras = j.postura === 'deitado' && iy < 0 && -iy >= Math.abs(ix);   // deitado, para trás: rasteja de costas olhando para a frente
+      j.ladoArmado = j.postura === 'abaixado' && j.armado && miraC.ligada && Math.abs(ix) > Math.abs(iy);
+      if (j.rastejaTras || j.ladoArmado) j.yaw = suavizarAngulo(j.yaw, miraC.ligada ? miraC.yaw : Math.atan2(frente.x, frente.z), dt * 8);
+      else j.yaw = suavizarAngulo(j.yaw, Math.atan2(dir.x, dir.z), dt * 6);
+      j.pos.x += dir.x * vel * dt; j.pos.z += dir.z * vel * dt;
+      resolverColisao(j.pos, j.raio); j.ultimoMov = performance.now(); j.correndo = false; j.coberturaAte = 0;
+    } else if (forca > 0.15) {
       vel = j.carregando ? VELOCIDADE.carregando : j.armado ? (correr && turbinado() ? VELOCIDADE.correr * 0.92 : VELOCIDADE.armado) : correr ? VELOCIDADE.correr : VELOCIDADE.andar;
       if (racaoAtiva()) vel *= 1.1;
       if (correr && jogador.armadura) vel *= 1 + ARMADURAS[jogador.armadura.modelo].bonus;   // armadura: corre até 15% mais
@@ -9284,7 +9306,8 @@ function atualizarJogador(dt) {
       j.pos.x += dir.x * vel * dt; j.pos.z += dir.z * vel * dt;
       resolverColisao(j.pos, j.raio); j.ultimoMov = performance.now(); j.correndo = correr;
     }
-    if (miraC.ligada) j.yaw = miraC.yaw;   // 20m: com a mira de centro o corpo fica virado para a mira (anda de lado/de costas)
+    if (miraC.ligada && !j.postura) j.yaw = miraC.yaw;   // 20m: com a mira de centro o corpo fica virado para a mira (anda de lado/de costas)
+    else if (miraC.ligada && vel === 0) j.yaw = suavizarAngulo(j.yaw, miraC.yaw, dt * 6);   // 20p: abaixado/deitado parado: vira para a mira
     // animação conforme o estado
     if (j.morto) { /* fica caído */ }
     else if (vel > 0) {
@@ -9292,6 +9315,7 @@ function atualizarJogador(dt) {
       j.paradaAte = 0; j.tCorre = correr && !j.armado && !j.carregando && !j.algemado ? (j.tCorre || 0) + dt : 0;
       if (j.algemado) av.tocar('algemado_andar', { velocidade: 1 });
       else if (j.carregando) av.tocar('carry_walk', { velocidade: 1 });
+      else if (j.postura) animPostura(av, j, true, ix);
       else if (j.armado && recargaAtual(j)) animRecarga(av, correr ? 'correndo' : 'andando', recargaAtual(j));
       else if (j.armado && miraC.ligada && !(correr && turbinado()) && (iy < -0.2 || Math.abs(ix) > Math.max(0.25, iy * 1.1))) {   // 20o: mirando, para trás ou de lado
         if (iy < 0 && -iy >= Math.abs(ix) * 0.8) av.tocar(forca > 0.75 ? 'mira_tras_rapido' : 'mira_tras_lento', { velocidade: 1 });
@@ -9306,6 +9330,7 @@ function atualizarJogador(dt) {
       if (performance.now() < (j.paradaAte || 0)) { /* termina a parada brusca */ }
       else if (j.algemado) av.tocar('algemado');
       else if (j.carregando) av.tocar('carregar_parado');
+      else if (j.postura) animPostura(av, j, false, 0);
       else if (j.armado && recargaAtual(j)) animRecarga(av, 'parado', recargaAtual(j));
       else if (j.armado && ARMAS[j.armaTipo]?.lanca) animLancador(av, j);
       else if (j.armado) av.tocar('mirar');
@@ -9320,7 +9345,7 @@ function atualizarJogador(dt) {
       else if (voz.estaFalando() || performance.now() < (j.falaAte || 0)) av.tocar(gestoConversa(av, j));
       else av.tocar('idle');
     }
-    passos(j, vel, dt);
+    passos(j, j.postura ? 0 : vel, dt);
   }
   if (j.emote === 'beber' && forca > 0.15) j.emote = null;   // andou: para de beber
   if (j.emote === 'celular' && forca > 0.15) celular.fechar();   // andou: guarda o celular
@@ -17355,7 +17380,7 @@ function atualizarMisseis(dt) {
     if ((acertou && m.meu) || fim) { efeitoExplosao(m.mesh.position.x, m.mesh.position.y, m.mesh.position.z, acertou ? 1.2 : 0.6, false); scene.remove(m.mesh); misseis.splice(i, 1); }
   }
   if (!jogador.carro?.jato) { const pn = $('painelJato'); if (pn) pn.style.display = 'none'; }
-  atualizarLancador(dt); atualizarP50(dt); hudAeronave(dt); atualizarMiraManual(dt);
+  atualizarLancador(dt); atualizarP50(dt); hudAeronave(dt); atualizarMiraManual(dt); atualizarBotoesPostura(false, dt);
   // som dos caças dos outros
   for (const r of remotos.values()) if (r.carro?.visible && civico.CARROS[r.carroModelo]?.jato) sons.continuo('aviaoG_alto', 0.6 * sons.perto(r.carro.position.distanceTo(jogador.pos), 260), 1.4);
 }
@@ -17539,6 +17564,93 @@ function balaNaAeronave(b) {
   }
   return false;
 }
+// ---- posturas (20p): 🧎 Abaixar e 🪖 Deitar. Abaixado engatinha, deitado rasteja (para trás, de costas olhando para a
+// frente). Com arma: pose de tiro ajoelhado/deitado e recarga própria. Encostado num veículo ou parede, com arma, o
+// Abaixar vira 🛡️ Cobertura: agacha, sai para o lado da mira, atira e volta. Abaixado/deitado é alvo menor.
+function posturaPode() {
+  const j = jogador;
+  return !!(j.avatar && !j.morto && !j.carro && !j.passageiro && !j.ave && !j.trem && !j.onibus && !j.voo && !j.paraquedas && !j.embarcado && !j.carregando && !j.algemado && !j.rendido && !j.pulo && !j.abducao && !correTropa);
+}
+function posturaParada(j) { return j.postura === 'deitado' ? (j.armado ? 'deitado_arma' : 'deitado') : (j.armado ? 'abaixado_arma' : 'abaixado'); }
+function mudarPostura(alvo) {   // alvo: null (em pé), 'abaixado' ou 'deitado'
+  const j = jogador, av = j.avatar; if (!av) return;
+  if (alvo && !posturaPode()) return;
+  if (performance.now() < (j.posTrans || 0)) return;   // ainda no meio de uma transição
+  const de = j.postura || null; if (de === alvo) return;
+  const TR = { 'null>abaixado': ['abaixar', 1.8], 'abaixado>null': ['levantar_abaixado', 1.8], 'null>deitado': ['deitar', 2], 'deitado>null': ['levantar_deitado', 2] }[`${de}>${alvo}`];
+  j.postura = alvo; j.coberturaAte = 0; j.emote = null;
+  if (TR && av.clipes[TR[0]]) {
+    av.tocar(TR[0], { umaVez: true, fade: 0.15, velocidade: TR[1] });
+    const dur = av.clipes[TR[0]].duration / TR[1]; j.trava = Math.max(j.trava, dur * 0.9); j.posTrans = performance.now() + dur * 900;
+  } else {   // abaixado ↔ deitado (ou o arquivo ainda carregando): passa direto, suave
+    if (alvo) av.tocar(posturaParada(j), { fade: 0.5 }); else av.tocar('idle', { fade: 0.4 });
+    j.trava = Math.max(j.trava, 0.45); j.posTrans = performance.now() + 450;
+  }
+  atualizarBotoesPostura(true);
+}
+function animRecargaPostura(av, postura, r) {
+  const nome = postura === 'deitado' ? 'deitado_recarga' : 'abaixado_recarga';
+  if (av.nomeAtual === nome || (!av.clipes?.[nome] && av.querExtra === nome)) return;
+  const total = Math.max(0.5, (r.fim - r.ini) / 1000), frac = THREE.MathUtils.clamp((performance.now() - r.ini) / 1000 / total, 0, 0.98);
+  const dur = av.clipes?.[nome]?.duration || 6.5;
+  av.tocar(nome, { umaVez: true, fade: 0.2, velocidade: THREE.MathUtils.clamp(dur / total, 0.5, 4) });
+  if (av.nomeAtual === nome && av.atual) av.atual.time = frac * dur;
+}
+function animPostura(av, j, andando, ix) {
+  if (!andando && performance.now() < (j.coberturaAte || 0)) return;   // atirando da cobertura
+  if (j.armado && recargaAtual(j)) { animRecargaPostura(av, j.postura, recargaAtual(j)); return; }
+  if (!andando) { av.tocar(posturaParada(j), { fade: 0.3 }); return; }
+  if (j.postura === 'deitado') { av.tocar(j.rastejaTras ? 'rastejar_tras' : 'rastejar_frente', { velocidade: 1.7 }); return; }
+  if (j.ladoArmado) { av.tocar(ix > 0 ? 'mira_lado_dir' : 'mira_lado_esq', { velocidade: 0.9 }); return; }
+  av.tocar('engatinhar', { velocidade: 1.8 });
+}
+// obstáculo para cobertura colado no jogador (veículo, parede ou prédio): o ponto mais perto, ou null
+function obstaculoPerto(raio = 1.7) {
+  const p = jogador.pos; let melhor = null, md = raio;
+  const ver = (x, z, folga) => { const d = Math.hypot(x - p.x, z - p.z) - folga; if (d < md) { md = d; melhor = { x, z }; } };
+  for (const v of carrosMundo.values()) if (v.mesh?.visible) ver(v.mesh.position.x, v.mesh.position.z, 1.3);
+  for (const v of viaturas) if (v.obj?.visible) ver(v.obj.position.x, v.obj.position.z, 1.3);
+  for (const [, r] of remotos) if (r.carro) ver(r.carro.position.x, r.carro.position.z, 1.3);
+  for (const c of caminhoes.values()) if (c.obj?.visible) ver(c.obj.position.x, c.obj.position.z, 1.6);
+  for (const c of colisores) {
+    if (c.tipo !== 'caixa' || p.x < c.x0 - 3 || p.x > c.x1 + 3 || p.z < c.z0 - 3 || p.z > c.z1 + 3) continue;
+    const x = THREE.MathUtils.clamp(p.x, c.x0, c.x1), z = THREE.MathUtils.clamp(p.z, c.z0, c.z1); ver(x, z, 0);
+  }
+  for (const pr of predios) {
+    const bx = pr.caixa; if (p.x < bx.min.x - 3 || p.x > bx.max.x + 3 || p.z < bx.min.z - 3 || p.z > bx.max.z + 3) continue;
+    ver(THREE.MathUtils.clamp(p.x, bx.min.x, bx.max.x), THREE.MathUtils.clamp(p.z, bx.min.z, bx.max.z), 0);
+  }
+  return melhor;
+}
+function fazerCobertura() {
+  const j = jogador, av = j.avatar, ob = j.obstaculo; if (!av || !ob || !posturaPode()) return;
+  if (performance.now() < (j.posTrans || 0) || performance.now() < (j.coberturaAte || 0)) return;
+  // o lado é o da mira: o obstáculo à esquerda da mira → sai pela direita (e vice-versa)
+  const ref = miraC.ligada ? miraC.yaw : j.yaw, rumo = Math.atan2(ob.x - j.pos.x, ob.z - j.pos.z), dif = Math.atan2(Math.sin(rumo - ref), Math.cos(rumo - ref));
+  const lado = dif > 0 ? 'dir' : 'esq';
+  j.postura = 'abaixado'; j.yaw = ref; j.emote = null;
+  av.tocar(`cobertura_${lado}`, { umaVez: true, velocidade: 1.3, fade: 0.15 });
+  j.coberturaAte = performance.now() + ((av.clipes[`cobertura_${lado}`]?.duration || 4) / 1.3) * 1000;
+  atualizarBotoesPostura(true);
+}
+let tBotoesPostura = 0, posturaPreparada = false;
+function atualizarBotoesPostura(forcar = false, dt = 0) {
+  const j = jogador, ba = $('btAbaixar'), bd = $('btDeitar'); if (!ba || !bd) return;
+  if (j.postura && !posturaPode() && !j.pulo) { j.postura = null; j.coberturaAte = 0; }   // entrou no carro, morreu, virou pássaro…: fica em pé
+  if (!forcar && (tBotoesPostura -= dt) > 0) return;
+  tBotoesPostura = 0.25;
+  const mostra = posturaPode() || !!j.postura;
+  ba.classList.toggle('oculto', !mostra); bd.classList.toggle('oculto', !mostra);
+  if (!mostra) return;
+  if (!posturaPreparada && j.avatar) { posturaPreparada = true; for (const n of ANIM_POSTURA) j.avatar.garantir(n); }   // baixa o arquivo antes do primeiro uso
+  j.obstaculo = j.armado && j.postura !== 'deitado' ? obstaculoPerto() : null;
+  const cob = !!j.obstaculo;
+  ba.innerHTML = cob ? '🛡️<br>Cobertura' : j.postura === 'abaixado' ? '🧍<br>Levantar' : '🧎<br>Abaixar';
+  bd.innerHTML = j.postura === 'deitado' ? '🧍<br>Levantar' : '🪖<br>Deitar';
+  ba.classList.toggle('ativo', j.postura === 'abaixado' && !cob); bd.classList.toggle('ativo', j.postura === 'deitado');
+}
+function tocarAbaixar() { const j = jogador; if (j.obstaculo && j.armado && j.postura !== 'deitado') fazerCobertura(); else mudarPostura(j.postura === 'abaixado' ? null : 'abaixado'); }
+function tocarDeitar() { mudarPostura(jogador.postura === 'deitado' ? null : 'deitado'); }
 // ---- mira de centro (20m): com a arma na mão (a pé), a câmera vai para trás do ombro e aparece uma cruz fixa no meio
 // da tela. Arrastar o dedo em qualquer lugar livre da tela (ou o mouse) gira a câmera e a mira; o analógico só anda.
 // O tiro sai da boca da arma já com o ângulo certo para cair exatamente no ponto que está sob a cruz (com a queda).
@@ -17569,7 +17681,9 @@ function cameraOmbro(dt) {
   const y = miraC.yaw, p = miraC.pitch, j = jogador;
   _fwdM.set(Math.sin(y) * Math.cos(p), Math.sin(p), Math.cos(y) * Math.cos(p));
   const rx = -Math.cos(y), rz = Math.sin(y), lado = 0.8, dist = j.dentroCasa ? 2.1 : 3.5;
-  const piv = new THREE.Vector3(j.pos.x + rx * lado, (j.pos.y || 0) + 1.72, j.pos.z + rz * lado);
+  const altAlvo = j.postura === 'deitado' ? 0.8 : j.postura === 'abaixado' ? 1.25 : 1.72;   // 20p: abaixado/deitado, a câmera desce junto
+  miraC.alt = (miraC.alt ?? altAlvo) + (altAlvo - (miraC.alt ?? altAlvo)) * Math.min(1, dt * 4);
+  const piv = new THREE.Vector3(j.pos.x + rx * lado, (j.pos.y || 0) + miraC.alt, j.pos.z + rz * lado);
   const cam = piv.clone().addScaledVector(_fwdM, -dist);
   // parede atrás: a câmera chega mais perto em vez de entrar no prédio
   _dirM.copy(cam).sub(piv); const L = _dirM.length(); _dirM.divideScalar(L || 1); _rayM.set(piv, _dirM);
@@ -18351,6 +18465,17 @@ function lancarGranada(mira) {
   const ps = jogador.passageiro, r = ps?.piloto && remotos.get(ps.piloto);
   const yaw = mira ? mira.yaw : ps ? yawDaCamera() : jogador.yaw;
   if (!ps) jogador.yaw = yaw;
+  if (!ps && jogador.postura) {   // 20p: abaixado/deitado: joga com a animação de granada agachado (solta no meio do movimento)
+    jogador.avatar.tocar('granada_abaixado', { umaVez: true, velocidade: 1.4, fade: 0.12 }); jogador.trava = Math.max(jogador.trava, 1.7);
+    rede.tatica.usarGranada().then(() => recarregarInventario()).catch((e) => aviso(e.message, 2.5));
+    setTimeout(() => {
+      if (jogador.morto || !jogador.avatar || jogador.carro) return;
+      const p2 = origemGranada(yaw); p2.y -= jogador.postura === 'deitado' ? 0.9 : 0.6;
+      const v2 = velGranada(yaw, mira ? mira.forca : 0.6); criarGranada(p2, v2, true);
+      conexao?.enviar('tatica', { k: 'gr', x: r2t(p2.x), y: r2t(p2.y), z: r2t(p2.z), vx: r2t(v2.x), vy: r2t(v2.y), vz: r2t(v2.z), de: jogador.perfil.id });
+    }, 1180);
+    return;
+  }
   const pos = origemGranada(yaw), v = velGranada(yaw, mira ? mira.forca : 0.6);
   rede.tatica.usarGranada().then(() => recarregarInventario()).catch((e) => aviso(e.message, 2.5));
   criarGranada(pos, v, true);
@@ -19406,6 +19531,7 @@ function alturaVeiculoEm(x, z) {
 }
 function pular() {
   const j = jogador;
+  if (j.postura) { mudarPostura(null); return; }   // 20p: abaixado/deitado, o Pular levanta
   if (!j.avatar || j.ave || j.morto || j.carro || j.passageiro || j.onibus || j.voo || j.trem || j.pulo || j.trava > 0 || j.algemado || j.rendido || j.paraquedas || j.pena > 0 || j.ferido) return;
   if (j.carregando) { aviso('Solte a caixa antes de pular.', 2); return; }
   const dx = Math.sin(j.yaw), dz = Math.cos(j.yaw), x0 = j.pos.x, z0 = j.pos.z, av = j.avatar;
