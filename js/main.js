@@ -14,6 +14,7 @@ const TOQUE = window.matchMedia('(pointer: coarse)').matches;
 
 import * as rede from './rede.js';
 import * as mundo from './mundo.js';
+import * as arq from './arquitetura.js';
 import * as ferrovia from './ferrovia.js';
 import * as sedes from './sedes.js';
 import { iniciarConquistas } from './conquistas.js';
@@ -925,7 +926,8 @@ function addColisorCaixa(obj, encolher = 0.6) {
 const CORES_MAPA = { estacionamento: '#1f6feb', oficina: '#e0a020', terrenoOficina: '#f1c40f', ferro_velho: '#7a4a2a', delegacia: '#4f7bd8', loja: '#e05a4f', empresa: '#9aa0a8', transportadora: '#e39b3a', casa: '#8c5a3c', base_cla: '#c43b3b', sede_bope: '#111111' };
 
 function colocarPredio(nome, x, z, rotY) {
-  const obj = clonar(nome);
+  const obj = typeof nome === 'string' ? clonar(nome) : nome;   // nome do modelo ou um grupo pronto (prédio feito por código)
+  if (typeof nome !== 'string') nome = 'empresa';
   obj.rotation.y = rotY; obj.position.set(x, 0.18, z);
   // materiais próprios para poder deixar transparente quando cobrir o jogador
   const mats = [];
@@ -3994,8 +3996,8 @@ async function iniciarJogo(perfil) {
   // objetos de rua em 3D (leves): bancos de praça, hidrantes e semáforos — carregam em segundo plano
   for (const n of ['banco', 'hidrante']) Promise.resolve(carregarGLB(`assets/modelos/prop_${n}.glb`)).then((g) => { if (g?.scene) mundo.montarProps(n, g.scene, scene); }).catch(() => {});
   // prédios 3D (perto do jogador): carregam em segundo plano
-  { const nomes = ['predio_casa1', 'predio_casa2', 'predio_sobrado', 'predio_residencial', 'predio_escritorio', 'predio_galpao', 'favela_casa1', 'favela_casa2', 'favela_casa3', 'favela_casa4'];
-    Promise.all(nomes.map((n) => Promise.resolve(carregarGLB(`assets/modelos/${n}.glb`)).then((g) => [n, g?.scene]).catch(() => [n, null]))).then((l) => { const m = Object.fromEntries(l.filter(([, c]) => c)); if (Object.keys(m).length) mundo.ativarPredios3d(m); }); }
+  // 21q: os prédios, casas e a favela não trocam mais por modelo 3D: a fachada nova (arquitetura.js) é mais bonita e
+  // mais leve (antes a troca a cada 0,7 s dava umas travadinhas andando pela cidade)
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
   civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n], addPiso: mundo.addPiso, foco: () => foco(),
@@ -4479,9 +4481,9 @@ function desenharLote(l) {
   const fabrica = u.funcao === 'fabrica';
   const modelo = fabrica ? 'empresa' : 'transportadora';
   if (sedes.fase(e.nivel) >= 1) { desenharSede(l, e, u, v, fabrica, modelo); return; }
-  const obj = colocarPredio(fabrica && modelos.empresa_f0 ? 'empresa_f0' : !fabrica && modelos.transp_f0 ? 'transp_f0' : modelo, x, z, 0);   // níveis 1–4 (modelo novo quando existe)
-  // prédio um pouco menor para sobrar pátio atrás (estacionamento) e corredor na lateral
-  obj.scale.setScalar(0.85 * (1 + (e.nivel - 1) * 0.04)); obj.updateMatrixWorld(true);
+  // níveis 1–4 (21q): galpão de telha metálica com escritório na frente, feito por código (arquitetura.js)
+  const obj = colocarPredio(sedes.predioPequeno({ nivel: e.nivel, fabrica, id: e.id, nome: e.nome }), x, z, 0);
+  obj.scale.setScalar(0.92 + (e.nivel - 1) * 0.03); obj.updateMatrixWorld(true);
   const b0 = new THREE.Box3().setFromObject(obj);
   obj.position.z += (z + LOTE_L / 2 - 0.4) - b0.max.z; obj.updateMatrixWorld(true);
   // colocarPredio registrou colisor e mapa com a posição antiga: refaz
@@ -9121,27 +9123,6 @@ const moraEm = (d) => d && (d.dono === jogador.perfil.id || (d.inquilino === jog
 const placasTorre = new Map();
 const num = (n) => Number(n || 0).toLocaleString('pt-BR');
 // casa construída num terreno (simples, sobrado ou mansão), de frente para a rua
-let _fachadaCasa = null;
-function texturasFachadaCasa() {
-  // uma "célula" de 3 m x 3,2 m: parede branca (a cor vem do material), janela com caixilho e reflexo
-  if (_fachadaCasa) return _fachadaCasa;
-  const cor = texturaCanvas(128, (g, t) => {
-    g.fillStyle = '#ffffff'; g.fillRect(0, 0, t, t); ruido(g, t, 700, 0.05, 1.2);
-    g.fillStyle = '#d9d4cc'; g.fillRect(t * 0.16, t * 0.2, t * 0.68, t * 0.62);           // moldura
-    const gr = g.createLinearGradient(0, t * 0.24, 0, t * 0.78); gr.addColorStop(0, '#5f88a8'); gr.addColorStop(1, '#22343f');
-    g.fillStyle = gr; g.fillRect(t * 0.2, t * 0.24, t * 0.6, t * 0.54);
-    g.fillStyle = 'rgba(255,255,255,.2)'; g.beginPath(); g.moveTo(t * 0.2, t * 0.6); g.lineTo(t * 0.45, t * 0.24); g.lineTo(t * 0.56, t * 0.24); g.lineTo(t * 0.2, t * 0.74); g.fill();
-    g.fillStyle = '#cfc9bd'; g.fillRect(t * 0.49, t * 0.24, 3, t * 0.54);                // montante
-    g.fillStyle = '#bdb6a8'; g.fillRect(t * 0.12, t * 0.82, t * 0.76, 5);                 // peitoril
-    g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(0, t - 4, t, 4);
-  });
-  const luz = texturaCanvas(128, (g, t) => {
-    g.fillStyle = '#000'; g.fillRect(0, 0, t, t);
-    g.fillStyle = '#fff'; g.fillRect(t * 0.2, t * 0.24, t * 0.6, t * 0.54);
-  });
-  _fachadaCasa = { cor, luz };
-  return _fachadaCasa;
-}
 function removerCasaTerreno(v) {
   if (!v.casa) return;
   for (const m of v.casa.luzes || []) { const k = luzesCasas.indexOf(m); if (k >= 0) luzesCasas.splice(k, 1); }
@@ -9157,86 +9138,10 @@ function desenharCasaTerreno(v) {
   const sz = Math.sign(c.z - zq) || 1;                                  // lado da rua
   const cx = c.x, cz = c.z - sz * 11;                                   // centro do lote (19 x 19)
   const g = new THREE.Group(), cols = [];
-  const cores = { simples: ['#f0dfc0', '#a5502f'], sobrado: ['#d6e4ee', '#4f5a63'], mansao: ['#f7f4ec', '#3d3a36'] }[c.modelo];
-  const parede = new THREE.MeshStandardMaterial({ color: cores[0], roughness: 0.8 });
-  const telha = new THREE.MeshStandardMaterial({ color: cores[1], roughness: 0.7 });
   const vidro = new THREE.MeshStandardMaterial({ color: '#2b3d4f', roughness: 0.1, metalness: 0.5, emissive: '#ffcf7a', emissiveIntensity: 0 });
-  const madeira = new THREE.MeshStandardMaterial({ color: '#6b4a2e', roughness: 0.7 });
-  const bloco = (mat, w, h, d, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
-  const telhado = (w, d, y, x = 0, z = 0) => {
-    const geo = new THREE.CylinderGeometry(0, Math.SQRT1_2, 1, 4, 1).rotateY(Math.PI / 4);
-    const m = new THREE.Mesh(geo, telha); m.scale.set(w + 0.8, 2.4, d + 0.8); m.position.set(x, y + 1.2, z); m.castShadow = true; g.add(m);
-  };
-  const janelas = (w, d, y, x = 0, z = 0) => { for (const dx of [-w / 3, w / 3]) bloco(vidro, 1.6, 1.3, 0.08, x + dx, y, z + d / 2 + 0.03); };
-  const nivel = c.nivel || 1;
-  const concreto = new THREE.MeshStandardMaterial({ color: '#cfc9bd', roughness: 0.85 });
-  const guarda = new THREE.MeshStandardMaterial({ color: '#9fc0d8', roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.45 });
-  // fachada de prédio: andares com janelas, varandas na frente e laje no topo
-  const predio = (w, d, andares, x, z, comVaranda) => {
-    const h = andares * 3.2;
-    // um bloco só com a fachada pintada (janelas na textura, acendem à noite): leve e sem piscar
-    const { cor, luz } = texturasFachadaCasa();
-    const face = (rx) => {
-      const t = cor.clone(), e = luz.clone(); t.needsUpdate = e.needsUpdate = true;
-      t.repeat.set(Math.max(1, Math.round(rx / 3)), andares); e.repeat.copy(t.repeat);
-      return new THREE.MeshStandardMaterial({ color: cores[0], map: t, emissive: '#ffcf7a', emissiveMap: e, emissiveIntensity: 0, roughness: 0.75 });
-    };
-    const frente = face(w), lado = face(d);
-    luzesCasas.push(frente, lado);
-    const corpo = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [lado, lado, concreto, concreto, frente, frente]);
-    corpo.position.set(x, h / 2, z); corpo.castShadow = corpo.receiveShadow = true; g.add(corpo);
-    bloco(concreto, w + 0.3, 0.35, d + 0.3, x, 3.2, z);                                     // marca do térreo
-    if (comVaranda) for (let a = 1; a < andares; a++) { bloco(concreto, w * 0.8, 0.18, 1.3, x, a * 3.2 + 0.1, z + d / 2 + 0.65); bloco(guarda, w * 0.8, 1.0, 0.06, x, a * 3.2 + 0.7, z + d / 2 + 1.28); }
-    bloco(concreto, w + 0.5, 0.5, d + 0.5, x, h + 0.25, z);
-    return h;
-  };
-  if (nivel >= 3) {
-    if (nivel === 3) {
-      // condomínio: 4 sobradinhos, muro e portaria
-      for (const [dx, dz] of [[-4.6, -4.8], [4.6, -4.8], [-4.6, 2.2], [4.6, 2.2]]) {
-        bloco(parede, 8, 6.2, 5.6, dx, 3.1, dz); telhado(8, 5.6, 6.2, dx, dz); janelas(8, 5.6, 1.8, dx, dz); janelas(8, 5.6, 4.8, dx, dz);
-        bloco(madeira, 1, 2.1, 0.1, dx, 1.05, dz + 2.85);
-      }
-      for (const sx of [-1, 1]) bloco(concreto, 7.5, 1.6, 0.25, sx * 5.6, 0.8, 8.9);
-      bloco(concreto, 0.25, 1.6, 18, -9.2, 0.8, 0); bloco(concreto, 0.25, 1.6, 18, 9.2, 0.8, 0); bloco(concreto, 18.6, 1.6, 0.25, 0, 0.8, -9);
-      bloco(parede, 2.4, 2.6, 2.4, 3, 1.3, 7.4); bloco(vidro, 1.6, 1, 0.08, 3, 1.8, 8.62);
-    } else {
-      const andares = nivel === 4 ? 4 : 12, h = predio(15, 11.5, andares, 0, -1.5, true);
-      // portaria de vidro com marquise
-      bloco(vidro, 4.5, 2.6, 0.1, 0, 1.3, 4.35);
-      bloco(concreto, 7, 0.25, 3, 0, 3, 5.6);
-      if (nivel === 5) {
-        bloco(telha, 15.6, 2.2, 12.1, 0, h + 1.5, -1.5);                                          // coroa colorida
-        const jardim = new THREE.Mesh(new THREE.BoxGeometry(10, 0.3, 7), new THREE.MeshStandardMaterial({ color: '#5b8c3e', roughness: 1 }));
-        jardim.position.set(0, h + 0.65, -1.5); g.add(jardim);
-      } else bloco(new THREE.MeshStandardMaterial({ color: '#6b7075', roughness: 0.6 }), 3, 2, 3, 4, h + 1.5, -4);   // caixa d'água
-    }
-  } else if (c.modelo === 'simples') {
-    bloco(parede, 9, 3.2, 8, 0, 1.6, 0); telhado(9, 8, 3.2); janelas(9, 8, 1.8);
-    bloco(madeira, 1.1, 2.2, 0.1, 0, 1.1, 4.05); bloco(madeira, 9, 0.15, 2.2, 0, 2.9, 5);
-    for (const dx of [-4.2, 4.2]) bloco(madeira, 0.2, 2.8, 0.2, dx, 1.4, 5.9);
-  } else if (c.modelo === 'sobrado') {
-    bloco(parede, 10, 6.4, 9, -1, 3.2, -0.5); telhado(10, 9, 6.4, -1, -0.5); janelas(10, 9, 1.8, -1, -0.5); janelas(10, 9, 5, -1, -0.5);
-    bloco(madeira, 1.2, 2.3, 0.1, -1, 1.15, 4.05);
-    bloco(parede, 5, 3, 6, 6.2, 1.5, 0.5); bloco(new THREE.MeshStandardMaterial({ color: '#5d636b', roughness: 0.6 }), 4, 2.5, 0.1, 6.2, 1.25, 3.55);
-  } else {
-    bloco(parede, 13, 3.6, 9, -1.5, 1.8, -2.5); bloco(parede, 8, 3.6, 7, -4, 5.4, -3.5);
-    bloco(new THREE.MeshStandardMaterial({ color: '#2b2b2b', roughness: 0.5 }), 13.4, 0.3, 9.4, -1.5, 3.7, -2.5);
-    bloco(new THREE.MeshStandardMaterial({ color: '#2b2b2b', roughness: 0.5 }), 8.4, 0.3, 7.4, -4, 7.3, -3.5);
-    for (const dx of [-6, -2.5, 1, 4]) bloco(vidro, 2.6, 2.6, 0.08, dx, 1.8, 2.05);
-    for (const dx of [-6, -2]) bloco(vidro, 2.6, 2.4, 0.08, dx, 5.4, 0.05);
-    const piscina = new THREE.Mesh(new THREE.BoxGeometry(6, 0.1, 3.4), new THREE.MeshStandardMaterial({ color: '#3fa3d6', roughness: 0.1, metalness: 0.2 }));
-    piscina.position.set(4.5, 0.06, 5.2); g.add(piscina);
-    bloco(new THREE.MeshStandardMaterial({ color: '#e8e2d4', roughness: 0.8 }), 7, 0.08, 4.4, 4.5, 0.03, 5.2).position.y = 0.02;
-    for (const dx of [-7.5, 7.5]) { const a = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4, 0), new THREE.MeshStandardMaterial({ color: '#4f7f3a', flatShading: true })); a.position.set(dx, 2.6, 7); a.castShadow = true; g.add(a); bloco(madeira, 0.25, 2, 0.25, dx, 1, 7); }
-  }
-  if (nivel === 2) {
-    // casa ampliada: garagem, muro baixo e jardim
-    bloco(concreto, 18.6, 1.1, 0.2, 0, 0.55, 9);
-    bloco(new THREE.MeshStandardMaterial({ color: '#5d636b', roughness: 0.6 }), 4.4, 2.6, 5.2, -6.6, 1.3, 5.5);
-    const gr = new THREE.Mesh(new THREE.BoxGeometry(8, 0.1, 3), new THREE.MeshStandardMaterial({ color: '#5b8c3e', roughness: 1 })); gr.position.set(3.5, 0.05, 7.2); g.add(gr);
-    g.scale.setScalar(1.06);
-  }
+  // 21q: casa nova (arquitetura.js): fachada em metros reais, telhado cerâmico, muro, varanda, garagem e portaria.
+  // Nível 1 casa · 2 sobrado com garagem · 3 condomínio · 4 residencial · 5 torre
+  arq.casaJogador(g, c.nivel || 1, c.modelo);
   g.position.set(cx, 0.18, cz); g.rotation.y = sz > 0 ? 0 : Math.PI; scene.add(g); g.updateMatrixWorld(true);
   const caixa = new THREE.Box3().setFromObject(g);
   const col = { tipo: 'caixa', x0: caixa.min.x + 0.3, x1: caixa.max.x - 0.3, z0: caixa.min.z + 0.3, z1: caixa.max.z - 0.3 };
@@ -15470,7 +15375,7 @@ function montarAeroportos() {
     muro(T.x0, T.z1 - 0.3, 314, T.z1, vidro); muro(326, T.z1 - 0.3, T.x1, T.z1, vidro);              // entrada pela calçada
     for (const x of [T.x0, T.x1]) caixa(x, H + 0.6, (T.z0 + T.z1) / 2, 0.6, 1.2, T.z1 - T.z0 + 0.6, azul);
     const teto = caixa((T.x0 + T.x1) / 2, H + 0.25, (T.z0 + T.z1) / 2, T.x1 - T.x0 + 2, 0.5, T.z1 - T.z0 + 2, parede); tetosTerminal.push(teto);
-    const term3d = glbEm('aero_terminal', (T.x0 + T.x1) / 2, 0, (T.z0 + T.z1) / 2, T.x1 - T.x0 + 2, 11, T.z1 - T.z0 + 2, 0); if (term3d) tetosTerminal.push(term3d);   // fachada 3D: some quando você entra (aparece o salão)
+    const term3d = arq.terminalAeroporto(scene, (T.x0 + T.x1) / 2, 0.02, (T.z0 + T.z1) / 2, T.x1 - T.x0 + 1, 10, T.z1 - T.z0 + 1); tetosTerminal.push(term3d);   // 21q: fachada de vidro (some quando você entra)   // fachada 3D: some quando você entra (aparece o salão)
     const faixaTeto = caixa((T.x0 + T.x1) / 2, H + 0.7, T.z1 + 0.6, T.x1 - T.x0 + 2, 0.8, 0.3, azul); tetosTerminal.push(faixaTeto);
     const nomeT = rotuloSimples('✈️ AEROPORTO DA METRÓPOLE', 16); nomeT.position.set(320, H + 5.5, T.z1 + 1); scene.add(nomeT);
     caixa(346, 0.55, -702.2, 12, 1.1, 1.2, azul, true);   // balcão
@@ -15484,12 +15389,12 @@ function montarAeroportos() {
     for (const x of [285, 330]) { caixa(x, 4, -717.5, 3, 2.6, 11, metal); caixa(x, 1.4, -721, 0.5, 2.8, 0.5, metal, true); }
     for (const [o, t] of [[a.balcao, '🎫 Passagens'], [a.portao, '✈️ Embarque · Portão 1'], [a.torre, '🗼 Torre de controle'], [a.hangar, '🛩️ Hangar dos pilotos']]) { const r = rotuloSimples(t, 4.4); r.position.set(o.x, 3.4, o.z); scene.add(r); }
     // torre de controle: base, cabine de vidro, teto e farol giratório
-    const torre3d = glbEm('aero_torre', 405, 0, -701, 11, 11 * 2.519, 11, Math.PI);   // modelo 3D (porta para a rua)
+    const torre3d = arq.torreControle(scene, 405, 0.02, -701, 27.1);   // 21q: torre feita por código
     if (torre3d) mundo.addCol({ tipo: 'caixa', x0: 402, x1: 408, z0: -704, z1: -698 });
     else { caixa(405, 13, -701, 6, 26, 6, parede, true); caixa(405, 28, -701, 10, 4, 10, vidro); caixa(405, 30.3, -701, 11, 0.6, 11, azul); caixa(405, 32.5, -701, 0.2, 4, 0.2, metal); }
-    farolTorre = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 0.5), new THREE.MeshStandardMaterial({ color: '#d8ffd8', emissive: '#7dff8a', emissiveIntensity: 0.5 })); farolTorre.position.set(405, torre3d ? 11 * 2.519 + 0.6 : 31.2, -701); scene.add(farolTorre);
+    farolTorre = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 0.5), new THREE.MeshStandardMaterial({ color: '#d8ffd8', emissive: '#7dff8a', emissiveIntensity: 0.5 })); farolTorre.position.set(405, torre3d ? 27.5 : 31.2, -701); scene.add(farolTorre);
     // hangar com o portão aberto para o pátio
-    if (glbEm('aero_hangar', 465, 0, -704, 70, 16, 24, Math.PI)) mundo.addCol({ tipo: 'caixa', x0: 430, x1: 500, z0: -716, z1: -692 });   // hangar 3D com o portão para o pátio
+    if (arq.hangarArco(scene, 465, 0.02, -704, 70, 24, 16, Math.PI)) { mundo.addCol({ tipo: 'caixa', x0: 430, x1: 500, z0: -693, z1: -692 }); mundo.addCol({ tipo: 'caixa', x0: 429.5, x1: 431, z0: -716, z1: -692 }); mundo.addCol({ tipo: 'caixa', x0: 499, x1: 500.5, z0: -716, z1: -692 }); }   // 21q: hangar em arco aberto para o pátio (só o fundo segura)
     else { caixa(465, 6.5, -704, 70, 13, 24, metal, true); const porta = new THREE.Mesh(new THREE.PlaneGeometry(50, 11), M('#1b1e22')); porta.position.set(465, 5.5, -716.05); porta.rotation.y = Math.PI; scene.add(porta); }
   }
   // luzes da pista (amarelas) e da taxiway (azuis): acendem à noite
@@ -17463,6 +17368,15 @@ function predioGLB(nome, x, z, maior, giro = 0, { cortaBase = 0, chaoBase = cort
 function montarQuartelExtras() {
   const Q = mundo.QUARTEL, pz = Q.portao.z, g = new THREE.Group(); scene.add(g);
   const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, ...o });
+  { // 21q: arame de concertina em cima do muro e mais dois mastros no pátio (Brasil, Exército e o estado)
+    const PS = mundo.PASSAGEM_BASES;
+    arq.concertina(g, [[Q.x0, Q.z0, Q.x1, Q.z0], [Q.x0, Q.z1, Q.x1, Q.z1], [Q.x1, Q.z0, Q.x1, PS.z0], [Q.x1, PS.z1, Q.x1, Q.z1], [Q.x0, Q.z0, Q.x0, pz - 6], [Q.x0, pz + 6, Q.x0, Q.z1]], 3.0);
+    for (const [dz, cor] of [[-4, '#c9a227'], [4, '#2a4b8a']]) {
+      const px = Q.patio.x + 22, mz = Q.patio.z + dz;
+      arq.cil(g, arq.std('#d8d8d0', 0.5, 0.4), px, 0, mz, 0.12, 10, 8);
+      const b = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.6), new THREE.MeshStandardMaterial({ color: cor, side: THREE.DoubleSide, roughness: 0.8 })); b.position.set(px, 9.1, mz + 1.25); b.rotation.y = Math.PI / 2; g.add(b);
+      colisores.push({ tipo: 'circ', x: px, z: mz, r: 0.25 });
+    } }
   const portao = { tipo: 'caixa', x0: Q.x0 - 0.6, x1: Q.x0 + 0.6, z0: pz - 6, z1: pz + 6 }; colisores.push(portao);
   const braco = cancelaEm(g, Q.x0 - 1, pz - 6, 12, 'z');
   // guarita de alistamento (fora do portão, ao lado da estrada)
@@ -17524,15 +17438,17 @@ function montarBaseAerea() {
   // hangares abertos para o pátio (um para cada caça) e a torre
   // o hangar principal (o maior) é o modelo 3D da Aeronáutica (hangar e torre, sem a laje branca), portão para a pista;
   // as paredes daqui continuam como parede sólida, só não aparecem
-  const hangar3d = predioGLB('predio_aeronautica', 455, 1005, 40, -Math.PI / 2, { cortaBase: 0.05, nucleo: 0 });
+  // 21q: os três hangares são em arco (chapa metálica), abertos para o pátio; as paredes daqui seguram mas não aparecem
+  for (const [hx, w] of [[350, 26], [395, 28], [455, 40]]) arq.hangarArco(g, hx, 0.02, 1005, w, 30, w === 40 ? 14 : 11);
   for (const [hx, w] of [[350, 26], [395, 28], [455, 40]]) {
-    const z0 = 990, d = 30, HH = 10, esconde = hx === 455 && hangar3d;
+    const z0 = 990, d = 30, HH = 10, esconde = true;
     const ps = [caixa(hx, HH / 2, z0, w, HH, 0.5, chapa, true), caixa(hx - w / 2, HH / 2, z0 + d / 2, 0.5, HH, d, chapa, true), caixa(hx + w / 2, HH / 2, z0 + d / 2, 0.5, HH, d, chapa, true),
       caixa(hx, HH + 0.3, z0 + d / 2, w + 1, 0.6, d + 1, M('#55595e'))];
-    if (esconde) { for (const q of ps) q.visible = false; continue; }
+    if (esconde) for (const q of ps) q.visible = false;
     plano(hx, z0 + d / 2, w, d, M('#5a5d62'), 2);
   }
-  caixa(560, 9, 1005, 6, 18, 6, M('#d9d4c8'), true); caixa(560, 19.5, 1005, 9, 3, 9, M('#2a3a4a', { roughness: 0.15, metalness: 0.6, emissive: '#10202c' })); caixa(560, 21.3, 1005, 10, 0.6, 10, M('#4a4f55'));
+  arq.torreControle(g, 560, 0.02, 1005, 22); colisores.push({ tipo: 'circ', x: 560, z: 1005, r: 2.7 });
+  arq.predioBase(g, 525, 0.02, 1000, 20, 6.6, 10, { estilo: 'militar', cor: '#ece6d6' }); colisores.push({ tipo: 'caixa', x0: 515, x1: 535, z0: 995, z1: 1005 });   // prédio de apoio
   const pl2 = textoSprite('Torre · Base Aérea', { escala: 0.55, fundo: 'rgba(30,60,110,.94)' }); pl2.position.set(560, 23.5, 1005); g.add(pl2);
   // plataformas de vigia
   for (const [x, z] of [[B.x0 + 6, B.z0 + 6], [B.x1 - 6, B.z0 + 6], [B.x0 + 6, B.z1 - 6], [B.x1 - 6, B.z1 - 6]]) caixa(x, 2, z, 3.2, 4, 3.2, M('#6b6f5e'), true);
@@ -18396,9 +18312,12 @@ function montarBaseNaval() {
   const braco = cancelaEm(g, gx - 8, N.z0 - 1, 16, 'x', '#2c5fd3');
   const pl = textoSprite('⚓ BASE NAVAL · ACESSO RESTRITO ÀS FORÇAS ARMADAS', { escala: 0.75, fundo: 'rgba(24,52,96,.95)' }); pl.position.set(gx, 6.5, N.z0 - 2); g.add(pl);
   // comando naval com a central de mísseis, alojamento e cais com dois píeres até os navios
-  if (!predioGLB('predio_marinha', 700, 1030, 40, Math.PI / 2, { cortaBase: 0.124, chaoBase: 0.1, nucleo: 0.55, soPredio: true })) { caixa(700, 4, 1030, 30, 8, 18, M('#d8d3c4'), true); caixa(700, 8.3, 1030, 31, 0.6, 19, azul); }   // comando naval: modelo 3D sem o cais e a água do modelo
-  const pl2 = textoSprite('⚓ Comando Naval · 🚀 Central de Mísseis', { escala: 0.55, fundo: 'rgba(24,52,96,.95)' }); pl2.position.set(700, 10.5, 1030); g.add(pl2);
-  caixa(820, 3, 1035, 36, 6, 14, M('#c9c3b2'), true);
+  // 21q: comando naval feito por código: prédio branco com barrado e platibanda azul-marinho, de frente para o portão
+  arq.predioBase(g, 700, 0.02, 1030, 34, 10, 16, { estilo: 'naval', cor: '#f4f4f0', telha: false, faixa: '#1f3d7a', rot: Math.PI });
+  colisores.push({ tipo: 'caixa', x0: 683, x1: 717, z0: 1022, z1: 1038 });
+  arq.farol(g, 845, 0.7, 1164, 16); colisores.push({ tipo: 'circ', x: 845, z: 1164, r: 2.3 });   // comando naval: modelo 3D sem o cais e a água do modelo
+  const pl2 = textoSprite('⚓ Comando Naval · 🚀 Central de Mísseis', { escala: 0.55, fundo: 'rgba(24,52,96,.95)' }); pl2.position.set(700, 13, 1030); g.add(pl2);
+  arq.predioBase(g, 820, 0.02, 1035, 36, 6.6, 14, { estilo: 'naval', cor: '#f4f4f0', telha: false, faixa: '#1f3d7a', rot: Math.PI }); colisores.push({ tipo: 'caixa', x0: 802, x1: 838, z0: 1028, z1: 1042 });   // alojamento
   caixa((N.x0 + N.x1) / 2, 0.4, 1112, N.x1 - N.x0, 0.8, 4, concreto);
   for (const x of [675, 760, 845]) caixa(x, 0.35, 1140, 8, 0.7, 56, concreto);
   // pisa em cima do cais e dos píeres (antes os pés ficavam na altura do mar, "afundando" no concreto)

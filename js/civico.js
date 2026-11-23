@@ -1,5 +1,6 @@
 // Prefeitura, concessionária, outdoors e modelos de carro (tudo feito por código).
 import * as THREE from 'three';
+import * as arq from './arquitetura.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { criarOvni } from './ovni.js';
 import { criarJato, JATOS } from './jato.js';
@@ -60,16 +61,12 @@ export function montarQuartelExercito() {
   b(escuro, W + 0.6, 0.5, D + 0.6, cx, H + 0.25, cz, teto); b(oliva, W - 6, 1.2, D - 5, cx, H + 1.1, cz, teto);
   EXERCITO.teto = teto;
   // QG do Exército em 3D (predio_exercito.glb) por fora: as paredes daqui só aparecem quando você entra (o modelo some)
-  { const glb = ctx.modelo?.('predio_exercito');
-    if (glb) {
-      const paredes = g.children.slice(0, g.children.indexOf(teto));
-      const casca = new THREE.Group(); casca.position.set(cx, 0.15, cz); casca.rotation.y = -Math.PI / 2;   // modelo com a frente em +x: vira para a porta (+z)
-      const m = glb.clone(true); casca.add(m); m.updateMatrixWorld(true);
-      const bb = new THREE.Box3().setFromObject(m), tam = bb.getSize(new THREE.Vector3()), k = (W + 2) / Math.max(tam.x, tam.z);
-      m.scale.setScalar(k); m.position.set(-(bb.min.x + bb.max.x) / 2 * k, -bb.min.y * k, -(bb.min.z + bb.max.z) / 2 * k);
-      m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-      ctx.scene.add(casca); EXERCITO.casca = { glb: casca, paredes };
-    } }
+  // 21q: por fora, o Comando é feito por código (fachada militar creme com barrado verde-oliva e telhado cerâmico);
+  // as paredes daqui só aparecem quando você entra (a casca some)
+  { const paredes = g.children.slice(0, g.children.indexOf(teto)).filter((o) => o.position.z < C.z1 + 0.5);   // a marquise e as colunas da entrada ficam
+    const casca = arq.predioBase(ctx.scene, cx, 0.15, cz, W + 0.2, H, D + 0.2, { estilo: 'militar', cor: '#e8dec3' });
+    for (const o of paredes) o.visible = false;
+    EXERCITO.casca = { glb: casca, paredes }; }
   // interior
   const piso = new THREE.Mesh(new THREE.PlaneGeometry(W - 2 * e, D - 2 * e).rotateX(-Math.PI / 2), mat('#8d8a7a', { roughness: 0.7 })); piso.position.set(cx, 0.14, cz); piso.receiveShadow = true; g.add(piso);
   const tapete = new THREE.Mesh(new THREE.PlaneGeometry(3, 10).rotateX(-Math.PI / 2), mat('#7a1f22', { roughness: 1 })); tapete.position.set(C.porta.x, 0.15, C.z1 - 6); g.add(tapete);

@@ -5,6 +5,9 @@
 // O lote tem 19 x 19 m; a frente (rua) fica em +Z e o pátio dos caminhões atrás (−Z).
 // Quando existe o modelo 3D da fase (empresa_f1..f3), ele substitui o prédio; docas, pátio e heliporto continuam por código.
 import * as THREE from 'three';
+import * as arq from './arquitetura.js';
+
+const SEDE_GLB = false;   // 21q: as sedes são feitas por código com a fachada nova (galpão de telha metálica + escritório)
 
 const XL = -9.3, XR = 6.1;            // largura útil (à direita fica o corredor dos caminhões)
 const FRENTE = 9.1;
@@ -53,6 +56,19 @@ function materiais() {
     fumaca: new THREE.SpriteMaterial({ map: fumaca, transparent: true, depthWrite: false }),
   };
   return M;
+}
+// níveis 1–4: galpão pequeno de telha metálica com o escritório na frente (frente +Z, base y = 0, centrado)
+export function predioPequeno({ nivel = 1, fabrica = true, id = 0, nome = '' }) {
+  materiais(); arq.novoCache();
+  const g = new THREE.Group(), cor = corDaEmpresa(id), n = Math.max(1, Math.min(4, nivel));
+  const gw = 11 + n * 0.6, gh = 5.6 + n * 0.25, gd = 9;
+  arq.bloco(g, arq.matFachada('metal', ['#a6aab0', '#8fa0ad', '#9aa59a', '#b9b2a2'][id % 4], { porta: !fabrica, par: { t: 3.8, b: 4.2, p: 0.5 } }), 0, 0, -1.5, gw, gh, gd);
+  arq.telhadoMetal(g, 0, gh, -1.5, gw, gd);
+  const ew = 5.6 + n * 0.3, eh = n >= 3 ? 6.6 : 3.6;
+  arq.bloco(g, arq.matFachada('predio', n >= 3 ? '#d9dee3' : '#e6dccb', { loja: 0, par: { a: 3.1, b: 2.6, p: 0.4 } }), -gw / 2 + ew / 2, 0, 4.4, ew, eh, 3.2);
+  arq.bloco(g, arq.std('#2a2f36'), -gw / 2 + ew / 2, eh, 4.4, ew + 0.4, 0.35, 3.6);
+  caixa(g, placaNome(nome || 'Empresa', cor), ew * 0.9, 0.9, 0.12, -gw / 2 + ew / 2, eh + 0.85, 6.1);
+  return g;
 }
 export function corDaEmpresa(id) { return new THREE.Color().setHSL(((id * 67) % 360) / 360, 0.55, 0.45); }
 
@@ -103,7 +119,9 @@ export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0, nom
   const zw = FRENTE - D;                         // parede de trás (docas)
   const anima = [];
   const tr = !fabrica && ctx.modelo?.(`transp_f${f}`), ab = fabrica && f === 1 && ctx.modelo?.('fabrica_aberta');   // fábrica 5–9: frente aberta com a produção à mostra
-  const glb = f >= 1 && (tr || ab || ctx.modelo?.(`empresa_f${f}`));
+  const glb = SEDE_GLB && f >= 1 && (tr || ab || ctx.modelo?.(`empresa_f${f}`));
+  arq.novoCache();
+  const MG = arq.matFachada('metal', ['#a6aab0', '#8fa0ad', '#9aa59a', '#b9b2a2'][id % 4], { porta: false, par: { t: 4.2, b: 3.0 } });
   // sede nível 15 (modelo novo, 18q): galpão com 3 portas de doca no fundo e a torre de vidro; mais fundo que os outros
   // (proporção do modelo) e as docas são as portas do próprio modelo
   if (glb && f === 3 && !tr && !ab) {
@@ -122,10 +140,10 @@ export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0, nom
   if (glb) return construirGlb({ g, glb, f, n, W, D, cx, zw, x, z, cor, helis, anima, alt: ab ? 0.585 : (tr ? ALT_TR : ALT_GLB)[f], nome });
   // galpão: chão, paredes de zinco, telhado e faixa da cor da empresa
   caixa(g, M.piso, W, 0.1, D, cx, 0.05, zw + D / 2);
-  caixa(g, M.zinco, W, H, 0.25, cx, H / 2, zw + 0.12, 3);                          // fundo
-  caixa(g, M.zinco, 0.25, H, D, XL + 0.12, H / 2, zw + D / 2, 3);                  // lado esquerdo
-  caixa(g, M.zinco, 0.25, H, D, XR - 0.12, H / 2, zw + D / 2, 3);                  // lado direito
-  caixa(g, M.concreto, W + 0.4, 0.35, D + 0.4, cx, H + 0.17, zw + D / 2);           // telhado
+  arq.bloco(g, MG, cx, 0, zw + 0.12, W, H, 0.25);                                  // fundo (telha metálica, faixa de janelas no alto)
+  arq.bloco(g, MG, XL + 0.12, 0, zw + D / 2, 0.25, H, D);                          // lado esquerdo
+  arq.bloco(g, MG, XR - 0.12, 0, zw + D / 2, 0.25, H, D);                          // lado direito
+  arq.bloco(g, MG, cx, H, zw + D / 2, W + 0.4, 0.35, D + 0.4);                      // telhado de telha metálica
   const faixaMat = new THREE.MeshStandardMaterial({ color: cor, roughness: 0.5, metalness: 0.2 });
   caixa(g, faixaMat, W + 0.45, 0.6, D + 0.45, cx, H - 0.6, zw + D / 2);
   if (fabrica) {
@@ -142,9 +160,8 @@ export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0, nom
     for (let k = 0; k < 3; k++) caixa(g, M.luz, 2.2, 0.08, 0.3, XL + 3 + k * 4.5, H - 0.25, FRENTE - 3);
   } else {
     // transportadora: frente fechada com janelas do escritório e portão
-    caixa(g, M.zinco, W, H, 0.25, cx, H / 2, FRENTE - 0.12, 3);
-    for (let k = 0; k < 4; k++) caixa(g, M.vidro, 2.2, 1.4, 0.1, XL + 2 + k * 3.6, H - 2.4, FRENTE + 0.02);
-    caixa(g, M.porta, 4, 3.4, 0.1, cx + 3, 1.7, FRENTE + 0.02);
+    arq.bloco(g, arq.matFachada('metal', '#c9ccd0', { porta: true, par: { t: 4.2, b: 4.6, p: 0.5 } }), cx + 2.6, 0, FRENTE - 0.25, W - 5.2, H, 0.25);   // portas de enrolar
+    arq.bloco(g, arq.matFachada('predio', '#e6dccb', { loja: 0, par: { a: 3.2, b: 2.6, p: 0.4 } }), XL + 2.6, 0, FRENTE - 1.6, 5.2, H, 3.2);       // escritório da frente
   }
   // docas no fundo: plataforma, porta de enrolar, borrachas, faixa e luz
   const docas = [];
@@ -161,7 +178,7 @@ export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0, nom
   if (f >= 2) {
     // escritório de vidro no telhado
     const ow = f === 3 ? 0 : 9.5;
-    if (ow) { caixa(g, M.vidro, ow, 5, 4.2, XL + 0.3 + ow / 2, H + 0.35 + 2.5, FRENTE - 2.3, 3); caixa(g, faixaMat, ow + 0.2, 0.4, 4.4, XL + 0.3 + ow / 2, H + 5.05, FRENTE - 2.3); }
+    if (ow) { arq.bloco(g, arq.matFachada('vidro', '#5c6b78', { par: { a: 2.5 } }), XL + 0.3 + ow / 2, H + 0.35, FRENTE - 2.3, ow, 5, 4.2); caixa(g, faixaMat, ow + 0.2, 0.4, 4.4, XL + 0.3 + ow / 2, H + 5.05, FRENTE - 2.3); }
     // com heliporto, as chaminés vão para o lado esquerdo do telhado
     if (fabrica) for (let k = 0; k < (f === 3 ? 3 : 2); k++) anima.push(chamine(g, helis ? XL + 1.6 + k * 2.2 : XR - 1.6 - k * 2.2, zw + 1.8, H + 0.35, 6 + k * 1.5));
   }
@@ -169,8 +186,7 @@ export function construir({ x, z, nivel, fabrica, id, corProduto, helis = 0, nom
   if (f === 3) {
     // torre de vidro de 34 m sobre o galpão, com coroa colorida, heliponto e antena
     const tw = 8.4, th = 34, tx = XL + 0.2 + tw / 2, tz = FRENTE - tw / 2 - 0.1, b = H + 0.35;
-    caixa(g, M.vidro, tw, th, tw, tx, b + th / 2, tz, 3);
-    for (let y = b + 3.5; y < b + th; y += 3.5) caixa(g, M.escuro, tw + 0.08, 0.12, tw + 0.08, tx, y, tz);
+    arq.bloco(g, arq.matFachada('vidro', '#4f6170', { par: { a: 3.5 } }), tx, b, tz, tw, th, tw);
     caixa(g, faixaMat, tw + 0.3, 2.2, tw + 0.3, tx, b + th - 1, tz);
     const heli = new THREE.Mesh(new THREE.PlaneGeometry(tw - 0.6, tw - 0.6).rotateX(-Math.PI / 2), M.heli); heli.position.set(tx, b + th + 0.06, tz); g.add(heli);
     const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 7, 6), M.metal); ant.position.set(tx + tw / 2 - 0.6, b + th + 3.5, tz - tw / 2 + 0.6); g.add(ant);

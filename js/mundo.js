@@ -2,6 +2,7 @@
 // Tudo é gerado por código e desenhado com InstancedMesh para rodar leve no celular.
 import * as THREE from 'three';
 import { CIDADE } from './config.js';
+import { materialFachada, materialTelhaCidade, ligarNoite } from './arquitetura.js';
 
 const { quarteiroes: N, quarteirao: QB, rua: RW, calcada: CW } = CIDADE;
 export const PASSO = QB + RW;
@@ -297,6 +298,7 @@ uniform float uNoite; uniform sampler2D uTerreo;`)
 let MAT = null;
 function criarMateriais() {
   const T = ctx.texturaCanvas, R = ctx.ruido;
+  ligarNoite(UNI.uNoite);
   const fachada = T(128, (g, t) => {
     g.fillStyle = '#f3efe6'; g.fillRect(0, 0, t, t); R(g, t, 1400, 0.05, 1.2);
     const gx = t * 0.2, gy = t * 0.22, gw = t * 0.6, gh = t * 0.52;
@@ -335,12 +337,12 @@ function criarMateriais() {
     g.fillStyle = '#41454d'; g.fillRect(0, 0, t, t); R(g, t, 9000, 0.06, 1.6);
   });
   MAT = {
-    fachada: materialMundo({ map: fachada, roughness: 0.85, metalness: 0.05 }, 'fachada'),
+    fachada: materialFachada({ attr: true }),   // 21q: fachada desenhada em metros reais (arquitetura.js)
     calcada: materialMundo({ map: calcada, roughness: 0.92 }, 'topo', [3.2, 3.2]),
     grama: materialMundo({ map: grama, roughness: 1 }, 'topo', [9, 9]),
     campo: materialMundo({ map: campo, roughness: 1 }, 'topo', [16, 16]),
     asfalto: materialMundo({ map: asfalto, roughness: 0.88 }, 'topo', [7, 7]),
-    telha: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8 }),
+    telha: materialTelhaCidade(),
     detalhe: new THREE.MeshStandardMaterial({ color: '#9da3a8', roughness: 0.7, metalness: 0.2 }),
     tronco: new THREE.MeshStandardMaterial({ color: '#6b4a2e', roughness: 0.9 }),
     copa: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85, flatShading: true, vertexColors: true }),
@@ -431,9 +433,9 @@ const CORES_PREDIO = ['#efe6d2', '#e4cfb0', '#d9b48f', '#c98f6a', '#bfc5c9', '#a
 const CORES_CASA = ['#f2e3c6', '#e9c9a8', '#cfe0e8', '#e7d2e0', '#f4efe4', '#d8e4c4', '#f0d39b'];
 const CORES_TELHA = ['#a5502f', '#8c3f2a', '#9c5a3c', '#6b5145', '#4f5a63'];
 
-export function predio(x, z, w, d, h, { y = 0.18, cor = escolher(CORES_PREDIO), colide = true, det = true, loja = true } = {}) {
+export function predio(x, z, w, d, h, { y = 0.18, cor = escolher(CORES_PREDIO), colide = true, det = true, loja = true, estilo } = {}) {
   const i = edificios.length;
-  edificios.push({ x, z, w, d, h, y, cor, tipo: 'predio', det: [], loja });
+  edificios.push({ x, z, w, d, h, y, cor, tipo: 'predio', det: [], loja, estilo });
   if (colide) addCol({ tipo: 'caixa', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 });
   for (const k of chaves(x - w / 2, z - d / 2, x + w / 2, z + d / 2)) { if (!gradeEd.has(k)) gradeEd.set(k, []); gradeEd.get(k).push(i); }
   if (det && w > 8) {
@@ -745,7 +747,7 @@ function gerarFavelas() {
       { const meia = Math.abs(Math.sin(rumo)) > 0.5 ? w / 2 : d / 2, px = x + Math.sin(rumo) * (meia + 0.8), pz = z + Math.cos(rumo) * (meia + 0.8);
         const fav = f === F.serra ? 'serra' : 'porto', nfav = CASAS_FAVELA.filter((q) => q.favela === fav).length + 1;
         CASAS_FAVELA.push({ id: 5000 + CASAS_FAVELA.length, x: Math.round(px * 10) / 10, z: Math.round(pz * 10) / 10, favela: fav, rotulo: `${fav === 'serra' ? 'Morro da Serra' : 'Morro do Porto'} · casa ${nfav}` }); }
-      if (rf() < 0.45) { edificios[i].det.push(detalhes.length); detalhes.push({ ed: i, dx: (rf() - 0.5) * (w - 1.6), dz: (rf() - 0.5) * (d - 1.6), w: 1.2, h: 1, d: 1.2 }); }   // caixa d'água
+      if (rf() < 0.45) edificios[i].caixa = { dx: (rf() - 0.5) * (w - 1.6), dz: (rf() - 0.5) * (d - 1.6) };   // caixa d'água azul (montarExtrasPredios)
     }
     extras.push({ x0: f.x0, x1: f.x1, z0: f.z0, z1: f.z1, cor: '#a88a68' });
   }
@@ -774,12 +776,7 @@ function montarFavelasMalhas() {
     }
     if (idx.length) janelasDe.set(i, idx);
   });
-  if (lista.length) {
-    matJanelas = new THREE.MeshBasicMaterial({ color: '#ffd58a', transparent: true, opacity: 0, depthWrite: false, toneMapped: false });
-    malhaJanelas = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.85, 0.85), matJanelas, lista.length);
-    lista.forEach(([x, y, z, r], k) => { _q.setFromAxisAngle(_v.set(0, 1, 0), r); _m.compose(_v.set(x, y, z), _q, _e.set(1, 1, 1)); malhaJanelas.setMatrixAt(k, _m); });
-    malhaJanelas.visible = false; malhaJanelas.frustumCulled = false; ctx.scene.add(malhaJanelas);
-  }
+  // 21q: as janelas da favela acendem na própria fachada (arquitetura.js); os quadros de luz soltos saíram
   const geo = new THREE.PlaneGeometry(200, 164, 80, 66).rotateX(-Math.PI / 2), pp = geo.attributes.position;
   for (let k = 0; k < pp.count; k++) { const x = pp.getX(k) + 1000, z = pp.getZ(k) + 1030; pp.setY(k, morroPorto(x, z) + 0.05); }
   geo.computeVertexNormals();
@@ -822,8 +819,8 @@ function montarQuartel() {
     extrasMesh.push({ geo: [4, 0.3, 4], cor: '#3b4430', pos: [x, 10.35, z] });
   }
   // prédios fechados: alojamento e paiol (o comando, com interior, e a garagem aberta ficam no civico.js)
-  predio(cx + 26, Q.z1 - 15, 34, 16, 7, { y: 0.12, cor: '#9aa070', loja: false });          // alojamento
-  predio(Q.x0 + 13, Q.z0 + 11, 16, 12, 5, { y: 0.12, cor: '#8f9470', loja: false, det: false });     // paiol
+  predio(cx + 26, Q.z1 - 15, 34, 16, 6.6, { y: 0.12, cor: '#e8dec3', loja: false, estilo: 4 });          // alojamento
+  predio(Q.x0 + 13, Q.z0 + 11, 16, 12, 5, { y: 0.12, cor: '#d9d0b4', loja: false, det: false, estilo: 4 });     // paiol
   // pátio de formatura e mastro
   calcadas.push([Q.patio.x, Q.patio.z, 40, 34, 0.14]);
   extrasMesh.push({ geo: [0.25, 12, 0.25], cor: '#d8d8d0', pos: [Q.patio.x + 22, 6, Q.patio.z] });
@@ -860,6 +857,97 @@ function matrizDet(dt, visivel = true) {
   _m.compose(_v.set(e.x + dt.dx, e.y + e.h, e.z + dt.dz), _q.identity(), _e.set(dt.w, dt.h, dt.d)); return _m;
 }
 
+// ---------------------------------------------------------------- fachada nova (21q): estilo, frente e detalhes
+const hashE = (e, k = 0) => { const v = Math.sin(e.x * 12.9898 + e.z * 78.233 + k * 37.719) * 43758.5453; return v - Math.floor(v); };   // sorteio fixo (não mexe no rnd do mapa)
+function estiloDe(e) {
+  if (e.estilo !== undefined) return e.estilo;
+  if (e.tipo === 'favela') return 2;
+  if (e.tipo === 'casa') return 1;
+  if (e.loja === false && e.w > 30) return 3;                       // galpão
+  if (e.h >= 36 && hashE(e, 1) < 0.45) return 5;                     // torre de vidro
+  return 0;
+}
+function frenteDe(e) {
+  const r = rumo3d(e), c = Math.cos(r), sn = Math.sin(r);
+  return Math.abs(c) >= Math.abs(sn) ? (c > 0 ? 0 : 1) : (sn > 0 ? 2 : 3);
+}
+function corDe(e) {
+  if (e.est === 5) return ['#5c6b78', '#4f6170', '#66747e', '#3f5566'][Math.floor(hashE(e, 2) * 4)];
+  if (e.est === 3) return ['#a6aab0', '#8fa0ad', '#b9b2a2', '#9aa59a'][Math.floor(hashE(e, 2) * 4)];
+  return e.cor;
+}
+// extras (só no gráfico Alto/Ultra): cornija e marquise dos prédios, ar-condicionado nas janelas, laje, caixa d'água e
+// ferro de espera na favela e os fios entre as casas. Prédio cortado/removido esconde os dele.
+let extrasPred = null;
+function montarExtrasPredios(scene) {
+  const cx = [], cl = [], fios = [];   // [ed, x, y, z, w, h, d, cor] · [ed, x, y, z, r, h, cor]
+  edificios.forEach((e, i) => {
+    if (e.y === 0 || e.removido) return;   // horizonte: longe demais
+    const top = e.y + e.h, f = frenteDe(e), eixoX = f < 2, larg = eixoX ? e.w : e.d;
+    const nx = f === 2 ? 1 : f === 3 ? -1 : 0, nz = f === 0 ? 1 : f === 1 ? -1 : 0, prof = eixoX ? e.d / 2 : e.w / 2;
+    const naFrente = (u, y, w, h, d, cor, sai = 0) => {   // u: metros ao longo da frente (0 no meio); sai: quanto sai da parede
+      const px = e.x + nx * (prof + sai + d / 2) + (eixoX ? u : 0), pz = e.z + nz * (prof + sai + d / 2) + (eixoX ? 0 : u);
+      cx.push([i, px, y, pz, eixoX ? w : d, h, eixoX ? d : w, cor]);
+    };
+    if (e.est === 0 && e.h > 6) {
+      cx.push([i, e.x, top - 0.45, e.z, e.w + 0.5, 0.45, e.d + 0.5, '#cfc8ba']);                      // cornija
+      if (e.tipo === 'predio' && e.loja !== false) naFrente(0, e.y + 3.42, larg * 0.92, 0.18, 1.3, '#3a3f46');   // marquise
+      // ar-condicionado embaixo de algumas janelas da frente
+      const bay = 2.7, pil = 1.3, nb = Math.max(1, Math.floor((larg - 2 * pil) / bay)), sobra = (larg - nb * bay) / 2;
+      const andares = Math.floor((e.h - 4.6 - 0.9) / 3.3);
+      for (let a = 0; a < andares; a++) for (let b = 0; b < nb; b++) {
+        if (hashE(e, 10 + a * 31 + b) > 0.16) continue;
+        naFrente(sobra + (b + 0.5) * bay - larg / 2, e.y + 4.6 + a * 3.3 + 0.25, 0.8, 0.5, 0.45, '#e4e4e0');
+      }
+    } else if (e.est === 5) {
+      cx.push([i, e.x, top, e.z, e.w * 0.55, 3.2, e.d * 0.55, '#2b3138']);                             // casa de máquinas recuada
+      naFrente(0, e.y + 4.2, larg * 0.5, 0.25, 2.2, '#2b3138');                                         // marquise da portaria
+    } else if (e.est === 2) {
+      cx.push([i, e.x, top, e.z, e.w + 0.35, 0.22, e.d + 0.35, '#9a9890']);                            // laje
+      if (e.caixa) { cl.push([i, e.x + e.caixa.dx, top + 0.22, e.z + e.caixa.dz, 0.72, 1.0, '#2d6fb5']); cl.push([i, e.x + e.caixa.dx, top + 1.22, e.z + e.caixa.dz, 0.8, 0.1, '#2d6fb5']); }
+      if (hashE(e, 3) < 0.6) for (let k = 0; k < 4; k++) naFrente(-larg / 2 + 0.3 + k * (larg - 0.6) / 3, top + 0.22, 0.06, 0.9, 0.06, '#5b4a3a', -0.35);   // ferro de espera
+      fios.push([i, e.x + nx * prof - (eixoX ? larg / 2 - 0.3 : 0), top - 0.4, e.z + nz * prof - (eixoX ? 0 : larg / 2 - 0.3)]);
+    } else if (e.est === 4 && e.h > 4) {
+      cx.push([i, e.x, top - 0.1, e.z, e.w + 0.6, 0.35, e.d + 0.6, '#5d6b44']);                       // beiral verde-oliva
+    }
+  });
+  const mk = (geo, lista, idx) => {
+    if (!lista.length) return null;
+    const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.7, metalness: 0.1 }), lista.length);
+    const por = new Map(), mats = [];
+    lista.forEach((l, k) => {
+      if (idx === 'cx') _m.compose(_v.set(l[1], l[2], l[3]), _q.identity(), _e.set(l[4], l[5], l[6])); else _m.compose(_v.set(l[1], l[2], l[3]), _q.identity(), _e.set(l[4], l[5], l[4]));
+      im.setMatrixAt(k, _m); mats.push(_m.clone()); im.setColorAt(k, _c.set(l[idx === 'cx' ? 7 : 6]));
+      if (!por.has(l[0])) por.set(l[0], []); por.get(l[0]).push(k);
+    });
+    im.castShadow = true; im.receiveShadow = true; im.visible = false; scene.add(im);
+    return { im, por, mats };
+  };
+  const grupos = [mk(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), cx, 'cx'), mk(new THREE.CylinderGeometry(1, 1, 1, 12).translate(0, 0.5, 0), cl, 'cl')].filter(Boolean);
+  // fios (gatos) entre casas vizinhas da favela, com barriga
+  let linhas = null;
+  if (fios.length) {
+    const p = [];
+    for (let a = 0; a < fios.length; a++) for (let b = a + 1; b < Math.min(fios.length, a + 2); b++) {
+      const A = fios[a], B = fios[b], d = Math.hypot(A[1] - B[1], A[3] - B[3]); if (d < 3 || d > 8.5 || Math.abs(A[2] - B[2]) > 4) continue;
+      for (let k = 0; k < 8; k++) for (const t of [k / 8, (k + 1) / 8]) p.push(A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t - Math.sin(t * Math.PI) * d * 0.06, A[3] + (B[3] - A[3]) * t);
+    }
+    if (p.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); linhas = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#2a2a2a', transparent: true, opacity: 0.75 })); linhas.visible = false; scene.add(linhas); }
+  }
+  extrasPred = { grupos, linhas };
+}
+const _zeroE = new THREE.Matrix4().makeScale(0, 0, 0);
+function extrasDoPredio(i, vis) {
+  if (!extrasPred) return;
+  for (const g of extrasPred.grupos) { const l = g.por.get(i); if (!l) continue; for (const k of l) g.im.setMatrixAt(k, vis ? g.mats[k] : _zeroE); g.im.instanceMatrix.needsUpdate = true; }
+}
+function qualidadeExtras() {
+  if (!extrasPred) return;
+  const q = ctx.qualidade?.() || 'medio', on = q === 'alto' || q === 'ultra';
+  for (const g of extrasPred.grupos) g.im.visible = on;
+  if (extrasPred.linhas) extrasPred.linhas.visible = on;
+}
+
 function montarMalhas() {
   const { scene } = ctx;
   for (const e of extrasMesh) {
@@ -868,10 +956,14 @@ function montarMalhas() {
   }
   const caixaBase = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
   const geoPredio = caixaBase.clone();
-  geoPredio.setAttribute('aLoja', new THREE.InstancedBufferAttribute(new Float32Array(edificios.map((e) => (e.tipo === 'predio' && e.loja !== false ? 1 : 0))), 1));
+  // 21q: estilo da fachada (arquitetura.js), frente (0 +z, 1 −z, 2 +x, 3 −x), base sem janela (m) e térreo com lojas
+  for (const e of edificios) e.est = estiloDe(e);
+  geoPredio.setAttribute('aEstilo', new THREE.InstancedBufferAttribute(new Float32Array(edificios.map((e) => e.est)), 1));
+  geoPredio.setAttribute('aInfo', new THREE.InstancedBufferAttribute(new Float32Array(edificios.flatMap((e) => [frenteDe(e), 0, e.tipo === 'predio' && e.loja !== false ? 1 : 0])), 3));
   malhaPredios = new THREE.InstancedMesh(geoPredio, MAT.fachada, edificios.length);
-  edificios.forEach((e, i) => { malhaPredios.setMatrixAt(i, matrizPredio(e)); malhaPredios.setColorAt(i, _c.set(e.cor)); });
+  edificios.forEach((e, i) => { malhaPredios.setMatrixAt(i, matrizPredio(e)); malhaPredios.setColorAt(i, _c.set(corDe(e))); });
   malhaPredios.castShadow = true; malhaPredios.receiveShadow = true; scene.add(malhaPredios);
+  montarExtrasPredios(scene);
 
   const casas = edificios.map((e, i) => [e, i]).filter(([e]) => e.tipo === 'casa');
   malhaTelhas = new THREE.InstancedMesh(geoTelhado(), MAT.telha, Math.max(1, casas.length));
@@ -1024,7 +1116,7 @@ export function liberarQuadra(cx, cz) {
   const dentro = (x, z) => x > x0 && x < x1 && z > z0 && z < z1;
   edificios.forEach((e, i) => {
     if (!dentro(e.x, e.z) || e.removido) return;
-    e.removido = true; e.h = 0.001; em3d.delete(i); cortados.delete(i);
+    e.removido = true; e.h = 0.001; em3d.delete(i); cortados.delete(i); extrasDoPredio(i, false);
     malhaPredios.setMatrixAt(i, _m.makeScale(0, 0, 0));
     if (idxTelha.has(i)) malhaTelhas.setMatrixAt(idxTelha.get(i), _m.makeScale(0, 0, 0));
     for (const d of e.det) malhaDet.setMatrixAt(d, _m.makeScale(0, 0, 0));
@@ -1048,6 +1140,7 @@ function definirCorte(i, cortar) {
   malhaPredios.setMatrixAt(i, matrizPredio(e, cortar ? Math.min(e.h, 2.2) : e.h));
   if (idxTelha.has(i)) malhaTelhas.setMatrixAt(idxTelha.get(i), matrizTelha(e, !cortar));
   for (const k of e.det) malhaDet.setMatrixAt(k, matrizDet(detalhes[k], !cortar));
+  extrasDoPredio(i, !cortar);
 }
 export function atualizarOclusao(dt, pos, dirCamera) {
   tempoOclusao -= dt; if (tempoOclusao > 0 || !malhaPredios) return;
@@ -1119,6 +1212,7 @@ function rumo3d(e) {
   return dx >= 0 ? Math.PI / 2 : -Math.PI / 2;
 }
 export function predios3dPerto(px, pz, dt) {
+  qualidadeExtras();
   if (!modelos3d || !malhaPredios) return;
   if ((tempo3d -= dt) > 0) return; tempo3d = 0.7;
   const q = ctx.qualidade?.() || 'medio', max = q === 'ultra' ? 64 : q === 'alto' ? 40 : q === 'medio' ? 16 : 6, raio = q === 'ultra' ? 240 : q === 'alto' ? 190 : q === 'medio' ? 100 : 65;   // alto: um pouco menos de prédios 3D (o resto continua caixa, na mesma distância de visão)
