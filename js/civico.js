@@ -187,7 +187,10 @@ export const CARROS = {
   onibus_brasilsul: { nome: 'Ônibus de viagem dois andares', preco: 0, vel: 13 },
   onibus_viacao: { nome: 'Ônibus de viagem executivo', preco: 0, vel: 13 },
   onibus_rod_dourado: { nome: 'Rodoviário Fator RP 03 (3 eixos)', preco: 0, vel: 13.5 },
-  onibus_rod_amarelo: { nome: 'Rodoviário Fator RP 05 (4 eixos)', preco: 0, vel: 13.5 },
+  onibus_rod_amarelo: { nome: 'Rodoviário Fator RP 05', preco: 0, vel: 13 },
+  onibus_rod_02: { nome: 'Rodoviário Fator RP 02 (3 eixos)', preco: 0, vel: 13.5 },
+  onibus_rod_04: { nome: 'Rodoviário Fator RP 04 (3 eixos)', preco: 0, vel: 13.5 },
+  onibus_rod_06: { nome: 'Rodoviário Fator RP 06 (dois andares, 4 eixos)', preco: 0, vel: 13.5 },
   onibus_rod_vermelho: { nome: 'Rodoviário Fator RP 01', preco: 0, vel: 13 },
   onibus_rod_branco: { nome: 'Rodoviário Fator RP 09', preco: 0, vel: 13 },
   aviao_pequeno: { nome: 'Avião pequeno', preco: 0, vel: 40, voa: true },
@@ -200,7 +203,7 @@ const ARRANCADA = { moto_250: 3.6, moto_650: 2.4, esportivo: 3, classico: 3, pop
   caminhao: 11, caminhao_escola: 11, caminhao_lixo: 11, bombeiros: 11, exercito_caminhao: 11, tanque: 12,
   onibus: 12, onibus_urbano: 12, onibus_apache: 12, onibus_busscar: 12, onibus_executivo: 14, onibus_executivo2: 15, onibus_dois_andares: 15, onibus_articulado: 16,
   onibus_amarelo: 12, onibus_branco: 12, onibus_laranja: 12, onibus_brasilsul: 15, onibus_viacao: 14,
-  onibus_rod_dourado: 14, onibus_rod_amarelo: 15, onibus_rod_vermelho: 13, onibus_rod_branco: 13 };
+  onibus_rod_dourado: 14, onibus_rod_amarelo: 13.5, onibus_rod_vermelho: 13, onibus_rod_branco: 13, onibus_rod_02: 14, onibus_rod_04: 14, onibus_rod_06: 15.5 };
 // aceleração (m/s²) na velocidade v: forte no começo e mais fraca perto do máximo, como um motor de verdade
 export function aceleracao(modelo, v, max) {
   const T = ARRANCADA[modelo] ?? 6, a0 = 1.21 * max / T, x = Math.min(1, Math.max(0, v / max));
@@ -838,9 +841,13 @@ export const RODAS = {
   onibus_rod_vermelho: { estilo: 'pesado', eixos: [[-3.46, 0.53], [3.86, 0.53]], cy: 0.53, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
   onibus_rod_branco: { estilo: 'pesado', eixos: [[-2.21, 0.52], [3.95, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
   onibus_rod_dourado: { estilo: 'pesado', eixos: [[-4.07, 0.52], [-2.63, 0.52], [4.66, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
-  // 4 eixos (o maior): os 2 da frente viram para o mesmo lado, o 3º é fixo (o giro é nele) e o 4º vira ao contrário
-  onibus_rod_amarelo: { estilo: 'pesado', eixos: [[-4.4, 0.55], [-3.05, 0.55], [2.75, 0.55], [4.1, 0.55]], cy: 0.55, xo: 1.3, xi: 0.88, corte: [1.25, 0.45, 0.7],
-    pivo: -3.05, dir: [2.75, -4.4], apagar: [[-3.61, 0.6], [3.95, 0.6]] },
+  onibus_rod_amarelo: { estilo: 'pesado', eixos: [[-3.38, 0.55], [3.69, 0.55]], cy: 0.55, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  // Neobus 02: o modelo veio sem a roda da frente; o eixo da frente fica no para-lama vazio
+  onibus_rod_02: { estilo: 'pesado', eixos: [[-4.24, 0.52], [-2.84, 0.52], [4.6, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_04: { estilo: 'pesado', eixos: [[-4.1, 0.52], [-2.75, 0.52], [4.13, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  // 06 dois andares, 4 eixos (o maior): os 2 da frente viram para o mesmo lado, o 3º é fixo (o giro é nele) e o 4º vira ao contrário
+  onibus_rod_06: { estilo: 'pesado', eixos: [[-4.52, 0.52], [-3.23, 0.52], [2.89, 0.52], [4.35, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25],
+    pivo: -3.23, dir: [2.89, -4.52] },
   // carros novos (Meshy) das lojas e das polícias: medidos no tamanho do jogo (18l)
   saveiro: { estilo: 'carro', eixos: [[-1.22, 0.355], [1.43, 0.355]], cy: 0.36, xo: 0.93, xi: 0.62, corte: [1.1, 0.06, 0.08] },
   saveiro_som: { estilo: 'esporte', eixos: [[-1.24, 0.3], [1.41, 0.3]], cy: 0.3, xo: 0.92, xi: 0.6, corte: [1.12, 0.06, 0.08] },
@@ -980,7 +987,7 @@ export function entreEixos(modelo) {
 //  caminhão (e Caveirão de 3 eixos): a frente vira e o giro fica entre os dois eixos de trás (o par arrasta de lado);
 //  ônibus de viagem com 3 eixos: a frente vira, o do meio é fixo (é nele o giro) e o último vira ao contrário e menos
 //  (pela própria geometria da curva), o que fecha a curva de um ônibus longo.
-export const RODOVIARIOS = new Set(['onibus_executivo2', 'onibus_rod_dourado', 'onibus_rod_amarelo']);
+export const RODOVIARIOS = new Set(['onibus_executivo2', 'onibus_rod_dourado', 'onibus_rod_02', 'onibus_rod_04', 'onibus_rod_06']);
 function eixosDoModelo(nome, R) {
   const zs = R.eixos.map((a) => a[0]).sort((a, b) => b - a), media = (l) => l.reduce((a, b) => a + b, 0) / l.length;
   if (R.pivo !== undefined) return { zf: zs[0], zr: R.pivo, zt: zs[zs.length - 1], tipo: 'rodoviario' };
@@ -1147,9 +1154,9 @@ function modeloCarroBase(modelo, cor) {
 const GLB_NOVOS = { caveirao: 6, viatura_pm: 4.6, viatura_civil: 4.6, viatura_prf: 4.7, saveiro: 4.4, saveiro_som: 4.4,
   // ônibus novos (Meshy): os da cidade (circulares) e os de viagem; vêm com a frente em -x
   onibus_amarelo: 12.5, onibus_branco: 12.5, onibus_laranja: 13,
-  onibus_rod_dourado: 14.5, onibus_rod_amarelo: 15, onibus_rod_vermelho: 13.5, onibus_rod_branco: 13.5 };
+  onibus_rod_dourado: 14.5, onibus_rod_amarelo: 14, onibus_rod_vermelho: 13.5, onibus_rod_branco: 13.5, onibus_rod_02: 14.5, onibus_rod_04: 14.5, onibus_rod_06: 15 };
 export const comprimentoOnibus = (m) => GLB_NOVOS[m] || 12;
-const FRENTE_MENOS_X = new Set(['onibus_amarelo', 'onibus_branco', 'onibus_laranja', 'onibus_brasilsul', 'onibus_viacao', 'onibus_rod_dourado', 'onibus_rod_amarelo', 'onibus_rod_vermelho', 'onibus_rod_branco']);
+const FRENTE_MENOS_X = new Set(['onibus_amarelo', 'onibus_branco', 'onibus_laranja', 'onibus_brasilsul', 'onibus_viacao', 'onibus_rod_dourado', 'onibus_rod_amarelo', 'onibus_rod_vermelho', 'onibus_rod_branco', 'onibus_rod_02', 'onibus_rod_04', 'onibus_rod_06']);
 const FRENTE_MENOS_Z = new Set(['viatura_pm']);
 // ---- pintura de verdade (18v): a textura do Meshy já vem colorida (ex.: o Popular é azul); multiplicar por uma cor só
 // escurecia. Aqui acha a cor da lataria (o tom mais comum entre os pixels coloridos), troca só esses pixels pela cor

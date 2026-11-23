@@ -7191,7 +7191,7 @@ async function natalAdmin(catalogo, testeMin) {
 const VIACAO = { x0: 278, x1: 316.5, z0: -262, z1: -224, vz: -254, vx: (i) => 292 + i * 3.85, balcao: { x: 283.6, z: -256.6 },
   escr: { x0: 278.6, x1: 289, z0: -261.5, z1: -250 }, nVagas: 7 };
 const VIACAO_PONTOS = [{ x: 135, z: -230, nome: 'Rodoviária da Metrópole' }, { x: 69, z: -931, nome: 'Rodoviária de Vila Serra' }, { x: 69, z: 931, nome: 'Rodoviária de Porto Sul' }];
-const VIACAO_MODELOS = ['onibus_rod_amarelo', 'onibus_rod_dourado', 'onibus_rod_vermelho', 'onibus_rod_branco', 'onibus_amarelo', 'onibus_branco', 'onibus_laranja'];   // 21r: a mesma frota das linhas
+const VIACAO_MODELOS = ['onibus_rod_06', 'onibus_rod_02', 'onibus_rod_04', 'onibus_rod_amarelo', 'onibus_rod_dourado', 'onibus_rod_vermelho', 'onibus_rod_branco', 'onibus_amarelo', 'onibus_branco', 'onibus_laranja'];   // 21r: a mesma frota das linhas
 let viacao = null, viacaoVagas = [], viacaoTeto = null, tViacao = 0, viacaoNpcs = null, viacaoCena = null;
 function montarViacao() {
   const y = 0.18, Q = VIACAO;
@@ -13787,7 +13787,7 @@ const TERMINAL_RODO = { x0: 113, x1: 211, z0: -265, z1: -221, saguao: { x: 186.5
 // cinco plataformas na Rodoviária (oeste → leste). As linhas "circulares" não param na plataforma: passam na calçada
 // do lado leste da rodoviária (ponto Rodoviária) e rodam sem parar o dia todo.
 const PLAT = [117.5, 126.1, 134.7, 143.3, 151.9];
-const URB = ['onibus_amarelo', 'onibus_branco', 'onibus_laranja'], EXEC = ['onibus_rod_amarelo', 'onibus_rod_dourado', 'onibus_rod_vermelho', 'onibus_rod_branco'];   // 21r: frota Fator RP; os de viagem vão para as cidades vizinhas
+const URB = ['onibus_amarelo', 'onibus_branco', 'onibus_laranja'], EXEC = ['onibus_rod_06', 'onibus_rod_02', 'onibus_rod_04', 'onibus_rod_amarelo', 'onibus_rod_dourado', 'onibus_rod_vermelho', 'onibus_rod_branco'];   // 21r: frota Fator RP; os de viagem vão para as cidades vizinhas
 const ROD = [188, -216, 'Rodoviária', 'o'];   // ponto coberto das circulares: calçada da frente do terminal (elas não entram)
 const LINHAS = [
   { id: 1, nome: 'Linha 1 · Circular', curto: 'Circular', cor: '#1f6fd1', faixa: PLAT[0], k: 3, fase: 0, modelos: URB,
