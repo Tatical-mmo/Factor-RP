@@ -7235,7 +7235,7 @@ function montarViacao() {
   const pg = rotuloSimples('📋 Cadastro · Viagens · Venda de ônibus', 6); pg.position.set(283.6, y + 2.5, -259); scene.add(pg);
   criarAvatar('personagens', 'Pai_Familia').then((av) => { av.raiz.position.set(283.6, y, -260.6); av.raiz.rotation.y = 0; scene.add(av.raiz); av.tocar('idle'); avataresObra.add(av); }).catch(() => {});
   // ônibus nas vagas (somem enquanto estão em viagem)
-  for (let i = 0; i < Q.nVagas; i++) viacaoVagas.push({ i, x: Q.vx(i), z: Q.vz, mesh: null, modelo: '', col: { tipo: 'caixa', x0: Q.vx(i) - 1.35, x1: Q.vx(i) + 1.35, z0: Q.vz - 7, z1: Q.vz + 7, off: true } });
+  for (let i = 0; i < Q.nVagas; i++) viacaoVagas.push({ i, x: Q.vx(i), z: Q.vz, mesh: null, modelo: '', col: { tipo: 'caixa', x0: Q.vx(i) - 1.35, x1: Q.vx(i) + 1.35, z0: Q.vz - 7.6, z1: Q.vz + 7.6, off: true } });   // 21r: cabe o 06 (15 m)
   for (const v of viacaoVagas) colisores.push(v.col);
   atualizarEstadoViacao();
 }
@@ -7336,7 +7336,11 @@ function cenaPassageiros(embarcar) {
   const c = jogador.carro; if (!c?.mesh) return;
   const m = c.mesh, fx = Math.sin(m.rotation.y), fz = Math.cos(m.rotation.y), rx = Math.cos(m.rotation.y), rz = -Math.sin(m.rotation.y);
   const L = civico.comprimentoOnibus(c.modelo);
-  const porta = { x: m.position.x + fx * (L / 2 - 1.6) - rx * 1.9, z: m.position.z + fz * (L / 2 - 1.6) - rz * 1.9 };
+  // 21r: porta de cada modelo (lado direito): urbanos entram pela frente e descem pela porta de trás; o de dois andares
+  // usa a porta do meio; os outros rodoviários, a da frente
+  const urbano = /^onibus_(amarelo|branco|laranja)$/.test(c.modelo);
+  const pz = urbano ? (embarcar ? L * 0.405 : -L * 0.345) : c.modelo === 'onibus_rod_06' ? -0.3 : L / 2 - 1.6;
+  const porta = { x: m.position.x + fx * pz - rx * 1.9, z: m.position.z + fz * pz - rz * 1.9 };
   if (!viacaoNpcs) {
     viacaoNpcs = [];
     PERSONAGENS_GRATIS.slice(0, 6).forEach((id) => criarAvatar('personagens', id).then((av) => { av.raiz.visible = false; scene.add(av.raiz); avataresObra.add(av); viacaoNpcs.push(av); }).catch(() => {}));

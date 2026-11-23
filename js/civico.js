@@ -184,8 +184,6 @@ export const CARROS = {
   onibus_amarelo: { nome: 'Urbano Fator RP 07', preco: 0, vel: 12 },
   onibus_branco: { nome: 'Urbano Fator RP 08', preco: 0, vel: 12 },
   onibus_laranja: { nome: 'Urbano Fator RP 10', preco: 0, vel: 12 },
-  onibus_brasilsul: { nome: 'Ônibus de viagem dois andares', preco: 0, vel: 13 },
-  onibus_viacao: { nome: 'Ônibus de viagem executivo', preco: 0, vel: 13 },
   onibus_rod_dourado: { nome: 'Rodoviário Fator RP 03 (3 eixos)', preco: 0, vel: 13.5 },
   onibus_rod_amarelo: { nome: 'Rodoviário Fator RP 05', preco: 0, vel: 13 },
   onibus_rod_02: { nome: 'Rodoviário Fator RP 02 (3 eixos)', preco: 0, vel: 13.5 },
@@ -820,6 +818,7 @@ export const RODAS = {
   carro_esportivo: { estilo: 'esporte', eixos: [[-1.19, 0.36], [1.31, 0.36]], cy: 0.36, xo: 1.0, xi: 0.71 },
   carro_presidencial: { estilo: 'carro', eixos: [[-1.85, 0.44], [2.12, 0.44]], cy: 0.44, xo: 1.23, xi: 0.85 },
   exercito_jipe: { estilo: 'militar', eixos: [[-1.08, 0.46], [1.34, 0.46]], cy: 0.45, xo: 0.97, xi: 0.59 },
+  van: { estilo: 'suv', eixos: [[-1.56, 0.37], [1.8, 0.37]], cy: 0.37, xo: 1.08, xi: 0.78 },   // 21r: a van tinha as rodas do próprio modelo (paradas)
   ambulancia: { estilo: 'suv', eixos: [[-1.34, 0.38], [1.88, 0.38]], cy: 0.38, xo: 0.96, xi: 0.7 },   // nova (16aj): van tipo Sprinter do SAMU
   caminhao_bombeiros: { estilo: 'pesado', eixos: [[-2.4, 0.58], [-1.3, 0.58], [2.45, 0.58]], cy: 0.58, xo: 1.33, xi: 0.86 },   // modelo novo (16r): eixo duplo atrás
   caminhao: { estilo: 'pesado', eixos: [[-3.0, 0.5], [-1.75, 0.5], [2.8, 0.5]], cy: 0.5, xo: 1.09, xi: 0.74 },   // modelo novo (16bd): baú branco liso, eixo duplo atrás
@@ -835,18 +834,18 @@ export const RODAS = {
   onibus_articulado: { estilo: 'pesado', eixos: [[-5.25, 0.52], [-3.9, 0.52], [1.8, 0.52], [6.6, 0.52]], cy: 0.53, xo: 1.23, xi: 0.84 },
   // 21r: frota Fator RP (medidos já girados e no tamanho do jogo; vidros já viram vidro na própria textura).
   // apagar: rodas do modelo que não ficam num eixo (o de 4 eixos ganhou eixos novos)
-  onibus_amarelo: { estilo: 'pesado', eixos: [[-2.03, 0.52], [3.69, 0.52]], cy: 0.52, xo: 1.26, xi: 0.84, corte: [1.22, 0.45, 0.25] },
-  onibus_branco: { estilo: 'pesado', eixos: [[-1.97, 0.52], [3.76, 0.52]], cy: 0.52, xo: 1.26, xi: 0.84, corte: [1.22, 0.45, 0.25] },
-  onibus_laranja: { estilo: 'pesado', eixos: [[-2.27, 0.52], [3.85, 0.52]], cy: 0.52, xo: 1.26, xi: 0.84, corte: [1.22, 0.45, 0.25] },
-  onibus_rod_vermelho: { estilo: 'pesado', eixos: [[-3.46, 0.53], [3.86, 0.53]], cy: 0.53, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
-  onibus_rod_branco: { estilo: 'pesado', eixos: [[-2.21, 0.52], [3.95, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
-  onibus_rod_dourado: { estilo: 'pesado', eixos: [[-4.07, 0.52], [-2.63, 0.52], [4.66, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
-  onibus_rod_amarelo: { estilo: 'pesado', eixos: [[-3.38, 0.55], [3.69, 0.55]], cy: 0.55, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  onibus_amarelo: { estilo: 'onibus', eixos: [[-2.03, 0.52], [3.69, 0.52]], cy: 0.52, xo: 1.26, xi: 0.84, corte: [1.22, 0.45, 0.25] },
+  onibus_branco: { estilo: 'onibus', eixos: [[-1.97, 0.52], [3.76, 0.52]], cy: 0.52, xo: 1.26, xi: 0.84, corte: [1.22, 0.45, 0.25] },
+  onibus_laranja: { estilo: 'onibus', eixos: [[-2.27, 0.52], [3.85, 0.52]], cy: 0.52, xo: 1.26, xi: 0.84, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_vermelho: { estilo: 'onibus', eixos: [[-3.46, 0.53], [3.86, 0.53]], cy: 0.53, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_branco: { estilo: 'onibus', eixos: [[-2.21, 0.52], [3.95, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_dourado: { estilo: 'onibus', eixos: [[-4.07, 0.52], [-2.63, 0.52], [4.66, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_amarelo: { estilo: 'onibus', eixos: [[-3.38, 0.55], [3.69, 0.55]], cy: 0.55, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
   // Neobus 02: o modelo veio sem a roda da frente; o eixo da frente fica no para-lama vazio
-  onibus_rod_02: { estilo: 'pesado', eixos: [[-4.24, 0.52], [-2.84, 0.52], [4.6, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
-  onibus_rod_04: { estilo: 'pesado', eixos: [[-4.1, 0.52], [-2.75, 0.52], [4.13, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_02: { estilo: 'onibus', eixos: [[-4.24, 0.52], [-2.84, 0.52], [4.6, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_04: { estilo: 'onibus', eixos: [[-4.1, 0.52], [-2.75, 0.52], [4.13, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
   // 06 dois andares, 4 eixos (o maior): os 2 da frente viram para o mesmo lado, o 3º é fixo (o giro é nele) e o 4º vira ao contrário
-  onibus_rod_06: { estilo: 'pesado', eixos: [[-4.52, 0.52], [-3.23, 0.52], [2.89, 0.52], [4.35, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25],
+  onibus_rod_06: { estilo: 'onibus', eixos: [[-4.52, 0.52], [-3.23, 0.52], [2.89, 0.52], [4.35, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25],
     pivo: -3.23, dir: [2.89, -4.52] },
   // carros novos (Meshy) das lojas e das polícias: medidos no tamanho do jogo (18l)
   saveiro: { estilo: 'carro', eixos: [[-1.22, 0.355], [1.43, 0.355]], cy: 0.36, xo: 0.93, xi: 0.62, corte: [1.1, 0.06, 0.08] },
@@ -856,12 +855,12 @@ export const RODAS = {
   viatura_prf: { estilo: 'suv', eixos: [[-1.38, 0.42], [1.35, 0.42]], cy: 0.42, xo: 0.98, xi: 0.62, corte: [1.1, 0.06, 0.08] },
   caveirao: { estilo: 'militar', eixos: [[-2.09, 0.48], [-1.08, 0.48], [1.51, 0.48]], cy: 0.48, xo: 1.23, xi: 0.85, corte: [1.1, 0.06, 0.08] },
 };
-const LARG_RODA = { classico: 0.32, carro: 0.30, esporte: 0.32, suv: 0.36, pesado: 0.30, militar: 0.38 };
+const LARG_RODA = { classico: 0.32, carro: 0.30, esporte: 0.32, suv: 0.36, pesado: 0.30, onibus: 0.30, militar: 0.38 };   // onibus: a roda padrão da frota Fator RP (21r)
 const comRodas = new Set();
 // embaixo do veículo (para não ficar oco): assoalho, caixas de roda, motor/cárter, escapamento, tanque, eixos e diferencial
 function geoChassi(nome, R, b) {
   const { estilo, eixos, cy, xo, xi } = R, r = Math.max(...eixos.map((e) => e[1])), s = r / 0.35, xin = xi - 0.03;
-  const zs = eixos.map((e) => e[0]), zf = Math.max(...zs), zr = Math.min(...zs), alto = estilo === 'pesado' || estilo === 'militar', onibus = nome.startsWith('onibus');
+  const zs = eixos.map((e) => e[0]), zf = Math.max(...zs), zr = Math.min(...zs), alto = estilo === 'pesado' || estilo === 'onibus' || estilo === 'militar', onibus = nome.startsWith('onibus');
   const fb = cy * (alto ? 1.1 : 0.72), ft = cy * (alto ? 1.6 : 1.25);
   const zmin = Math.max(b.min.z + 0.35, zr - r * (alto ? 2.2 : 1.25)), zmax = Math.min(b.max.z - 0.35, zf + r * (alto ? 1.6 : 1.25));
   const ESC = [0.07, 0.075, 0.08], MET = [0.2, 0.21, 0.23], FER = [0.13, 0.135, 0.14], PRETO = [0.05, 0.05, 0.055], lista = [];
@@ -1156,7 +1155,7 @@ const GLB_NOVOS = { caveirao: 6, viatura_pm: 4.6, viatura_civil: 4.6, viatura_pr
   onibus_amarelo: 12.5, onibus_branco: 12.5, onibus_laranja: 13,
   onibus_rod_dourado: 14.5, onibus_rod_amarelo: 14, onibus_rod_vermelho: 13.5, onibus_rod_branco: 13.5, onibus_rod_02: 14.5, onibus_rod_04: 14.5, onibus_rod_06: 15 };
 export const comprimentoOnibus = (m) => GLB_NOVOS[m] || 12;
-const FRENTE_MENOS_X = new Set(['onibus_amarelo', 'onibus_branco', 'onibus_laranja', 'onibus_brasilsul', 'onibus_viacao', 'onibus_rod_dourado', 'onibus_rod_amarelo', 'onibus_rod_vermelho', 'onibus_rod_branco', 'onibus_rod_02', 'onibus_rod_04', 'onibus_rod_06']);
+const FRENTE_MENOS_X = new Set(['onibus_amarelo', 'onibus_branco', 'onibus_laranja', 'onibus_rod_dourado', 'onibus_rod_amarelo', 'onibus_rod_vermelho', 'onibus_rod_branco', 'onibus_rod_02', 'onibus_rod_04', 'onibus_rod_06']);
 const FRENTE_MENOS_Z = new Set(['viatura_pm']);
 // ---- pintura de verdade (18v): a textura do Meshy já vem colorida (ex.: o Popular é azul); multiplicar por uma cor só
 // escurecia. Aqui acha a cor da lataria (o tom mais comum entre os pixels coloridos), troca só esses pixels pela cor
