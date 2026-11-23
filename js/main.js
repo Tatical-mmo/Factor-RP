@@ -2041,12 +2041,21 @@ function sincronizarCarros(lista) {
     if (!civico.CARROS[d.modelo]?.voa) eixos.inclinar(v.mesh, alturaChao);
   }
 }
+// 21n: perto = a menos de ~2,2 m da lataria (antes era 3,4 m do centro: num helicóptero ou ônibus, de pé ao lado
+// da porta, o centro fica a 4–6 m e o botão Dirigir nunca aparecia)
+function distLataria(m, p) {
+  const L = caixaLataria(m), dx0 = p.x - m.position.x, dz0 = p.z - m.position.z;
+  if (!L) return Math.hypot(dx0, dz0) - 1.6;
+  const s = Math.sin(-m.rotation.y), c = Math.cos(-m.rotation.y), lx = dx0 * c + dz0 * s, lz = -dx0 * s + dz0 * c;
+  return Math.hypot(Math.max(L.x0 - lx, 0, lx - L.x1), Math.max(L.z0 - lz, 0, lz - L.z1));
+}
 function meuCarroProximo() {
-  let melhor = null, dm = 3.4;
+  let melhor = null, dm = 2.2;
   for (const v of carrosMundo.values()) {
     const meu = v.d.ladrao ? v.d.ladrao === jogador.perfil.id : v.d.dono === jogador.perfil.id;
     if (!meu || !v.mesh.visible) continue;
-    const d = Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z);
+    if (Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z) > 16) continue;
+    const d = Math.min(distLataria(v.mesh, jogador.pos), Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z) - 1.6);
     if (d < dm) { dm = d; melhor = v; }
   }
   return melhor;
@@ -2448,7 +2457,8 @@ function caixaLataria(m) {
   const b = new THREE.Box3();
   m.traverse((o) => {
     if (!o.isMesh || o.isSprite || !o.visible || o.userData.semCaixa) return;
-    for (let a = o.parent; a && a !== m; a = a.parent) if (a.name === 'luzes' || !a.visible && a.name !== 'longe') return;
+    for (let a = o.parent; a && a !== m; a = a.parent) if (a.name === 'luzes' || a.name === 'rotor' || a.name === 'helice' || !a.visible && a.name !== 'longe') return;   // pás do rotor não contam
+    if (o.name === 'borrao' || o.name === 'discoHelice' || o.name === 'rotor') return;
     const mt = Array.isArray(o.material) ? o.material[0] : o.material; if (mt?.transparent && mt.depthWrite === false) return;   // facho / brilho
     b.expandByObject(o);
   });
@@ -3938,7 +3948,7 @@ async function iniciarJogo(perfil) {
   if (!introRodando) $('carregando').classList.remove('oculto');   // 20l: durante o vídeo carrega por trás, sem aparecer
   montarChao();
   // um modelo faltando não pode travar o jogo: ele só fica de fora (veículos e prédios têm versão feita por código)
-  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_exercito' ? '?v=aberto19f' : /^onibus_rod_/.test(m) ? '?v=fecha20y' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau2' : m === 'empresa_f3' ? '?v=sede18q' : m === 'empresa_f2' ? '?v=sede19b' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
+  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_executivo' ? '?v=rotor21n' : m === 'helicoptero_exercito' ? '?v=aberto19f' : /^onibus_rod_/.test(m) ? '?v=fecha20y' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau2' : m === 'empresa_f3' ? '?v=sede18q' : m === 'empresa_f2' ? '?v=sede19b' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
   const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
   const skin = id;   // em serviço o policial continua com o próprio personagem (a farda mostra a corporação)
   const avatarP = criarAvatar(ROBOS.includes(skin) ? 'robos' : pastaJogador, skin);
