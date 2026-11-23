@@ -1471,6 +1471,10 @@ function texturas() {
   const spr = (cor) => new THREE.SpriteMaterial({ map: texBrilho, color: cor, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false });
   M = { farol: spr('#fff1c8'), lanterna: spr('#ff2a1a'), navV: spr('#ff2020'), navG: spr('#1fff5a'), estrobo: spr('#ffffff'), giro: spr('#ff3020'),
     laranjaA: spr('#ff8a12'), laranjaB: spr('#ff8a12'),
+    // 21t: sinais (freio, ré, setas e pisca-alerta): mistura normal para aparecer de dia, até sobre lataria branca
+    freio: new THREE.SpriteMaterial({ map: texBrilho, color: '#ff1a10', depthWrite: false, transparent: true, toneMapped: false }),
+    re: new THREE.SpriteMaterial({ map: texBrilho, color: '#ffffff', depthWrite: false, transparent: true, toneMapped: false }),
+    seta: new THREE.SpriteMaterial({ map: texBrilho, color: '#ffa012', depthWrite: false, transparent: true, toneMapped: false }),
     feixe: new THREE.MeshBasicMaterial({ map: texFeixe, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false, opacity: 0.8 }),
     poca: new THREE.MeshBasicMaterial({ map: texPoca, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }) };
 }
@@ -1491,6 +1495,57 @@ function medir(g) {
   });
   return e.px ? e : null;
 }
+// ---- 21t: lâmpadas medidas em cada modelo (vistas de frente e de trás, no tamanho do jogo). x é o lado (o outro é
+// espelhado; x = 0: uma só, no meio), y a altura; a profundidade sai de um raio na própria lataria.
+// f: farol [x, y, tamanho] · t: lanterna [x, y, largura, altura] · sf / st: seta da frente / de trás [x, y]
+// (sem: na ponta de fora do farol / da lanterna) · re: luz de ré [x, y] (sem: do lado de dentro da lanterna; null: não tem)
+const LAMPADAS = {
+  popular: { f: [0.69, 0.78, 0.24], t: [0.78, 0.84, 0.2, 0.14] },
+  suv: { f: [0.68, 1.02, 0.26], t: [0.83, 1.08, 0.14, 0.32] },
+  esportivo: { f: [0.85, 0.58, 0.22], t: [0.68, 0.82, 0.3, 0.1] },
+  classico: { f: [0.65, 0.62, 0.22], t: [0.6, 0.75, 0.42, 0.1] },
+  presidencial: { f: [0.97, 0.82, 0.24], t: [0.92, 0.94, 0.22, 0.18] },
+  saveiro: { f: [0.63, 0.68, 0.24], t: [0.83, 0.81, 0.14, 0.3] },
+  viatura_pm: { f: [0.67, 0.62, 0.22], t: [0.6, 0.84, 0.22, 0.12] },
+  viatura_civil: { f: [0.69, 0.67, 0.24], t: [0.77, 0.87, 0.2, 0.12] },
+  viatura_prf: { f: [0.9, 0.92, 0.22], t: [0.9, 1.08, 0.16, 0.16] },
+  ambulancia: { f: [0.77, 0.99, 0.26], t: [0.83, 1.1, 0.14, 0.45] },
+  van: { f: [0.88, 0.89, 0.26], t: [1.0, 1.08, 0.14, 0.4] },
+  militar: { f: [0.5, 1.1, 0.24], t: [0.8, 0.95, 0.12, 0.12] },
+  moto_250: { f: [0, 0.74, 0.18], t: [0, 0.8, 0.12, 0.08], sf: [0.2, 0.7], st: [0.16, 0.78], re: null },
+  moto_650: { f: [0, 0.84, 0.2], t: [0, 0.88, 0.12, 0.08], sf: [0.2, 0.8], st: [0.16, 0.85], re: null },
+};
+LAMPADAS.saveiro_som = LAMPADAS.saveiro; LAMPADAS.viatura = LAMPADAS.viatura_pm;
+const _rc = new THREE.Raycaster();
+// profundidade da lataria em (x, y), vindo de fora pela frente (lado 1) ou por trás (-1); null se não acertar
+function zLataria(g, x, y, lado, e) {
+  const alvos = []; g.traverse((o) => { if (!o.isMesh) return; for (let p = o; p && p !== g; p = p.parent) if (p.name === 'rodas' || p.name === 'luzes' || p.name === 'sinais') return; alvos.push(o); });
+  g.updateMatrixWorld(true); const m = g.matrixWorld, inv = new THREE.Matrix4().copy(m).invert();
+  const o = new THREE.Vector3(x, y, lado > 0 ? e.max.z + 1 : e.min.z - 1).applyMatrix4(m), d = new THREE.Vector3(0, 0, -lado).transformDirection(m);
+  _rc.set(o, d); _rc.far = (e.max.z - e.min.z) * 0.45 + 1;
+  const h = _rc.intersectObjects(alvos, false)[0]; return h ? h.point.clone().applyMatrix4(inv).z + lado * 0.03 : null;
+}
+function lampadasMedidas(g, tipo, e, L, w) {
+  const T = LAMPADAS[tipo]; if (!T) return false;
+  const sp = (mat, x, y, z, t, pai = L, nome = '') => { const s = new THREE.Sprite(mat); s.position.set(x, y, z); s.scale.set(t, t, t); s.name = nome; pai.add(s); return s; };
+  const lados = (x) => (x === 0 ? [0] : [x, -x]);
+  // na quina arredondada o raio entra fundo e a luz ficava escondida atrás da lataria: no máximo 20 cm para dentro
+  const zf = (x, y) => Math.max(zLataria(g, x, y, 1, e) ?? e.max.z + 0.05, e.max.z - 0.2), zt = (x, y) => Math.min(zLataria(g, x, y, -1, e) ?? e.min.z - 0.05, e.min.z + 0.2);
+  const [fx, fy, fs] = T.f, [tx, ty, tw, th] = T.t, tt = Math.max(tw, th);
+  for (const x of lados(fx)) sp(M.farol, x, fy, zf(x, fy), fs * 2.6);
+  for (const x of lados(tx)) sp(M.lanterna, x, ty, zt(x, ty), tt * 2.2);
+  // facho no chão (igual ao de antes)
+  const moto = /^moto/.test(tipo), comp = moto ? 9 : 12, fe = new THREE.Mesh(new THREE.PlaneGeometry(moto ? 2.6 : 4.8, comp).rotateX(-Math.PI / 2), M.feixe);
+  fe.position.set(0, e.min.y + 0.06, e.max.z + comp / 2 - 0.5); fe.rotation.y = Math.PI; fe.renderOrder = 3; L.add(fe);
+  // sinais: sempre presentes, cada lâmpada acende sozinha (a montagem fica escondida enquanto nada está aceso)
+  const S = new THREE.Group(); S.name = 'sinais'; S.visible = false; g.add(S);
+  for (const x of lados(tx)) sp(M.freio, x, ty, zt(x, ty) - 0.01, tt * 2.6, S, 'freio');
+  if (T.re !== null) { const [rx, ry] = T.re || [Math.max(0.15, tx - tw / 2 - 0.08), ty]; for (const x of lados(rx)) sp(M.re, x, ry, zt(x, ry) - 0.01, 0.32, S, 're'); }
+  const [sfx, sfy] = T.sf || [fx + fs * 0.55, fy], [stx, sty] = T.st || [tx + tw / 2 - 0.02, ty + (th > 0.25 ? th * 0.3 : 0)];
+  for (const x of [sfx, -sfx]) sp(M.seta, x, sfy, zf(x, sfy) + 0.01, 0.42, S, x > 0 ? 'setaE' : 'setaD');
+  for (const x of [stx, -stx]) sp(M.seta, x, sty, zt(x, sty) - 0.02, 0.42, S, x > 0 ? 'setaE' : 'setaD');
+  return true;
+}
 function adicionarLuzes(g, tipo, chave = null) {
   texturas();
   if (g.getObjectByName('luzes')) return g;
@@ -1499,7 +1554,8 @@ function adicionarLuzes(g, tipo, chave = null) {
   const L = new THREE.Group(); L.name = 'luzes'; L.visible = false; L.userData = { aereo, heli, comp: e.max.z - e.min.z };
   const sp = (mat, x, y, z, t) => { const s = new THREE.Sprite(mat); s.position.set(x, y, z); s.scale.set(t, t, t); L.add(s); return s; };
   const w = e.max.x - e.min.x, h = e.max.y - e.min.y, cx = (e.max.x + e.min.x) / 2;
-  if (!aereo) {
+  if (!aereo && lampadasMedidas(g, tipo, e, L, w)) { /* 21t: lâmpadas nos lugares do modelo */ }
+  else if (!aereo) {
     const grande = w > 2.2, moto = /^moto/.test(tipo), yf = e.min.y + h * (grande ? 0.22 : moto ? 0.62 : 0.38);
     for (const s of moto ? [0] : [-1, 1]) {   // moto: um farol só
       sp(M.farol, cx + s * w * 0.34, moto ? yf + 0.12 : yf, e.max.z + (moto ? -0.25 : 0.08), grande ? 0.9 : moto ? 0.42 : 0.7);
@@ -1535,6 +1591,45 @@ function adicionarLuzes(g, tipo, chave = null) {
 export function luzesEm(o, tipo, chave) { adicionarLuzes(o, tipo, chave); if (o.getObjectByName('luzes')) comLuz.add(o); return o; }
 const _f = new THREE.Vector3();
 let luzAerea = null;
+// ---- 21t: freio, ré, setas e pisca-alerta. O meu veículo manda a seta e o alerta (userData.sinalJog, botões em cima
+// do volante); o dos outros jogadores chega pela rede (userData.sinalRede: 1 esquerda, 2 direita, 4 alerta); os NPCs
+// ligam a seta pela curva que estão fazendo. Freio (desacelerando ou parado depois de andar) e ré saem do movimento.
+const _sinais = new WeakMap();
+function sinaisDo(o, u, ult, dt) {
+  let S = _sinais.get(o); if (S === undefined) { S = o.getObjectByName('sinais') || null; _sinais.set(o, S); } if (!S) return;
+  const ry = o.rotation.y;
+  if (ult && dt > 0) {
+    const dx = _f.x - ult.x, dz = _f.z - ult.z;
+    if (Math.hypot(dx, dz) > 8) u.vS = 0;   // teleporte
+    else {
+      const v = (dx * Math.sin(ry) + dz * Math.cos(ry)) / dt, vAnt = u.vS || 0;
+      u.vS = vAnt + (v - vAnt) * Math.min(1, dt * 5);
+      u.aS = (u.aS || 0) + ((u.vS - vAnt) / dt - (u.aS || 0)) * Math.min(1, dt * 4);
+      const dy = Math.atan2(Math.sin(ry - (u.ryS ?? ry)), Math.cos(ry - (u.ryS ?? ry))) / dt;
+      u.yS = (u.yS || 0) + (dy - (u.yS || 0)) * Math.min(1, dt * 4);
+    }
+  }
+  u.ryS = ry;
+  const v = u.vS || 0;
+  if (Math.abs(v) > 0.6) u.andouEm = tLuz;
+  if (v > 0.4 && (u.aS || 0) < -1.2) u.freouEm = tLuz;
+  const freio = tLuz - (u.freouEm ?? -9) < 0.35 || (Math.abs(v) < 0.3 && u.andouEm !== undefined && tLuz - u.andouEm < 20);
+  let seta = 0, alerta = !!u.alerta;
+  const jog = u.sinalJog && performance.now() - u.sinalJog.t < 600 ? u.sinalJog : null;
+  if (jog) { seta = jog.seta; alerta = alerta || jog.alerta; }
+  else if (u.sinalRede !== undefined) { seta = u.sinalRede & 1 ? 1 : u.sinalRede & 2 ? -1 : 0; alerta = alerta || !!(u.sinalRede & 4); }
+  else {
+    if (Math.abs(u.yS || 0) > 0.12 && Math.abs(v) > 1) { u.setaInf = Math.sign(u.yS) * Math.sign(v); u.setaAte = tLuz + 1.2; }
+    seta = tLuz < (u.setaAte || 0) ? u.setaInf : 0;
+  }
+  const pisca = (tLuz % 0.8) < 0.42, re = v < -0.4;
+  let algo = false;
+  for (const c of S.children) {
+    const on = c.name === 'freio' ? freio : c.name === 're' ? re : c.name === 'lateral' ? (alerta || seta !== 0) && pisca : (alerta || (c.name === 'setaE' ? seta > 0 : seta < 0)) && pisca;
+    c.visible = on; algo ||= on;
+  }
+  S.visible = algo && o.visible;
+}
 export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
   let melhor = null;
   if (!M) return;
@@ -1548,6 +1643,7 @@ export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
     if (!o.parent || !L) { if (L) L.visible = false; if (o.userData.pocaLuz) o.userData.pocaLuz.visible = false; comLuz.delete(o); continue; }
     o.getWorldPosition(_f);
     const u = o.userData, ult = u.ultLuz;
+    sinaisDo(o, u, ult, dt);
     if (ult && Math.hypot(_f.x - ult.x, _f.y - ult.y, _f.z - ult.z) > 0.03) u.ativoAte = tLuz + 4;
     u.ultLuz = { x: _f.x, y: _f.y, z: _f.z };
     const ligado = noite > 0.25 && tLuz < (u.ativoAte || 0) && o.visible;
