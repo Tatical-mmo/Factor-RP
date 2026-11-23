@@ -72,6 +72,10 @@ function aplicar() {
   const pr = nivel === 'baixo' ? 1 : nivel === 'medio' ? Math.min(dpr, toque ? 1.25 : 2) : nivel === 'ultra' ? Math.min(dpr, 2.5) : Math.min(dpr, toque ? 1.5 : 2);   // celular na média: 1,25x (bem mais leve, quase a mesma nitidez)
   R.setPixelRatio(pr);
   R.shadowMap.type = nivel === 'baixo' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+  // 21o: Alta e Ultra com ACES (filme: mais contraste e cor mais rica, brilho do sol sem estourar); Baixa e Média
+  // seguem com o neutro (mais claro e leve de ler no celular)
+  R.toneMapping = comEfeitos() ? THREE.ACESFilmicToneMapping : (THREE.NeutralToneMapping ?? THREE.ACESFilmicToneMapping);
+  R.toneMappingExposure = comEfeitos() ? 1.05 : 0.95;
   const tam = nivel === 'ultra' ? 4096 : nivel === 'alto' ? 2048 : 1024;
   if (sol && sol.shadow.mapSize.x !== tam) { sol.shadow.mapSize.set(tam, tam); sol.shadow.map?.dispose(); sol.shadow.map = null; }
   cena.traverse((o) => { if (o.material && !Array.isArray(o.material)) o.material.needsUpdate = true; });   // troca do tipo de sombra

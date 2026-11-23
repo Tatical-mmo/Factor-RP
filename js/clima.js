@@ -57,6 +57,51 @@ export function iniciar(c) {
   for (const m of [pocas, neveChao]) { m.frustumCulled = false; m.visible = false; m.renderOrder = 1; ctx.scene.add(m); }
 }
 
+// ---- poças de verdade no gráfico ultra (21o): água parada que espelha o céu (Fresnel: de longe/rasante reflete muito,
+// olhando de cima dá para ver o asfalto escuro), borda que some aos poucos (sem disco recortado) e gotas de chuva
+// fazendo anéis que se abrem na superfície (duas camadas de ondinhas girando em sentidos opostos).
+let matPocaSimples = null, matPocaUltra = null;
+function texturaAneis(n, seed) {
+  const W = 256, cv = document.createElement('canvas'); cv.width = cv.height = W; const g = cv.getContext('2d'), d = g.createImageData(W, W);
+  const h = new Float32Array(W * W), gotasR = [];
+  for (let i = 0; i < n; i++) gotasR.push([hash(seed, i) * W, hash(i, seed + 3) * W, 6 + hash(seed + i, 7) * 26]);
+  for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {
+    let v = 0;
+    for (const [cx, cy, r] of gotasR) { let dx = Math.abs(x - cx), dy = Math.abs(y - cy); dx = Math.min(dx, W - dx); dy = Math.min(dy, W - dy); const dd = Math.hypot(dx, dy); if (dd < r + 6) v += Math.cos((dd - r) * 0.9) * Math.exp(-((dd - r) ** 2) / 18) * (1 - r / 40); }
+    h[y * W + x] = v;
+  }
+  for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {
+    const hx = h[y * W + (x + 1) % W] - h[y * W + (x + W - 1) % W], hy = h[((y + 1) % W) * W + x] - h[((y + W - 1) % W) * W + x];
+    const nx = -hx * 1.4, ny = -hy * 1.4, nz = 1, l = Math.hypot(nx, ny, nz), i = (y * W + x) * 4;
+    d.data[i] = (nx / l * 0.5 + 0.5) * 255; d.data[i + 1] = (ny / l * 0.5 + 0.5) * 255; d.data[i + 2] = (nz / l * 0.5 + 0.5) * 255; d.data[i + 3] = 255;
+  }
+  g.putImageData(d, 0, 0);
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.NoColorSpace; return t;
+}
+function texturaBorda() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, 20, 64, 64, 63); gr.addColorStop(0, '#fff'); gr.addColorStop(0.62, '#fff'); gr.addColorStop(1, '#000');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(cv);
+}
+export function aguaUltra(sim) {
+  if (!pocas) return;
+  matPocaSimples ||= pocas.material;
+  if (sim && !matPocaUltra) {
+    matPocaUltra = new THREE.MeshPhysicalMaterial({ color: '#141a20', roughness: 0.02, metalness: 0, ior: 1.333, specularIntensity: 0.9, envMapIntensity: 1.4,
+      normalMap: texturaAneis(26, 1), normalScale: new THREE.Vector2(0.55, 0.55), clearcoat: 1, clearcoatRoughness: 0, clearcoatNormalMap: texturaAneis(34, 2), clearcoatNormalScale: new THREE.Vector2(0.35, 0.35),
+      alphaMap: texturaBorda(), transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    matPocaUltra.normalMap.repeat.set(2, 2); matPocaUltra.clearcoatNormalMap.repeat.set(3, 3);
+    matPocaUltra.userData.ultra = true;
+  }
+  const quer = sim ? matPocaUltra : matPocaSimples;
+  if (pocas.material !== quer) { quer.opacity = pocas.material.opacity; pocas.material = quer; }
+}
+function animarPocas(dt) {
+  const m = pocas.material; if (!m.normalMap) return;
+  m.normalMap.rotation += dt * 0.25; m.normalMap.offset.x += dt * 0.03;   // anéis andando (as duas camadas para lados opostos)
+  m.clearcoatNormalMap.rotation -= dt * 0.35; m.clearcoatNormalMap.offset.y += dt * 0.05;
+  m.normalMap.center.set(0.5, 0.5); m.clearcoatNormalMap.center.set(0.5, 0.5);
+}
 const listaPocas = [];   // [x, z, raio] das poças de chuva em volta do jogador
 // tem poça d'água aqui? (para o espirro de quem pisa ou passa de carro)
 export function pocaEm(x, z) {
@@ -156,7 +201,8 @@ export function atualizar(dt, seg, ciclo, centro, luzes) {
   m.visible = chao > 0.01 && !centro.dentro;
   if (m.visible) {
     if (!centroChao || Math.hypot(centro.x - centroChao.x, centro.z - centroChao.z) > 16) espalhar(centro.x, centro.z);
-    m.material.opacity = (m === pocas ? 0.62 : 0.92) * chao;
+    m.material.opacity = (m === pocas ? (pocas.material.userData.ultra ? 0.95 : 0.62) : 0.92) * chao;
+    if (m === pocas && pocas.material.userData.ultra) animarPocas(dt);
   } else centroChao = null;
 
   // sons do tempo

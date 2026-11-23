@@ -232,6 +232,12 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.NeutralToneMapping ?? THREE.ACESFilmicToneMapping;   // neutro: cores vivas, brancos sem estourar
 renderer.toneMappingExposure = 0.95;
+// 21o: neblina com curva exponencial (exp²): começa mais cedo e bem fraca, engrossa no horizonte e chega a 100% no fim
+// da visão (fogFar). A Fog linear continua sendo a que controla perto/longe (o jogo encurta a visão no 3D e na chuva e
+// a câmera não desenha além do fogFar); só a forma da curva muda, então nada "pipoca" no limite.
+THREE.ShaderChunk.fog_fragment = THREE.ShaderChunk.fog_fragment.replace(
+  'float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );',
+  'float fogT = clamp( ( vFogDepth - fogNear * 0.35 ) / max( fogFar - fogNear * 0.35, 1.0 ), 0.0, 1.0 ); float fogFactor = ( 1.0 - exp( -3.2 * fogT * fogT ) ) / ( 1.0 - exp( -3.2 ) );');
 // celular: ao sair do app, o sistema pode tirar a placa de vídeo do jogo (contexto WebGL perdido). Na volta, texturas e
 // sombras não voltam direito e o cenário fica escuro. A posição já foi salva ao sair; então o jogo recarrega limpo.
 {
@@ -3974,7 +3980,8 @@ async function iniciarJogo(perfil) {
     Promise.all(nomes.map((n) => Promise.resolve(carregarGLB(`assets/modelos/${n}.glb`)).then((g) => [n, g?.scene]).catch(() => [n, null]))).then((l) => { const m = Object.fromEntries(l.filter(([, c]) => c)); if (Object.keys(m).length) mundo.ativarPredios3d(m); }); }
   for (const c of mundo.CIDADES) if (c.loja) colocarLojaExtra(c.loja.x, c.loja.z);
   montarAgencias();
-  civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n], addPiso: mundo.addPiso, foco: () => foco() });
+  civico.iniciar({ scene, textoSprite, colisores, balcao, janelas: luzesCasas, altura: alturaChao, modelo: (n) => modelos[n], addPiso: mundo.addPiso, foco: () => foco(),
+    verniz: () => (/^(alto|ultra)$/.test(visual.nivelAtual()) ? (TOQUE ? 3 : 8) : visual.nivelAtual() === 'medio' && !TOQUE ? 3 : 0) });   // 21o: quantos veículos com verniz
   civico.montarPrefeitura(); montarBasePrf(); civico.montarConcessionaria();
   { // degraus da entrada da prefeitura: o personagem sobe neles em vez de afundar
     const P = civico.PREFEITURA;
@@ -10271,7 +10278,7 @@ function quadroJogo() {
   clima.atualizar(dt, agoraServidor() / 1000, CICLO_DIA, { x: foco().x, y: (foco().y || 0) - 2, z: foco().z, dentro: !!jogador.dentroCasa && !averiguando }, { sol, hemi, cena: scene });
   tempoClima -= dt; if (tempoClima <= 0) { tempoClima = 30; carregarClima(); }
   diag('mundo (LOD)');
-  mundo.atualizar(dt);
+  mundo.atualizar(dt); clima.aguaUltra(visual.nivelAtual() === 'ultra');
   mundo.carrosPerto(foco().x, foco().z, dt);
   mundo.arvoresPerto(foco().x, foco().z, dt); mundo.gramaPerto(foco().x, foco().z, dt); marcasSocorro(); atualizarSocorristas(dt);
   mundo.propsPerto(foco().x, foco().z, dt); semaforos.atualizar(dt, foco().x, foco().z);

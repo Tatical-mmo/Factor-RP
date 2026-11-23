@@ -9,8 +9,79 @@ let ctx = null;
 let incendios = [], tempoFogo = 2, tempoProc = 20, tempoPonto = 45, esperaPonto = 0, tempoGuerra = 3;
 let guerras = [], hud = null, apagando = null;
 const vistos = new Set(), focos = new Map(), jatos = [];
-const matAgua = new THREE.MeshBasicMaterial({ color: '#9fd4ff', transparent: true, opacity: 0.75, depthWrite: false });
-const geoGota = new THREE.SphereGeometry(0.14, 6, 4);
+const matAgua = new THREE.MeshBasicMaterial({ color: '#cfeaff', transparent: true, opacity: 0.6, depthWrite: false });
+const geoGota = new THREE.SphereGeometry(0.08, 6, 4);
+// ---- jato contínuo (21o): um tubo d'água em arco do bico até o fogo (fino no bico, abrindo em leque no fim), com
+// listras de água correndo, névoa onde bate e gotas soltas. No helicóptero vira uma cortina caindo do balde.
+const SEG = 28, LADOS = 10;
+let jatoMalha = null, nevoas = [], tNevoa = 0;
+function texturaFluxo() {
+  const W = 64, H = 256, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
+  g.fillStyle = '#6a6a6a'; g.fillRect(0, 0, W, H);   // água contínua (meio transparente) com fios mais claros por cima
+  for (let i = 0; i < 90; i++) {   // fios d'água compridos, claros, em alturas e larguras diferentes
+    const x = Math.random() * W, y = Math.random() * H, l = 30 + Math.random() * 90, w = 1 + Math.random() * 3, a = 0.35 + Math.random() * 0.65;
+    const gr = g.createLinearGradient(0, y, 0, y + l); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, `rgba(255,255,255,${a})`); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(x, y, w, l); if (y + l > H) g.fillRect(x, y - H, w, l);
+  }
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 3); return t;
+}
+function texturaNevoa() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 2, 32, 32, 31); gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.5, 'rgba(235,245,255,0.35)'); gr.addColorStop(1, 'rgba(235,245,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv);
+}
+function montarJato() {
+  const pos = new Float32Array((SEG + 1) * LADOS * 3), uv = new Float32Array((SEG + 1) * LADOS * 2), idx = [];
+  for (let i = 0; i <= SEG; i++) for (let k = 0; k < LADOS; k++) { uv[(i * LADOS + k) * 2] = k / (LADOS - 1); uv[(i * LADOS + k) * 2 + 1] = i / SEG; }
+  for (let i = 0; i < SEG; i++) for (let k = 0; k < LADOS; k++) { const a = i * LADOS + k, b = i * LADOS + (k + 1) % LADOS, c = a + LADOS, d = b + LADOS; idx.push(a, c, b, b, c, d); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setIndex(idx);
+  const mat = new THREE.MeshStandardMaterial({ color: '#e6f5ff', emissive: '#1b3a52', emissiveIntensity: 0.35, roughness: 0.12, metalness: 0, envMapIntensity: 1.6, transparent: true, opacity: 0.9, alphaMap: texturaFluxo(), depthWrite: false, side: THREE.DoubleSide });
+  jatoMalha = new THREE.Mesh(geo, mat); jatoMalha.frustumCulled = false; jatoMalha.renderOrder = 3; jatoMalha.visible = false; ctx.scene.add(jatoMalha);
+  const mn = new THREE.SpriteMaterial({ map: texturaNevoa(), color: '#eef6ff', transparent: true, opacity: 0, depthWrite: false });
+  for (let i = 0; i < 14; i++) { const s = new THREE.Sprite(mn.clone()); s.visible = false; s.userData = { vida: Math.random(), x: 0, z: 0 }; ctx.scene.add(s); nevoas.push(s); }
+}
+const _o = new THREE.Vector3(), _f = new THREE.Vector3(), _c = new THREE.Vector3(), _pt = new THREE.Vector3(), _tg = new THREE.Vector3(), _n1 = new THREE.Vector3(), _n2 = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+function origemJatoAgora() {
+  const j = ctx.jogador(), doAlto = ctx.origemJato?.(), alcance = ctx.alcanceJato?.() || 10;
+  if (doAlto) return { o: _o.copy(doAlto), alto: true };
+  if (alcance > 10) return { o: _o.set(j.pos.x, j.pos.y + 3.6, j.pos.z), alto: false };
+  return { o: _o.set(j.pos.x + Math.sin(j.yaw || 0) * 0.5, j.pos.y + 1.3, j.pos.z + Math.cos(j.yaw || 0) * 0.5), alto: false };
+}
+function atualizarJatoContinuo(dt) {
+  const f = apagando && incendios.find((x) => x.id === apagando.id);
+  if (!jatoMalha) { if (!f) return; montarJato(); }
+  jatoMalha.visible = !!f;
+  for (const s of nevoas) if (!f) s.visible = false;
+  if (!f) return;
+  const { o, alto } = origemJatoAgora(), hf = ctx.altura(f.x, f.z) + (alto ? 0 : 1.1);
+  _f.set(f.x, hf, f.z);
+  const dist = Math.hypot(f.x - o.x, f.z - o.z);
+  // arco: o ponto de controle sobe (mangueira) ou fica logo abaixo do balde (helicóptero: a água cai quase reta)
+  if (alto) _c.set((o.x * 3 + f.x) / 4, o.y - 2, (o.z * 3 + f.z) / 4); else _c.set((o.x + f.x) / 2, Math.max(o.y, hf) + dist * 0.22, (o.z + f.z) / 2);
+  const P = jatoMalha.geometry.attributes.position, arr = P.array, t0 = performance.now() / 1000;
+  for (let i = 0; i <= SEG; i++) {
+    const t = i / SEG, a = (1 - t) * (1 - t), b = 2 * (1 - t) * t, c = t * t;
+    _pt.set(a * o.x + b * _c.x + c * _f.x, a * o.y + b * _c.y + c * _f.y, a * o.z + b * _c.z + c * _f.z);
+    _tg.set(2 * (1 - t) * (_c.x - o.x) + 2 * t * (_f.x - _c.x), 2 * (1 - t) * (_c.y - o.y) + 2 * t * (_f.y - _c.y), 2 * (1 - t) * (_c.z - o.z) + 2 * t * (_f.z - _c.z)).normalize();
+    _n1.crossVectors(_tg, _up); if (_n1.lengthSq() < 1e-4) _n1.set(1, 0, 0); _n1.normalize(); _n2.crossVectors(_n1, _tg).normalize();
+    // fino no bico, abre no fim; uma ondulação leve deixa o jato "vivo"
+    const r = (alto ? 0.35 + t * 1.6 : 0.1 + t * t * 0.8) * (1 + 0.12 * Math.sin(t0 * 23 + i * 1.7));
+    for (let k = 0; k < LADOS; k++) {
+      const ang = k / LADOS * Math.PI * 2, cx = Math.cos(ang) * r, cy = Math.sin(ang) * r * (alto ? 1 : 0.8), q = (i * LADOS + k) * 3;
+      arr[q] = _pt.x + _n1.x * cx + _n2.x * cy; arr[q + 1] = _pt.y + _n1.y * cx + _n2.y * cy; arr[q + 2] = _pt.z + _n1.z * cx + _n2.z * cy;
+    }
+  }
+  P.needsUpdate = true; jatoMalha.geometry.computeVertexNormals();
+  jatoMalha.material.alphaMap.offset.y -= dt * (alto ? 1.6 : 2.6);   // a água correndo do bico para o fogo
+  // névoa onde a água bate (sobe e se espalha); pingos soltos saindo do jato
+  for (const s of nevoas) {
+    const u = s.userData; u.vida += dt / (alto ? 1.4 : 1.0);
+    if (u.vida >= 1) { u.vida = 0; const a = Math.random() * Math.PI * 2, rr = Math.random() * (alto ? 2.2 : 1.2); u.x = Math.cos(a) * rr; u.z = Math.sin(a) * rr; }
+    const v = u.vida; s.visible = true; s.position.set(f.x + u.x * (1 + v), ctx.altura(f.x, f.z) + 0.4 + v * (alto ? 2.5 : 1.6), f.z + u.z * (1 + v));
+    const e = (alto ? 2.2 : 1.3) + v * (alto ? 3 : 2); s.scale.set(e, e, 1); s.material.opacity = Math.sin(v * Math.PI) * (alto ? 0.5 : 0.42);
+  }
+  if ((tNevoa -= dt) <= 0) { tNevoa = 0.06; esguichar(f, alto ? o.clone().setY(o.y - 1) : o.clone(), 2); }
+}
 let texMancha = null;
 function mancha() {     // ponto suave (centro claro, borda transparente) para chamas, brilho e fumaça
   if (texMancha) return texMancha;
@@ -153,6 +224,7 @@ function atualizarFocos(dt) {
   luzDoFogo(dt, t);
   for (const [id, o] of focos) if (!ativos.has(id)) { ctx.scene.remove(o.g); o.g.traverse((x) => x.material?.dispose?.()); focos.delete(id); }
   // jatos d'água
+  atualizarJatoContinuo(dt);
   for (let i = jatos.length - 1; i >= 0; i--) {
     const jt = jatos[i]; jt.vida -= dt; jt.v.y -= 9.8 * dt; jt.m.position.addScaledVector(jt.v, dt);
     if (jt.vida <= 0) { ctx.scene.remove(jt.m); jatos.splice(i, 1); }

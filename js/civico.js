@@ -1003,7 +1003,9 @@ export function eixosDe(o) {
 
 // nas curvas; de longe usa a roda simples e não gira
 const _pR = new THREE.Vector3();
+let _tVerniz = 0;
 export function atualizarRodas(dt, cam) {
+  if ((_tVerniz -= dt) <= 0) { _tVerniz = 0.5; atualizarVerniz(cam); }
   for (const m of comRodas) {
     if (!m.parent) { comRodas.delete(m); continue; }
     const gr = m.userData.grupoRodas || (m.userData.grupoRodas = m.getObjectByName('rodas')); if (!gr) { comRodas.delete(m); continue; }
@@ -1202,6 +1204,68 @@ function repintar(m, cor) {
     nova.offset.copy(tx.offset); nova.repeat.copy(tx.repeat); nova.anisotropy = tx.anisotropy;
     _repintadas.set(k, nova); m.map = nova; m.color.set('#ffffff');
   } catch { m.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), 0.45); }   // imagem protegida ou sem canvas: pinta de leve como antes
+}
+// ---- verniz automotivo (21o): MeshPhysicalMaterial com clearcoat só na lataria. A máscara do verniz sai da própria
+// textura (os pixels da cor dominante da carroceria; carro branco/prata: o cinza claro), então vidro, pneu, para-choque
+// preto e cromado ficam sem. Só nos veículos mais perto da câmera (quantos: ctx.verniz(), 0 = desligado), trocando o
+// material na hora e voltando ao normal quando se afastam: o resto da cena segue com MeshStandardMaterial.
+const _mascaras = new Map(), _fisicos = new WeakMap();
+function mascaraLataria(tx) {
+  const img = tx?.image; if (!img || !img.width) return null;
+  if (_mascaras.has(tx.uuid)) return _mascaras.get(tx.uuid);
+  let res = null;
+  try {
+    const esc = Math.min(1, 512 / Math.max(img.width, img.height)), W = Math.max(8, Math.round(img.width * esc)), H = Math.max(8, Math.round(img.height * esc));
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, W, H);
+    const d = g.getImageData(0, 0, W, H), px = d.data, hist = new Float32Array(36); let nCor = 0, nTot = 0, somaN = 0, nN = 0;
+    for (let i = 0; i < px.length; i += 4) { const [h, sa, l] = hsl(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255); nTot++; if (sa > 0.28 && l > 0.12 && l < 0.88) { hist[Math.floor(h * 36) % 36] += sa; nCor++; } if (sa < 0.12 && l > 0.55) { somaN += l; nN++; } }
+    const neutro = nCor < nTot * 0.12; let centro = 0;
+    if (!neutro) { let mi = 0; for (let i = 1; i < 36; i++) if (hist[i] + hist[(i + 35) % 36] + hist[(i + 1) % 36] > hist[mi] + hist[(mi + 35) % 36] + hist[(mi + 1) % 36]) mi = i; centro = (mi + 0.5) / 36; }
+    for (let i = 0; i < px.length; i += 4) {
+      const [h, sa, l] = hsl(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255); let v = 0;
+      if (neutro) v = sa < 0.16 && l > 0.5 && l < 0.985 ? 1 : 0;
+      else { const dh = Math.min(Math.abs(h - centro), 1 - Math.abs(h - centro)); v = sa > 0.2 && dh < 0.1 ? Math.min(1, (sa - 0.2) / 0.12) : 0; }
+      const b = Math.round(v * 255); px[i] = px[i + 1] = px[i + 2] = b; px[i + 3] = 255;
+    }
+    g.putImageData(d, 0, 0);
+    res = new THREE.CanvasTexture(cv); res.flipY = tx.flipY; res.wrapS = tx.wrapS; res.wrapT = tx.wrapT; res.channel = tx.channel; res.offset.copy(tx.offset); res.repeat.copy(tx.repeat);
+  } catch { res = null; }
+  _mascaras.set(tx.uuid, res); return res;
+}
+function fisicoDe(m) {
+  if (_fisicos.has(m)) return _fisicos.get(m);
+  let f = null;
+  if (m.isMeshStandardMaterial && !m.isMeshPhysicalMaterial && !m.transparent && m.map) {
+    const mask = mascaraLataria(m.map);
+    if (mask) {
+      f = new THREE.MeshPhysicalMaterial({ clearcoat: 1, clearcoatRoughness: 0.06, clearcoatMap: mask });
+      for (const k of ['map', 'color', 'roughness', 'metalness', 'normalMap', 'normalScale', 'roughnessMap', 'metalnessMap', 'emissive', 'emissiveMap', 'emissiveIntensity', 'aoMap', 'aoMapIntensity', 'envMapIntensity', 'side', 'alphaTest', 'vertexColors', 'flatShading', 'name']) {
+        const v = m[k]; if (v === undefined) continue; if (v?.isColor || v?.isVector2) f[k].copy(v); else f[k] = v;
+      }
+      f.roughness = Math.min(m.roughness ?? 0.5, 0.55);   // tinta envernizada não é fosca
+      f.userData = { ...m.userData, verniz: true };
+    }
+  }
+  _fisicos.set(m, f); return f;
+}
+function envernizar(m, sim) {
+  if (!!m.userData.envernizado === sim) return;
+  m.userData.envernizado = sim;
+  m.traverse((o) => {
+    if (!o.isMesh || o.isSkinnedMesh || o.parent?.name === 'luzes') return;
+    if (sim) { if (o.userData.matStd) return; const f = fisicoDe(o.material); if (f) { o.userData.matStd = o.material; o.material = f; } }
+    else if (o.userData.matStd) { o.material = o.userData.matStd; delete o.userData.matStd; }
+  });
+}
+// chamado por atualizarRodas: liga o verniz nos N veículos mais perto (dentro de 30 m) e desliga nos outros
+const _perto = [];
+function atualizarVerniz(cam) {
+  const n = ctx?.verniz?.() || 0;
+  _perto.length = 0;
+  if (n > 0) for (const m of comRodas) { if (!m.visible || !m.parent) continue; m.getWorldPosition(_pR); const d = _pR.distanceTo(cam); if (d < 30) _perto.push([d, m]); }
+  _perto.sort((a, b) => a[0] - b[0]);
+  const quer = new Set(_perto.slice(0, n).map((x) => x[1]));
+  for (const m of comRodas) envernizar(m, quer.has(m));
 }
 function veiculoGLBNovo(modelo, cor) {
   const L = GLB_NOVOS[modelo], g = new THREE.Group(), piv = new THREE.Group(), c = ctx.modelo(modelo).clone(true);

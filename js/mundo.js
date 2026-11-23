@@ -1577,9 +1577,26 @@ export function atualizar(dt) {
   A.normalMap.offset.x += dt * (ultra ? 0.011 : 0.004); A.normalMap.offset.y += dt * (ultra ? 0.007 : 0.0025);
   if (A.userData.ultra !== ultra) {
     A.userData.ultra = ultra;
-    A.roughness = ultra ? 0.04 : 0.12; A.metalness = ultra ? 0.4 : 0.25; A.envMapIntensity = ultra ? 1.8 : 1;
-    A.normalScale.set(ultra ? 1.15 : 0.6, ultra ? 1.15 : 0.6); A.color.set(ultra ? '#2f6f99' : '#3e7ea6');
+    // 21o: no ultra o mar/rio vira água de verdade (MeshPhysicalMaterial): sem metal, índice de refração da água
+    // (1,333: reflete pouco olhando de cima e quase como espelho no horizonte), duas camadas de ondas — marolas
+    // finas e irregulares andando para um lado e ondas maiores para o outro — e cor de água funda
+    if (ultra && !MAT.aguaUltra) {
+      const W = 512, cv = document.createElement('canvas'); cv.width = cv.height = W; const g = cv.getContext('2d'), img = g.createImageData(W, W);
+      const ondasF = []; for (let i = 0; i < 28; i++) { const f = 2 + Math.floor(Math.pow(Math.random(), 1.6) * 30), a = Math.random() * Math.PI * 2; ondasF.push([Math.round(Math.cos(a) * f), Math.round(Math.sin(a) * f), 1 / (1 + f * 0.35), Math.random() * 6.28]); }
+      for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {
+        let dx = 0, dy = 0; for (const [kx, ky, am, fs] of ondasF) { const c = Math.cos((kx * x + ky * y) / W * 6.2832 + fs) * am; dx += c * kx; dy += c * ky; }
+        const i = (y * W + x) * 4, nx = -dx * 0.06, ny = -dy * 0.06, l = Math.hypot(nx, ny, 1);
+        img.data[i] = (nx / l * 0.5 + 0.5) * 255; img.data[i + 1] = (ny / l * 0.5 + 0.5) * 255; img.data[i + 2] = (1 / l * 0.5 + 0.5) * 255; img.data[i + 3] = 255;
+      }
+      g.putImageData(img, 0, 0);
+      const fina = new THREE.CanvasTexture(cv); fina.wrapS = fina.wrapT = THREE.RepeatWrapping; fina.colorSpace = THREE.NoColorSpace; fina.repeat.set(140, 60);
+      MAT.aguaUltra = new THREE.MeshPhysicalMaterial({ color: '#0a3550', roughness: 0.06, metalness: 0, ior: 1.333, specularIntensity: 0.75, envMapIntensity: 1.05,
+        normalMap: fina, normalScale: new THREE.Vector2(0.8, 0.8), clearcoat: 1, clearcoatRoughness: 0.02, clearcoatNormalMap: A.normalMap, clearcoatNormalScale: new THREE.Vector2(0.9, 0.9) });
+    }
+    const de = ultra ? A : MAT.aguaUltra, para = ultra ? MAT.aguaUltra : A;
+    if (de && para) ctx?.scene?.traverse((o) => { if (o.isMesh && o.material === de) o.material = para; });
   }
+  if (ultra && MAT.aguaUltra) { const f = MAT.aguaUltra.normalMap; f.offset.x -= dt * 0.018; f.offset.y += dt * 0.012; }
 }
 
 // semáforos nos cruzamentos do centro e hidrantes nas esquinas dos quarteirões do centro
