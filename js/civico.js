@@ -180,16 +180,16 @@ export const CARROS = {
   van: { nome: 'Van', preco: 0, vel: 11 },
   caminhao_escola: { nome: 'Caminhão da autoescola', preco: 0, vel: 9 },
   caminhao_lixo: { nome: 'Caminhão de lixo', preco: 0, vel: 9 },
-  onibus_amarelo: { nome: 'Ônibus urbano (amarelo)', preco: 0, vel: 12 },
-  onibus_branco: { nome: 'Ônibus urbano (branco)', preco: 0, vel: 12 },
-  onibus_laranja: { nome: 'Ônibus urbano (laranja)', preco: 0, vel: 12 },
+  // 21r: frota nova da Fator RP (Meshy): os mesmos ônibus rodam nas linhas e são vendidos na Viação
+  onibus_amarelo: { nome: 'Urbano Fator RP 07', preco: 0, vel: 12 },
+  onibus_branco: { nome: 'Urbano Fator RP 08', preco: 0, vel: 12 },
+  onibus_laranja: { nome: 'Urbano Fator RP 10', preco: 0, vel: 12 },
   onibus_brasilsul: { nome: 'Ônibus de viagem dois andares', preco: 0, vel: 13 },
   onibus_viacao: { nome: 'Ônibus de viagem executivo', preco: 0, vel: 13 },
-  // 20e: ônibus da Viação Expresso Fator (rodoviários)
-  onibus_rod_dourado: { nome: 'Rodoviário Dourado (3 eixos)', preco: 0, vel: 13.5 },
-  onibus_rod_amarelo: { nome: 'Rodoviário Amarelo (3 eixos)', preco: 0, vel: 13.5 },
-  onibus_rod_vermelho: { nome: 'Executivo Vermelho', preco: 0, vel: 13 },
-  onibus_rod_branco: { nome: 'Micro Executivo Branco', preco: 0, vel: 12.5 },
+  onibus_rod_dourado: { nome: 'Rodoviário Fator RP 03 (3 eixos)', preco: 0, vel: 13.5 },
+  onibus_rod_amarelo: { nome: 'Rodoviário Fator RP 05 (4 eixos)', preco: 0, vel: 13.5 },
+  onibus_rod_vermelho: { nome: 'Rodoviário Fator RP 01', preco: 0, vel: 13 },
+  onibus_rod_branco: { nome: 'Rodoviário Fator RP 09', preco: 0, vel: 13 },
   aviao_pequeno: { nome: 'Avião pequeno', preco: 0, vel: 40, voa: true },
   aviao_medio: { nome: 'Avião médio', preco: 0, vel: 52, voa: true },
   aviao_grande: { nome: 'Avião grande', preco: 0, vel: 64, voa: true },
@@ -200,7 +200,7 @@ const ARRANCADA = { moto_250: 3.6, moto_650: 2.4, esportivo: 3, classico: 3, pop
   caminhao: 11, caminhao_escola: 11, caminhao_lixo: 11, bombeiros: 11, exercito_caminhao: 11, tanque: 12,
   onibus: 12, onibus_urbano: 12, onibus_apache: 12, onibus_busscar: 12, onibus_executivo: 14, onibus_executivo2: 15, onibus_dois_andares: 15, onibus_articulado: 16,
   onibus_amarelo: 12, onibus_branco: 12, onibus_laranja: 12, onibus_brasilsul: 15, onibus_viacao: 14,
-  onibus_rod_dourado: 14, onibus_rod_amarelo: 14, onibus_rod_vermelho: 12.5, onibus_rod_branco: 11 };
+  onibus_rod_dourado: 14, onibus_rod_amarelo: 15, onibus_rod_vermelho: 13, onibus_rod_branco: 13 };
 // aceleração (m/s²) na velocidade v: forte no começo e mais fraca perto do máximo, como um motor de verdade
 export function aceleracao(modelo, v, max) {
   const T = ARRANCADA[modelo] ?? 6, a0 = 1.21 * max / T, x = Math.min(1, Math.max(0, v / max));
@@ -830,17 +830,17 @@ export const RODAS = {
   onibus_apache: { estilo: 'pesado', eixos: [[-2.13, 0.56], [3.37, 0.56]], cy: 0.57, xo: 1.22, xi: 0.84 },
   onibus_busscar: { estilo: 'pesado', eixos: [[-2.27, 0.5], [3.16, 0.5]], cy: 0.51, xo: 1.2, xi: 0.84 },
   onibus_articulado: { estilo: 'pesado', eixos: [[-5.25, 0.52], [-3.9, 0.52], [1.8, 0.52], [6.6, 0.52]], cy: 0.53, xo: 1.23, xi: 0.84 },
-  // ônibus novos (medidos já girados e no tamanho do jogo)
-  onibus_amarelo: { estilo: 'pesado', eixos: [[-1.7, 0.52], [3.25, 0.52]], cy: 0.52, xo: 1.28, xi: 0.86, corte: [1.22, 0.45, 0.25] },
-  onibus_branco: { estilo: 'pesado', eixos: [[-2.0, 0.52], [3.3, 0.52]], cy: 0.52, xo: 1.28, xi: 0.86, corte: [1.22, 0.45, 0.25] },
-  onibus_laranja: { estilo: 'pesado', eixos: [[-2.35, 0.52], [3.35, 0.52]], cy: 0.52, xo: 1.2, xi: 0.8, corte: [1.22, 0.45, 0.25] },
-  onibus_brasilsul: { estilo: 'pesado', eixos: [[-3.9, 0.52], [-2.65, 0.52], [4.5, 0.52]], cy: 0.52, xo: 1.28, xi: 0.86, corte: [1.22, 0.45, 0.25] },
-  onibus_viacao: { estilo: 'pesado', eixos: [[-4.0, 0.52], [-2.5, 0.52], [4.7, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
-  // 20w: ônibus da Viação (rodoviários): medidos no tamanho do jogo — antes não tinham rodas que giram/viram nem a dinâmica dos outros
-  onibus_rod_dourado: { estilo: 'pesado', eixos: [[-3.43, 0.5], [-2.14, 0.5], [4.47, 0.5]], cy: 0.5, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
-  onibus_rod_amarelo: { estilo: 'pesado', eixos: [[-3.55, 0.5], [-2.11, 0.5], [4.34, 0.5]], cy: 0.5, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
-  onibus_rod_vermelho: { estilo: 'pesado', eixos: [[-2.14, 0.48], [3.75, 0.48]], cy: 0.48, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
-  onibus_rod_branco: { estilo: 'pesado', eixos: [[-1.9, 0.45], [3.39, 0.45]], cy: 0.45, xo: 1.25, xi: 0.85, corte: [1.22, 0.45, 0.25] },
+  // 21r: frota Fator RP (medidos já girados e no tamanho do jogo; vidros já viram vidro na própria textura).
+  // apagar: rodas do modelo que não ficam num eixo (o de 4 eixos ganhou eixos novos)
+  onibus_amarelo: { estilo: 'pesado', eixos: [[-2.03, 0.52], [3.69, 0.52]], cy: 0.52, xo: 1.26, xi: 0.84, corte: [1.22, 0.45, 0.25] },
+  onibus_branco: { estilo: 'pesado', eixos: [[-1.97, 0.52], [3.76, 0.52]], cy: 0.52, xo: 1.26, xi: 0.84, corte: [1.22, 0.45, 0.25] },
+  onibus_laranja: { estilo: 'pesado', eixos: [[-2.27, 0.52], [3.85, 0.52]], cy: 0.52, xo: 1.26, xi: 0.84, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_vermelho: { estilo: 'pesado', eixos: [[-3.46, 0.53], [3.86, 0.53]], cy: 0.53, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_branco: { estilo: 'pesado', eixos: [[-2.21, 0.52], [3.95, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_dourado: { estilo: 'pesado', eixos: [[-4.07, 0.52], [-2.63, 0.52], [4.66, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  // 4 eixos (o maior): os 2 da frente viram para o mesmo lado, o 3º é fixo (o giro é nele) e o 4º vira ao contrário
+  onibus_rod_amarelo: { estilo: 'pesado', eixos: [[-4.4, 0.55], [-3.05, 0.55], [2.75, 0.55], [4.1, 0.55]], cy: 0.55, xo: 1.3, xi: 0.88, corte: [1.25, 0.45, 0.7],
+    pivo: -3.05, dir: [2.75, -4.4], apagar: [[-3.61, 0.6], [3.95, 0.6]] },
   // carros novos (Meshy) das lojas e das polícias: medidos no tamanho do jogo (18l)
   saveiro: { estilo: 'carro', eixos: [[-1.22, 0.355], [1.43, 0.355]], cy: 0.36, xo: 0.93, xi: 0.62, corte: [1.1, 0.06, 0.08] },
   saveiro_som: { estilo: 'esporte', eixos: [[-1.24, 0.3], [1.41, 0.3]], cy: 0.3, xo: 0.92, xi: 0.6, corte: [1.12, 0.06, 0.08] },
@@ -880,7 +880,8 @@ function montarRodas(g, nome) {
   const { eixos, cy, xo, xi } = R, W = LARG_RODA[R.estilo], zf = Math.max(...eixos.map((e) => e[0]));
   // corte: [raio (x o da roda), quanto entra para dentro (rodado duplo), quanto sai para fora]
   const [kr, dxi, dxo] = R.corte || [1.04, 0.03, 0.06];
-  removerTriangulos(g, (x, y, z) => { const sx = Math.abs(x); if (sx < xi - dxi || sx > xo + dxo) return false; for (const [ez, r] of eixos) if (Math.hypot(y - cy, z - ez) < r * kr) return true; return false; }, 'semRodas');
+  const todas = R.apagar ? eixos.concat(R.apagar) : eixos;
+  removerTriangulos(g, (x, y, z) => { const sx = Math.abs(x); if (sx < xi - dxi || sx > xo + dxo) return false; for (const [ez, r] of todas) if (Math.hypot(y - cy, z - ez) < r * kr) return true; return false; }, 'semRodas');
   const b = new THREE.Box3().setFromObject(g);
   const grupo = new THREE.Group(); grupo.name = 'rodas'; g.add(grupo);
   matChassi ||= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0.1, side: THREE.DoubleSide });
@@ -889,6 +890,7 @@ function montarRodas(g, nome) {
   for (const [z, r] of eixos) for (const sg of [1, -1]) {
     const piv = new THREE.Object3D(); piv.position.set(sg * (xo + xi) / 2, cy, z); piv.userData.dianteira = z === zf && eixos.length > 1; grupo.add(piv);
     if (RODOVIARIOS.has(nome) && eixos.length === 3 && z === Math.min(...eixos.map((e) => e[0]))) piv.userData.trasDir = true;   // ônibus de viagem: último eixo vira ao contrário
+    if (R.dir?.includes(z)) piv.userData.trasDir = true;   // 4 eixos: o 2º vira junto com o 1º e o último ao contrário (pela geometria da curva, a partir do eixo fixo)
     if (tras && z < tras.position.z) { piv.userData.traseira = true; piv.userData.p0 = piv.position.clone(); }
     const rd = base.clone(true); rd.scale.set(sg * (xo - xi) / (2 * W), r, r); rd.userData.raio = r; piv.add(rd);
   }
@@ -978,9 +980,10 @@ export function entreEixos(modelo) {
 //  caminhão (e Caveirão de 3 eixos): a frente vira e o giro fica entre os dois eixos de trás (o par arrasta de lado);
 //  ônibus de viagem com 3 eixos: a frente vira, o do meio é fixo (é nele o giro) e o último vira ao contrário e menos
 //  (pela própria geometria da curva), o que fecha a curva de um ônibus longo.
-export const RODOVIARIOS = new Set(['onibus_executivo2', 'onibus_brasilsul', 'onibus_viacao', 'onibus_rod_dourado', 'onibus_rod_amarelo']);
+export const RODOVIARIOS = new Set(['onibus_executivo2', 'onibus_rod_dourado', 'onibus_rod_amarelo']);
 function eixosDoModelo(nome, R) {
   const zs = R.eixos.map((a) => a[0]).sort((a, b) => b - a), media = (l) => l.reduce((a, b) => a + b, 0) / l.length;
+  if (R.pivo !== undefined) return { zf: zs[0], zr: R.pivo, zt: zs[zs.length - 1], tipo: 'rodoviario' };
   if (RODOVIARIOS.has(nome) && zs.length === 3) return { zf: zs[0], zr: zs[1], zt: zs[2], tipo: 'rodoviario' };
   const meio = (zs[0] + zs[zs.length - 1]) / 2, f = zs.filter((z) => z >= meio), t = zs.filter((z) => z < meio);
   // dois eixos atrás: os pneus arrastam de lado e resistem à curva, como se o eixo ficasse mais para trás do meio deles
@@ -992,7 +995,7 @@ export function eixosDe(o) {
   const R = RODAS[glb]; let e = { zf: 1.3, zr: -1.3 };
   if (R && R.eixos.length > 1) {
     const tras = o.getObjectByName('traseira'), eix = R.eixos.filter((a) => !tras || a[0] > tras.position.z);
-    if (eix.length > 1) e = eixosDoModelo(tras ? '' : glb, { eixos: eix });
+    if (eix.length > 1) e = eixosDoModelo(tras ? '' : glb, { ...(tras ? {} : R), eixos: eix });
   }
   const k = o.scale.z || 1; e = { ...e, zf: e.zf * k, zr: e.zr * k, zt: e.zt != null ? e.zt * k : null };
   o.userData.eixos = e; return e;
@@ -1143,8 +1146,9 @@ function modeloCarroBase(modelo, cor) {
 // modelos 3D gerados (vêm com a frente em +x e tamanho 1): gira para +z, põe as rodas no chão e ajusta o comprimento
 const GLB_NOVOS = { caveirao: 6, viatura_pm: 4.6, viatura_civil: 4.6, viatura_prf: 4.7, saveiro: 4.4, saveiro_som: 4.4,
   // ônibus novos (Meshy): os da cidade (circulares) e os de viagem; vêm com a frente em -x
-  onibus_amarelo: 12.5, onibus_branco: 12, onibus_laranja: 12, onibus_brasilsul: 14, onibus_viacao: 14,
-  onibus_rod_dourado: 14, onibus_rod_amarelo: 14, onibus_rod_vermelho: 11.5, onibus_rod_branco: 10.5 };
+  onibus_amarelo: 12.5, onibus_branco: 12.5, onibus_laranja: 13,
+  onibus_rod_dourado: 14.5, onibus_rod_amarelo: 15, onibus_rod_vermelho: 13.5, onibus_rod_branco: 13.5 };
+export const comprimentoOnibus = (m) => GLB_NOVOS[m] || 12;
 const FRENTE_MENOS_X = new Set(['onibus_amarelo', 'onibus_branco', 'onibus_laranja', 'onibus_brasilsul', 'onibus_viacao', 'onibus_rod_dourado', 'onibus_rod_amarelo', 'onibus_rod_vermelho', 'onibus_rod_branco']);
 const FRENTE_MENOS_Z = new Set(['viatura_pm']);
 // ---- pintura de verdade (18v): a textura do Meshy já vem colorida (ex.: o Popular é azul); multiplicar por uma cor só

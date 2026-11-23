@@ -452,7 +452,7 @@ function blocoTesouro() {
   $('pSirenes').onclick = () => { ctx.testarSirenes(); msg('Sirenes tocando por 15 s para todos.'); };
   if ($('pFoto')) $('pFoto').onclick = () => { fechar(); setTimeout(() => ctx.modoFoto(), 150); };
 }
-const MOD_VIACAO = [['onibus_rod_dourado', 'Rodoviário Dourado'], ['onibus_rod_amarelo', 'Rodoviário Amarelo'], ['onibus_rod_vermelho', 'Executivo Vermelho'], ['onibus_rod_branco', 'Micro Executivo Branco']];
+const MOD_VIACAO = [['onibus_rod_amarelo', 'Rodoviário 05 (4 eixos)'], ['onibus_rod_dourado', 'Rodoviário 03 (3 eixos)'], ['onibus_rod_vermelho', 'Rodoviário 01'], ['onibus_rod_branco', 'Rodoviário 09'], ['onibus_amarelo', 'Urbano 07'], ['onibus_branco', 'Urbano 08'], ['onibus_laranja', 'Urbano 10']];   // 21r: frota Fator RP
 async function blocoViacao() {
   const c = $('pViacao'); if (!c) return;
   let e; try { e = await ctx.viacaoEstado(); } catch (er) { c.textContent = er.message; return; }

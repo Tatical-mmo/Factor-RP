@@ -3974,7 +3974,7 @@ async function iniciarJogo(perfil) {
   if (!introRodando) $('carregando').classList.remove('oculto');   // 20l: durante o vídeo carrega por trás, sem aparecer
   montarChao();
   // um modelo faltando não pode travar o jogo: ele só fica de fora (veículos e prédios têm versão feita por código)
-  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_executivo' ? '?v=rotor21n' : m === 'helicoptero_exercito' ? '?v=aberto19f' : /^onibus_rod_/.test(m) ? '?v=fecha20y' : /^(aviao_|onibus_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau2' : m === 'empresa_f3' ? '?v=sede18q' : m === 'empresa_f2' ? '?v=sede19b' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
+  const carregamentos = MODELOS.map(async (m) => { try { modelos[m] = prepararEstatico((await carregarGLB(`assets/modelos/${m}.glb${m === 'roda_pesado' ? '?v=roda2' : m === 'ambulancia' ? '?v=samu1' : m === 'helicoptero_executivo' ? '?v=rotor21n' : m === 'helicoptero_exercito' ? '?v=aberto19f' : /^onibus_/.test(m) ? '?v=fator21r' : /^(aviao_|caminhao_lixo)/.test(m) ? '?v=tex1' : m === 'caminhao' ? '?v=bau2' : m === 'empresa_f3' ? '?v=sede18q' : m === 'empresa_f2' ? '?v=sede19b' : /^caminhao/.test(m) ? '?v=cam2' : ''}`)).scene, /^caminhao/.test(m)); if (/^predio_/.test(m)) modelos[m].traverse((o) => { if (o.isMesh) o.userData.predio3d = 1; }); } catch (e) { console.warn('modelo não carregou:', m, e); } });
   const pastaJogador = ROBOS.includes(id) ? 'robos' : 'personagens';
   const skin = id;   // em serviço o policial continua com o próprio personagem (a farda mostra a corporação)
   const avatarP = criarAvatar(ROBOS.includes(skin) ? 'robos' : pastaJogador, skin);
@@ -7191,7 +7191,7 @@ async function natalAdmin(catalogo, testeMin) {
 const VIACAO = { x0: 278, x1: 316.5, z0: -262, z1: -224, vz: -254, vx: (i) => 292 + i * 3.85, balcao: { x: 283.6, z: -256.6 },
   escr: { x0: 278.6, x1: 289, z0: -261.5, z1: -250 }, nVagas: 7 };
 const VIACAO_PONTOS = [{ x: 135, z: -230, nome: 'Rodoviária da Metrópole' }, { x: 69, z: -931, nome: 'Rodoviária de Vila Serra' }, { x: 69, z: 931, nome: 'Rodoviária de Porto Sul' }];
-const VIACAO_MODELOS = ['onibus_rod_dourado', 'onibus_rod_amarelo', 'onibus_rod_vermelho', 'onibus_rod_branco'];
+const VIACAO_MODELOS = ['onibus_rod_amarelo', 'onibus_rod_dourado', 'onibus_rod_vermelho', 'onibus_rod_branco', 'onibus_amarelo', 'onibus_branco', 'onibus_laranja'];   // 21r: a mesma frota das linhas
 let viacao = null, viacaoVagas = [], viacaoTeto = null, tViacao = 0, viacaoNpcs = null, viacaoCena = null;
 function montarViacao() {
   const y = 0.18, Q = VIACAO;
@@ -7335,7 +7335,7 @@ function executarViacao(k) {
 function cenaPassageiros(embarcar) {
   const c = jogador.carro; if (!c?.mesh) return;
   const m = c.mesh, fx = Math.sin(m.rotation.y), fz = Math.cos(m.rotation.y), rx = Math.cos(m.rotation.y), rz = -Math.sin(m.rotation.y);
-  const L = civico.CARROS[c.modelo] ? (c.modelo === 'onibus_rod_branco' ? 10.5 : c.modelo === 'onibus_rod_vermelho' ? 11.5 : 14) : 12;
+  const L = civico.comprimentoOnibus(c.modelo);
   const porta = { x: m.position.x + fx * (L / 2 - 1.6) - rx * 1.9, z: m.position.z + fz * (L / 2 - 1.6) - rz * 1.9 };
   if (!viacaoNpcs) {
     viacaoNpcs = [];
@@ -10775,7 +10775,7 @@ function npcAlgemado(n, dt) {
 // créditos dos modelos 3D com licença CC-BY 4.0 (a licença pede o nome do autor e o link da obra)
 const CREDITOS = [];   // (os ônibus do Sketchfab saíram do jogo)
 function creditos() {
-  escolher('📜 Créditos', '<b>Ônibus</b>: modelos 3D gerados por inteligência artificial (Meshy), inspirados nas carrocerias e chassis dos fabricantes brasileiros de ônibus, como <b>Marcopolo</b>, <b>Caio Induscar</b>, <b>Busscar</b>, <b>Comil</b> e <b>Mascarello</b>, e nos chassis <b>Mercedes-Benz</b>, <b>Volvo</b> e <b>Scania</b>. Pinturas, nomes de viações e marcas que aparecem nos ônibus pertencem aos seus donos; o jogo não tem ligação com essas empresas.<br><br><b>Personagens, máscaras e veículos novos</b>: gerados com Meshy e Tripo.',
+  escolher('📜 Créditos', '<b>Ônibus</b>: frota da <b>Fator RP</b>, empresa fictícia do jogo. Modelos 3D gerados por inteligência artificial (Meshy), com vidros, rodas e eixos ajustados no jogo. Qualquer semelhança com carrocerias reais é inspiração de estilo; o jogo não tem ligação com fabricantes ou viações.<br><br><b>Personagens, máscaras e veículos novos</b>: gerados com Meshy e Tripo.',
     [{ rotulo: 'Ok', fn: () => {} }, ...CREDITOS.map(([obra, autor, url]) => ({ rotulo: `🚌 "${obra}" · por ${autor} (Sketchfab)`, fn: () => window.open(url, '_blank', 'noopener') }))]);
 }
 function escolher(titulo, texto, opcoes) {
@@ -13787,7 +13787,7 @@ const TERMINAL_RODO = { x0: 113, x1: 211, z0: -265, z1: -221, saguao: { x: 186.5
 // cinco plataformas na Rodoviária (oeste → leste). As linhas "circulares" não param na plataforma: passam na calçada
 // do lado leste da rodoviária (ponto Rodoviária) e rodam sem parar o dia todo.
 const PLAT = [117.5, 126.1, 134.7, 143.3, 151.9];
-const URB = ['onibus_amarelo', 'onibus_branco', 'onibus_laranja'], EXEC = ['onibus_brasilsul', 'onibus_viacao'];   // os de viagem vão para as cidades vizinhas
+const URB = ['onibus_amarelo', 'onibus_branco', 'onibus_laranja'], EXEC = ['onibus_rod_amarelo', 'onibus_rod_dourado', 'onibus_rod_vermelho', 'onibus_rod_branco'];   // 21r: frota Fator RP; os de viagem vão para as cidades vizinhas
 const ROD = [188, -216, 'Rodoviária', 'o'];   // ponto coberto das circulares: calçada da frente do terminal (elas não entram)
 const LINHAS = [
   { id: 1, nome: 'Linha 1 · Circular', curto: 'Circular', cor: '#1f6fd1', faixa: PLAT[0], k: 3, fase: 0, modelos: URB,
@@ -13802,7 +13802,7 @@ const LINHAS = [
   { id: 3, nome: 'Linha 3 · Leste', curto: 'Leste', cor: '#2e9e57', faixa: PLAT[3], k: 3, fase: 14, modelos: URB,
     rua: [[PLAT[3], -216], [270, -216], [270, 162], [108, 162], [108, -270], [PLAT[3], -270]],
     paradas: [[270, -90, 'Zona Leste'], [190, 162, 'Cemitério'], [108, 27, null], [108, -180, 'Banco']] },
-  { id: 2, nome: 'Linha 2 · Aeroporto', curto: 'Aeroporto', cor: '#e8891c', faixa: PLAT[4], k: 3, fase: 7, modelos: ['onibus_viacao'],
+  { id: 2, nome: 'Linha 2 · Aeroporto', curto: 'Aeroporto', cor: '#e8891c', faixa: PLAT[4], k: 3, fase: 7, modelos: ['onibus_rod_vermelho', 'onibus_rod_branco'],
     rua: [[PLAT[4], -216], [216, -216], [216, -270], [162, -270], [162, -668], [400, -668], [400, -688], [162, -688], [162, -270], [PLAT[4], -270]],   // sai por baixo e contorna o terminal (a rua do meio agora é do terminal)
     paradas: [[162, -470, 'Av. do Aeroporto', 'n'], [270, -688, '✈️ Aeroporto · Terminal'], [162, -420, 'Av. do Aeroporto', 's']] },
   // circulares (sem plataforma): começam e terminam no ponto coberto da calçada da frente do terminal (não entram nele)
@@ -13944,7 +13944,7 @@ const estadoBus = new Map(), pontosOcupados = [], pontosAntes = [], juncaoAntes 
 let paradasMontadas = false, minhaVolta = null, placasRodo = [];
 // modelo do ônibus de cada saída: as linhas alternam entre os modelos (o mesmo ônibus físico mantém o modelo)
 // comprimento de cada ônibus (o articulado tem 18,6 m): a fila e a espera nos pontos usam o tamanho de verdade
-const COMP_ONIBUS = (mod) => (mod === 'onibus_articulado' ? 18.6 : /^onibus_(executivo2|dois_andares|brasilsul|viacao)$/.test(mod) ? 14 : mod === 'onibus_amarelo' ? 12.5 : 12);
+const COMP_ONIBUS = (mod) => (mod === 'onibus_articulado' ? 18.6 : civico.comprimentoOnibus(mod));
 const passoFila = (L) => (L.passoFila ??= Math.max(...L.modelos.map(COMP_ONIBUS)) + 2);
 const folgaFila = (L) => Math.max(0, passoFila(L) - 14);   // a vaga da fila fica a 13 m da plataforma: ônibus compridos recuam
 // cada vão da rodoviária cabe dois ônibus (plataforma + fila). O terceiro espera fora, na "fila imaginária": no
