@@ -443,6 +443,8 @@ function salvarPref(k, v) {
 }
 function aplicarPrefs() {
   const pr = jogador.perfil?.prefs || {};
+  if (typeof pr.volante === 'boolean' && pr.volante !== volantePref) { volantePref = pr.volante; rotuloVolante(); }
+  $('btChassi')?.classList.toggle('oculto', jogador.perfil?.cargo !== 'admin');
   if (typeof pr.ajudaMira === 'boolean' && pr.ajudaMira !== ajudaMira) { ajudaMira = pr.ajudaMira; const sp = $('btAjudaMira')?.querySelector('span'); if (sp) sp.textContent = `Ajuda de mira: ${ajudaMira ? 'ligada' : 'desligada'}`; }
   if (baixouQualidade) salvarPref('grafico', visual.nivelAtual());   // o jogo baixou sozinho (sem memória): guarda o novo
   else if (visual.NIVEIS[pr.grafico] && pr.grafico !== visual.nivelAtual()) {
@@ -1606,7 +1608,8 @@ function alturaChao(x, z) {
 const teclas = new Set();
 const joy = { ativo: false, x: 0, y: 0, id: null };
 const manche = { ativo: false, x: 0, y: 0, id: null };   // avião: x inclina (vira), y puxa (sobe) / empurra (desce)
-const pedais = { esq: false, dir: false, acel: false, freio: false, empinar: false };
+const pedais = { esq: false, dir: false, acel: false, freio: false, empinar: false, volanteA: null };
+let volantePref = false, comVolanteUI = false;   // 21m: volante na tela no lugar das setas (escolha no menu)
 window.addEventListener('keydown', (e) => {
   const foco = document.activeElement;
   if (foco && (foco.tagName === 'INPUT' || foco.tagName === 'TEXTAREA')) return;
@@ -1623,7 +1626,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'm') abrirJanela('mochila');
   if (k === 'v') { voz.falar(true); desenharBotaoVoz(); }
   if (k === 'g') acaoAlgema();
-  if (k === 'h') lancarGranada();
+  if (k === 'h') { if (jogador.carro) alternarDebugChassi(); else lancarGranada(); }   // dirigindo: H mostra o chassi (a pé continua a granada)
   if (k === 'c') acaoCrime();
   if (k === 'j') ejetar();
 });
@@ -2058,7 +2061,7 @@ function modoHeli(sim) {
 function modoVolante(sim) {
   if (!sim && document.body.classList.contains('heli')) modoHeli(false);
   if (!sim) { document.body.classList.remove('aviao'); manche.x = manche.y = 0; manche.ativo = false; const b = $('manche')?.querySelector('i'); if (b) b.style.transform = ''; }
-  if (!sim && voandoUI) { voandoUI = false; document.body.classList.remove('voando'); } if (!sim && document.body.classList.contains('tanque')) { document.body.classList.remove('tanque'); $('btTiro').classList.toggle('oculto', !jogador.armado || !TOQUE); } document.body.classList.toggle('dirigindo', sim); for (const k in pedais) pedais[k] = false; joy.ativo = false; joy.x = joy.y = 0; }
+  if (!sim && voandoUI) { voandoUI = false; document.body.classList.remove('voando'); } if (!sim && document.body.classList.contains('tanque')) { document.body.classList.remove('tanque'); $('btTiro').classList.toggle('oculto', !jogador.armado || !TOQUE); } document.body.classList.toggle('dirigindo', sim); for (const k in pedais) pedais[k] = false; pedais.volanteA = null; joy.ativo = false; joy.x = joy.y = 0; }
 function entrarCarro(v) {
   if (jogador.carregando) { aviso('Largue a caixa antes de dirigir.'); return; }
   modoVolante(true);
@@ -2151,12 +2154,14 @@ function dirigir(dt) {
   const c = jogador.carro, max = c.max || civico.CARROS[c.modelo]?.vel || 15;
   if (civico.CARROS[c.modelo]?.moto && !c.moto) entrarMoto(c);   // 21i: moto de qualquer jeito (teste de veículos do admin, roubada…): piloto em cima
   if (c.dano === undefined) { c.dano = danoGuardado(c); if (c.dano >= 50) veicFumando.add(c); }
+  { const qv = volantePref && !c.voa && !c.aviao && !c.jato && !c.moto && !civico.CARROS[c.modelo]?.moto; if (qv !== comVolanteUI) { comVolanteUI = qv; document.body.classList.toggle('comVolante', qv); if (!qv) pedais.volanteA = null; } }
   if (c.voa !== voandoUI) { voandoUI = !!c.voa; document.body.classList.toggle('voando', voandoUI); }
   if (c.jato) { pilotarJato(c, dt); return; }
   if (c.aviao) { pilotarAviao(c, dt); return; }
   if (c.voa) { pilotarHeli(c, dt, max); return; }
   const acel = pedais.acel || teclas.has('w') || teclas.has('arrowup'), freio = pedais.freio || teclas.has('s') || teclas.has('arrowdown');
-  const volante = (pedais.dir || teclas.has('d') || teclas.has('arrowright') ? 1 : 0) - (pedais.esq || teclas.has('a') || teclas.has('arrowleft') ? 1 : 0);
+  const setas = (pedais.dir || teclas.has('d') || teclas.has('arrowright') ? 1 : 0) - (pedais.esq || teclas.has('a') || teclas.has('arrowleft') ? 1 : 0);
+  const analogico = comVolanteUI && pedais.volanteA != null && !setas, volante = analogico ? pedais.volanteA : setas;   // 21m: volante na tela (opcional)
   // aceleração suave; freio firme; parado, o freio vira ré (devagar)
   if (acel && !freio) c.vel = c.vel < 0 ? Math.min(0, c.vel + 10 * dt) : Math.min(max, c.vel + civico.aceleracao(c.modelo, c.vel, max) * dt);   // cada veículo com a sua arrancada
   else if (freio) c.vel = c.vel > 0.3 ? Math.max(0, c.vel - 11 * dt) : c.voa ? 0 : Math.max(-Math.min(4, max * 0.35), c.vel - 3 * dt);   // helicóptero não tem ré
@@ -2167,7 +2172,7 @@ function dirigir(dt) {
     // distância entre os eixos e da velocidade (rápido, o volante "pesa" e a curva fica mais aberta). Sem curva seca.
     // 20i: devagar o volante gira bem mais rápido (manobra leve); rápido continua gradual
     const vAbs = Math.abs(c.vel), rapidez = THREE.MathUtils.clamp(1 - (vAbs - 4) / 18, 0, 1);
-    c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * (volante ? 3.4 + 4 * rapidez : 4.5 + 2 * rapidez));
+    c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * (analogico ? 12 : volante ? 3.4 + 4 * rapidez : 4.5 + 2 * rapidez));
     // distância entre eixos do próprio modelo (com dois eixos atrás, o efetivo fica mais para trás: vira mais aberto)
     const tc = tipoCabine(), ex = c.mesh ? civico.eixosDe(c.mesh) : null;
     const eixo = c.moto ? 1.38 : ex && ex.zf - ex.zr > 1.5 ? ex.zf - ex.zr : tc === 'onibus' ? 6.2 : tc === 'caminhao' ? 4.8 : 2.7;
@@ -2177,12 +2182,21 @@ function dirigir(dt) {
     const tanque = c.modelo === 'tanque', maxEsterco = tc === 'carro' ? 0.68 : 0.84;
     c.eixoTras = c.moto ? -0.69 : tanque || !ex ? 0 : ex.zr;   // o veículo gira em volta do eixo de trás (a frente é que vira)
     const aLat = c.moto ? 9 : tanque ? 99 : tc === 'carro' ? (c.modelo === 'esportivo' || c.modelo === 'classico' ? 9.5 : 8) : 5;   // 20i: ~0,8 g no carro (antes 0,45 g: a 30 km/h só fazia curva de 14 m)
-    let curva = Math.tan(c.volante * maxEsterco) / eixo;
-    const curvaMax = aLat / Math.max(1, vAbs * vAbs);
-    curva = THREE.MathUtils.clamp(curva, -curvaMax, curvaMax);
-    const giro = tanque ? c.volante * 0.9 * Math.min(1, vAbs / 2 + 0.4) : vAbs * curva;
-    c.yawAntes = jogador.yaw;
-    jogador.yaw -= giro * dt * Math.sign(c.vel || 1);
+    const curvaPed = Math.tan(c.volante * maxEsterco) / eixo, curvaMax = aLat / Math.max(1, vAbs * vAbs);
+    // 21m: derrapada (só carros): acelerando, rápido e com o volante quase todo, além da aderência, a traseira escapa —
+    // o carro aponta mais para dentro da curva (beta), fecha um pouco mais a curva e não perde velocidade
+    if (c.yawMov == null || Math.abs(Math.atan2(Math.sin(jogador.yaw - c.yawMov - (c.beta || 0)), Math.cos(jogador.yaw - c.yawMov - (c.beta || 0)))) > 0.02) { c.yawMov = jogador.yaw; c.beta = 0; c.omega = 0; }   // mexeram no yaw de fora (entrou, teleporte…)
+    const derrapa = tc === 'carro' && !c.moto && !tanque && acel && !freio && c.vel > 11 && Math.abs(c.volante) > 0.7 && Math.abs(curvaPed) > curvaMax * 1.15;
+    const betaAlvo = derrapa ? -Math.sign(curvaPed) * Math.min(0.38, 0.12 + (Math.abs(curvaPed) / curvaMax - 1) * 0.3) : 0;
+    c.beta = (c.beta || 0) + (betaAlvo - (c.beta || 0)) * Math.min(1, dt * (derrapa ? 2.2 : 3.2));
+    if (derrapa && !c.derrapando) sons.derrapar?.(); c.derrapando = derrapa;
+    const curva = THREE.MathUtils.clamp(curvaPed, -curvaMax * (derrapa ? 1.2 : 1), curvaMax * (derrapa ? 1.2 : 1));
+    // inércia do giro: a curva entra e sai aos poucos (carro rápido, caminhão e ônibus mais devagar)
+    const giroAlvo = tanque ? c.volante * 0.9 * Math.min(1, vAbs / 2 + 0.4) : vAbs * curva, resp = tanque ? 99 : c.moto ? 12 : tc === 'carro' ? 8 : tc === 'caminhao' ? 3.8 : 3.2;
+    c.omega = (c.omega || 0) + (giroAlvo - (c.omega || 0)) * Math.min(1, dt * resp);
+    c.yawAntes = c.yawMov;
+    c.yawMov -= c.omega * dt * Math.sign(c.vel || 1);
+    jogador.yaw = c.yawMov + c.beta;
   }
   if (c.servico) civico.atualizarSirenes(performance.now() / 1000, c.mesh);
   if (!c.assentado) { resolverColisao(jogador.pos, c.raio || 1.3); c.assentado = true; }
@@ -2190,11 +2204,12 @@ function dirigir(dt) {
   {
     // bicicleta de verdade: o eixo de trás anda reto na direção que estava e a frente (que vira) puxa; o centro do
     // veículo é posto de volta a partir do eixo de trás. Assim a frente abre na curva e a traseira é arrastada.
-    const zr = c.eixoTras || 0, y0 = c.yawAntes ?? jogador.yaw;
+    // (na derrapada o carro anda pela direção do movimento, não para onde o nariz aponta)
+    const zr = c.eixoTras || 0, y0 = c.yawAntes ?? c.yawMov, y1 = c.yawMov ?? jogador.yaw;
     const rx = jogador.pos.x + Math.sin(y0) * zr + Math.sin(y0) * c.vel * dt, rz = jogador.pos.z + Math.cos(y0) * zr + Math.cos(y0) * c.vel * dt;
-    jogador.pos.x = rx - Math.sin(jogador.yaw) * zr; jogador.pos.z = rz - Math.cos(jogador.yaw) * zr;
+    jogador.pos.x = rx - Math.sin(y1) * zr; jogador.pos.z = rz - Math.cos(y1) * zr;
   }
-  if (!c.voa) { derrubarNoCaminho(c); colidirVeiculo(c, dt); resolverColisao(jogador.pos, c.raio || 1.3); }
+  if (!c.voa) { derrubarNoCaminho(c); colidirVeiculo(c, dt); resolverColisao(jogador.pos, c.raio || 1.3); colisaoChassi(c); }
   const andou = Math.hypot(jogador.pos.x - antes.x, jogador.pos.z - antes.z), esperado = Math.abs(c.vel) * dt;
   if (esperado > 0.01 && andou < esperado * 0.6) {          // bateu
     if (c.moto && Math.abs(c.vel) > 7) { quedaMoto(c, 'frente'); return; }   // 21h: de moto, o piloto voa
@@ -2421,6 +2436,103 @@ function alternarArma() {
   jogador.trava = 0.2;
 }
 
+
+// ---- 21m: colisão no comprimento todo: o círculo do meio sozinho deixava a frente e a traseira de um ônibus
+// atravessarem paredes, postes e carros parados. Agora uma fileira de círculos (largura do veículo) cobre do
+// para-choque de trás ao da frente; o que cada um encontra empurra o veículo inteiro.
+// caixa da lataria no espaço do veículo (sem os fachos dos faróis, halos e placas, que esticavam a caixa por metros)
+function caixaLataria(m) {
+  if (m.userData.caixaLat) return m.userData.caixaLat;
+  const rot = m.rotation.clone(), px = m.position.x, py = m.position.y, pz = m.position.z;
+  m.rotation.set(0, 0, 0); m.updateMatrixWorld(true);
+  const b = new THREE.Box3();
+  m.traverse((o) => {
+    if (!o.isMesh || o.isSprite || !o.visible || o.userData.semCaixa) return;
+    for (let a = o.parent; a && a !== m; a = a.parent) if (a.name === 'luzes' || !a.visible && a.name !== 'longe') return;
+    const mt = Array.isArray(o.material) ? o.material[0] : o.material; if (mt?.transparent && mt.depthWrite === false) return;   // facho / brilho
+    b.expandByObject(o);
+  });
+  m.rotation.copy(rot); m.updateMatrixWorld(true);
+  if (b.isEmpty()) return null;
+  return (m.userData.caixaLat = { x0: b.min.x - px, x1: b.max.x - px, y0: b.min.y - py, y1: b.max.y - py, z0: b.min.z - pz, z1: b.max.z - pz });
+}
+function circulosChassi(c) {
+  if (c.circ !== undefined) return c.circ;
+  const L = caixaLataria(c.mesh); if (!L || !c.mesh.getObjectByName('rodas')) return (c.circ = null);
+  const larg = Math.max(1, L.x1 - L.x0), z0 = L.z0, z1 = L.z1, comp = z1 - z0;
+  const r = Math.min(larg / 2 * 0.9, 1.4), n = Math.max(2, Math.ceil((comp - 2 * r) / (r * 1.4)) + 1), zs = [];
+  if (comp < 2 * r + 0.2) { c.circ = null; return null; }   // carro curto: o círculo do meio já basta
+  for (let i = 0; i < n; i++) zs.push(z0 + r + (comp - 2 * r) * i / (n - 1));
+  c.circ = { r, zs }; return c.circ;
+}
+function colisaoChassi(c) {
+  const k = circulosChassi(c); if (!k) return;
+  const sy = Math.sin(jogador.yaw), cy = Math.cos(jogador.yaw), q = new THREE.Vector3();
+  for (const z of k.zs) {
+    if (Math.abs(z) < k.r * 0.8) continue;   // o do meio já foi resolvido
+    q.set(jogador.pos.x + sy * z, jogador.pos.y, jogador.pos.z + cy * z);
+    const ax = q.x, az = q.z;
+    colidirLista(colisores, q, k.r); mundo.colidir(q, k.r, colidirLista); colidirCarros(q, k.r);
+    jogador.pos.x += q.x - ax; jogador.pos.z += q.z - az;
+  }
+}
+// ---- 21m: volante na tela (opção do menu, salva na conta): arrastar girando o volante; solto, ele volta ao centro.
+function rotuloVolante() { const sp = $('btVolante')?.querySelector('span'); if (sp) sp.textContent = `Direção: ${volantePref ? 'volante' : 'setas'}`; }
+function montarVolante() {
+  if ($('volanteUI')) return;
+  const el = document.createElement('div'); el.id = 'volanteUI';
+  el.innerHTML = `<svg viewBox="-100 -100 200 200" width="100%" height="100%"><circle r="86" fill="rgba(14,24,40,.25)" stroke="rgba(10,14,22,.75)" stroke-width="24"/><circle r="86" fill="none" stroke="rgba(232,238,248,.92)" stroke-width="15"/>
+    <circle r="22" fill="rgba(20,28,42,.9)" stroke="rgba(232,238,248,.92)" stroke-width="4"/><path d="M-80 8 L-22 4 M80 8 L22 4 M0 22 L0 80" stroke="rgba(232,238,248,.92)" stroke-width="14" stroke-linecap="round"/>
+    <rect x="-6" y="-100" width="12" height="20" rx="3" fill="#ffd23e"/></svg>`;
+  document.body.appendChild(el);
+  let dedo = null, ang0 = 0, giro = 0, base = 0;
+  const angulo = (e) => { const r = el.getBoundingClientRect(); return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)); };
+  const mostrar = () => { el.querySelector('svg').style.transform = `rotate(${giro}rad)`; pedais.volanteA = THREE.MathUtils.clamp(giro / 2.3, -1, 1); };
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); dedo = e.pointerId; try { el.setPointerCapture(dedo); } catch { /* sem captura */ } ang0 = angulo(e); base = giro; el.querySelector('svg').style.transition = 'none'; });
+  el.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== dedo) return;
+    let d = angulo(e) - ang0; d = Math.atan2(Math.sin(d), Math.cos(d));   // atravessa o ±180° sem pular
+    giro = THREE.MathUtils.clamp(base + d, -2.3, 2.3); if (Math.abs(d) > 2.5) { ang0 = angulo(e); base = giro; }
+    mostrar();
+  });
+  const soltar = (e) => { if (e.pointerId !== dedo) return; dedo = null; giro = 0; el.querySelector('svg').style.transition = 'transform .25s ease-out'; mostrar(); };
+  el.addEventListener('pointerup', soltar); el.addEventListener('pointercancel', soltar);
+}
+// ---- 21m: chassi à mostra (tecla H dirigindo, ou no menu do admin): círculo de colisão (amarelo), eixos (azul),
+// ponto de giro (vermelho), centro das rodas (verde) e o eixo que vira ao contrário no ônibus de viagem (laranja)
+let debugChassi = false;
+const guiasChassi = new Map();
+function alternarDebugChassi() {
+  debugChassi = !debugChassi;
+  if (!debugChassi) { for (const [m, g] of guiasChassi) m.remove(g); guiasChassi.clear(); }
+  aviso(debugChassi ? '🔧 Chassi à mostra: amarelo = colisão, azul = eixos, vermelho = ponto de giro, verde = rodas. H de novo esconde.' : '🔧 Chassi escondido.', 4);
+}
+function guiaChassi(m, raio) {
+  const g = new THREE.Group(), k = m.scale.x || 1, ex = civico.eixosDe(m), gr = m.getObjectByName('rodas');
+  const linha = (pts, cor) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: cor, depthTest: false })); l.renderOrder = 9; g.add(l); return l; };
+  const circulo = (rr, zc) => { const a0 = []; for (let i = 0; i <= 40; i++) { const a = i / 40 * Math.PI * 2; a0.push(new THREE.Vector3(Math.sin(a) * rr / k, 0.08 / k, zc / k + Math.cos(a) * rr / k)); } linha(a0, '#ffd23e'); };
+  circulo(raio, 0);
+  const cc = jogador.carro?.mesh === m ? circulosChassi(jogador.carro) : null; if (cc) for (const z of cc.zs) if (Math.abs(z) >= cc.r * 0.8) circulo(cc.r, z);
+  const bola = (cor, x, y, z, rr) => { const b = new THREE.Mesh(new THREE.SphereGeometry(rr, 10, 8), new THREE.MeshBasicMaterial({ color: cor, depthTest: false })); b.position.set(x, y, z); b.renderOrder = 10; b.userData.semCaixa = true; g.add(b); };
+  if (gr) {
+    const zs = new Map(); let y = 0.4;
+    for (const p of gr.children) if (p.name !== 'chassi') { y = p.position.y; bola(p.userData.trasDir ? '#ff9a1a' : '#39e07a', p.position.x, p.position.y, p.position.z, 0.09); zs.set(p.position.z, Math.max(zs.get(p.position.z) || 0, Math.abs(p.position.x))); }
+    for (const [z, x] of zs) linha([new THREE.Vector3(-x, y, z), new THREE.Vector3(x, y, z)], '#3aa0ff');
+    bola('#ff3030', 0, y, ex.zr / k, 0.14);
+    linha([new THREE.Vector3(0, y, ex.zr / k), new THREE.Vector3(0, y, ex.zf / k)], '#ff3030');
+  }
+  const L = caixaLataria(m); if (!L) return g;   // caixa da lataria (branca)
+  const bh = new THREE.Box3Helper(new THREE.Box3(new THREE.Vector3(L.x0 / k, L.y0 / k, L.z0 / k), new THREE.Vector3(L.x1 / k, L.y1 / k, L.z1 / k)), '#ffffff'); bh.material.depthTest = false; bh.material.transparent = true; bh.material.opacity = 0.35; g.add(bh);
+  return g;
+}
+function atualizarDebugChassi() {
+  if (!debugChassi) return;
+  const vivos = new Set(), pos = jogador.pos;
+  const ver = (m, raio) => { if (!m?.parent || !m.visible) return; vivos.add(m); if (!guiasChassi.has(m)) { const g = guiaChassi(m, raio); m.add(g); guiasChassi.set(m, g); } };
+  if (jogador.carro?.mesh) ver(jogador.carro.mesh, jogador.carro.raio || 1.3);
+  for (const v of carrosMundo.values()) if (v.mesh && Math.hypot(v.mesh.position.x - pos.x, v.mesh.position.z - pos.z) < 40) ver(v.mesh, v.raio || 1.3);
+  for (const [m, g] of guiasChassi) if (!vivos.has(m)) { m.remove(g); guiasChassi.delete(m); }
+}
 // ---- roda de armas (19g): o botão Arma abre uma roda com tudo o que o jogador pode usar (mão, arma padrão,
 // espingarda, fuzil, RPG, bazuca, granada); tocar numa opção equipa e fecha. Granada na mão: o botão Atirar arremessa.
 function nomeArmaPadrao() {
@@ -3974,6 +4086,9 @@ async function iniciarJogo(perfil) {
     locaisTrabalho: () => ({ policia: pontos.delegacia, prf: civico.PREFEITURA.prf, medico: civico.HOSPITAL.balcao, bombeiro: civico.BOMBEIROS.balcao,
       jornalista: civico.PREFEITURA.jornal, exercito: mundo.QUARTEL.portao, motorista: TERMINAL, fiscal: PONTO_FISCAL, gari: CENTRAL.garagem, piloto: AERO.metro.hangar, controlador: AERO.metro.torre, agencia: civico.BANCO.empregos }), destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); dublar('hospital_alta'); }, pontoMudou: () => servicos.recomecarPonto(),
   });
+  $('btVolante').onclick = () => { volantePref = !volantePref; rotuloVolante(); salvarPref('volante', volantePref); aviso(volantePref ? '🛞 Direção com volante: no carro, gire o volante da tela (motos, aviões e helicópteros continuam com os controles deles).' : '🛞 Direção com as setas ◀ ▶.', 4); };
+  rotuloVolante(); montarVolante();
+  $('btChassi').onclick = () => { alternarDebugChassi(); $('menuBar').classList.remove('aberto'); };
   $('btVeiculos').onclick = () => abrirServico('veiculos');
   $('btAmigos').onclick = () => abrirServico('amigos');
   const rotuloGrafico = () => { const b = $('btGrafico'); if (b) b.querySelector('span').textContent = `Gráficos: ${visual.NIVEIS[visual.nivelAtual()]}`; };
@@ -15888,7 +16003,8 @@ function menuRevisaoHeli(c) {
 function heliParaRevisar() {
   if (jogador.perfil?.profissao !== 'mecanico' && jogador.perfil?.cargo !== 'admin') return null;
   const outros = dirigidosPorOutros();
-  for (const v of carrosMundo.values()) if (v.d.modelo === 'helicoptero' && v.mesh.visible && !outros.has(v.d.id) && Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z) < 5) return v;
+  // o próprio helicóptero não: o dono (mesmo mecânico ou admin) vê Dirigir — antes o Revisar tomava o lugar e não dava para entrar
+  for (const v of carrosMundo.values()) if (v.d.modelo === 'helicoptero' && v.d.dono !== jogador.perfil?.id && !(v.d.ladrao && v.d.ladrao === jogador.perfil?.id) && v.mesh.visible && !outros.has(v.d.id) && Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z) < 5) return v;
   return null;
 }
 // prédios no caminho de aviões e helicópteros: abaixo do telhado = bateu (cai, com as regras de queda)
@@ -17658,7 +17774,7 @@ function atualizarMisseis(dt) {
     if ((acertou && m.meu) || fim) { efeitoExplosao(m.mesh.position.x, m.mesh.position.y, m.mesh.position.z, acertou ? 1.2 : 0.6, false); scene.remove(m.mesh); misseis.splice(i, 1); }
   }
   if (!jogador.carro?.jato) { const pn = $('painelJato'); if (pn) pn.style.display = 'none'; }
-  atualizarLancador(dt); atualizarP50(dt); hudAeronave(dt); atualizarMiraManual(dt); atualizarBotoesPostura(false, dt);
+  atualizarLancador(dt); atualizarP50(dt); hudAeronave(dt); atualizarDebugChassi(); atualizarMiraManual(dt); atualizarBotoesPostura(false, dt);
   // som dos caças dos outros
   for (const r of remotos.values()) if (r.carro?.visible && civico.CARROS[r.carroModelo]?.jato) sons.continuo('aviaoG_alto', 0.6 * sons.perto(r.carro.position.distanceTo(jogador.pos), 260), 1.4);
 }

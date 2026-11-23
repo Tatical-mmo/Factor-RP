@@ -891,6 +891,7 @@ function montarRodas(g, nome) {
   const tras = g.getObjectByName('traseira'); if (tras) ch.visible = false;   // articulado: o chassi inteiriço apareceria na curva
   for (const [z, r] of eixos) for (const sg of [1, -1]) {
     const piv = new THREE.Object3D(); piv.position.set(sg * (xo + xi) / 2, cy, z); piv.userData.dianteira = z === zf && eixos.length > 1; grupo.add(piv);
+    if (RODOVIARIOS.has(nome) && eixos.length === 3 && z === Math.min(...eixos.map((e) => e[0]))) piv.userData.trasDir = true;   // ônibus de viagem: último eixo vira ao contrário
     if (tras && z < tras.position.z) { piv.userData.traseira = true; piv.userData.p0 = piv.position.clone(); }
     const rd = base.clone(true); rd.scale.set(sg * (xo - xi) / (2 * W), r, r); rd.userData.raio = r; piv.add(rd);
   }
@@ -972,23 +973,31 @@ export function veiculoComRodas(o, nome) {
 // No articulado conta só a parte da frente (a de trás é um reboque, dobrada à parte).
 // distância entre o eixo que vira e o eixo de trás (efetivo) de um modelo, sem precisar do objeto
 export function entreEixos(modelo) {
-  const R = RODAS[GLB_CARRO[modelo]] || RODAS[modelo]; if (!R || R.eixos.length < 2) return 2.7;
-  const zs = R.eixos.map((a) => a[0]), meio = (Math.max(...zs) + Math.min(...zs)) / 2, media = (l) => l.reduce((a, b) => a + b, 0) / l.length;
-  const f = zs.filter((z) => z >= meio), t = zs.filter((z) => z < meio);
-  return media(f) - (media(t) - (t.length > 1 ? 0.35 * (Math.max(...t) - Math.min(...t)) : 0));
+  const nome = RODAS[GLB_CARRO[modelo]] ? GLB_CARRO[modelo] : modelo, R = RODAS[nome]; if (!R || R.eixos.length < 2) return 2.7;
+  const e = eixosDoModelo(nome, R); return e.zf - e.zr;
+}
+// ---- chassi (21m): como cada veículo vira, pelos eixos medidos no próprio modelo
+//  carro / van / ônibus urbano / Caveirão: 2 eixos, a frente vira e o giro é no eixo de trás;
+//  caminhão (e Caveirão de 3 eixos): a frente vira e o giro fica entre os dois eixos de trás (o par arrasta de lado);
+//  ônibus de viagem com 3 eixos: a frente vira, o do meio é fixo (é nele o giro) e o último vira ao contrário e menos
+//  (pela própria geometria da curva), o que fecha a curva de um ônibus longo.
+export const RODOVIARIOS = new Set(['onibus_executivo2', 'onibus_brasilsul', 'onibus_viacao', 'onibus_rod_dourado', 'onibus_rod_amarelo']);
+function eixosDoModelo(nome, R) {
+  const zs = R.eixos.map((a) => a[0]).sort((a, b) => b - a), media = (l) => l.reduce((a, b) => a + b, 0) / l.length;
+  if (RODOVIARIOS.has(nome) && zs.length === 3) return { zf: zs[0], zr: zs[1], zt: zs[2], tipo: 'rodoviario' };
+  const meio = (zs[0] + zs[zs.length - 1]) / 2, f = zs.filter((z) => z >= meio), t = zs.filter((z) => z < meio);
+  // dois eixos atrás: os pneus arrastam de lado e resistem à curva, como se o eixo ficasse mais para trás do meio deles
+  return { zf: media(f), zr: media(t) - (t.length > 1 ? 0.35 * (Math.max(...t) - Math.min(...t)) : 0), zt: null, tipo: t.length > 1 ? 'tandem' : zs[0] - zs[zs.length - 1] > 4 ? 'longo' : 'curto' };
 }
 export function eixosDe(o) {
   if (o.userData.eixos) return o.userData.eixos;
   let glb = null; o.traverse((k) => { glb ||= k.userData?.glb; });
   const R = RODAS[glb]; let e = { zf: 1.3, zr: -1.3 };
   if (R && R.eixos.length > 1) {
-    const tras = o.getObjectByName('traseira'), zs = R.eixos.map((a) => a[0]).filter((z) => !tras || z > tras.position.z);
-    const hi = Math.max(...zs), lo = Math.min(...zs), meio = (hi + lo) / 2, media = (l) => l.reduce((a, b) => a + b, 0) / l.length;
-    const f = zs.filter((z) => z >= meio), t = zs.filter((z) => z < meio);
-    // dois eixos atrás: os pneus arrastam de lado e resistem à curva, como se o eixo ficasse mais para trás do meio deles
-    if (f.length && t.length) e = { zf: media(f), zr: media(t) - (t.length > 1 ? 0.35 * (Math.max(...t) - Math.min(...t)) : 0) };
+    const tras = o.getObjectByName('traseira'), eix = R.eixos.filter((a) => !tras || a[0] > tras.position.z);
+    if (eix.length > 1) e = eixosDoModelo(tras ? '' : glb, { eixos: eix });
   }
-  const k = o.scale.z || 1; e = { zf: e.zf * k, zr: e.zr * k };
+  const k = o.scale.z || 1; e = { ...e, zf: e.zf * k, zr: e.zr * k, zt: e.zt != null ? e.zt * k : null };
   o.userData.eixos = e; return e;
 }
 
@@ -1006,14 +1015,47 @@ export function atualizarRodas(dt, cam) {
     if (!u.ultR) { u.ultR = _pR.clone(); u.ultY = ry; continue; }
     const dx = _pR.x - u.ultR.x, dz = _pR.z - u.ultR.z; u.ultR.copy(_pR);
     const dyaw = Math.atan2(Math.sin(ry - u.ultY), Math.cos(ry - u.ultY)); u.ultY = ry;
-    if (d > 120 || Math.hypot(dx, dz) > 6) continue;
+    if (d > 120 || Math.hypot(dx, dz) > 6) { suspender(m, u, gr, dt, 0, 0, false); continue; }
     const anda = dx * Math.sin(ry) + dz * Math.cos(ry);
     // ângulo das rodas da frente pela geometria (bicicleta): giro = andou × tan(ângulo) / entre-eixos
-    const ex = eixosDe(m), wb = Math.max(1.5, ex.zf - ex.zr);
-    const alvo = Math.abs(anda) > 0.004 ? THREE.MathUtils.clamp(Math.atan(dyaw * wb / anda), -0.84, 0.84) : (u.esterco || 0);
+    const ex = eixosDe(m), k = m.scale.z || 1, wb = Math.max(1.5, ex.zf - ex.zr) / k;
+    const alvo = Math.abs(anda) > 0.004 ? THREE.MathUtils.clamp(Math.atan(dyaw * wb * k / anda), -0.84, 0.84) : (u.esterco || 0);
     u.esterco = (u.esterco || 0) + (alvo - (u.esterco || 0)) * Math.min(1, dt * 8);
-    for (const piv of gr.children) { if (piv.name === 'chassi') continue; const rd = piv.children[0]; if (rd) rd.rotation.x += anda / (rd.userData.raio || 0.4); if (piv.userData.dianteira) piv.rotation.y = u.esterco; }
+    // Ackermann: a roda de dentro da curva vira mais que a de fora (todas apontam para o mesmo centro); no ônibus de
+    // viagem o último eixo vira ao contrário, só o que a geometria pede
+    const t = Math.tan(u.esterco), zp = ex.zr / k;
+    for (const piv of gr.children) {
+      if (piv.name === 'chassi') continue;
+      const rd = piv.children[0]; if (rd) rd.rotation.x += anda / (rd.userData.raio || 0.4);
+      if (piv.userData.dianteira) piv.rotation.y = Math.abs(t) < 1e-4 ? 0 : Math.atan(t / Math.max(0.2, 1 - piv.position.x * t / wb));
+      else if (piv.userData.trasDir) piv.rotation.y = Math.abs(t) < 1e-4 ? 0 : Math.atan((t / wb) * (piv.position.z - zp) / Math.max(0.2, 1 - piv.position.x * t / wb));
+    }
+    suspender(m, u, gr, dt, anda, dyaw, perto);
   }
+}
+// ---- suspensão (21m): a carroceria (tudo menos rodas e assoalho) inclina para fora na curva, abaixa a frente na
+// freada e levanta na arrancada, numa mola com amortecedor. Pesados balançam mais devagar e mais fundo.
+function carroceria(m, gr) {
+  if (m.userData.carroceria !== undefined) return m.userData.carroceria;
+  if (m.getObjectByName('traseira') || !gr.children.length) return (m.userData.carroceria = null);   // articulado: não
+  let cy = 0.4, zf = -1e9, zr = 1e9;
+  for (const p of gr.children) if (p.name !== 'chassi') { cy = p.position.y; zf = Math.max(zf, p.position.z); zr = Math.min(zr, p.position.z); }
+  const w = new THREE.Group(); w.name = 'carroceria'; w.position.set(0, cy, (zf + zr) / 2);
+  for (const ch of [...m.children]) if (ch !== gr) { ch.position.sub(w.position); w.add(ch); }
+  m.add(w); m.userData.carroceria = w; return w;
+}
+// kr: rad por m/s² de aceleração lateral (carro a ~0,8 g inclina ~2,6°; ônibus a ~0,3 g ~2°); kp: idem na freada/arrancada
+const MOLA = { leve: { k: 70, c: 11, kr: 0.0058, mr: 0.05, kp: 0.0045, mp: 0.028 }, pesado: { k: 24, c: 5.5, kr: 0.012, mr: 0.07, kp: 0.006, mp: 0.035 } };
+function suspender(m, u, gr, dt, anda, dyaw, perto) {
+  if (!perto || dt <= 0) { const w = m.userData.carroceria; if (w) w.rotation.set(0, 0, 0); if (u.sus) u.sus.r = u.sus.vr = u.sus.p = u.sus.vp = 0; return; }
+  const w = carroceria(m, gr); if (!w) return;
+  const s = u.sus ||= { r: 0, vr: 0, p: 0, vp: 0, v: 0, a: 0, pes: /^onibus|caminhao|bombeiros|lixo|caveirao|tanque|ambulancia|van/.test(m.userData.glb || '') ? 'pesado' : 'leve' };
+  const P = MOLA[s.pes], h = Math.min(dt, 0.05), v = anda / dt, w0 = dyaw / dt;
+  s.a += ((v - s.v) / dt - s.a) * Math.min(1, dt * 6); s.v = v;
+  const alvoR = THREE.MathUtils.clamp(v * w0 * P.kr, -P.mr, P.mr), alvoP = THREE.MathUtils.clamp(-s.a * P.kp, -P.mp, P.mp);
+  s.vr += (P.k * (alvoR - s.r) - P.c * s.vr) * h; s.r += s.vr * h;
+  s.vp += (P.k * (alvoP - s.p) - P.c * s.vp) * h; s.p += s.vp * h;
+  w.rotation.set(s.p, 0, s.r);
 }
 // articulado: a parte de trás é puxada pela junta (como um reboque) e dobra na sanfona; a sanfona gira a metade
 const _jS = new THREE.Vector3();
