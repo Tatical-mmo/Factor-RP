@@ -103,6 +103,11 @@ export function addCol(c) {
   for (const k of chaves(x0, z0, x1, z1)) { if (!grade.has(k)) grade.set(k, []); grade.get(k).push(c); }
 }
 export function addPiso(p) { pisos.push(p); }
+// 21p: os colisores do mapa em volta de um ponto (para desenhar no modo chassi e achar "parede invisível")
+export function colisoresPerto(x, z, r) {
+  const s = new Set(); for (const k of chaves(x - r, z - r, x + r, z + r)) for (const c of grade.get(k) || []) s.add(c);
+  return [...s];
+}
 export function colidir(p, raio, resolverLista) {
   const vistos = new Set();
   for (const k of chaves(p.x - raio, p.z - raio, p.x + raio, p.z + raio)) {
@@ -1527,8 +1532,10 @@ export function tirarCarroRua(k, fora) {
 export function carrosPerto(px, pz, dt) {
   const E = estacionados; if (!E || !E.glb.some(Boolean)) return;
   if ((E.t -= dt) > 0) return; E.t = 0.4;
-  const ultra = /^(ultra|alto)$/.test(ctx.qualidade?.()), maxC = ultra ? 28 : E.max;   // ultra: carros 3D até mais longe
-  const perto = E.carros.map((c, k) => [c.fora ? 1e9 : Math.hypot(c.x - px, c.z - pz), k]).filter(([d]) => d < (ultra ? 130 : 70)).sort((a, b) => a[0] - b[0]).slice(0, maxC * 2);
+  // 21p: o limite é por tipo (popular, SUV, esportivo); antes só os 16 mais perto de todos entravam na conta e, numa
+  // rua cheia, um carro a 10 m ficava de "caixinha". Agora cada tipo pega os seus mais perto até a capacidade (28).
+  const ultra = /^(ultra|alto)$/.test(ctx.qualidade?.()), maxC = ultra ? 28 : Math.min(28, E.max + 6);
+  const perto = E.carros.map((c, k) => [c.fora ? 1e9 : Math.hypot(c.x - px, c.z - pz), k]).filter(([d]) => d < (ultra ? 130 : 80)).sort((a, b) => a[0] - b[0]);
   const conta = E.glb.map(() => 0), novo = new Set();
   for (const [, k] of perto) {
     const c = E.carros[k], im = E.glb[c.tipo]; if (!im || conta[c.tipo] >= maxC) continue;

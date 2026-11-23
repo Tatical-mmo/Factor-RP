@@ -2479,10 +2479,10 @@ function circulosChassi(c) {
   const r = Math.min(larg / 2 * 0.9, 1.4), n = Math.max(2, Math.ceil((comp - 2 * r) / (r * 1.4)) + 1), zs = [];
   if (comp < 2 * r + 0.2) { c.circ = null; return null; }   // carro curto: o círculo do meio já basta
   for (let i = 0; i < n; i++) zs.push(z0 + r + (comp - 2 * r) * i / (n - 1));
-  c.circ = { r, zs }; return c.circ;
+  c.circ = { r, zs, comp }; return c.circ;
 }
 function colisaoChassi(c) {
-  const k = circulosChassi(c); if (!k) return;
+  const k = circulosChassi(c); if (!k || k.comp < 5.6) return;   // 21p: só veículo comprido (van, ônibus, caminhão); no carro o círculo do meio basta
   const sy = Math.sin(jogador.yaw), cy = Math.cos(jogador.yaw), q = new THREE.Vector3();
   for (const z of k.zs) {
     if (Math.abs(z) < k.r * 0.8) continue;   // o do meio já foi resolvido
@@ -2521,7 +2521,7 @@ const guiasChassi = new Map();
 function alternarDebugChassi() {
   debugChassi = !debugChassi;
   if (!debugChassi) { for (const [m, g] of guiasChassi) m.remove(g); guiasChassi.clear(); }
-  aviso(debugChassi ? '🔧 Chassi à mostra: amarelo = colisão, azul = eixos, vermelho = ponto de giro, verde = rodas. H de novo esconde.' : '🔧 Chassi escondido.', 4);
+  aviso(debugChassi ? '🔧 Chassi à mostra: amarelo = colisão do veículo, azul = eixos, vermelho = ponto de giro, verde = rodas; contornos vermelhos no chão = obstáculos (até os invisíveis). H de novo esconde.' : '🔧 Chassi escondido.', 4);
 }
 function guiaChassi(m, raio) {
   const g = new THREE.Group(), k = m.scale.x || 1, ex = civico.eixosDe(m), gr = m.getObjectByName('rodas');
@@ -2541,7 +2541,25 @@ function guiaChassi(m, raio) {
   const bh = new THREE.Box3Helper(new THREE.Box3(new THREE.Vector3(L.x0 / k, L.y0 / k, L.z0 / k), new THREE.Vector3(L.x1 / k, L.y1 / k, L.z1 / k)), '#ffffff'); bh.material.depthTest = false; bh.material.transparent = true; bh.material.opacity = 0.35; g.add(bh);
   return g;
 }
-function atualizarDebugChassi() {
+// 21p: no modo chassi, todos os obstáculos de colisão em volta (até 22 m) aparecem em vermelho, mesmo os que não
+// têm nada desenhado: uma "parede invisível" vira um contorno vermelho no chão (dá para tirar print e achar a causa)
+let guiaObst = null, tGuiaObst = 0;
+function desenharObstaculos(dt) {
+  if (!debugChassi) { if (guiaObst) { scene.remove(guiaObst); guiaObst.geometry.dispose(); guiaObst = null; } return; }
+  if ((tGuiaObst -= dt) > 0) return; tGuiaObst = 0.5;
+  const p = jogador.pos, R = 22, pts = [], y0 = alturaChao(p.x, p.z) + 0.15;
+  const caixa = (c) => { const y = y0; for (const [a, b] of [[[c.x0, c.z0], [c.x1, c.z0]], [[c.x1, c.z0], [c.x1, c.z1]], [[c.x1, c.z1], [c.x0, c.z1]], [[c.x0, c.z1], [c.x0, c.z0]]]) pts.push(a[0], y, a[1], b[0], y, b[1], a[0], y + 1.2, a[1], b[0], y + 1.2, b[1]); };
+  const circ = (c) => { for (let i = 0; i < 16; i++) { const a = i / 16 * 6.283, b = (i + 1) / 16 * 6.283; pts.push(c.x + Math.cos(a) * c.r, y0, c.z + Math.sin(a) * c.r, c.x + Math.cos(b) * c.r, y0, c.z + Math.sin(b) * c.r); } pts.push(c.x, y0, c.z, c.x, y0 + 1.2, c.z); };
+  for (const c of [...colisores, ...mundo.colisoresPerto(p.x, p.z, R)]) {
+    if (c.off) continue;
+    if (c.tipo === 'caixa') { if (c.x1 < p.x - R || c.x0 > p.x + R || c.z1 < p.z - R || c.z0 > p.z + R) continue; caixa(c); }
+    else if (c.x !== undefined && Math.hypot(c.x - p.x, c.z - p.z) < R + (c.r || 0)) circ(c);
+  }
+  if (!guiaObst) { guiaObst = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: '#ff2a2a', depthTest: false })); guiaObst.renderOrder = 9; guiaObst.frustumCulled = false; scene.add(guiaObst); }
+  guiaObst.geometry.dispose(); guiaObst.geometry = new THREE.BufferGeometry(); guiaObst.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+}
+function atualizarDebugChassi(dt) {
+  desenharObstaculos(dt || 0.016);
   if (!debugChassi) return;
   const vivos = new Set(), pos = jogador.pos;
   const ver = (m, raio) => { if (!m?.parent || !m.visible) return; vivos.add(m); if (!guiasChassi.has(m)) { const g = guiaChassi(m, raio); m.add(g); guiasChassi.set(m, g); } };
@@ -17791,7 +17809,7 @@ function atualizarMisseis(dt) {
     if ((acertou && m.meu) || fim) { efeitoExplosao(m.mesh.position.x, m.mesh.position.y, m.mesh.position.z, acertou ? 1.2 : 0.6, false); scene.remove(m.mesh); misseis.splice(i, 1); }
   }
   if (!jogador.carro?.jato) { const pn = $('painelJato'); if (pn) pn.style.display = 'none'; }
-  atualizarLancador(dt); atualizarP50(dt); hudAeronave(dt); atualizarDebugChassi(); atualizarMiraManual(dt); atualizarBotoesPostura(false, dt);
+  atualizarLancador(dt); atualizarP50(dt); hudAeronave(dt); atualizarDebugChassi(dt); atualizarMiraManual(dt); atualizarBotoesPostura(false, dt);
   // som dos caças dos outros
   for (const r of remotos.values()) if (r.carro?.visible && civico.CARROS[r.carroModelo]?.jato) sons.continuo('aviaoG_alto', 0.6 * sons.perto(r.carro.position.distanceTo(jogador.pos), 260), 1.4);
 }
