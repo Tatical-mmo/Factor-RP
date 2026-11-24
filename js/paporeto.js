@@ -9,6 +9,7 @@ export const CELULARES = [
   { id: 'crest', nome: 'Midnight Crest', info: '3 câmeras quadradas' },
 ];
 export const PRECO_CELULAR = 2500;
+const MOTIVOS = [['ofensa', 'Ofensa'], ['nudez', 'Conteúdo adulto'], ['violencia', 'Violência'], ['spam', 'Spam'], ['outro', 'Outro']];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = (n) => Number(n || 0).toLocaleString('pt-BR');
 const $ = (id) => document.getElementById(id);
@@ -130,6 +131,10 @@ export async function desenhar(tela, c, u) {
       try { const n = await rede.papo.curtir(Number(b.dataset.curtir), sim); b.dataset.on = sim ? '1' : ''; b.innerHTML = `${sim ? '🔥' : '🤍'} ${n}`; } catch (e) { msg(e.message, false); }
     }; });
     c.querySelectorAll('[data-com]').forEach((b) => { b.onclick = () => { papoV = { v: 'com', post: Number(b.dataset.com), de: papoV }; u.desenhar(); }; });
+    c.querySelectorAll('[data-denunciar]').forEach((b) => { b.onclick = () => { const d = c.querySelector(`[data-den="${b.dataset.denunciar}"]`); if (d) d.style.display = d.style.display === 'none' ? '' : 'none'; }; });
+    c.querySelectorAll('[data-mot]').forEach((b) => { b.onclick = async () => {
+      try { await rede.papo.denunciar(Number(b.dataset.post), b.dataset.mot); b.parentElement.innerHTML = '<small>🚩 Denúncia enviada para a equipe. Obrigado!</small>'; } catch (e) { msg(e.message, false); }
+    }; });
     c.querySelectorAll('[data-apagar]').forEach((b) => { b.onclick = () => {
       if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Apagar mesmo?'; return; }
       u.executar(() => rede.papo.apagar(Number(b.dataset.apagar)), '🗑️ Post apagado.');
@@ -138,7 +143,8 @@ export async function desenhar(tela, c, u) {
   const posts = (l, eu) => l.map((p) => `<div class="post"><div class="cab" data-u="${esc(p.usuario)}">${avatar(p.avatar)}<div><b>${esc(p.usuario)}</b>${p.publico ? '' : '<span class="tag">👥 seguidores</span>'}<br><small>${esc(p.local || 'Fator RP')} · ${tempo(p.criado)}</small></div></div>
     <img class="ft" src="${esc(p.foto)}" loading="lazy" alt="">
     <div class="acoes"><button data-curtir="${p.id}" data-on="${p.curti ? '1' : ''}">${p.curti ? '🔥' : '🤍'} ${p.curtidas}</button>${p.comentarios !== 'ninguem' || p.ncom ? `<button data-com="${p.id}">💬 ${p.ncom}</button>` : '<small style="opacity:.6">🔒 sem comentários</small>'}
-      ${p.autor === eu || ctx.moderador() ? `<button data-apagar="${p.id}" style="margin-left:auto;font-size:12px;opacity:.7">🗑️</button>` : ''}</div>
+      <span style="margin-left:auto">${p.autor !== eu ? `<button data-denunciar="${p.id}" style="font-size:12px;opacity:.7" title="Denunciar">🚩</button>` : ''}${p.autor === eu || ctx.moderador() ? `<button data-apagar="${p.id}" style="font-size:12px;opacity:.7;margin-left:10px">🗑️</button>` : ''}</span></div>
+    <div class="denuncia" data-den="${p.id}" style="display:none"><small>Denunciar por:</small><br>${MOTIVOS.map(([k, t]) => `<button class="bt sec" data-mot="${k}" data-post="${p.id}" style="padding:4px 8px;font-size:12px">${t}</button>`).join('')}</div>
     ${p.legenda ? `<div class="leg2"><b>${esc(p.usuario)}</b> ${esc(p.legenda)}</div>` : ''}</div>`).join('');
   const topo = (t, voltarPara) => `<div class="prTopo">${voltarPara ? `<button class="volta" id="prVolta" style="margin:0">‹</button>` : '<button class="volta" data-ir="inicio" style="margin:0">‹ Início</button>'}${t}<span style="width:40px"></span></div>`;
   const ligarVolta = (para) => { const b = $('prVolta'); if (b) b.onclick = () => { papoV = para; u.desenhar(); }; };

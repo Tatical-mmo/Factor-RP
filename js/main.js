@@ -887,6 +887,36 @@ function danoTiroNoMeuVeiculo(d) {
   if (c.dano >= 100) { if (!c.pegouFogo) { c.pegouFogo = 5; aviso('🔥 O veículo foi baleado e pegou fogo! Saia já: ele explode em 5 s!', 4); } }
   else if (!c._avTiro || performance.now() - c._avTiro > 2500) { c._avTiro = performance.now(); aviso(`🔫 Estão atirando no seu veículo! ${Math.round(100 - c.dano)}%`, 2); }
 }
+// ---- 22b: pneu furado. A bala que pega perto do centro de uma roda fura aquele pneu: o carro desce daquele lado,
+// fica mais lento e o volante puxa para o lado furado (e trepida).
+function rodaAtingida(obj, ponto) {
+  const l = civico.rodasDe(obj); if (!l.length) return -1;
+  obj.updateMatrixWorld(true); const esc = obj.getWorldScale(_vf).x || 1;
+  for (let i = 0; i < l.length; i++) { const rd = l[i].children[0], r = (rd?.userData.raio || 0.4) * esc; if (l[i].getWorldPosition(_vf).distanceTo(ponto) < r * 1.15) return i; }
+  return -1;
+}
+function avisarPneu(id, m) { conexao?.enviar('pneu', { id, m }); }
+function furarPneuCarro(v, i) {
+  if ((v.d.pneus >> i) & 1) return;
+  v.d.pneus = (v.d.pneus || 0) | (1 << i); sons.tocar('soco_metal', { vol: 0.6, dist: Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z), raio: 40, velocidade: 0.6 });
+  rede.furarPneu(v.d.id, i, v.mesh.position.x, v.mesh.position.z).then((m) => { v.d.pneus = m; avisarPneu(v.d.id, m); }).catch(() => {});
+}
+function furarMeuPneu(i) {
+  const c = jogador.carro; if (!c || c.voa || !c.mesh || i < 0) return;
+  const v = c.id ? carrosMundo.get(c.id) : null, m0 = v ? v.d.pneus || 0 : c.pneus || 0; if ((m0 >> i) & 1) return;
+  const m = m0 | (1 << i); aviso('💥 Furaram um pneu! O carro vai puxar para o lado.', 3); tremor = Math.max(tremor, 0.25);
+  if (v) { v.d.pneus = m; rede.furarPneu(c.id, i, jogador.pos.x, jogador.pos.z).then((mm) => { v.d.pneus = mm; avisarPneu(c.id, mm); }).catch(() => {}); }
+  else { c.pneus = m; civico.aplicarPneus(c.mesh, m); }
+}
+function receberPneu(e) {
+  const id = Number(e.id), m = Number(e.m) || 0, v = carrosMundo.get(id);
+  if (v) { v.d.pneus = m; civico.aplicarPneus(v.mesh, m, !!v.d.queimado); }
+  for (const r of remotos.values()) if (Number(r.carroId) === id && r.carro) civico.aplicarPneus(r.carro, m);
+}
+function atualizarPneus() {
+  for (const v of carrosMundo.values()) if (v.mesh) civico.aplicarPneus(v.mesh, v.d.pneus || 0, !!v.d.queimado || v.mesh.userData.queimaTotal);
+  const c = jogador.carro; if (c?.mesh && !c.id && c.pneus) civico.aplicarPneus(c.mesh, c.pneus);
+}
 // dano dos tiros nos veículos parados (só quem atira conta; o tiro que passa de 100% explode o veículo para todos)
 const danoTiroParado = new Map();
 let explodindoRef = new Set();
@@ -1325,7 +1355,7 @@ function modeloCelular(id) {
     const base = new THREE.Group(), mira = new THREE.Group(); m.position.sub(c); mira.add(m); base.add(mira);
     // eixos do modelo → mão: comprimento (x) para cima no osso (y), costas (y+) para fora da palma (z)
     mira.matrixAutoUpdate = false; mira.matrix.makeBasis(new THREE.Vector3(0, s, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(s, 0, 0)).scale(new THREE.Vector3(k, k, k));
-    m.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
+    m.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; if (o.material?.name === 'tela') { o.material = o.material.clone(); o.material.emissive = new THREE.Color('#8fb3ff'); o.material.emissiveIntensity = 0.6; o.material.toneMapped = false; } } });   // 22b: tela acesa na mão
     base.rotation.y = Math.PI / 2;   // a palma da mão do esqueleto olha para o lado: tela para o rosto na selfie
     return base;
   }).catch(() => null));
@@ -1698,7 +1728,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'm') abrirJanela('mochila');
   if (k === 'v') { voz.falar(true); desenharBotaoVoz(); }
   if (k === 'g') acaoAlgema();
-  if (k === 'h') { if (jogador.carro) alternarDebugChassi(); else lancarGranada(); }   // dirigindo: H mostra o chassi (a pé continua a granada)
+  if (k === 'h') { if (jogador.carro) { if (jogador.perfil?.cargo === 'admin') alternarDebugChassi(); } else lancarGranada(); }   // dirigindo: H mostra o chassi (22b: só o administrador; a pé continua a granada)
   if (k === 'c') acaoCrime();
   if (k === 'j') ejetar();
 });
@@ -2233,7 +2263,7 @@ function sairCarroLocal() {
 }
 // direção arcade: o controle aponta para onde o carro deve ir (como andar a pé)
 function dirigir(dt) {
-  const c = jogador.carro, max = c.max || civico.CARROS[c.modelo]?.vel || 15;
+  const c = jogador.carro, fp = c.mesh && !c.voa ? civico.puxaoPneus(c.mesh) : { p: 0, n: 0 }, max = (c.max || civico.CARROS[c.modelo]?.vel || 15) * (fp.n ? Math.max(0.35, 1 - 0.2 * fp.n) : 1);   // 22b: pneu furado: mais lento
   if (civico.CARROS[c.modelo]?.moto && !c.moto) entrarMoto(c);   // 21i: moto de qualquer jeito (teste de veículos do admin, roubada…): piloto em cima
   if (c.dano === undefined) { c.dano = danoGuardado(c); if (c.dano >= 50) veicFumando.add(c); }
   { const qv = volantePref && !c.voa && !c.aviao && !c.jato && !c.moto && !civico.CARROS[c.modelo]?.moto; if (qv !== comVolanteUI) { comVolanteUI = qv; document.body.classList.toggle('comVolante', qv); if (!qv) pedais.volanteA = null; } }
@@ -2254,7 +2284,8 @@ function dirigir(dt) {
     // distância entre os eixos e da velocidade (rápido, o volante "pesa" e a curva fica mais aberta). Sem curva seca.
     // 20i: devagar o volante gira bem mais rápido (manobra leve); rápido continua gradual
     const vAbs = Math.abs(c.vel), rapidez = THREE.MathUtils.clamp(1 - (vAbs - 4) / 18, 0, 1);
-    c.volante = (c.volante || 0) + (volante - (c.volante || 0)) * Math.min(1, dt * (analogico ? 12 : volante ? 3.4 + 4 * rapidez : 4.5 + 2 * rapidez));
+    const puxa = fp.n ? (fp.p * 0.22 + Math.sin(performance.now() / 85) * 0.08 * fp.n) * Math.min(1, vAbs / 6) : 0;   // 22b: puxa para o lado furado e trepida
+    c.volante = (c.volante || 0) + (volante + puxa - (c.volante || 0)) * Math.min(1, dt * (analogico ? 12 : volante ? 3.4 + 4 * rapidez : 4.5 + 2 * rapidez));
     // distância entre eixos do próprio modelo (com dois eixos atrás, o efetivo fica mais para trás: vira mais aberto)
     const tc = tipoCabine(), ex = c.mesh ? civico.eixosDe(c.mesh) : null;
     const eixo = c.moto ? 1.38 : ex && ex.zf - ex.zr > 1.5 ? ex.zf - ex.zr : tc === 'onibus' ? 6.2 : tc === 'caminhao' ? 4.8 : 2.7;
@@ -2670,11 +2701,13 @@ function nomeArmaPadrao() {
   const esp = jogador.armaEspecial; jogador.armaEspecial = null; const t = tipoArma(); jogador.armaEspecial = esp;
   return { basica: ['🔫', 'Pistola de tinta'], policia: ['🔫', 'Arma da Polícia'], prf: ['🔫', 'Arma da PRF'], exercito: ['🔫', 'Arma do Exército'], militar: ['🔫', 'Arma do clã'], pesada: ['💥', 'Arma pesada'] }[t] || ['🔫', 'Arma'];
 }
+const LASERS_EVENTO = ['laser_ev_laranja', 'laser_ev_amarelo', 'laser_ev_roxo'];
+const precisaArmadura = (k) => !!ARMAS[k]?.laser && !ARMAS[k]?.evento;
 function opcoesRoda() {
   const r = [{ id: 'mao', ic: '✋', nome: 'Mão' }], [ic, nome] = nomeArmaPadrao();
   r.push({ id: 'padrao', ic, nome });
   for (const [it, ic2] of [['espingarda', '🔫'], ['fuzil', '🔫'], ['rpg', '🚀'], ['bazuca', '🚀']]) if (qtdItem(it) > 0) r.push({ id: it, ic: ic2, nome: NOME_ITEM_T[it], qtd: it === 'rpg' || it === 'bazuca' ? `${qtdItem('foguete')} foguetes` : null });
-  if (jogador.armadura) for (const it of ['laser_azul', 'laser_roxo', 'laser_vermelho', 'laser_energia']) if (qtdItem(it) > 0) {   // lasers: só com a armadura vestida
+  for (const it of ['laser_azul', 'laser_roxo', 'laser_vermelho', 'laser_energia', ...LASERS_EVENTO]) if (qtdItem(it) > 0 && (jogador.armadura || !precisaArmadura(it))) {   // lasers do laboratório: só com a armadura vestida; os de evento, sempre
     const pe = jogador.pentes?.[it]; r.push({ id: it, ic: '🔋', nome: NOME_ITEM_T[it], qtd: pe ? (pe.ate ? '⏳' : `${pe.balas}/10`) : '10/10' });
   }
   if (qtdItem('granada') > 0) r.push({ id: 'granada', ic: '💣', nome: 'Granada', qtd: `${qtdItem('granada')}` });
@@ -2745,6 +2778,10 @@ const ARMAS = {
   laser_roxo: { cod: 13, laser: true, alc: 140, grav: 0.03, modelo: 'laser_roxo', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 34, recarga: 0.11, pente: 10, troca: 5, rajada: true, vel: 70, cor: '#b14bff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
   laser_vermelho: { cod: 14, laser: true, alc: 140, grav: 0.03, modelo: 'laser_vermelho', comp: 1.1, vira: true, reserva: 'arma_militar', dano: 40, recarga: 0.11, pente: 10, troca: 5, rajada: true, vel: 66, cor: '#ff3b3b', pega: [0, 0.02, 0], boca: [0, 0.02, 0.74], bola: 1.5 },
   laser_energia: { cod: 15, laser: true, alc: 140, grav: 0.03, modelo: 'laser_energia', comp: 1.05, vira: true, reserva: 'arma_militar', dano: 36, recarga: 0.11, pente: 10, troca: 5, rajada: true, vel: 72, cor: '#7dff5a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.7], bola: 1.3 },
+  // 22b: lasers de evento: qualquer jogador usa (sem armadura); dano e alcance do fuzil; o pente recarrega sozinho
+  laser_ev_laranja: { cod: 16, laser: true, evento: true, alc: 130, grav: 0.03, modelo: 'laser_ev_laranja', comp: 1.0, vira: true, reserva: 'arma_militar', dano: 26, recarga: 0.1, pente: 10, troca: 5, rajada: true, vel: 70, cor: '#ff8a1e', pega: [0, 0.02, 0], boca: [0, 0.02, 0.62] },
+  laser_ev_amarelo: { cod: 17, laser: true, evento: true, alc: 130, grav: 0.03, modelo: 'laser_ev_amarelo', comp: 1.0, vira: true, reserva: 'arma_militar', dano: 26, recarga: 0.1, pente: 10, troca: 5, rajada: true, vel: 70, cor: '#ffe23a', pega: [0, 0.02, 0], boca: [0, 0.02, 0.62] },
+  laser_ev_roxo: { cod: 18, laser: true, evento: true, alc: 130, grav: 0.03, modelo: 'laser_ev_roxo', comp: 1.1, vira: true, reserva: 'arma_militar', dano: 26, recarga: 0.1, pente: 10, troca: 5, rajada: true, vel: 70, cor: '#a64bff', pega: [0, 0.02, 0], boca: [0, 0.02, 0.68] },
   ponto50: { cod: 11, alc: 220, grav: 0.1, modelo: 'arma_ponto50', dano: 34, recarga: 0.12, vel: 90, cor: '#ffcc33' },
   fuzil: { cod: 8, alc: 130, grav: 0.18, modelo: 'arma_fuzil', comp: 0.95, vira: true, reserva: 'arma_militar', dano: 26, recarga: 0.1, pente: 30, troca: 2.5, rajada: true, vel: 42, cor: '#d9dde3', pega: [0, 0.02, 0], boca: [0, 0.02, 0.62] },
 };
@@ -2756,7 +2793,7 @@ const ARMA_POR_COD = Object.fromEntries(Object.entries(ARMAS).map(([k, a]) => [a
 function tipoArma() {
   const p = jogador.perfil; if (!p) return 'basica';
   const general = p.cargo === 'admin';
-  if (jogador.armaEspecial && (!ARMAS[jogador.armaEspecial]?.laser || jogador.armadura) && (jogador.desviada?.item === jogador.armaEspecial ? jogador.desviada.balas > 0 : qtdItem(jogador.armaEspecial) > 0) && !jogador.armaPesada) return jogador.armaEspecial;   // espingarda ou fuzil (desviada: até acabarem as balas)   // espingarda ou fuzil equipado
+  if (jogador.armaEspecial && (!precisaArmadura(jogador.armaEspecial) || jogador.armadura) && (jogador.desviada?.item === jogador.armaEspecial ? jogador.desviada.balas > 0 : qtdItem(jogador.armaEspecial) > 0) && !jogador.armaPesada) return jogador.armaEspecial;   // espingarda ou fuzil (desviada: até acabarem as balas)   // espingarda ou fuzil equipado
   if (jogador.armaPesada && (general || (p.profissao === 'exercito' && p.arma_pesada_ate && Date.parse(p.arma_pesada_ate) > agoraServidor()))) return 'pesada';
   if (militar()) return 'exercito';   // militar em serviço (o General Supremo sempre)
   if (p.policial) return 'policia';
@@ -4155,7 +4192,7 @@ async function iniciarJogo(perfil) {
   montarQuarteiroes();
   montarPlacasRuas();
   sedes.iniciar({ scene, texturaCanvas, modelo: (n) => modelos[n] });
-  mundo.montar({ scene, texturaCanvas, ruido, textoSprite, modelo: (n) => modelos[n], qualidade: () => visual.nivelAtual() });
+  mundo.montar({ scene, texturaCanvas, ruido, textoSprite, modelo: (n) => modelos[n], qualidade: () => visual.nivelAtual(), repintar: (m, cor) => civico.repintarMaterial(m, cor) });
   ferrovia.montar({ scene, textoSprite, modelo: (n) => modelos[n] });
   ceu.iniciar(scene); clima.ouvirRelampago(() => ceu.raio(foco(), alturaChao, camAtiva === camP ? camP : null));
   clima.iniciar({ scene, alturaChao, naRua, mudou: (t) => { if (jogador.avatar) aviso(t === 'limpo' ? '☀️ O tempo abriu.' : { chuva: '🌧️ Começou a chover.', tempestade: '⛈️ Tempestade chegando! Fique atento aos raios.', neve: '❄️ Começou a nevar.' }[t], 3.5); } });
@@ -4461,7 +4498,7 @@ function conectarMultiplayer(perfil) {
     explosao: (e) => { if (!congelados.has(e.de)) receberExplosao(e); },
     voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, dm: (m) => { if (m?.para === jogador.perfil?.id && amigosIds.has(m.de)) celular.mensagemChegou(m.de, remotos.get(m.de)?.meta?.nome); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => { if (!congelados.has(d.de)) receberDano(d); }, atropelo: (d) => { if (!congelados.has(d.de)) receberAtropelo(d); }, chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
-    toqueCel: (e) => receberToqueCel(e), abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, derrubar: (e) => receberDerrubar(e), danoTiro: (e) => { if (e.alvo === jogador.perfil?.id) danoTiroNoMeuVeiculo(Number(e.d) || 0); }, danoQueda: (e) => { if (e.alvo === jogador.perfil?.id) danoNoMeuVeiculo(Math.min(40, Math.max(0, +e.d || 0))); }, viacao: () => atualizarEstadoViacao(), somSoco: (e) => sons.tocar(e.k ? 'soco1' : 'soco2', { vol: 0.85, dist: Math.hypot((+e.x || 0) - jogador.pos.x, (+e.z || 0) - jogador.pos.z), raio: 30 }), navio: (e) => receberNavio(e),
+    toqueCel: (e) => receberToqueCel(e), abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, derrubar: (e) => receberDerrubar(e), danoTiro: (e) => { if (e.alvo !== jogador.perfil?.id) return; danoTiroNoMeuVeiculo(Number(e.d) || 0); if (e.pneu != null) furarMeuPneu(Number(e.pneu)); }, pneu: (e) => receberPneu(e), danoQueda: (e) => { if (e.alvo === jogador.perfil?.id) danoNoMeuVeiculo(Math.min(40, Math.max(0, +e.d || 0))); }, viacao: () => atualizarEstadoViacao(), somSoco: (e) => sons.tocar(e.k ? 'soco1' : 'soco2', { vol: 0.85, dist: Math.hypot((+e.x || 0) - jogador.pos.x, (+e.z || 0) - jogador.pos.z), raio: 30 }), navio: (e) => receberNavio(e),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -4534,15 +4571,17 @@ function atualizarRemotos(dt) {
       raiz.position.set(a.x, a.y, a.z); raiz.visible = false; r.av.mixer.update(dt); continue;
     }
     if (a.cv) {   // dirigindo: mostra o carro no lugar do personagem
-      const [cid, mod, cor] = String(a.cv).split('|');
+      const [cid, mod, cor, pn] = String(a.cv).split('|');
       { const pv = carrosMundo.get(Number(cid)); if (pv && pv.mesh.visible) pv.mesh.visible = false; }   // ele está dirigindo: some o carro parado
       if (!r.carro || r.carroId !== cid) {
         if (r.carro) scene.remove(r.carro); r.carro = civico.modeloCarro(mod, cor); r.carroId = cid; r.carroModelo = mod; r.carro.position.set(a.x, a.y, a.z); scene.add(r.carro);
+        r.carro.userData.pneuMask = 0;
         // o motor dele pegando, se for perto (o avião só se estiver no chão)
         const d = Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z), av = /^aviao_/.test(mod), pf = perfilSom(mod);
         if (av && (a.y || 0) - alturaChao(a.x, a.z) < 1 && d < 150) sons.tocar(`${SOM_AVIAO[mod.slice(6)]}_partida`, { vol: 0.8, dist: d, raio: 150 });
         else if (pf && d < 60) sons.tocar(`${pf.p}_partida`, { vol: 0.6, dist: d, raio: 60, velocidade: pf.tom * (pf.tomAlto || 1) });
       }
+      { const m = Number(pn) || 0; if ((r.carro.userData.pneuMask ?? 0) !== m) civico.aplicarPneus(r.carro, m); }   // 22b: pneus dele
       const kc = Math.min(1, dt * 10);
       r.carro.position.x += (a.x - r.carro.position.x) * kc; r.carro.position.y += (a.y - r.carro.position.y) * kc; r.carro.position.z += (a.z - r.carro.position.z) * kc;
       r.carro.rotation.y = suavizarAngulo(r.carro.rotation.y, a.r, dt * 10);
@@ -4595,7 +4634,7 @@ function enviarEstado(dt) {
   if (envioTimer > 0) return;
   envioTimer = 0.15;
   const j = jogador, r2 = (v) => Math.round(v * 100) / 100;
-  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), iv: j.carro?.invisivel ? 1 : 0, mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? (j.paraquedas.mesh ? 1 : 2) : 0, ave: j.ave ? (j.ave.tipo === 'corvo' ? 1 : 2) : 0, bd: j.ave?.bando ? 1 : 0, oc: nomeOculto ? 1 : 0, mp: miraC.ligada ? Math.round(miraC.pitch * 20) / 20 : 0, mi: j.carro?.moto ? Math.round((j.carro.incl || 0) * 20) / 20 : 0, me: j.carro?.moto ? Math.round((j.carro.emp || 0) * 20) / 20 : 0, sn: j.carro ? bitsSinal() : 0 };
+  const est = { id: j.perfil.id, x: r2(j.pos.x), y: r2(j.pos.y + (j.carro?.voa && !j.carro.caminhao ? j.carro.alt || 0 : 0)), z: r2(j.pos.z), r: r2(j.yaw), a: j.avatar.nomeAtual || 'idle', ar: j.armado ? ARMAS[j.armaTipo || 'basica'].cod : 0, cx: codigoCaixa(j.carregando), al: j.algemado ? 1 : 0, tr: j.trem ? `${j.trem.li}.${j.trem.k}.${j.trem.v}` : 0, cv: j.carro && !j.carro.caminhao ? `${j.carro.id}|${j.carro.modelo}|${j.carro.cor}|${(j.carro.id && carrosMundo.get(j.carro.id)?.d.pneus) || j.carro.pneus || 0}` : 0, vc: j.carro?.caminhao || j.passageiro?.c.d.id || 0, pg: j.passageiro?.piloto || j.levadoPor || (j.onibus || j.voo ? 1 : 0), cs: codigoEsquadra(), iv: j.carro?.invisivel ? 1 : 0, mh: j.aperto ? 1 : 0, ap: j.algemado ? (j.algemadoPor || 0) : 0, sg: j.segurando ? (j.segurando.npc !== undefined ? 'n' + j.segurando.npc : j.segurando.id) : 0, pq: j.paraquedas ? (j.paraquedas.mesh ? 1 : 2) : 0, ave: j.ave ? (j.ave.tipo === 'corvo' ? 1 : 2) : 0, bd: j.ave?.bando ? 1 : 0, oc: nomeOculto ? 1 : 0, mp: miraC.ligada ? Math.round(miraC.pitch * 20) / 20 : 0, mi: j.carro?.moto ? Math.round((j.carro.incl || 0) * 20) / 20 : 0, me: j.carro?.moto ? Math.round((j.carro.emp || 0) * 20) / 20 : 0, sn: j.carro ? bitsSinal() : 0 };
   const u = ultimoEnvio;
   const mudou = !u || Math.abs(u.x - est.x) > 0.03 || Math.abs(u.z - est.z) > 0.03 || Math.abs(u.r - est.r) > 0.05 || u.a !== est.a || u.ar !== est.ar || u.cx !== est.cx || u.al !== est.al || u.tr !== est.tr || u.cv !== est.cv || u.vc !== est.vc || u.pg !== est.pg || u.cs !== est.cs || u.iv !== est.iv || u.mh !== est.mh || u.ap !== est.ap || u.sg !== est.sg || u.mp !== est.mp || u.mi !== est.mi || u.me !== est.me || u.sn !== est.sn;
   if (!mudou && tempoKeepAlive > 0) return;
@@ -5444,13 +5483,14 @@ function bolaEmVeiculo(b, danificar) {
   const perto = (q, r = 3) => q && Math.hypot(p.x - q.x, p.z - q.z) < r && p.y < q.y + 3.6 && p.y > q.y - 0.3;
   for (const v of carrosMundo.values()) if (v.mesh?.visible && jogador.carro?.id !== v.d.id && perto(v.mesh.position)) {
     const hit = tocaModelo(v.mesh, b); if (!hit) continue;
+    if (danificar && !v.d.queimado) { const ri = rodaAtingida(v.mesh, hit.ponto); if (ri >= 0) furarPneuCarro(v, ri); }
     if (danificar && !v.d.queimado) tiroEmVeiculoParado('car:' + v.d.id, v.mesh.position.x, v.mesh.position.z, civico.CARROS[v.d.modelo]?.nome || 'Carro', 1, danoTiroVeic(b) * (blindadoLeve(v.d.id) ? 0.5 : 1));
     return { hit, pai: v.mesh };
   }
   for (const v of viaturas) if (v.obj?.visible && perto(v.obj.position)) { const hit = tocaModelo(v.obj, b); if (hit) return { hit, pai: v.obj }; }
   for (const [id, r] of remotos) if (r.carro && r.carroModelo !== 'caveirao' && id !== jogador.passageiro?.piloto && perto(r.carro.position, 4)) {
     const hit = tocaModelo(r.carro, b); if (!hit) continue;
-    if (danificar) conexao?.enviar('danoTiro', { alvo: id, d: Math.round(danoTiroVeic(b) * 10) / 10 });
+    if (danificar) { const ri = rodaAtingida(r.carro, hit.ponto); conexao?.enviar('danoTiro', { alvo: id, d: Math.round(danoTiroVeic(b) * 10) / 10, ...(ri >= 0 ? { pneu: ri } : {}) }); }
     return { hit, pai: r.carro };
   }
   for (const [k, l] of largadosRua) if (l.mesh && perto(l.mesh.position)) {
@@ -12512,24 +12552,31 @@ function atualizarQueimados(dt) {
   for (const f of servicos.listaIncendios()) {
     if (f.tipo !== 'veiculo' || !f.ref) continue;
     const v = veiculoPorRef(f.ref); if (!v) continue;
-    const q = Math.min(1, Math.max(0, ((agora - Date.parse(f.inicio)) / 1000 - 20) / 70));
+    const q = f.explodiu_em ? 1 : Math.min(1, Math.max(0, ((agora - Date.parse(f.inicio)) / 1000 - 20) / 70));   // 21y/22b: explodiu: carcaça preta na hora
     if (v.l) v.l.queima = Math.max(v.l.queima || 0, q);
     pintarQueimado(v.mesh, v.l ? v.l.queima : q);
+    if ((v.l ? v.l.queima : q) > 0.85) { v.mesh.userData.queimaTotal = true; civico.aplicarPneus(v.mesh, 0, true); }   // 22b: pneus queimaram: só o aro
   }
+  atualizarPneus();
   // o veículo da empresa voltou para o dono (garagem): sai novo, sem a pintura de queimado
   for (const c of caminhoes.values()) if (c.obj?.userData.queimado && c.d.status !== 'dirigido') { limparQueimado(c.obj); c.queima = 0; }
 }
 function limparQueimado(mesh) {
+  mesh.userData.queimaTotal = false; civico.aplicarPneus(mesh, 0, false);
   mesh.traverse((o) => { if (o.userData.matSemQueima) { o.material = o.userData.matSemQueima; delete o.userData.matSemQueima; delete o.userData.matQueima; } });
   mesh.userData.queimado = false;
 }
+const COR_CARVAO = new THREE.Color('#0d0b0a');
 function pintarQueimado(mesh, q) {
   if (!(q > 0)) return;
   mesh.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     if (!o.userData.matQueima) { o.userData.matSemQueima = o.material; o.userData.matQueima = Array.isArray(o.material) ? o.material.map((m) => m.clone()) : o.material.clone(); o.material = o.userData.matQueima; for (const m of [].concat(o.material)) m.userData.cor0 = m.color?.clone(); }
     mesh.userData.queimado = true;
-    for (const m of [].concat(o.material)) if (m.userData.cor0) { m.color.copy(m.userData.cor0).multiplyScalar(1 - 0.9 * q); if (m.map && q > 0.85) m.map = null, m.needsUpdate = true; }
+    for (const m of [].concat(o.material)) if (m.userData.cor0) {   // 22b: vai até o preto de carvão (antes parava num cinza claro)
+      m.color.copy(m.userData.cor0).lerp(COR_CARVAO, Math.min(1, q * 1.1));
+      if (q > 0.85) { if (m.map) { m.map = null; m.needsUpdate = true; } m.roughness = 1; m.metalness = 0.15; if (m.emissive) m.emissive.setRGB(0, 0, 0); m.envMapIntensity = 0.2; }
+    }
   });
 }
 // ================================================================= rua obstruída e explosão de veículo em chamas
@@ -13894,7 +13941,7 @@ function menuLaboratorio() {
       { rotulo: '⛔ Tirar a autorização', fn: () => rede.lab.autorizar(id, false).then(() => aviso(`⛔ ${r.meta.nome} sem autorização.`, 3)).catch((e) => aviso(e.message, 3)) }]) }));
     escolher('🔐 Autorizar jogador', lista.length ? 'Jogadores online:' : 'Ninguém online agora.', lista);
   } });
-  if (adm) ops.push({ rotulo: '⚙️ Dano das armas laser', fn: () => escolher('⚙️ Dano das armas laser', 'Escolha a arma:', Object.keys(ARMAS).filter((k) => ARMAS[k].laser).map((k) => ({ rotulo: `${NOME_ITEM_T[k]}: dano ${ARMAS[k].dano}`, fn: () =>
+  if (adm) ops.push({ rotulo: '⚙️ Dano das armas laser', fn: () => escolher('⚙️ Dano das armas laser', 'Escolha a arma:', Object.keys(ARMAS).filter((k) => precisaArmadura(k)).map((k) => ({ rotulo: `${NOME_ITEM_T[k]}: dano ${ARMAS[k].dano}`, fn: () =>
     escolher(`⚙️ ${NOME_ITEM_T[k]}`, 'Novo dano por tiro (fuzil do Exército: 26; arma do Exército: 32):', [20, 25, 30, 35, 40, 45, 50, 60].map((d) => ({ rotulo: String(d), fn: () => rede.lab.definirDano(k, d).then((v) => { ARMAS[k].dano = v; aviso(`⚙️ ${NOME_ITEM_T[k]}: dano ${v} (vale para todos ao entrar de novo).`, 3.5); }).catch((e) => aviso(e.message, 3)) }))) }))) });
   if (adm) ops.push({ rotulo: '🕊️ Perdoar desertor', fn: () => {
     const ds = [...remotos].filter(([, r]) => r.meta?.des).map(([id, r]) => ({ rotulo: r.meta.nome, fn: () => rede.lab.perdoar(id).then(() => aviso(`🕊️ ${r.meta.nome} perdoado: não é mais desertor.`, 3)).catch((e) => aviso(e.message, 3)) }));
@@ -19474,7 +19521,7 @@ function tiqueTatica(dt) {
 // ---------------------------------------------------------------- janela tática (menu 🎯)
 function equiparArma(item) {
   if (item && qtdItem(item) < 1) { aviso('Você não tem essa arma.'); return; }
-  if (item && ARMAS[item]?.laser && !jogador.armadura) { aviso('🔋 As armas laser só funcionam com a armadura vestida.', 3); return; }
+  if (item && precisaArmadura(item) && !jogador.armadura) { aviso('🔋 As armas laser só funcionam com a armadura vestida.', 3); return; }
   enviarBalas(); jogador.desviada = null;
   if (item) jogador.armaPesada = false;
   jogador.armaEspecial = item || null; conferirArma();
@@ -19492,7 +19539,7 @@ function abrirTatica(modo) {
 }
 function msgTatica(t, ok = true) { const m = $('taticaMsg'); if (!m) return; m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'erro'); clearTimeout(msgTatica.t); msgTatica.t = setTimeout(() => { m.textContent = ''; }, 4500); }
 async function fazerTatica(fn, ok) { try { const r = await fn(); msgTatica(typeof ok === 'function' ? ok(r) : ok); recarregarInventario(); setTimeout(desenharTatica, 300); } catch (e) { msgTatica(e.message, false); } }
-const NOME_ITEM_T = { espingarda: 'Espingarda', fuzil: 'Fuzil', granada: 'Granada', rpg: 'RPG', bazuca: 'Bazuca', foguete: 'Foguete', laser_azul: 'Laser azul', laser_roxo: 'Laser roxo', laser_vermelho: 'Laser vermelho', laser_energia: 'Laser de energia' };
+const NOME_ITEM_T = { laser_ev_laranja: 'Laser laranja', laser_ev_amarelo: 'Laser amarelo', laser_ev_roxo: 'Laser roxo de evento', espingarda: 'Espingarda', fuzil: 'Fuzil', granada: 'Granada', rpg: 'RPG', bazuca: 'Bazuca', foguete: 'Foguete', laser_azul: 'Laser azul', laser_roxo: 'Laser roxo', laser_vermelho: 'Laser vermelho', laser_energia: 'Laser de energia' };
 async function desenharTatica() {
   const c = $('taticaConteudo'); if (!c || !modoTatica) return;
   const p = jogador.perfil, eu = p.id;
@@ -19525,7 +19572,10 @@ async function desenharTatica() {
     h += `<div class="sub">🤖 ${esc(A.nome)}</div><p class="dica">Blindagem <b>${pc}%</b>. Corre e soca ${Math.round(A.bonus * 100)}% mais e pula mais alto. Com 10% ela pede para recuar; 3 min fora de combate e ela se recupera aos poucos; com 2% ela ejeta você de paraquedas e é perdida.</p>
       <div class="botoes">${jogador.armadura ? '<button id="tArmTirar">🤖 Guardar a armadura</button>' : '<button id="tArmVestir">🤖 Vestir a armadura</button>'}<button id="tArmVender">💰 Vender a armadura</button></div>`;
   }
-  { const ls = Object.keys(ARMAS).filter((k) => ARMAS[k].laser && qtdItem(k) > 0);
+  { const le = LASERS_EVENTO.filter((k) => qtdItem(k) > 0);   // 22b
+    if (le.length) h += `<div class="sub">✨ Lasers de evento</div><p class="dica">Qualquer um usa (sem armadura). Dano e alcance do fuzil; pente de 10 em rajada que recarrega sozinho em 5 s.</p>
+      <div class="botoes">${le.map((k) => `<button data-eq="${k}">${jogador.armaEspecial === k ? '✔️ ' : ''}🔋 ${NOME_ITEM_T[k]}</button>`).join('')}</div>`; }
+  { const ls = Object.keys(ARMAS).filter((k) => precisaArmadura(k) && qtdItem(k) > 0);
     if (ls.length) h += `<div class="sub">🔋 Armas laser</div><p class="dica">Só funcionam com a armadura vestida. Pente de 10 tiros em rajada (segure o Atirar); vazio, recarrega sozinho em 5 s.</p>
       <div class="botoes">${ls.map((k) => `<button data-eq="${k}" ${jogador.armadura ? '' : 'disabled'}>${jogador.armaEspecial === k ? '✔️ ' : ''}🔋 ${NOME_ITEM_T[k]}</button>`).join('')}</div>`; }
   try { const of = await rede.lab.ofertas(); const pra = (of || []).filter((o) => o.comprador === eu && Date.parse(o.em) > agoraServidor() - 600000);

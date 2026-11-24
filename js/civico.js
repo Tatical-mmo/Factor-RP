@@ -973,6 +973,69 @@ export function veiculoComRodas(o, nome) {
   if (o.getObjectByName('rodas')) comRodas.add(o);
   return o;
 }
+// ---- 22b: pneu furado e carro queimado. A roda (aro + pneu num modelo só) é separada pelo raio: o que está além de
+// 74% do raio é o pneu. Furado: o aro continua girando, o pneu murcho fica parado embaixo (achatado no chão e
+// "embarrigado" para os lados) e aquele canto do carro desce. Queimado: só o aro, no chão. A carroceria inclina junto.
+const pneuGeo = new WeakMap(), _mRel = new THREE.Matrix4(), _vP = new THREE.Vector3();
+function separarRoda(rd) {
+  rd.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(rd.matrixWorld).invert(), partes = [];
+  rd.traverse((o) => {
+    if (!o.isMesh || o.name === 'longe' || o.userData.murcho) return;
+    const g = o.userData.geoOrig || o.geometry; o.userData.geoOrig = g;
+    let c = pneuGeo.get(g);
+    if (!c) {
+      _mRel.multiplyMatrices(inv, o.matrixWorld);
+      const pos = g.attributes.position, n = pos.count, P = new Float32Array(n * 3); let R = 0;
+      for (let i = 0; i < n; i++) { _vP.fromBufferAttribute(pos, i).applyMatrix4(_mRel); P.set([_vP.x, _vP.y, _vP.z], i * 3); R = Math.max(R, Math.hypot(_vP.y, _vP.z)); }
+      const idx = g.index ? g.index.array : [...Array(n).keys()], aro = [], pn = [];
+      const rr = (i) => Math.hypot(P[i * 3 + 1], P[i * 3 + 2]);
+      for (let t = 0; t < idx.length; t += 3) { const a = idx[t], b = idx[t + 1], d = idx[t + 2]; ((rr(a) + rr(b) + rr(d)) / 3 > 0.74 * R ? pn : aro).push(a, b, d); }
+      const ga = g.clone(); ga.setIndex(aro);
+      // pneu murcho já no espaço da roda: baixa D e o que passaria do chão fica achatado e mais largo
+      const D = 0.2 * R, piso = -R + D, gp = new THREE.BufferGeometry(), Q = new Float32Array(P);
+      for (let i = 0; i < n; i++) { const y = Q[i * 3 + 1]; if (y < 0) Q[i * 3 + 2] *= 1.04; if (y < piso) { const pen = piso - y; Q[i * 3 + 1] = piso - pen * 0.15; Q[i * 3] *= 1 + 0.9 * pen / D; } }
+      gp.setAttribute('position', new THREE.BufferAttribute(Q, 3));
+      for (const k of ['color', 'uv']) if (g.attributes[k]) gp.setAttribute(k, g.attributes[k]);
+      gp.setIndex(pn); gp.computeVertexNormals();
+      c = { aro: ga, murcho: gp, R }; pneuGeo.set(g, c);
+    }
+    partes.push({ o, c });
+  });
+  return partes;
+}
+export const rodasDe = (m) => { const gr = m?.userData.grupoRodas || m?.getObjectByName('rodas'); return gr ? gr.children.filter((p) => p.name !== 'chassi') : []; };
+// mask: bit i = roda i furada; queimado: todas só no aro
+export function aplicarPneus(m, mask = 0, queimado = false) {
+  const rodas = rodasDe(m); if (!rodas.length) return;
+  let mudou = false; const quedas = [];
+  rodas.forEach((piv, i) => {
+    const est = queimado ? 'aro' : (mask >> i) & 1 ? 'murcho' : 'cheio', rd = piv.children.find((k) => !k.userData.murcho);
+    if (piv.userData.y0 === undefined) piv.userData.y0 = piv.position.y;
+    const r = rd?.userData.raio || 0.4;
+    if (piv.userData.pneu === undefined && est === 'cheio') piv.userData.pneu = 'cheio';   // novo: nada a fazer
+    if (piv.userData.pneu !== est && rd) {
+      mudou = true; piv.userData.pneu = est;
+      for (const k of piv.children.filter((x) => x.userData.murcho)) piv.remove(k);
+      const partes = separarRoda(rd);
+      for (const { o, c } of partes) {
+        o.geometry = est === 'cheio' ? o.userData.geoOrig : c.aro;
+        if (est === 'murcho') { const mm = new THREE.Mesh(c.murcho, o.material); mm.userData.murcho = true; mm.scale.copy(rd.scale); mm.castShadow = true; piv.add(mm); }
+      }
+      rd.traverse((o) => { if (o.name === 'longe') o.userData.semPneu = est !== 'cheio'; });
+    }
+    const R = 1, d = est === 'cheio' ? 0 : est === 'murcho' ? 0.2 * R * r : 0.3 * R * r;
+    piv.position.y = piv.userData.y0 - d; quedas.push({ x: piv.position.x, z: piv.position.z, d });
+  });
+  // carroceria: desce na média e inclina para o lado/ponta que caiu
+  const med = (l) => (l.length ? l.reduce((a, q) => a + q.d, 0) / l.length : 0);
+  const zs = quedas.map((q) => q.z), zm = (Math.max(...zs) + Math.min(...zs)) / 2, wb = Math.max(1, Math.max(...zs) - Math.min(...zs));
+  const xs = quedas.map((q) => q.x), tr = Math.max(1, Math.max(...xs) - Math.min(...xs));
+  const df = med(quedas.filter((q) => q.z > zm)), dr = med(quedas.filter((q) => q.z <= zm)), de = med(quedas.filter((q) => q.x > 0)), dd = med(quedas.filter((q) => q.x <= 0));
+  m.userData.pneuInc = { y: med(quedas), p: Math.atan((df - dr) / wb), r: -Math.atan((de - dd) / tr) };
+  if (mudou) m.userData.pneuMask = mask;
+}
+// força de cada pneu furado no volante: puxa para o lado dele (direita = +1)
+export function puxaoPneus(m) { let p = 0, n = 0; rodasDe(m).forEach((piv) => { if (piv.userData.pneu === 'murcho' || piv.userData.pneu === 'aro') { p += piv.position.x > 0 ? -1 : 1; n++; } }); return { p, n }; }
 // gira as rodas pelo quanto cada veículo andou (serve para o seu, os NPCs e os outros jogadores) e vira as da frente
 // distância do centro do modelo até o eixo da frente (zf) e até o de trás (zr); com dois eixos juntos, o meio deles.
 // No articulado conta só a parte da frente (a de trás é um reboque, dobrada à parte).
@@ -1055,7 +1118,9 @@ function carroceria(m, gr) {
 // kr: rad por m/s² de aceleração lateral (carro a ~0,8 g inclina ~2,6°; ônibus a ~0,3 g ~2°); kp: idem na freada/arrancada
 const MOLA = { leve: { k: 70, c: 11, kr: 0.0058, mr: 0.05, kp: 0.0045, mp: 0.028 }, pesado: { k: 24, c: 5.5, kr: 0.012, mr: 0.07, kp: 0.006, mp: 0.035 } };
 function suspender(m, u, gr, dt, anda, dyaw, perto) {
-  if (!perto || dt <= 0) { const w = m.userData.carroceria; if (w) w.rotation.set(0, 0, 0); if (u.sus) u.sus.r = u.sus.vr = u.sus.p = u.sus.vp = 0; return; }
+  const inc = m.userData.pneuInc;
+  if (inc && (inc.y || u.incAntes)) { const w = carroceria(m, gr); if (w) { if (w.userData.y0 === undefined) w.userData.y0 = w.position.y; w.position.y = w.userData.y0 - inc.y; } u.incAntes = !!inc.y; }   // 22b: pneu furado/queimado: o carro desce
+  if (!perto || dt <= 0) { const w = m.userData.carroceria; if (w) w.rotation.set(inc?.p || 0, 0, inc?.r || 0); if (u.sus) u.sus.r = u.sus.vr = u.sus.p = u.sus.vp = 0; return; }
   const w = carroceria(m, gr); if (!w) return;
   const s = u.sus ||= { r: 0, vr: 0, p: 0, vp: 0, v: 0, a: 0, pes: /^onibus|caminhao|bombeiros|lixo|caveirao|tanque|ambulancia|van/.test(m.userData.glb || '') ? 'pesado' : 'leve' };
   const P = MOLA[s.pes], h = Math.min(dt, 0.05), v = anda / dt, w0 = dyaw / dt;
@@ -1063,7 +1128,7 @@ function suspender(m, u, gr, dt, anda, dyaw, perto) {
   const alvoR = THREE.MathUtils.clamp(v * w0 * P.kr, -P.mr, P.mr), alvoP = THREE.MathUtils.clamp(-s.a * P.kp, -P.mp, P.mp);
   s.vr += (P.k * (alvoR - s.r) - P.c * s.vr) * h; s.r += s.vr * h;
   s.vp += (P.k * (alvoP - s.p) - P.c * s.vp) * h; s.p += s.vp * h;
-  w.rotation.set(s.p, 0, s.r);
+  w.rotation.set(s.p + (inc?.p || 0), 0, s.r + (inc?.r || 0));
 }
 // articulado: a parte de trás é puxada pela junta (como um reboque) e dobra na sanfona; a sanfona gira a metade
 const _jS = new THREE.Vector3();
@@ -1169,6 +1234,7 @@ function hsl(r, g, b) {
   const h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
   return [h / 6, sat, l];
 }
+export function repintarMaterial(m, cor) { repintar(m, cor); }   // 22b: os carros parados na rua
 function repintar(m, cor) {
   const tx = m.map, img = tx?.image;
   if (!img || !img.width) { m.color = new THREE.Color('#ffffff').lerp(new THREE.Color(cor), 0.45); return; }

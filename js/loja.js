@@ -177,7 +177,7 @@ function desenhar() {
     const venda = precos.filter((p) => p.compra != null);
     const compra = precos.filter((p) => p.venda != null);
     c.innerHTML = `<p class="dica">Você tem <b>${moedas()}</b> moedas.</p>
-      <div class="botoes" style="margin-bottom:10px"><button id="lMercado">🤝 Mercado dos jogadores</button></div>
+      <div class="botoes" style="margin-bottom:10px"><button id="lMercado">🤝 Mercado dos jogadores</button></div><div id="lEvento"></div>
       <div class="sub">Comprar</div><div class="lista">${venda.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${p.compra} moedas${p.fome ? ` · enche ${p.fome}% da fome` : ''}${p.item === 'remedio' ? ' · cura 50 de vida' : ''}${p.item === 'desbloqueio' ? ' · libera os níveis 5, 10 e 15 de empresas e clãs' : ''}</small></span>
@@ -187,6 +187,16 @@ function desenhar() {
           <span class="nm"><b>${esc(p.nome)}</b><small>${p.venda} moedas cada · você tem ${inv[p.item] || 0}</small></span>
           <span class="bts"><button data-vender="${p.item}" data-q="1" ${inv[p.item] ? '' : 'disabled'}>1</button><button data-vender="${p.item}" data-q="${inv[p.item] || 0}" ${inv[p.item] ? '' : 'disabled'}>Todos</button></span></div>`).join('')}</div>`;
     $('lMercado').onclick = () => abrir('mercado');
+    // 22b: armas laser de evento (só aparecem com a vitrine aberta)
+    rede.armasEvento.listar().then((l) => {
+      const el = $('lEvento'), agora = Date.now(); if (!el || modo !== 'loja') return;
+      const abertas = (l || []).filter((a) => a.liberado_ate && Date.parse(a.liberado_ate) > agora); if (!abertas.length) return;
+      const hora = (t) => new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      el.innerHTML = `<div class="sub">✨ Armas de evento</div><p class="dica">Qualquer um usa (sem armadura): dano e alcance do fuzil, e o pente recarrega sozinho. Só durante o evento!</p><div class="lista">${abertas.map((a) => `
+        <div class="linha item"><span class="ic">🔋</span><span class="nm"><b>${esc(a.nome)}</b><small>${Number(a.preco).toLocaleString('pt-BR')} moedas · até ${hora(a.liberado_ate)}</small></span>
+          <span class="bts">${inv[a.id] > 0 ? '<button disabled>✔ Já é sua</button>' : `<button data-arma-ev="${a.id}">Comprar</button>`}</span></div>`).join('')}</div>`;
+      el.querySelectorAll('[data-arma-ev]').forEach((b) => { b.onclick = () => { if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Confirmar'; return; } executar(() => rede.armasEvento.comprar(b.dataset.armaEv), 'Arma comprada! Equipe pelo 🎯 Tático.'); }; });
+    }).catch(() => {});
     c.querySelectorAll('[data-comprar]').forEach((b) => { b.onclick = () => executar(() => rede.economia.comprar(b.dataset.comprar, Number(b.dataset.q)), `Comprado: ${b.dataset.q}x ${nomeDe(b.dataset.comprar)}.`); });
     c.querySelectorAll('[data-vender]').forEach((b) => { b.onclick = () => { const q = Number(b.dataset.q); if (q > 0) executar(() => rede.economia.vender(b.dataset.vender, q), (r) => `Vendido por ${r} moedas.`); }; });
   } else {

@@ -1541,7 +1541,7 @@ function montarMobiliario() {
   pocas.forEach(([x, z, r, cor, y], k) => { _m.compose(_v.set(x, y ?? chaoPoca(x, z), z), _q.identity(), _e.set(r * 2, 1, r * 2)); pc.setMatrixAt(k, _m); pc.setColorAt(k, _c.set(cor || '#ffffff')); });
   pc.renderOrder = 2; pc.visible = false; scene.add(pc); matPoca.userData.malha = pc;
   // carros estacionados: caixinhas leves para todos; os mais perto do jogador trocam pelo modelo 3D
-  const coresCarro = ['#c0392b', '#2c3e50', '#ecf0f1', '#7f8c8d', '#2980b9', '#16a085', '#f1c40f', '#8e44ad', '#d35400', '#1f1f1f', '#bdc3c7'];
+  const coresCarro = ['#c0392b', '#2c3e50', '#ecf0f1', '#7f8c8d', '#2980b9', '#16a085', '#f1c40f', '#8e44ad', '#d35400', '#1f1f1f', '#bdc3c7', '#7b1e2b', '#2e5e3a', '#5dade2'];   // 22b: vinho, verde escuro e azul claro
   const corpo = new THREE.BoxGeometry(1.8, 0.62, 4.2).translate(0, 0.62, 0);
   const cabine = new THREE.BoxGeometry(1.58, 0.58, 2.1).translate(0, 1.2, -0.25);
   const rodaG = []; for (const sx of [-0.86, 0.86]) for (const sz of [-1.35, 1.35]) rodaG.push(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 12).rotateZ(Math.PI / 2).translate(sx, 0.34, sz).toNonIndexed());
@@ -1565,9 +1565,9 @@ function montarMobiliario() {
     base.traverse((o) => { if (o.isMesh && !malha) malha = o; });
     if (!malha) return null;
     const geo = malha.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, malha.matrixWorld));
-    const mat = [].concat(malha.material)[0].clone(); mat.color = new THREE.Color('#ffffff');
-    const im = new THREE.InstancedMesh(geo, mat, 28); im.count = 0; im.receiveShadow = true; im.frustumCulled = false; scene.add(im);   // capacidade do ultra
-    return im;
+    // 22b: uma malha por cor, com a lataria repintada de verdade (antes era uma só com uma tinta leve: tudo da mesma cor)
+    const mat0 = [].concat(malha.material)[0];
+    return { geo, mat0, porCor: new Map() };
   });
   estacionados = { carros, caixas: [ic, iv, ir], glb, max: MAX, t: 0 };
 }
@@ -1630,14 +1630,19 @@ export function carrosPerto(px, pz, dt) {
   // rua cheia, um carro a 10 m ficava de "caixinha". Agora cada tipo pega os seus mais perto até a capacidade (28).
   const ultra = /^(ultra|alto)$/.test(ctx.qualidade?.()), maxC = ultra ? 28 : Math.min(28, E.max + 6);
   const perto = E.carros.map((c, k) => [c.fora ? 1e9 : Math.hypot(c.x - px, c.z - pz), k]).filter(([d]) => d < (ultra ? 130 : 80)).sort((a, b) => a[0] - b[0]);
-  const conta = E.glb.map(() => 0), novo = new Set();
+  const conta = E.glb.map(() => 0), novo = new Set(), usadas = new Map();
+  let novas = 0;   // repintar custa: no máximo uma cor nova por vez (enquanto isso, a original com uma tinta leve)
+  const nova = (g, cor, pintar) => { const mat = g.mat0.clone(); mat.color = new THREE.Color('#ffffff'); if (pintar) ctx.repintar?.(mat, cor); const im = new THREE.InstancedMesh(g.geo, mat, 28); im.count = 0; im.receiveShadow = true; im.frustumCulled = false; ctx.scene.add(im); g.porCor.set(cor, im); return im; };
+  const malhaDe = (g, cor) => g.porCor.get(cor) || (novas++ < 1 ? nova(g, cor, true) : null);
   for (const [, k] of perto) {
-    const c = E.carros[k], im = E.glb[c.tipo]; if (!im || conta[c.tipo] >= maxC) continue;
+    const c = E.carros[k], g = E.glb[c.tipo]; if (!g || conta[c.tipo] >= maxC) continue;
+    const im0 = malhaDe(g, c.cor), im = im0 || g.porCor.get('*') || nova(g, '*', false), n = usadas.get(im) || 0;
     _q.setFromAxisAngle(_e.set(0, 1, 0), c.rot); _m.compose(_v.set(c.x, 0.02, c.z), _q, _e.set(1, 1, 1));
-    im.setMatrixAt(conta[c.tipo], _m); im.setColorAt(conta[c.tipo], _c.set('#ffffff').lerp(new THREE.Color(c.cor), 0.25)); conta[c.tipo]++;   // tinta leve (forte, as rodas ficavam roxas/coloridas)
+    im.setMatrixAt(n, _m); if (!im0) im.setColorAt(n, _c.set('#ffffff').lerp(new THREE.Color(c.cor), 0.25)); usadas.set(im, n + 1); conta[c.tipo]++;
+    if (!im0) E.t = 0.15;   // falta pintar alguma: volta logo
     novo.add(k);
   }
-  E.glb.forEach((im, i) => { if (!im) return; im.count = conta[i]; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; });
+  for (const g of E.glb) if (g) for (const im of g.porCor.values()) { const n = usadas.get(im) || 0; im.count = n; im.visible = n > 0; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
   // esconde (escala 0) as caixinhas que viraram modelo e mostra de volta as que saíram
   let mudou = false;
   E.carros.forEach((c, k) => {

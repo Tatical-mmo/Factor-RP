@@ -375,19 +375,26 @@ async function blocoCarreiras(j) {
 const MOTIVO_TXT = { ofensa: 'Ofensa', assedio: 'Assédio/ameaça', trapaca: 'Trapaça', nome: 'Nome impróprio', voz: 'Chat de voz', outro: 'Outro' };
 async function abaDenuncias() {
   const c = $('painelConteudo'); c.textContent = 'Carregando…';
-  let l, fl = []; try { l = await rede.painel.denuncias(); fl = await rede.painel.faltas().catch(() => []); } catch (e) { c.textContent = e.message; return; }
+  let l, fl = [], pr = []; try { l = await rede.painel.denuncias(); fl = await rede.painel.faltas().catch(() => []); pr = await rede.painel.papoDenuncias().catch(() => []); } catch (e) { c.textContent = e.message; return; }
   // anti-trapaça: faltas registradas pelo servidor (3 pontos em 10 min = ban automático)
   const porJog = new Map(); for (const f of fl) { const k = f.jogador; if (!porJog.has(k)) porJog.set(k, { nome: f.perfil?.nome || '?', itens: [] }); porJog.get(k).itens.push(f); }
   const blocoFaltas = `<div class="sub">🚨 Anti-trapaça</div>${porJog.size ? [...porJog.entries()].map(([id, j]) => `<div class="linha item" style="flex-direction:column;align-items:stretch"><span><b>${esc(j.nome)}</b> · ${j.itens.length} falta(s)</span>
       ${j.itens.slice(0, 4).map((f) => `<small>${new Date(f.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${esc(f.motivo)} (peso ${f.peso})</small>`).join('')}
       <div class="botoes"><button data-abrir="${id}">Abrir</button><button data-perdoar="${id}">Perdoar e desbanir</button></div></div>`).join('') : '<p class="dica">Nenhuma falta registrada.</p>'}<div class="sub">Denúncias</div>`;
-  c.innerHTML = blocoFaltas + `<p class="dica">Denúncias abertas feitas pelos jogadores. Abra o jogador para agir (banir, prender, algemar…) e marque como resolvida.</p>
+  // 22b: posts do Papo Reto denunciados
+  const MOT_PR = { ofensa: 'Ofensa', nudez: 'Conteúdo adulto', violencia: 'Violência', spam: 'Spam', outro: 'Outro' };
+  const blocoPapo = `<div class="sub">💬 Papo Reto</div>${pr.length ? pr.map((d) => `<div class="linha item" style="align-items:flex-start;gap:8px"><img src="${esc(d.foto)}" alt="" style="width:64px;height:80px;object-fit:cover;border-radius:6px;flex:none">
+      <span style="flex:1"><b>@${esc(d.usuario)}</b> (${esc(d.autor_nome)}) · <i class="tag ruim">${d.vezes} denúncia(s)</i><br><small>${(d.motivos || []).map((m) => MOT_PR[m] || m).join(', ')}</small>${d.legenda ? `<br><small style="white-space:pre-wrap">“${esc(d.legenda)}”</small>` : ''}
+      <div class="botoes"><button data-papagar="${d.post}">🗑️ Apagar post</button><button data-presolver="${d.post}">Está ok ✓</button><button data-abrir="${d.autor}">Abrir jogador</button></div></span></div>`).join('') : '<p class="dica">Nenhum post denunciado.</p>'}`;
+  c.innerHTML = blocoFaltas.replace('<div class="sub">Denúncias</div>', '') + blocoPapo + `<div class="sub">Denúncias</div><p class="dica">Denúncias abertas feitas pelos jogadores. Abra o jogador para agir (banir, prender, algemar…) e marque como resolvida.</p>
     ${l.length ? l.map((d) => `<div class="linha item" style="flex-direction:column;align-items:stretch"><span><b>${esc(d.alvo_nome)}</b> · ${MOTIVO_TXT[d.motivo] || d.motivo}${d.vezes > 1 ? ` · <i class="tag ruim">${d.vezes} denúncias</i>` : ''}</span>
       ${d.detalhes ? `<small style="white-space:pre-wrap">${esc(d.detalhes)}</small>` : ''}<small>por ${esc(d.autor_nome)} · ${new Date(d.criada_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small>
       <div class="botoes">${ctx.online().some((o) => o.id === d.alvo) ? `<button data-averiguar="${d.alvo}" data-nome="${esc(d.alvo_nome)}">👁️ Averiguar</button>` : '<small>offline</small>'}<button data-abrir="${d.alvo}">Abrir jogador</button><button data-resolver="${d.id}">Resolvida ✓</button></div></div>`).join('') : '<p class="vazio">Nenhuma denúncia aberta. 🎉</p>'}`;
   c.querySelectorAll('[data-averiguar]').forEach((b) => { b.onclick = () => { fechar(); ctx.averiguar(b.dataset.averiguar, b.dataset.nome); }; });
   c.querySelectorAll('[data-abrir]').forEach((b) => { b.onclick = () => { aba = 'jogadores'; selecionado = b.dataset.abrir; desenhar(); }; });
   c.querySelectorAll('[data-perdoar]').forEach((b) => { b.onclick = async () => { try { await rede.painel.perdoarFaltas(b.dataset.perdoar); msg('Faltas apagadas e jogador desbanido (se o ban foi automático).'); abaDenuncias(); } catch (e) { msg(e.message, false); } }; });
+  c.querySelectorAll('[data-papagar]').forEach((b) => { b.onclick = async () => { try { await rede.papo.apagar(Number(b.dataset.papagar)); msg('Post apagado.'); abaDenuncias(); } catch (e) { msg(e.message, false); } }; });
+  c.querySelectorAll('[data-presolver]').forEach((b) => { b.onclick = async () => { try { await rede.painel.papoResolver(Number(b.dataset.presolver)); msg('Denúncia do post resolvida.'); abaDenuncias(); } catch (e) { msg(e.message, false); } }; });
   c.querySelectorAll('[data-resolver]').forEach((b) => { b.onclick = async () => { try { await rede.painel.resolverDenuncia(Number(b.dataset.resolver)); msg('Denúncia resolvida.'); abaDenuncias(); } catch (e) { msg(e.message, false); } }; });
 }
 // ------------------------------------------------------------ tempo (chuva, tempestade, neve)
@@ -543,6 +550,10 @@ function abaEu() {
       <div id="pEvLista" class="poderes">${PERSONAGENS_EVENTO.filter((x) => !x.soPresente).map((x) => `<label><input type="checkbox" data-ev="${x.id}"> ${esc(x.nome)}</label>`).join('')}</div>
       <div class="botoes"><select id="pEvTempo">${[[30, '30 min'], [60, '1 h'], [180, '3 h'], [720, '12 h'], [1440, '1 dia'], [4320, '3 dias'], [10080, '7 dias']].map(([m, t]) => `<option value="${m}" ${m === 60 ? 'selected' : ''}>${t}</option>`).join('')}</select>
       <button id="pEvAbrir">✨ Abrir vitrine</button><button id="pEvFechar">Fechar vitrine</button></div>`;
+    h += `<div class="sub">🔫 Armas de evento: vitrine</div><p class="dica">Lasers que qualquer jogador usa (dano e alcance do fuzil). Ficam à venda na Loja só com a vitrine aberta. Nenhuma marcada = todas.</p>
+      <div class="poderes">${[['laser_ev_laranja', 'Laser laranja'], ['laser_ev_amarelo', 'Laser amarelo'], ['laser_ev_roxo', 'Laser roxo']].map(([k, n]) => `<label><input type="checkbox" data-aev="${k}"> ${n}</label>`).join('')}</div>
+      <div class="botoes"><select id="pAevTempo">${[[30, '30 min'], [60, '1 h'], [180, '3 h'], [720, '12 h'], [1440, '1 dia'], [4320, '3 dias'], [10080, '7 dias']].map(([m, t]) => `<option value="${m}" ${m === 60 ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <button id="pAevAbrir">🔫 Abrir vitrine</button><button id="pAevFechar">Fechar vitrine</button></div>`;
     h += `<div class="sub">Resetar o mapa</div><p class="dica">Para deixar o mapa limpo antes de abrir para os jogadores. As contas continuam; a equipe mantém o cargo. <b>Não dá para desfazer.</b></p>
       <div class="poderes">${[['moradia', 'Casas, terrenos, prédios e baús'], ['empresas', 'Empresas, veículos, pedidos e carros dos jogadores'], ['clas', 'Clãs, guerras e territórios'],
         ['jogadores', 'Moedas, mochila, carreiras, crimes, banco e personagens comprados'], ['prefeitura', 'Prefeito, eleição, cofre, outdoors e notícias']]
@@ -592,6 +603,9 @@ function abaEu() {
   const evSel = () => [...c.querySelectorAll('[data-ev]')].filter((x) => x.checked).map((x) => x.dataset.ev);
   const ba = $('pEvAbrir'); if (ba) ba.onclick = () => { const m = Number($('pEvTempo').value); executar(() => rede.personagens.liberarEvento(evSel(), m), 'Vitrine do evento aberta. Todos foram avisados.'); };
   const bf = $('pEvFechar'); if (bf) bf.onclick = () => executar(() => rede.personagens.liberarEvento(evSel(), 0), 'Vitrine fechada.');
+  const aevSel = () => [...c.querySelectorAll('[data-aev]')].filter((x) => x.checked).map((x) => x.dataset.aev);   // 22b: armas de evento
+  if ($('pAevAbrir')) $('pAevAbrir').onclick = () => executar(() => rede.armasEvento.liberar(aevSel(), Number($('pAevTempo').value)), 'Vitrine das armas aberta. Todos foram avisados.');
+  if ($('pAevFechar')) $('pAevFechar').onclick = () => executar(() => rede.armasEvento.liberar(aevSel(), 0), 'Vitrine das armas fechada.');
   const br = $('pReset'); if (br) br.onclick = () => {
     const partes = [...c.querySelectorAll('[data-reset]')].filter((x) => x.checked).map((x) => x.dataset.reset);
     if (confirmarDuplo('pReset', '🧹 Resetar o mapa')) rede.painel.resetarMundo(partes, $('pResetConf').value.trim()).then((r) => {

@@ -132,7 +132,8 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'derrubar' }, ({ payload }) => eventos.derrubar?.(payload));
   canal.on('broadcast', { event: 'viacao' }, ({ payload }) => eventos.viacao?.(payload));
   canal.on('broadcast', { event: 'danoQueda' }, ({ payload }) => eventos.danoQueda?.(payload));
-  canal.on('broadcast', { event: 'danoTiro' }, ({ payload }) => eventos.danoTiro?.(payload));   // 21y: tiro no veículo que eu dirijo
+  canal.on('broadcast', { event: 'danoTiro' }, ({ payload }) => eventos.danoTiro?.(payload));
+  canal.on('broadcast', { event: 'pneu' }, ({ payload }) => eventos.pneu?.(payload));   // 22b: pneu furado de um carro   // 21y: tiro no veículo que eu dirijo
   canal.on('broadcast', { event: 'missil' }, ({ payload }) => eventos.missil?.(payload));
   canal.on('broadcast', { event: 'congelar' }, ({ payload }) => eventos.congelar?.(payload));
   canal.on('broadcast', { event: 'travado' }, ({ payload }) => eventos.travado?.(payload));
@@ -399,10 +400,12 @@ function traduzirRpc(m) {
     'nenhuma caixa embalada': 'Essa caixa não foi embalada por você.',
     'entrega rapida demais': 'Entrega rápida demais. Tente de novo em instantes.',
     'moedas insuficientes': 'Moedas insuficientes.',
+    'fora do evento': 'Essa arma não está à venda agora (só durante o evento).',
+    'os pneus estao bons': 'Os pneus desse carro estão bons.', 'roda invalida': 'Roda inválida.',
     'compre esse celular na loja': 'Compre esse celular na Loja de celulares.', 'voce ja tem esse celular': 'Você já tem esse celular.', 'modelo invalido': 'Modelo inválido.',
     'escolha um celular primeiro': 'Escolha o seu celular primeiro.', 'foto invalida': 'Foto inválida.', 'esse @usuario ja existe': 'Esse @usuário já existe. Escolha outro.',
     'crie seu perfil no Papo Reto': 'Crie o seu perfil no Papo Reto primeiro.', 'muitos posts: espere um pouco': 'Muitos posts seguidos: espere um pouco.',
-    'perfil invalido': 'Perfil inválido.', 'post nao encontrado': 'Post não encontrado.', 'comentarios fechados nesse post': 'Os comentários desse post estão fechados para você.',
+    'perfil invalido': 'Perfil inválido.', 'post invalido': 'Você não pode denunciar o seu próprio post.', 'post nao encontrado': 'Post não encontrado.', 'comentarios fechados nesse post': 'Os comentários desse post estão fechados para você.',
     'calma: espere um pouco para comentar': 'Calma: espere um pouco para comentar de novo.',
     'esse carro nao esta com voce': 'Esse carro não está com você.', 'esse carro nao pode ser regularizado': 'Esse carro não pode ser regularizado.',
     'aviao ja revisado': 'Já está revisado.',
@@ -625,6 +628,8 @@ export const assaltarNpc = () => rpc('assaltar_npc');
 export const explodirIncendio = (id) => rpc('explodir_incendio', { p_incendio: id });
 export const propagarFogo = (origem, ref, x, z, nome, porte) => rpc('propagar_fogo', { p_origem: origem, p_ref: ref, p_x: x, p_z: z, p_nome: nome, p_porte: porte });
 export const consertarCarro = (id) => rpc('consertar_carro', { p_carro: id });
+export const furarPneu = (id, roda, x, z) => rpc('furar_pneu', { p_carro: id, p_roda: roda, p_x: x, p_z: z });   // 22b
+export const trocarPneus = (id) => rpc('trocar_pneus', { p_carro: id });
 export const incendiarVeiculo = (ref, x, z, nome, porte) => rpc('incendiar_veiculo', { p_ref: ref, p_x: x, p_z: z, p_nome: nome, p_porte: porte });
 export const destruirVeiculo = (ref, x, z, nome, porte) => rpc('destruir_veiculo', { p_ref: ref, p_x: x, p_z: z, p_nome: nome, p_porte: porte });   // 21y: tiro final ou foguete
 export const cativeiro = {
@@ -712,6 +717,7 @@ export const painel = {
   faltas: () => sel(sb.from('faltas').select('*, perfil:perfis!faltas_jogador_fkey(nome)').order('em', { ascending: false }).limit(80)),
   perdoarFaltas: (id) => rpc('perdoar_faltas', { p_jogador: id }),
   resolverDenuncia: (id) => rpc('admin_resolver_denuncia', { p_id: id }),
+  papoDenuncias: () => rpc('admin_papo_denuncias'), papoResolver: (post) => rpc('admin_papo_resolver', { p_post: post }),   // 22b
   carreiras: (id) => rpc('admin_carreiras', { p_jogador: id }),
   promover: (id, carreira, nivel) => rpc('admin_promover', { p_jogador: id, p_carreira: carreira, p_nivel: nivel }),
   definirEmprego: (id, emprego) => rpc('admin_definir_emprego', { p_jogador: id, p_emprego: emprego }),
@@ -1218,6 +1224,12 @@ export const aviacao = {
 // ---------------------------------------------------------------- jujubas (ração militar), licitação e comprador ilegal
 // logo das empresas na lona do baú (106): imagem própria (passa por avaliação) ou logo pronta do jogo
 // 22a: celular (3 modelos) e a rede social Papo Reto (149)
+export const armasEvento = {   // 22b: lasers de evento (152)
+  listar: () => sel(sb.from('armas_evento').select('*').order('id')),
+  comprar: (item) => rpc('comprar_arma_evento', { p_item: item }),
+  liberar: (ids, minutos) => rpc('admin_liberar_armas_evento', { p_ids: ids, p_minutos: minutos }),
+  presentear: (jogador, item) => rpc('admin_presentear_arma', { p_jogador: jogador, p_item: item }),
+};
 export const papo = {
   escolherCelular: (m) => rpc('escolher_celular', { p_modelo: m }),
   comprarCelular: (m) => rpc('comprar_celular', { p_modelo: m }),
@@ -1239,6 +1251,7 @@ export const papo = {
   comentarios: (id) => rpc('papo_comentarios', { p_post: id }),
   comentar: (id, t) => rpc('papo_comentar', { p_post: id, p_texto: t }),
   apagarComentario: (id) => rpc('papo_apagar_comentario', { p_id: id }),
+  denunciar: (id, motivo) => rpc('papo_denunciar', { p_post: id, p_motivo: motivo }),
 };
 // música da Saveiro com som enviada do celular (119): uma por jogador, a anterior é apagada
 export const musicas = {
