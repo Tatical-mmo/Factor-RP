@@ -2,6 +2,7 @@
 // atalhos: Minha empresa, Minha casa, Meu clã (cada um com "📍 Ir até", que marca no mapa), Mecânico e Meu banco.
 import * as rede from './rede.js';
 import * as voz from './voz.js';
+import * as papo from './paporeto.js';
 
 let ctx = null, aberto = false, tela = 'inicio', modoPc = false, corOnline = '#c0392b';
 let conversaCom = null, naoLidas = new Map(), relogioLig = null, toque = null, chamadaUI = null;   // 👥 Contatos
@@ -66,7 +67,7 @@ const CSS = `
 
 export function iniciarCelular(contexto) {
   ctx = contexto;
-  const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
+  const st = document.createElement('style'); st.textContent = CSS + papo.CSS; document.head.appendChild(st);
   const el = document.createElement('div'); el.id = 'celular'; el.className = 'oculto';
   el.innerHTML = '<div class="entalhe"></div><button class="fechaX" id="celX" title="Fechar">✕</button><div class="barra"><span id="celHora">--:--</span><span id="celSinal">📶 🔋</span></div><div class="corpo" id="celCorpo"></div><div class="casa" id="celCasa" title="Início / fechar"></div>';
   const fundo = document.createElement('div'); fundo.id = 'celFundo'; fundo.className = 'oculto';
@@ -81,12 +82,15 @@ export function iniciarCelular(contexto) {
 export const celularAberto = () => aberto;
 // pc = true: computador da empresa (tela larga, sem animação, com o caixa da empresa)
 export function abrir(pc = false) {
-  aberto = true; modoPc = pc; tela = chamadaUI ? 'ligacao' : 'inicio';
+  aberto = true; modoPc = pc; tela = chamadaUI ? 'ligacao' : !pc && !ctx.celular?.() ? 'escolhercel' : 'inicio';   // 22a: a primeira vez escolhe o celular
   $('celular').classList.toggle('pc', pc); $('celSinal').textContent = pc ? '💻 Computador da empresa' : '📶 🔋';
   $('celular').classList.remove('oculto'); $('celFundo').classList.remove('oculto'); desenhar();
 }
 export function fechar() { if (!aberto) return; aberto = false; $('celular').classList.add('oculto'); $('celFundo').classList.add('oculto'); ctx.aoFechar?.(); }
-function ir(t) { tela = t; desenhar(); }
+function ir(t) { tela = t; ctx.telaMudou?.(t); desenhar(); }
+// 22a: abre direto numa tela (a câmera volta para a Galeria / Papo Reto)
+export function abrirEm(t, v) { if (v) papo.abrirPapo(v); abrir(); if (tela !== 'escolhercel' && tela !== 'ligacao') ir(t); }
+export const telaAtual = () => tela;
 function msg(t, ok = true) { const m = $('celMsg'); if (m) { m.textContent = t; m.className = 'msg' + (ok ? '' : ' erro'); } }
 async function executar(fn, sucesso) {
   try { const r = await fn(); msg(typeof sucesso === 'function' ? sucesso(r) : sucesso); desenhar(true); }
@@ -112,7 +116,10 @@ async function desenhar(manterMsg = false) {
         <button class="app" data-ir="estac"><i style="background:#1f6feb">🅿️</i>Estacionar</button>
         <button class="app" data-ir="contatos"><i style="background:#0f7b6c">👥</i>Contatos${totalNaoLidas() ? `<span class="badge">${totalNaoLidas()}</span>` : ''}</button>
         <button class="app" data-ir="loja"><i style="background:#8250df">🛒</i>Concessionária</button>
-        ${modoPc ? '<button class="app" data-ir="caixa"><i style="background:#bf8700">💼</i>Caixa da empresa</button>' : ''}
+        ${modoPc ? '<button class="app" data-ir="caixa"><i style="background:#bf8700">💼</i>Caixa da empresa</button>' : `<button class="app" id="celCamera"><i style="background:#30363d">📷</i>Câmera</button>
+        <button class="app" data-ir="papo"><i style="background:linear-gradient(135deg,#ffd166,#ef476f)">💬</i>Papo Reto</button>
+        <button class="app" data-ir="galeria"><i style="background:#2b6cb0">🖼️</i>Galeria</button>
+        <button class="app" data-ir="lojacel"><i style="background:#1b1f24;border:1px solid #444">📱</i>Loja de celulares</button>`}
       </div>`;
   } else if (tela === 'empresa') {
     c.innerHTML = `${voltar}<h3>🏢 Minha empresa</h3>${L.empresas.length ? L.empresas.map((l) => lugar(l.icone === '🔧' ? l : { ...l, abrir: 'empresa' })).join('') : '<p>Você não tem empresa nem emprego. Os lotes à venda aparecem no mapa; terrenos para oficina têm placa amarela "VENDE-SE" (150.000).</p>'}`;
@@ -200,6 +207,9 @@ async function desenhar(manterMsg = false) {
       if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confirmar?'; setTimeout(() => { b.dataset.ok = ''; b.textContent = 'Comprar'; }, 3000); return; }
       executar(() => ctx.comprarOnline(b.dataset.online, corOnline), (r) => { ctx.saldoMudou?.(); return r; });
     }; });
+  } else if (['escolhercel', 'lojacel', 'galeria', 'papo'].includes(tela)) {   // 22a
+    await papo.desenhar(tela, c, { ctx, ir, msg, voltar, desenhar: () => desenhar(), executar });
+    if (!aberto) return;
   } else if (tela === 'caixa') {
     c.innerHTML = `${voltar}<h3>💼 Caixa da empresa</h3><div class="card"><small>carregando…</small></div>`;
     try {
@@ -215,6 +225,7 @@ async function desenhar(manterMsg = false) {
   }
   if (m) c.insertAdjacentHTML('afterbegin', m); else c.insertAdjacentHTML('afterbegin', '<div class="msg" id="celMsg"></div>');
   c.querySelectorAll('[data-ir]').forEach((b) => { b.onclick = () => ir(b.dataset.ir); });
+  if ($('celCamera')) $('celCamera').onclick = () => ctx.abrirCamera?.();
   c.querySelectorAll('[data-ate]').forEach((b) => { b.onclick = () => { const [x, z] = b.dataset.ate.split(',').map(Number); ctx.marcar({ nome: b.dataset.nome, x, z }); msg('📍 Marcado no mapa.'); }; });
   c.querySelectorAll('[data-abrir]').forEach((b) => { b.onclick = () => { fechar(); ctx.abrirJanela(b.dataset.abrir); }; });
   c.querySelectorAll('[data-mec]').forEach((b) => { b.onclick = () => executar(() => ctx.chamarMecanico(Number(b.dataset.mec)), (r) => r || '🔧 O mecânico está trazendo o veículo.'); });

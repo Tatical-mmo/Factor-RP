@@ -399,6 +399,11 @@ function traduzirRpc(m) {
     'nenhuma caixa embalada': 'Essa caixa não foi embalada por você.',
     'entrega rapida demais': 'Entrega rápida demais. Tente de novo em instantes.',
     'moedas insuficientes': 'Moedas insuficientes.',
+    'compre esse celular na loja': 'Compre esse celular na Loja de celulares.', 'voce ja tem esse celular': 'Você já tem esse celular.', 'modelo invalido': 'Modelo inválido.',
+    'escolha um celular primeiro': 'Escolha o seu celular primeiro.', 'foto invalida': 'Foto inválida.', 'esse @usuario ja existe': 'Esse @usuário já existe. Escolha outro.',
+    'crie seu perfil no Papo Reto': 'Crie o seu perfil no Papo Reto primeiro.', 'muitos posts: espere um pouco': 'Muitos posts seguidos: espere um pouco.',
+    'perfil invalido': 'Perfil inválido.', 'post nao encontrado': 'Post não encontrado.', 'comentarios fechados nesse post': 'Os comentários desse post estão fechados para você.',
+    'calma: espere um pouco para comentar': 'Calma: espere um pouco para comentar de novo.',
     'esse carro nao esta com voce': 'Esse carro não está com você.', 'esse carro nao pode ser regularizado': 'Esse carro não pode ser regularizado.',
     'aviao ja revisado': 'Já está revisado.',
     'helicoptero invalido': 'Helicóptero inválido.',
@@ -1212,6 +1217,29 @@ export const aviacao = {
 
 // ---------------------------------------------------------------- jujubas (ração militar), licitação e comprador ilegal
 // logo das empresas na lona do baú (106): imagem própria (passa por avaliação) ou logo pronta do jogo
+// 22a: celular (3 modelos) e a rede social Papo Reto (149)
+export const papo = {
+  escolherCelular: (m) => rpc('escolher_celular', { p_modelo: m }),
+  comprarCelular: (m) => rpc('comprar_celular', { p_modelo: m }),
+  enviarFoto: async (blob) => {
+    const eu = (await sb.auth.getUser()).data.user?.id; if (!eu) throw new Error('Faça login.');
+    const ext = blob.type === 'image/webp' ? 'webp' : 'jpg', caminho = `${eu}/${Date.now()}.${ext}`;
+    const { error } = await sb.storage.from('papo').upload(caminho, blob, { contentType: blob.type || 'image/jpeg', upsert: false });
+    if (error) throw new Error(traduzir(error));
+    return sb.storage.from('papo').getPublicUrl(caminho).data.publicUrl;
+  },
+  salvarPerfil: (usuario, nome, idade, bio, foto) => rpc('papo_salvar_perfil', { p_usuario: usuario, p_nome: nome, p_idade: idade, p_bio: bio, p_foto: foto || null }),
+  postar: (foto, legenda, local, publico, comentarios) => rpc('papo_postar', { p_foto: foto, p_legenda: legenda, p_local: local, p_publico: publico, p_comentarios: comentarios }),
+  apagar: (id) => rpc('papo_apagar', { p_post: id }),
+  feed: (modo, antes) => rpc('papo_feed', { p_modo: modo, p_antes: antes ?? null }),
+  perfil: (usuario) => rpc('papo_perfil', { p_usuario: usuario || null }),
+  buscar: (t) => rpc('papo_buscar', { p_texto: t }),
+  seguir: (usuario, sim) => rpc('papo_seguir', { p_usuario: usuario, p_sim: sim }),
+  curtir: (id, sim) => rpc('papo_curtir', { p_post: id, p_sim: sim }),
+  comentarios: (id) => rpc('papo_comentarios', { p_post: id }),
+  comentar: (id, t) => rpc('papo_comentar', { p_post: id, p_texto: t }),
+  apagarComentario: (id) => rpc('papo_apagar_comentario', { p_id: id }),
+};
 // música da Saveiro com som enviada do celular (119): uma por jogador, a anterior é apagada
 export const musicas = {
   enviar: async (arquivo) => {

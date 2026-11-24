@@ -31,6 +31,7 @@ import * as eixos from './eixos.js';
 import * as racoes from './racoes.js';
 import * as logos from './logos.js';
 import * as celular from './celular.js';
+import * as papo from './paporeto.js';
 import { pecasCabine } from './cabine.js';
 import * as ovni from './ovni.js';
 import * as jato from './jato.js';
@@ -1315,14 +1316,35 @@ function novaGarrafa() {
   return g;
 }
 const _escMao = new THREE.Vector3();
-function celularNaMao(av, on) {   // celular na mão direita enquanto a animação de falar no celular toca
+// 22a: o celular é o modelo que o jogador escolheu (Midnight Vision, Shield ou Crest), 15,5 cm, tela para a palma
+const modelosCel = new Map(), CEL_TOPO = { vision: -1, shield: 1, crest: 1 };   // de que lado do modelo ficam as câmeras
+function modeloCelular(id) {
+  if (!modelosCel.has(id)) modelosCel.set(id, carregarGLB(`assets/celulares/${id}.glb?v=1`).then((g) => {
+    const m = g.scene; m.updateMatrixWorld(true); const bx = new THREE.Box3().setFromObject(m), c = bx.getCenter(new THREE.Vector3()), t = bx.getSize(new THREE.Vector3());
+    const k = 0.155 / Math.max(t.x, 0.01), s = CEL_TOPO[id] || 1;
+    const base = new THREE.Group(), mira = new THREE.Group(); m.position.sub(c); mira.add(m); base.add(mira);
+    // eixos do modelo → mão: comprimento (x) para cima no osso (y), costas (y+) para fora da palma (z)
+    mira.matrixAutoUpdate = false; mira.matrix.makeBasis(new THREE.Vector3(0, s, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(s, 0, 0)).scale(new THREE.Vector3(k, k, k));
+    m.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
+    base.rotation.y = Math.PI / 2;   // a palma da mão do esqueleto olha para o lado: tela para o rosto na selfie
+    return base;
+  }).catch(() => null));
+  return modelosCel.get(id);
+}
+function celularNaMao(av, on, modelo) {   // celular na mão direita enquanto fala, tira foto, faz selfie ou mexe no celular
   if (!av?.maoD) return;
   if (!on) { if (av.fone) av.fone.visible = false; return; }
-  if (!av.fone) {
-    av.fone = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.15, 0.011), new THREE.MeshStandardMaterial({ color: '#15171a', roughness: 0.35, metalness: 0.4 }));
-    av.maoD.add(av.fone); av.raiz.updateMatrixWorld(true);
-    const s = av.maoD.getWorldScale(_escMao).x / (av.raiz.getWorldScale(_escMao).x || 1) || 1;
-    av.fone.scale.setScalar(1 / s); av.fone.position.set(0, 0.09 / s, 0.03 / s);
+  const id = CEL_TOPO[modelo] ? modelo : 'vision';
+  if (!av.fone || av.foneId !== id) {
+    if (av.foneCarregando === id) return; av.foneCarregando = id;
+    modeloCelular(id).then((b) => {
+      av.foneCarregando = null; if (!b) return;
+      if (av.fone) av.fone.parent?.remove(av.fone);
+      av.fone = b.clone(true); av.foneId = id; av.maoD.add(av.fone); av.raiz.updateMatrixWorld(true);
+      const s = av.maoD.getWorldScale(_escMao).x / (av.raiz.getWorldScale(_escMao).x || 1) || 1;
+      av.fone.scale.setScalar(1 / s); av.fone.position.set(0, 0.09 / s, 0.025 / s);
+    });
+    return;
   }
   av.fone.visible = true;
 }
@@ -1378,8 +1400,10 @@ const ANIM_POSTURA = ['deitado_arma', 'deitado_recarga', 'deitado', 'rastejar_tr
   'moto_pilotar', 'moto_curva_dir', 'moto_curva_esq', 'moto_empinar', 'moto_subir', 'moto_descer', 'moto_queda_frente', 'moto_queda_tras'];   // 21h: moto   // 21a: pular muro baixo   // 20t: agachado sem arma e rastejar com arma   // 20s: abaixar armado e andar agachado armado (gerados no Meshy)
 // 20r: deslocamento das cambalhotas (tempo, x = esquerda do personagem, z = frente), tirado do quadril da animação
 const CURVAS_ROLAR = {"rolar_frente":[[0.0,0.0,0.0],[0.1,-0.021,0.044],[0.2,-0.035,0.118],[0.3,-0.041,0.24],[0.4,-0.029,0.425],[0.5,-0.007,0.656],[0.6,0.037,0.922],[0.7,0.072,1.192],[0.8,0.066,1.435],[0.9,0.08,1.556],[1.0,0.088,1.644],[1.1,0.055,1.744],[1.2,0.027,1.833],[1.3,0.003,1.91],[1.4,-0.005,2.008],[1.5,0.004,2.109],[1.6,0.017,2.176],[1.7,0.038,2.213],[1.8,0.059,2.236],[1.9,0.069,2.25],[2.0,0.072,2.261],[2.1,0.073,2.268],[2.2,0.075,2.273],[2.3,0.077,2.274],[2.4,0.08,2.273],[2.5,0.082,2.273]],"rolar_dir":[[0.0,0.0,0.0],[0.1,-0.184,-0.049],[0.2,-0.5,-0.11],[0.3,-0.749,-0.153],[0.4,-1.003,-0.196],[0.5,-1.268,-0.213],[0.6,-1.498,-0.203],[0.7,-1.731,-0.201],[0.8,-1.918,-0.192],[0.9,-2.15,-0.172],[1.0,-2.365,-0.137],[1.1,-2.478,-0.128],[1.2,-2.54,-0.133],[1.3,-2.606,-0.127],[1.4,-2.694,-0.101],[1.5,-2.768,-0.046],[1.6,-2.825,0.003],[1.7,-2.906,0.07],[1.8,-2.98,0.121],[1.9,-3.055,0.172],[2.0,-3.104,0.216],[2.1,-3.129,0.235],[2.2,-3.146,0.239],[2.3,-3.155,0.239],[2.4,-3.165,0.239]],"rolar_esq":[[0.0,0.0,0.0],[0.1,0.184,-0.049],[0.2,0.5,-0.11],[0.3,0.749,-0.153],[0.4,1.003,-0.196],[0.5,1.268,-0.213],[0.6,1.498,-0.203],[0.7,1.731,-0.201],[0.8,1.918,-0.192],[0.9,2.15,-0.172],[1.0,2.365,-0.137],[1.1,2.478,-0.128],[1.2,2.54,-0.133],[1.3,2.606,-0.127],[1.4,2.694,-0.101],[1.5,2.768,-0.046],[1.6,2.825,0.003],[1.7,2.906,0.07],[1.8,2.98,0.121],[1.9,3.055,0.172],[2.0,3.104,0.216],[2.1,3.129,0.235],[2.2,3.146,0.239],[2.3,3.155,0.239],[2.4,3.165,0.239]]};
-for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA, ...ANIM_POSTURA]) ANIM_EXTRAS.add(n);
-const ARQ_EXTRA = (nome) => (ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=9' : 'assets/personagens/animacoes_emotes.glb?v=2');
+// 22a: celular na mão: selfie (braço esticado), fotografar (as duas mãos) e mexer no celular (Papo Reto, Galeria)
+const ANIM_CEL = ['selfie', 'fotografar', 'feed', 'insta'], NA_MAO = new Set(['celular', ...ANIM_CEL]);
+for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA, ...ANIM_POSTURA, ...ANIM_CEL]) ANIM_EXTRAS.add(n);
+const ARQ_EXTRA = (nome) => (ANIM_CEL.includes(nome) ? 'assets/personagens/animacoes_celular.glb?v=1' : ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=9' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
 function obterBaseExtra(arq) {
   if (!basesExtra.has(arq)) basesExtra.set(arq, carregarGLB(arq).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { basesExtra.delete(arq); return null; }));
@@ -4232,12 +4256,18 @@ async function iniciarJogo(perfil) {
   celular.iniciarCelular({
     hora: () => { const h = horaAtual || 0; return `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`; }, lugares: lugaresCelular, veiculos: veiculosCelular, marcar: (a) => rastrear(a),
     abrirJanela: (q) => $(q === 'empresa' ? 'btEmpresa' : 'btCla')?.click(), chamarMecanico, chamarSamu, vida: () => Math.round(jogador.vida ?? 100), estacionamentoPerto: estacionamentoMaisPerto,
-    saldoMudou: () => rede.carregarPerfil(jogador.perfil.id).then((p) => { if (p) { jogador.perfil.moedas = p.moedas; atualizarInfo(); } }).catch(() => {}), aoFechar: () => { if (jogador.emote === 'celular') jogador.emote = null; },
+    saldoMudou: () => rede.carregarPerfil(jogador.perfil.id).then((p) => { if (p) { jogador.perfil.moedas = p.moedas; atualizarInfo(); } }).catch(() => {}), aoFechar: () => { if (jogador.emote === 'celular' || jogador.emote === 'insta') jogador.emote = null; },
     moedas: () => jogador.perfil?.moedas || 0, lojaOnline, comprarOnline, miniaturaCarro,
     online: (id) => remotos.has(id), euId: () => jogador.perfil?.id, aviso, toqueCelular,
     avisarMensagem: (id) => conexao?.enviar('dm', { de: jogador.perfil.id, para: id }),
     abrirParaLigacao: () => { if (!jogador.carro && !jogador.dentroCasa && !jogador.morto) { if (jogador.armado) alternarArma(); jogador.emote = 'celular'; jogador.avatar.garantir('celular'); } },
     aoFimLigacao: () => { if (jogador.emote === 'celular' && !celular.celularAberto()) jogador.emote = null; },
+    // 22a: celular escolhido/comprado, câmera e Papo Reto
+    celular: () => jogador.perfil?.celular || null, celulares: () => jogador.perfil?.celulares || [],
+    celularMudou: (m, lista) => { jogador.perfil.celular = m; if (lista) jogador.perfil.celulares = lista; conexao?.rastrear(metaPresenca()); },
+    abrirCamera: (modo) => abrirCamera(modo), moderador: () => ['admin', 'moderador'].includes(jogador.perfil?.cargo),
+    nome: () => jogador.perfil?.nome || '', local: () => (jogador.dentroCasa ? 'Em casa' : nomeDaRua(jogador.pos.x, jogador.pos.z) || 'Fator RP'),
+    telaMudou: (t) => { if (jogador.carro || jogador.dentroCasa || !['celular', 'insta'].includes(jogador.emote)) return; const q = ['papo', 'galeria', 'lojacel', 'escolhercel'].includes(t) ? 'insta' : 'celular'; if (jogador.emote !== q) { jogador.emote = q; jogador.avatar?.garantir(q); } },
     minhasEmpresas: async () => { try { await carregarLogistica(); } catch { /* usa o que tem */ } return [...empresas.values()].filter((e) => e.dono === jogador.perfil?.id); },
   });
   if ($('btCelular')) $('btCelular').onclick = () => abrirCelular();
@@ -4546,7 +4576,7 @@ function atualizarRemotos(dt) {
     if (a.cx && !r.caixa) r.caixa = criarCaixa(tipoDoCodigo(a.cx));
     if (r.av.colunaAntes) { r.av.coluna.quaternion.copy(r.av.colunaAntes); r.av.colunaAntes = null; }
     r.av.mixer.update(dt);
-    garrafaNaMao(r.av, r.anim === 'beber'); celularNaMao(r.av, r.anim === 'celular');
+    garrafaNaMao(r.av, r.anim === 'beber'); celularNaMao(r.av, NA_MAO.has(r.anim), r.meta?.cel);
     raiz.updateMatrixWorld(true);
     ajustarChaoPostura(r.av, raiz.position.y - (r.av.offChao || 0), dt);
     if (a.ar && r.arma) r.arma.visible = !ARMA_GUARDADA.test(r.av.nomeAtual || '');
@@ -5260,7 +5290,7 @@ async function npcFardado(papel, i, arma, farda) {
 }
 function metaPresenca() {
   const p = jogador.perfil;
-  return { mk: jogador.mascara || 0, rd: jogador.rendido ? 1 : 0, ceu: jogador.noCeu ? 1 : 0, bope: !!p.bope, invis: !!p.invisivel, som: somAtivo ? { url: somAtivo.url, txt: somAtivo.txt } : null, emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
+  return { cel: p.celular || null, mk: jogador.mascara || 0, rd: jogador.rendido ? 1 : 0, ceu: jogador.noCeu ? 1 : 0, bope: !!p.bope, invis: !!p.invisivel, som: somAtivo ? { url: somAtivo.url, txt: somAtivo.txt } : null, emb: jogador.embarcado?.id || null, inv: performance.now() < invasorAte ? 1 : 0, nome: p.nome, personagem: skinAtual(), cargo: p.cargo, crimes: p.crimes || 0, policial: !!p.policial, cla: jogador.claInfo?.nome || null,
     prf: !!p.prf, eleitoral: !!p.eleitoral, prefeito: prefeitoAtual === p.id, profissao: p.profissao || null, ferido: !!jogador.ferido, recompensa: p.recompensa || 0, des: p.desertor ? 1 : 0, patente: jogador.patente || null, ref: cativo() ? p.cativeiro : 0, farda: jogador.farda || null, sf: sexoFarda(), cc: jogador.coleteCivil && !jogador.farda ? 1 : 0, arm: jogador.armadura?.modelo || null, on: minhaVolta ? `${minhaVolta.L.id}.${minhaVolta.m}` : 0, tw: estavaNaTorre ? 1 : 0, fs: jogador.perfil?.profissao === 'fiscal' && naRodoviaria(jogador.pos.x, jogador.pos.z, 25) ? 1 : 0, gr: minhaColeta ? minhaColeta.S.id : 0 };
 }
 // etiqueta acima do nome: procurado, polícia ou clã
@@ -9761,7 +9791,8 @@ function atualizarJogador(dt) {
   }
   if (j.emote === 'beber' && forca > 0.15) j.emote = null;   // andou: para de beber
   if (j.emote === 'celular' && forca > 0.15) celular.fechar();   // andou: guarda o celular
-  celularNaMao(j.avatar, j.avatar?.nomeAtual === 'celular');
+  if (j.emote && j.emote !== 'celular' && NA_MAO.has(j.emote) && forca > 0.15) { if (camCel.on) fecharCamera(); else celular.fechar(); j.emote = null; }   // andou: guarda o celular
+  celularNaMao(j.avatar, NA_MAO.has(j.avatar?.nomeAtual), j.perfil?.celular);
   garrafaNaMao(j.avatar, j.avatar?.nomeAtual === 'beber' && j.emote === 'beber');
   if (!j.pulo && !j.emCima) resolverColisao(j.pos, j.raio);   // pulando por cima de um obstáculo: a colisão volta no fim do pulo
   if (j.dentroCasa) limitarInterior(j.pos);
@@ -10102,6 +10133,7 @@ function cameraDoEditor() {
   camAtiva = camP;
 }
 function atualizarCamera(dt) {
+  if (camCel.on && jogador.avatar) { cameraCelular(dt); return; }   // 22a: câmera do celular
   if (editorFarda && jogador.avatar) { cameraDoEditor(); return; }
   if (camEditor.ativa) { camEditor.ativa = false; document.body.classList.remove('editandoFarda'); camP.fov = 68; camP.updateProjectionMatrix(); if (jogador.etiqueta) jogador.etiqueta.visible = true; }
   if (miraC.ligada && jogador.avatar) { cameraOmbro(dt); return; }   // 20m: arma na mão: câmera de ombro
@@ -10452,6 +10484,7 @@ function quadroJogo() {
   visual.ajustar(noiteAtual, molhadoAtual);
   diag('render (desenho)');
   visual.render(camAtiva);
+  if (camCel.pedido) { camCel.pedido = false; capturarFoto(); }   // 22a: a foto sai do quadro que acabou de ser desenhado
   // cabine 3D por cima (só na primeira pessoa, dentro do veículo)
   for (const o of cenaCabine.children) if (o.isGroup || o.type === 'Group' || o.isObject3D && o.userData.local) o.visible = o === cabine3D;
   if (cabine3D && camAtiva === camP) {
@@ -12268,6 +12301,135 @@ async function comprarOnline(modelo, cor) {
   return `🚗 Comprado! Ele está no estacionamento a ${e.dist} m (marcado no mapa).`;
 }
 // ---------------------------------------------------------------- celular 📱
+// ---- 22a: 📷 câmera do celular. FOTO: a visão do personagem segurando o celular com as duas mãos (arraste para olhar
+// em volta). SELFIE: o braço estica e a câmera fica no celular, olhando para o personagem (arraste para girar em volta,
+// pinça/roda para afastar). A foto (4:5, 720×900) vai para a 🖼️ Galeria deste aparelho; de lá vai para o Papo Reto.
+const camCel = { on: false, modo: 'foto', giro: 0, alt: 0, pitch: 0, dist: 0.85, pedido: false, ui: null };
+const _cabC = new THREE.Vector3(), _fC = new THREE.Vector3(), _alvoC = new THREE.Vector3();
+function montarUICamera() {
+  if (camCel.ui) return camCel.ui;
+  const st = document.createElement('style');
+  st.textContent = `#camCel{position:fixed;inset:0;z-index:45;touch-action:none;user-select:none;-webkit-user-select:none}
+#camCel .moldura{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);height:min(100vh,125vw);aspect-ratio:4/5;max-width:100vw;box-shadow:0 0 0 100vmax rgba(0,0,0,.45);pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.2) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.2) 1px,transparent 1px);background-size:33.33% 33.33%;background-position:-1px -1px}
+#camCel .topo{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between}
+#camCel button{border:0;color:#fff;cursor:pointer;font-family:system-ui,sans-serif}
+#camCel .topo button{width:42px;height:42px;border-radius:50%;background:rgba(0,0,0,.5);font-size:20px}
+#camCel .modos{position:absolute;bottom:112px;left:0;right:0;display:flex;justify-content:center;gap:22px}
+#camCel .modos button{background:none;font-size:14px;font-weight:800;letter-spacing:.5px;text-shadow:0 1px 3px #000;opacity:.8}
+#camCel .modos button.on{color:#ffd166;opacity:1}
+#camCel .base{position:absolute;bottom:0;left:0;right:0;height:100px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,.45)}
+#camCel .disp{width:68px;height:68px;border-radius:50%;border:5px solid #fff;background:rgba(255,255,255,.3)}
+#camCel .disp:active{background:#fff}
+#camCel .mini{width:46px;height:46px;border-radius:10px;border:2px solid #fff;background:#222 center/cover}
+#camCel .girar{width:46px;height:46px;border-radius:50%;background:rgba(43,49,56,.9);font-size:22px}
+#camCel .dica{position:absolute;top:64px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.55);border-radius:10px;padding:6px 10px;font:12px system-ui,sans-serif;color:#fff;text-align:center;max-width:86vw;pointer-events:none}
+#camCel .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
+body.modoCamera #hud, body.modoCamera #toque, body.modoCamera #joy, body.modoCamera #botoes, body.modoCamera #municao, body.modoCamera #girar, body.modoCamera #chatLog{visibility:hidden}`;
+  document.head.appendChild(st);
+  const el = document.createElement('div'); el.id = 'camCel'; el.style.display = 'none';
+  el.innerHTML = `<div class="moldura"></div><div class="flash"></div>
+    <div class="topo"><button id="camX" title="Fechar">✕</button><button id="camRede" title="Papo Reto">💬</button></div>
+    <div class="dica" id="camDica"></div>
+    <div class="modos"><button data-m="foto">FOTO</button><button data-m="selfie">SELFIE</button></div>
+    <div class="base"><button class="mini" id="camMini" title="Galeria"></button><button class="disp" id="camDisp" title="Tirar foto"></button><button class="girar" id="camGirar" title="Trocar">🔄</button></div>`;
+  document.body.appendChild(el);
+  const $c = (id) => el.querySelector('#' + id);
+  $c('camX').onclick = () => fecharCamera();
+  $c('camRede').onclick = () => fecharCamera('papo');
+  $c('camMini').onclick = () => fecharCamera('galeria');
+  $c('camDisp').onclick = () => { camCel.pedido = true; };
+  $c('camGirar').onclick = () => trocarModoCamera(camCel.modo === 'foto' ? 'selfie' : 'foto');
+  el.querySelectorAll('[data-m]').forEach((b) => { b.onclick = () => trocarModoCamera(b.dataset.m); });
+  // arrastar: olhar em volta (foto) ou girar em volta do personagem (selfie); pinça ou roda: afastar a selfie
+  const toques = new Map(); let pinca = 0;
+  el.addEventListener('pointerdown', (ev) => { if (ev.target.closest('button')) return; toques.set(ev.pointerId, { x: ev.clientX, y: ev.clientY }); el.setPointerCapture?.(ev.pointerId); });
+  el.addEventListener('pointermove', (ev) => {
+    const t = toques.get(ev.pointerId); if (!t) return;
+    if (toques.size === 2) {
+      const [a, b] = [...toques.values()], d0 = Math.hypot(a.x - b.x, a.y - b.y); t.x = ev.clientX; t.y = ev.clientY;
+      const [c2, d2] = [...toques.values()], d1 = Math.hypot(c2.x - d2.x, c2.y - d2.y);
+      if (pinca && camCel.modo === 'selfie') camCel.dist = Math.max(0.45, Math.min(1.6, camCel.dist * (d0 / Math.max(1, d1))));
+      pinca = 1; return;
+    }
+    const dx = ev.clientX - t.x, dy = ev.clientY - t.y; t.x = ev.clientX; t.y = ev.clientY;
+    if (camCel.modo === 'foto') { jogador.yaw -= dx * 0.006; camCel.pitch = Math.max(-0.9, Math.min(0.9, camCel.pitch - dy * 0.005)); }
+    else { camCel.giro = Math.max(-1.2, Math.min(1.2, camCel.giro - dx * 0.006)); camCel.alt = Math.max(-0.35, Math.min(0.55, camCel.alt + dy * 0.003)); }
+  });
+  const solta = (ev) => { toques.delete(ev.pointerId); if (toques.size < 2) pinca = 0; };
+  el.addEventListener('pointerup', solta); el.addEventListener('pointercancel', solta);
+  el.addEventListener('wheel', (ev) => { if (camCel.modo === 'selfie') camCel.dist = Math.max(0.45, Math.min(1.6, camCel.dist * (ev.deltaY > 0 ? 1.08 : 0.93))); }, { passive: true });
+  for (const t of ['pointerdown', 'touchstart', 'wheel']) el.addEventListener(t, (ev) => ev.stopPropagation(), { passive: true });
+  addEventListener('keydown', (ev) => { if (!camCel.on) return; if (ev.key === 'Escape') fecharCamera(); else if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); camCel.pedido = true; } });
+  camCel.ui = el; return el;
+}
+function trocarModoCamera(m) {
+  camCel.modo = m; camCel.giro = 0; camCel.alt = 0; camCel.pitch = 0;
+  jogador.emote = m === 'selfie' ? 'selfie' : 'fotografar'; jogador.avatar?.garantir(jogador.emote);
+  const el = montarUICamera(); el.querySelectorAll('[data-m]').forEach((b) => b.classList.toggle('on', b.dataset.m === m));
+  el.querySelector('#camDica').textContent = m === 'selfie' ? 'Arraste para girar em volta · pinça para afastar' : 'Arraste para olhar em volta';
+  if (jogador.avatar) jogador.avatar.raiz.visible = true;
+}
+function abrirCamera(modo = 'foto') {
+  if (!jogador.perfil?.celular) { celular.abrir(); return; }
+  if (jogador.carro || jogador.morto || jogador.algemado || jogador.pena > 0 || !jogador.avatar) { aviso('📷 A câmera só funciona a pé.', 2.5); return; }
+  celular.fechar(); if (jogador.armado) alternarArma();
+  const el = montarUICamera(); el.style.display = ''; camCel.on = true; document.body.classList.add('modoCamera');
+  trocarModoCamera(modo); camCel.dist = 0.85;
+  papo.ultimaFotoUrl().then((u) => { el.querySelector('#camMini').style.backgroundImage = u ? `url(${u})` : ''; });
+}
+function fecharCamera(voltarPara) {
+  if (!camCel.on) return;
+  camCel.on = false; camCel.pedido = false; if (camCel.ui) camCel.ui.style.display = 'none'; document.body.classList.remove('modoCamera');
+  if (jogador.avatar) jogador.avatar.raiz.visible = true;
+  camP.near = 0.4; camP.updateProjectionMatrix();
+  if (['selfie', 'fotografar'].includes(jogador.emote)) jogador.emote = null;
+  if (voltarPara) { if (!jogador.carro && !jogador.dentroCasa) { jogador.emote = 'insta'; jogador.avatar?.garantir('insta'); } celular.abrirEm(voltarPara); }
+}
+function cameraCelular(dt) {
+  const j = jogador, av = j.avatar;
+  if (!['selfie', 'fotografar'].includes(j.emote) || j.carro || j.morto) { fecharCamera(); return; }
+  camAtiva = camP; ladoUnicoP1(null); camP.layers.enable(1);
+  if (camP.near !== 0.06) { camP.near = 0.06; camP.updateProjectionMatrix(); }
+  if (Math.abs(camP.fov - 62) > 0.5) { camP.fov = 62; camP.updateProjectionMatrix(); }
+  const cab = cabecaDe(av); if (cab) { av.raiz.updateMatrixWorld(true); cab.getWorldPosition(_cabC); } else _cabC.set(j.pos.x, (j.pos.y || 0) + 1.6, j.pos.z);
+  if (!(_cabC.y > (j.pos.y || 0) + 0.3)) _cabC.y = (j.pos.y || 0) + 1.55;
+  const y = j.yaw;
+  if (camCel.modo === 'foto') {   // primeira pessoa: um pouco à frente do rosto, na altura do celular
+    _fC.set(Math.sin(y) * Math.cos(camCel.pitch), Math.sin(camCel.pitch), Math.cos(y) * Math.cos(camCel.pitch));
+    camP.position.set(_cabC.x + Math.sin(y) * 0.42, _cabC.y - 0.02, _cabC.z + Math.cos(y) * 0.42);
+    camP.lookAt(_alvoC.copy(camP.position).add(_fC));
+    av.raiz.visible = false;   // só para quem tira a foto (os outros veem o personagem fotografando)
+  } else {   // selfie: o celular na mão esticada, olhando para o rosto
+    av.raiz.visible = true;
+    const a = y + 0.35 + camCel.giro, d = camCel.dist;
+    camP.position.set(_cabC.x + Math.sin(a) * d, _cabC.y + 0.12 + camCel.alt, _cabC.z + Math.cos(a) * d);
+    const ch = alturaChao(camP.position.x, camP.position.z) + 0.2; if (camP.position.y < ch) camP.position.y = ch;
+    camP.lookAt(_alvoC.set(_cabC.x, _cabC.y - 0.06, _cabC.z));
+  }
+  alvoCam.set(j.pos.x, 0, j.pos.z); posicionarSol(alvoCam.x, alvoCam.z);
+  const mira1 = $('mira1p'); if (mira1) mira1.classList.add('oculto');
+}
+function somObturador() {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)(), n = ac.sampleRate * 0.09, b = ac.createBuffer(1, n, ac.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3) * (i < n * 0.4 || i > n * 0.55 ? 1 : 0.2);
+    const s = ac.createBufferSource(), g = ac.createGain(); g.gain.value = 0.35; s.buffer = b; s.connect(g); g.connect(ac.destination); s.start(); s.onended = () => ac.close?.();
+  } catch { /* sem áudio */ }
+}
+function capturarFoto() {
+  const cv = renderer.domElement; let h = cv.height, w = Math.round(h * 0.8); if (w > cv.width) { w = cv.width; h = Math.round(w / 0.8); }
+  const out = document.createElement('canvas'); out.width = 720; out.height = 900;
+  try { out.getContext('2d').drawImage(cv, (cv.width - w) / 2, (cv.height - h) / 2, w, h, 0, 0, 720, 900); } catch { aviso('Não deu para tirar a foto.', 2); return; }
+  somObturador();
+  const fl = camCel.ui?.querySelector('.flash'); if (fl) { fl.style.transition = 'none'; fl.style.opacity = '0.85'; requestAnimationFrame(() => { fl.style.transition = 'opacity .35s'; fl.style.opacity = '0'; }); }
+  const local = jogador.dentroCasa ? 'Em casa' : nomeDaRua(jogador.pos.x, jogador.pos.z) || 'Fator RP';
+  out.toBlob(async (blob) => {
+    if (!blob) return;
+    try { await papo.salvarFoto(blob, local); const u = await papo.ultimaFotoUrl(); if (camCel.ui) camCel.ui.querySelector('#camMini').style.backgroundImage = u ? `url(${u})` : ''; aviso('📷 Foto salva na Galeria.', 1.5); }
+    catch { aviso('Não deu para salvar a foto neste aparelho.', 2.5); }
+  }, 'image/jpeg', 0.85);
+}
 function abrirCelular() {
   if (celular.celularAberto()) { celular.fechar(); return; }
   if (jogador.morto || jogador.algemado) return;
