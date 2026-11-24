@@ -17,7 +17,7 @@ begin
   if (select cargo from perfis where id = auth.uid()) is distinct from 'admin' then raise exception 'so o administrador'; end if;
   if p_modelo !~ '^[a-z0-9_]{2,40}$' then raise exception 'modelo invalido'; end if;
   if p_cfg is null then delete from lanternas_onibus where modelo = p_modelo; return; end if;
-  if jsonb_typeof(p_cfg) <> 'object' or length(p_cfg::text) > 400 then raise exception 'medida invalida'; end if;
+  if jsonb_typeof(p_cfg) <> 'object' or length(p_cfg::text) > 2000 then raise exception 'medida invalida'; end if;
   insert into lanternas_onibus (modelo, cfg) values (p_modelo, p_cfg)
     on conflict (modelo) do update set cfg = excluded.cfg, atualizado_em = now();
 end $$;

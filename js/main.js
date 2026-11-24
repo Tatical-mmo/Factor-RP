@@ -12048,11 +12048,10 @@ function fecharAjusteLanternas() {
   civico.definirLantCfg(ajLant.modelo, civico.LANT_PADRAO[ajLant.modelo] || null); carregarLanternas(); ajLant.el.remove(); ajLant = null;
 }
 function trocarModeloLant(m) {
-  const A = ajLant; A.modelo = m;
-  A.cfg = { ...(civico.lantConfig(m) || civico.LANT_PADRAO[m] || { des: 'nenhuma', x: 1.1, z: -7, y: 0.9, h: 1.0, w: 0.4, ang: 30 }) };
-  if (!civico.lantConfig(m)) A.cfg.des = A.cfg.des || 'nenhuma';
+  const A = ajLant; A.modelo = m; A.peca = -1; A.lado = A.lado || 'ambos';   // -1 = todas as peças juntas; lado: ambos, E ou D
+  A.cfg = JSON.parse(JSON.stringify(civico.lantConfig(m) || civico.LANT_PADRAO[m] || { des: 'nenhuma', x: 1.1, z: -7, y: 0.9, h: 1.0, w: 0.4, ang: 30 }));
   if (A.bus) scene.remove(A.bus);
-  const b = civico.modeloCarro(m, '#ffffff'), fx = Math.sin(jogador.yaw), fz = Math.cos(jogador.yaw), d = civico.CARROS[m] ? 12 : 12;
+  const b = civico.modeloCarro(m, '#ffffff'), fx = Math.sin(jogador.yaw), fz = Math.cos(jogador.yaw), d = 12;
   b.position.set(jogador.pos.x + fx * d, alturaChao(jogador.pos.x + fx * d, jogador.pos.z + fz * d), jogador.pos.z + fz * d); b.rotation.y = jogador.yaw; scene.add(b);
   A.bus = b; civico.testeLant(b, A.teste); desenharAjusteLant();
 }
@@ -12061,30 +12060,45 @@ function aplicarAjusteLant() {
   if (A.bus) civico.testeLant(A.bus, A.teste);
   desenharAjusteLant();
 }
+// os campos mostrados: os da peça escolhida (ou da lanterna inteira); "todas" move todas juntas
+function alvoLant() { const C = ajLant.cfg; return C.pecas ? (ajLant.peca >= 0 ? [C.pecas[ajLant.peca]] : C.pecas) : [C]; }
 function desenharAjusteLant() {
   const A = ajLant, C = A.cfg, bt = (id, t, extra = '') => `<button data-l="${id}" style="padding:4px 7px;border:0;border-radius:6px;background:#2d3540;color:#fff;font:inherit${extra}">${t}</button>`;
   const liga = (k, t) => bt('t:' + k, t, A.teste[k] ? ';background:#c0392b' : '');
+  const ref0 = alvoLant()[0] || C, ref = A.lado === 'ambos' ? ref0 : { ...ref0, ...(ref0.lados?.[A.lado] || {}) };
+  const soltas = Object.entries(civico.DESENHOS_LANT).filter(([, d]) => d.camadas.length === 3);
+  const selDes = C.pecas
+    ? `<select data-l="peca" style="font:inherit"><option value="-1">Todas as peças</option>${C.pecas.map((p, k) => `<option value="${k}" ${k === A.peca ? 'selected' : ''}>${k + 1}. ${escLant(civico.DESENHOS_LANT[p.des]?.nome || p.des)}</option>`).join('')}</select>`
+    : `<select data-l="des" style="font:inherit"><option value="nenhuma">Sem desenho (bolas)</option>${soltas.map(([k, d]) => `<option value="${k}" ${k === C.des ? 'selected' : ''}>${escLant(d.nome)}</option>`).join('')}</select>`;
   A.el.innerHTML = `<b>🚌 Lanternas</b>
     <select data-l="modelo" style="font:inherit">${MODELOS_LANT.map((m) => `<option value="${m}" ${m === A.modelo ? 'selected' : ''}>${escLant(civico.CARROS[m]?.nome || m)}</option>`).join('')}</select>
-    <select data-l="des" style="font:inherit"><option value="nenhuma">Sem desenho (bolas)</option>${Object.entries(civico.DESENHOS_LANT).map(([k, d]) => `<option value="${k}" ${k === C.des ? 'selected' : ''}>${escLant(d.nome)}</option>`).join('')}</select>
-    ${CAMPOS_LANT.map(([k, t]) => `<span style="white-space:nowrap">${t} ${bt('-:' + k, '−')}<b style="display:inline-block;min-width:36px;text-align:center">${(+C[k]).toFixed(k === 'ang' ? 0 : 2)}</b>${bt('+:' + k, '+')}</span>`).join('')}
+    ${selDes}
+    <select data-l="lado" style="font:inherit">${[['ambos', 'Os dois lados'], ['E', 'Só o esquerdo'], ['D', 'Só o direito']].map(([v, t]) => `<option value="${v}" ${v === A.lado ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    ${CAMPOS_LANT.map(([k, t]) => `<span style="white-space:nowrap">${t} ${bt('-:' + k, '−')}<b style="display:inline-block;min-width:36px;text-align:center">${A.peca < 0 && C.pecas ? '·' : (+ref[k]).toFixed(k === 'ang' ? 0 : 2)}</b>${bt('+:' + k, '+')}</span>`).join('')}
     <span style="white-space:nowrap">${liga('ligado', 'Lanterna')}${liga('freio', 'Freio')}${liga('alerta', 'Alerta')}${liga('re', 'Ré')}</span>
     ${bt('salvar', '💾 Salvar', ';background:#1f7a3a')}${bt('padrao', 'Padrão')}${bt('fechar', '✖')}`;
   A.el.querySelectorAll('[data-l]').forEach((e) => {
     const k = e.dataset.l;
-    if (e.tagName === 'SELECT') { e.onchange = () => { if (k === 'modelo') trocarModeloLant(e.value); else { C.des = e.value; aplicarAjusteLant(); } }; return; }
+    if (e.tagName === 'SELECT') {
+      e.onchange = () => { if (k === 'modelo') trocarModeloLant(e.value); else if (k === 'peca') { A.peca = +e.value; desenharAjusteLant(); } else if (k === 'lado') { A.lado = e.value; desenharAjusteLant(); } else { C.des = e.value; aplicarAjusteLant(); } };
+      return;
+    }
     e.onclick = () => {
       if (k === 'fechar') { fecharAjusteLanternas(); return; }
-      if (k === 'padrao') { A.cfg = { ...(civico.LANT_PADRAO[A.modelo] || { ...C, des: 'nenhuma' }) }; aplicarAjusteLant(); return; }
+      if (k === 'padrao') { A.cfg = JSON.parse(JSON.stringify(civico.LANT_PADRAO[A.modelo] || { ...C, des: 'nenhuma' })); A.peca = -1; aplicarAjusteLant(); return; }
       if (k === 'salvar') {
-        const cfg = Object.fromEntries(Object.entries(A.cfg).map(([a, v]) => [a, typeof v === 'number' ? Math.round(v * 1000) / 1000 : v]));
+        const arred = (o) => Object.fromEntries(Object.entries(o).map(([a, v]) => [a, typeof v === 'number' ? Math.round(v * 1000) / 1000 : v && typeof v === 'object' ? arred(v) : v]));
+        const cfg = A.cfg.pecas ? { pecas: A.cfg.pecas.map(arred) } : arred(A.cfg);
         rede.lanternas.salvar(A.modelo, cfg).then(() => { aviso('💾 Lanterna salva: vale para todos.', 2.5); conexao?.enviar('lantCfg', { modelo: A.modelo }); }).catch((er) => aviso(er.message, 3));
         return;
       }
       if (k.startsWith('t:')) { const n = k.slice(2); A.teste = { ...A.teste, [n]: !A.teste[n] }; civico.testeLant(A.bus, A.teste); desenharAjusteLant(); return; }
-      const [s, campo] = k.split(':'), passo = CAMPOS_LANT.find((c) => c[0] === campo)[2];
-      C[campo] = +((+C[campo] || 0) + (s === '+' ? passo : -passo)).toFixed(3);
-      if (C.des === 'nenhuma') C.des = Object.keys(civico.DESENHOS_LANT)[0];
+      const [sn, campo] = k.split(':'), passo = CAMPOS_LANT.find((c) => c[0] === campo)[2] * (sn === '+' ? 1 : -1);
+      for (const P of alvoLant()) {
+        if (A.lado === 'ambos') { P[campo] = +((+P[campo] || 0) + passo).toFixed(3); for (const L of Object.values(P.lados || {})) if (L[campo] !== undefined) L[campo] = +(L[campo] + passo).toFixed(3); }
+        else { P.lados ||= {}; const L = (P.lados[A.lado] ||= {}); L[campo] = +((L[campo] ?? +P[campo] ?? 0) + passo).toFixed(3); }
+      }
+      if (!C.pecas && C.des === 'nenhuma') C.des = soltas[0][0];
       aplicarAjusteLant();
     };
   });

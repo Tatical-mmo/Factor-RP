@@ -1627,21 +1627,51 @@ const _rc = new THREE.Raycaster();
 // na lataria por raios inclinados na quina: dobra da traseira para a lateral, como a de verdade. Cada modelo tem a sua
 // medida (altura, lateral, fundo, largura, tamanho e ângulo da quina), ajustável pelo admin (aba Lanternas) e salva no
 // banco para todos. Com ela, as bolas de brilho de trás somem nesse modelo.
-export const DESENHOS_LANT = { neobus: { nome: 'Neobus (LEDs em X)', arq: 'assets/lanternas/neobus_', prop: 256 / 916 }, marcopolo: { nome: 'Marcopolo Paradiso G7', arq: 'assets/lanternas/marcopolo_', prop: 256 / 496 }, viaggio: { nome: 'Marcopolo Viaggio G7', arq: 'assets/lanternas/viaggio_', prop: 256 / 408 }, busscar: { nome: 'Busscar Jum Buss 360', arq: 'assets/lanternas/busscar_', prop: 256 / 1348 } };
-export const LANT_PADRAO = {   // medidas iniciais (pela lanterna pintada de cada modelo); o admin ajusta na aba Lanternas
+// desenhos: arq + camadas que acendem (led = lanterna/freio, seta = pisca/alerta, re = ré); prop = largura / altura
+const L3 = ['led', 'seta', 're'];
+export const DESENHOS_LANT = {
+  neobus: { nome: 'Neobus (LEDs em X)', arq: 'assets/lanternas/neobus_', prop: 256 / 916, camadas: L3 },
+  marcopolo: { nome: 'Marcopolo Paradiso G7', arq: 'assets/lanternas/marcopolo_', prop: 256 / 496, camadas: L3 },
+  viaggio: { nome: 'Marcopolo Viaggio G7', arq: 'assets/lanternas/viaggio_', prop: 256 / 408, camadas: L3 },
+  busscar: { nome: 'Busscar Jum Buss 360', arq: 'assets/lanternas/busscar_', prop: 256 / 1348, camadas: L3 },
+  paradiso_g6: { nome: 'Marcopolo Paradiso G6', arq: 'assets/lanternas/paradiso_g6_', prop: 256 / 592, camadas: L3 },
+  // peças soltas (cada uma ajustável sozinha)
+  redonda_ambar: { nome: 'Redonda âmbar (seta)', arq: 'assets/lanternas/redonda_ambar_', prop: 1, camadas: ['seta'] },
+  redonda_vermelha: { nome: 'Redonda vermelha (lanterna)', arq: 'assets/lanternas/redonda_vermelha_', prop: 1, camadas: ['led'] },
+  redonda_branca: { nome: 'Redonda branca (ré)', arq: 'assets/lanternas/redonda_branca_', prop: 1, camadas: ['re'] },
+  apache07_v1: { nome: 'Apache 07: vermelha de cima', arq: 'assets/lanternas/apache07_v1_', prop: 0.176, camadas: ['led'] },
+  apache07_v2: { nome: 'Apache 07: vermelha do meio', arq: 'assets/lanternas/apache07_v2_', prop: 0.184, camadas: ['led'] },
+  apache07_v3: { nome: 'Apache 07: vermelha curva', arq: 'assets/lanternas/apache07_v3_', prop: 0.503, camadas: ['led'] },
+  apache07_b1: { nome: 'Apache 07: pisca de cima', arq: 'assets/lanternas/apache07_b1_', prop: 0.189, camadas: ['seta'] },
+  apache07_b2: { nome: 'Apache 07: pisca do meio', arq: 'assets/lanternas/apache07_b2_', prop: 0.18, camadas: ['seta'] },
+  apache07_b3: { nome: 'Apache 07: ré curva', arq: 'assets/lanternas/apache07_b3_', prop: 0.549, camadas: ['re'] },
+};
+// medidas iniciais (pela lanterna pintada de cada modelo); o admin ajusta na aba Lanternas. Com "pecas", cada peça
+// tem a sua medida (as redondas do 08/10 e as do Apache 07).
+const redondas = (x, z, y0, d) => ({ pecas: [['redonda_ambar', 0], ['redonda_vermelha', 1], ['redonda_branca', 2]].map(([des, k]) => ({ des, x, z, y: y0 + (2 - k) * (d + 0.02), h: d, w: d, ang: 25 })) });
+export const LANT_PADRAO = {
   onibus_rod_02: { des: 'neobus', x: 1.16, z: -7.12, y: 0.9, h: 1.1, w: 0.31, ang: 30 },
+  onibus_rod_amarelo: { des: 'neobus', x: 1.14, z: -6.8, y: 0.9, h: 1.1, w: 0.31, ang: 30 },
+  onibus_rod_04: { des: 'busscar', x: 1.12, z: -7.14, y: 0.85, h: 1.35, w: 0.3, ang: 30 },
   onibus_rod_06: { des: 'marcopolo', x: 1.02, z: -7.28, y: 0.5, h: 1.2, w: 0.5, ang: 30 },
   onibus_rod_vermelho: { des: 'marcopolo', x: 1.06, z: -6.64, y: 0.8, h: 1.0, w: 0.44, ang: 30 },
-  onibus_rod_04: { des: 'busscar', x: 1.12, z: -7.14, y: 0.85, h: 1.35, w: 0.3, ang: 30 },
   onibus_rod_branco: { des: 'viaggio', x: 1.08, z: -6.56, y: 0.9, h: 0.85, w: 0.46, ang: 30 },
+  onibus_rod_dourado: { des: 'paradiso_g6', x: 1.0, z: -7.14, y: 1.0, h: 1.1, w: 0.42, ang: 30 },
+  onibus_branco: redondas(1.0, -6.06, 0.9, 0.26),
+  onibus_laranja: redondas(0.97, -6.37, 0.82, 0.24),
+  onibus_amarelo: { pecas: [
+    { des: 'apache07_v1', x: 1.16, z: -6.09, y: 1.55, h: 0.55, w: 0.1, ang: 35 }, { des: 'apache07_b1', x: 1.04, z: -6.09, y: 1.55, h: 0.55, w: 0.1, ang: 25 },
+    { des: 'apache07_v2', x: 1.16, z: -6.09, y: 0.98, h: 0.55, w: 0.1, ang: 35 }, { des: 'apache07_b2', x: 1.04, z: -6.09, y: 0.98, h: 0.55, w: 0.1, ang: 25 },
+    { des: 'apache07_v3', x: 1.14, z: -6.09, y: 0.6, h: 0.36, w: 0.18, ang: 35 }, { des: 'apache07_b3', x: 0.98, z: -6.09, y: 0.6, h: 0.36, w: 0.2, ang: 25 }] },
 };
-const lantCfg = { ...LANT_PADRAO };
+const lantCfg = JSON.parse(JSON.stringify(LANT_PADRAO));
 export const lantConfig = (glb) => lantCfg[glb] || null;
+export const pecasLant = (C) => (!C ? [] : C.pecas ? C.pecas : [C]);
 const texLant = {}, geoLant = new Map();
 function texturasLant(des) {
   if (texLant[des]) return texLant[des];
   const D = DESENHOS_LANT[des], tl = new THREE.TextureLoader(), t = {};
-  for (const k of ['base', 'led', 'seta', 're']) { t[k] = tl.load(`${D.arq}${k}.webp`); t[k].colorSpace = THREE.SRGBColorSpace; t[k].anisotropy = 4; }
+  for (const k of ['base', ...D.camadas]) { t[k] = tl.load(`${D.arq}${k}.webp`); t[k].colorSpace = THREE.SRGBColorSpace; t[k].anisotropy = 4; }
   return (texLant[des] = t);
 }
 // geometria dos dois lados (no espaço do modelo), feita uma vez por modelo + medida
@@ -1649,8 +1679,10 @@ function geometriaLant(g, glb, C) {
   const chave = glb + JSON.stringify(C); if (geoLant.has(chave)) return geoLant.get(chave);
   const alvos = []; g.traverse((o) => { if (!o.isMesh) return; for (let p = o; p && p !== g; p = p.parent) if (['rodas', 'luzes', 'sinais', 'lantDes', 'chassi'].includes(p.name)) return; alvos.push(o); });
   g.updateMatrixWorld(true); const m = g.matrixWorld, inv = new THREE.Matrix4().copy(m).invert();
-  const NU = 14, NV = 20, prop = DESENHOS_LANT[C.des]?.prop || 0.28, W = C.w ?? C.h * prop, th = (C.ang ?? 30) * Math.PI / 180, r = [];
+  const NU = 12, NV = 16, prop = DESENHOS_LANT[C.des]?.prop || 0.28, r = [];
   for (const sg of [1, -1]) {
+    const C0 = C; C = { ...C0, ...(C0.lados?.[sg > 0 ? 'E' : 'D'] || {}) };   // 22e: ajuste só de um lado
+    const W = C.w ?? C.h * prop, th = (C.ang ?? 30) * Math.PI / 180;
     const d = new THREE.Vector3(Math.sin(th) * sg, 0, -Math.cos(th)), lado = new THREE.Vector3(Math.cos(th) * sg, 0, Math.sin(th));
     const pos = [], uv = [], idx = [];
     for (let j = 0; j <= NV; j++) for (let i = 0; i <= NU; i++) {
@@ -1658,36 +1690,45 @@ function geometriaLant(g, glb, C) {
       _rc.set(o.clone().applyMatrix4(m), d.clone().negate().transformDirection(m)); _rc.far = 6;
       const h = _rc.intersectObjects(alvos, false)[0];
       const q = h ? h.point.clone().applyMatrix4(inv).addScaledVector(d, 0.025) : o.addScaledVector(d, -3);
-      pos.push(q.x, q.y, q.z); uv.push(sg > 0 ? u : 1 - u, v);
+      pos.push(q.x, q.y, q.z); uv.push(u, v);
     }
     for (let j = 0; j < NV; j++) for (let i = 0; i < NU; i++) { const a = j * (NU + 1) + i, b = a + 1, c = a + NU + 1, e = c + 1; if (sg > 0) idx.push(a, b, c, b, e, c); else idx.push(a, c, b, b, c, e); }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
     r.push({ geo, lado: sg > 0 ? 'E' : 'D' });
+    C = C0;
   }
   geoLant.set(chave, r); return r;
 }
 function montarLantDes(o) {
   const glb = o.userData.glb, velho = o.getObjectByName('lantDes');
   if (velho) { o.remove(velho); o.userData.lantDes = null; }
-  const C = glb && lantCfg[glb];
+  const pecas = pecasLant(glb && lantCfg[glb]).filter((p) => DESENHOS_LANT[p.des]);
   const tras = (vis) => o.traverse((c) => { if (c.isSprite && c.userData.tras && c.parent?.name === 'luzes') c.visible = vis; });
-  if (!C || !DESENHOS_LANT[C.des]) { tras(true); return; }
-  const T = texturasLant(C.des), G = new THREE.Group(); G.name = 'lantDes';
-  const add = (geo, mat, nome) => { const m = new THREE.Mesh(geo, mat); m.name = nome; m.renderOrder = 2; G.add(m); return m; };
+  if (!pecas.length) { tras(true); return; }
+  const G = new THREE.Group(); G.name = 'lantDes';
   const brilho = (t) => new THREE.MeshBasicMaterial({ map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
-  const base = new THREE.MeshStandardMaterial({ map: T.base, transparent: true, alphaTest: 0.3, roughness: 0.25, metalness: 0.1, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1 });
-  const L = { led: brilho(T.led), re: brilho(T.re), setaE: brilho(T.seta), setaD: brilho(T.seta) };
-  for (const { geo, lado } of geometriaLant(o, glb, C)) { add(geo, base, 'base'); add(geo, L.led, 'led'); add(geo, L.re, 're'); add(geo, lado === 'E' ? L.setaE : L.setaD, 'seta'); }
+  const L = { led: [], re: [], setaE: [], setaD: [] };
+  pecas.forEach((C, k) => {
+    const T = texturasLant(C.des), D = DESENHOS_LANT[C.des];
+    const base = new THREE.MeshStandardMaterial({ map: T.base, transparent: true, alphaTest: 0.3, roughness: 0.25, metalness: 0.1, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1 });
+    const mats = {}; for (const c of D.camadas) mats[c] = c === 'seta' ? { E: brilho(T.seta), D: brilho(T.seta) } : brilho(T[c]);
+    if (mats.led) L.led.push(mats.led); if (mats.re) L.re.push(mats.re); if (mats.seta) { L.setaE.push(mats.seta.E); L.setaD.push(mats.seta.D); }
+    for (const { geo, lado } of geometriaLant(o, glb, C)) {
+      const add = (mat, nome) => { const m = new THREE.Mesh(geo, mat); m.name = nome; m.renderOrder = 2; m.userData.peca = k; G.add(m); };
+      add(base, 'base');
+      for (const c of D.camadas) add(c === 'seta' ? mats.seta[lado] : mats[c], c);
+    }
+  });
   o.add(G); o.userData.lantDes = L; tras(false);
   comLuz.add(o);
 }
 function acenderLantDes(o, u, ligado) {
   const L = u.lantDes, S = u.lantTeste || u.sinal || {}, vis = o.visible;
-  L.led.opacity = !vis ? 0 : S.freio ? 1 : ligado ? 0.5 : 0;
-  L.re.opacity = vis && S.re ? 1 : 0;
   const p = S.pisca ?? ((tLuz % 0.8) < 0.42);
-  L.setaE.opacity = vis && (S.alerta || S.seta > 0) && p ? 1 : 0;
-  L.setaD.opacity = vis && (S.alerta || S.seta < 0) && p ? 1 : 0;
+  const led = !vis ? 0 : S.freio ? 1 : ligado ? 0.5 : 0, re = vis && S.re ? 1 : 0;
+  const sE = vis && (S.alerta || S.seta > 0) && p ? 1 : 0, sD = vis && (S.alerta || S.seta < 0) && p ? 1 : 0;
+  for (const m of L.led) m.opacity = led; for (const m of L.re) m.opacity = re;
+  for (const m of L.setaE) m.opacity = sE; for (const m of L.setaD) m.opacity = sD;
 }
 // medida nova (do admin ou do banco): refaz a lanterna em todos os ônibus desse modelo que estão na cena
 export function definirLantCfg(glb, C) {
