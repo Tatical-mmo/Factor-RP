@@ -1514,7 +1514,24 @@ const LAMPADAS = {
   militar: { f: [0.5, 1.1, 0.24], t: [0.8, 0.95, 0.12, 0.12] },
   moto_250: { f: [0, 0.74, 0.18], t: [0, 0.8, 0.12, 0.08], sf: [0.2, 0.7], st: [0.16, 0.78], re: null },
   moto_650: { f: [0, 0.84, 0.2], t: [0, 0.88, 0.12, 0.08], sf: [0.2, 0.8], st: [0.16, 0.85], re: null },
+  // pesados (21t, 2º pacote). lat: altura das luzes laterais âmbar dos ônibus (piscam junto com a seta e o alerta)
+  onibus_amarelo: { f: [0.88, 0.81, 0.3], t: [1.06, 1.29, 0.15, 0.85], lat: 0.8 },
+  onibus_branco: { f: [0.87, 1.1, 0.3], t: [1.1, 1.32, 0.15, 0.5], lat: 0.8 },
+  onibus_laranja: { f: [0.86, 0.96, 0.28], t: [1.1, 1.5, 0.15, 0.9], lat: 0.8 },
+  onibus_rod_vermelho: { f: [0.94, 1.08, 0.3], t: [1.1, 1.29, 0.15, 0.6], lat: 0.85 },
+  onibus_rod_branco: { f: [1.0, 0.92, 0.3], t: [1.1, 1.25, 0.15, 0.55], lat: 0.85 },
+  onibus_rod_amarelo: { f: [0.96, 1.04, 0.3], t: [1.14, 1.75, 0.12, 1.2], lat: 0.9 },
+  onibus_rod_dourado: { f: [1.0, 0.82, 0.3], t: [1.07, 1.33, 0.15, 0.5], lat: 0.85 },
+  onibus_rod_02: { f: [1.04, 0.88, 0.3], t: [1.17, 1.54, 0.12, 0.8], lat: 0.85 },
+  onibus_rod_04: { f: [1.05, 1.15, 0.3], t: [1.17, 2.1, 0.12, 0.8], lat: 0.9 },
+  onibus_rod_06: { f: [0.9, 0.96, 0.3], t: [1.06, 1.21, 0.18, 0.6], lat: 0.85 },
+  caminhao_escola: { f: [0.92, 0.75, 0.26], t: [0.98, 0.96, 0.18, 0.12], st: [0.72, 0.96] },
+  caminhao_lixo: { f: [1.1, 0.8, 0.26], t: [1.15, 0.67, 0.15, 0.12] },
+  bombeiros: { f: [0.84, 0.89, 0.26], t: [1.15, 0.48, 0.15, 0.12] },
+  exercito_caminhao: { f: [0.89, 1.36, 0.26], t: [1.15, 0.92, 0.15, 0.12] },
+  caveirao: { f: [1.0, 1.05, 0.26], t: [0.97, 1.04, 0.14, 0.14] },
 };
+LAMPADAS.caminhao = LAMPADAS.caminhao_escola;   // caminhão das empresas (mesmo modelo)
 LAMPADAS.saveiro_som = LAMPADAS.saveiro; LAMPADAS.viatura = LAMPADAS.viatura_pm;
 const _rc = new THREE.Raycaster();
 // profundidade da lataria em (x, y), vindo de fora pela frente (lado 1) ou por trás (-1); null se não acertar
@@ -1531,15 +1548,20 @@ function lampadasMedidas(g, tipo, e, L, w) {
   const lados = (x) => (x === 0 ? [0] : [x, -x]);
   // na quina arredondada o raio entra fundo e a luz ficava escondida atrás da lataria: no máximo 20 cm para dentro
   const zf = (x, y) => Math.max(zLataria(g, x, y, 1, e) ?? e.max.z + 0.05, e.max.z - 0.2), zt = (x, y) => Math.min(zLataria(g, x, y, -1, e) ?? e.min.z - 0.05, e.min.z + 0.2);
-  const [fx, fy, fs] = T.f, [tx, ty, tw, th] = T.t, tt = Math.max(tw, th);
+  const [fx, fy, fs] = T.f, [tx, ty, tw, th] = T.t, tt = Math.min(Math.max(tw, th), 0.3);
+  const nT = th > 0.35 ? Math.ceil(th / 0.28) : 1, ysT = Array.from({ length: nT }, (_, i) => (nT === 1 ? ty : ty - th / 2 + th * (i + 0.5) / nT));   // lanterna alta (ônibus): várias, empilhadas
   for (const x of lados(fx)) sp(M.farol, x, fy, zf(x, fy), fs * 2.6);
-  for (const x of lados(tx)) sp(M.lanterna, x, ty, zt(x, ty), tt * 2.2);
+  for (const x of lados(tx)) for (const y of ysT) sp(M.lanterna, x, y, zt(x, y), tt * 2.2);
   // facho no chão (igual ao de antes)
   const moto = /^moto/.test(tipo), comp = moto ? 9 : 12, fe = new THREE.Mesh(new THREE.PlaneGeometry(moto ? 2.6 : 4.8, comp).rotateX(-Math.PI / 2), M.feixe);
   fe.position.set(0, e.min.y + 0.06, e.max.z + comp / 2 - 0.5); fe.rotation.y = Math.PI; fe.renderOrder = 3; L.add(fe);
   // sinais: sempre presentes, cada lâmpada acende sozinha (a montagem fica escondida enquanto nada está aceso)
   const S = new THREE.Group(); S.name = 'sinais'; S.visible = false; g.add(S);
-  for (const x of lados(tx)) sp(M.freio, x, ty, zt(x, ty) - 0.01, tt * 2.6, S, 'freio');
+  for (const x of lados(tx)) for (const y of ysT) sp(M.freio, x, y, zt(x, y) - 0.01, tt * 2.6, S, 'freio');
+  if (T.lat) {   // ônibus: luzes laterais âmbar ao longo da carroceria (a cada ~3 m)
+    const meia = Math.min(1.32, w / 2 - 0.02), n = Math.max(2, Math.round((e.max.z - e.min.z - 2.4) / 3));
+    for (let i = 0; i <= n; i++) { const z = e.min.z + 1.2 + (e.max.z - e.min.z - 2.4) * i / n; for (const x of [meia, -meia]) sp(M.seta, x, T.lat, z, 0.3, S, 'lateral'); }
+  }
   if (T.re !== null) { const [rx, ry] = T.re || [Math.max(0.15, tx - tw / 2 - 0.08), ty]; for (const x of lados(rx)) sp(M.re, x, ry, zt(x, ry) - 0.01, 0.32, S, 're'); }
   const [sfx, sfy] = T.sf || [fx + fs * 0.55, fy], [stx, sty] = T.st || [tx + tw / 2 - 0.02, ty + (th > 0.25 ? th * 0.3 : 0)];
   for (const x of [sfx, -sfx]) sp(M.seta, x, sfy, zf(x, sfy) + 0.01, 0.42, S, x > 0 ? 'setaE' : 'setaD');
