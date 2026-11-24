@@ -12075,6 +12075,7 @@ function desenharAjusteLant() {
     ${selDes}
     <select data-l="lado" style="font:inherit">${[['ambos', 'Os dois lados'], ['E', 'Só o esquerdo'], ['D', 'Só o direito']].map(([v, t]) => `<option value="${v}" ${v === A.lado ? 'selected' : ''}>${t}</option>`).join('')}</select>
     ${CAMPOS_LANT.map(([k, t]) => `<span style="white-space:nowrap">${t} ${bt('-:' + k, '−')}<b style="display:inline-block;min-width:36px;text-align:center">${A.peca < 0 && C.pecas ? '·' : (+ref[k]).toFixed(k === 'ang' ? 0 : 2)}</b>${bt('+:' + k, '+')}</span>`).join('')}
+    ${bt('espelho', '↔ Espelhar' + (ref.esp ? ' ✓' : ''), ref.esp ? ';background:#7d5ba6' : '')}
     <span style="white-space:nowrap">${liga('ligado', 'Lanterna')}${liga('freio', 'Freio')}${liga('alerta', 'Alerta')}${liga('re', 'Ré')}</span>
     ${bt('salvar', '💾 Salvar', ';background:#1f7a3a')}${bt('padrao', 'Padrão')}${bt('fechar', '✖')}`;
   A.el.querySelectorAll('[data-l]').forEach((e) => {
@@ -12091,6 +12092,13 @@ function desenharAjusteLant() {
         const cfg = A.cfg.pecas ? { pecas: A.cfg.pecas.map(arred) } : arred(A.cfg);
         rede.lanternas.salvar(A.modelo, cfg).then(() => { aviso('💾 Lanterna salva: vale para todos.', 2.5); conexao?.enviar('lantCfg', { modelo: A.modelo }); }).catch((er) => aviso(er.message, 3));
         return;
+      }
+      if (k === 'espelho') {   // vira o desenho da peça escolhida, no lado escolhido (ou nos dois)
+        for (const P of alvoLant()) {
+          if (A.lado === 'ambos') { P.esp = !P.esp; for (const L of Object.values(P.lados || {})) delete L.esp; }
+          else { P.lados ||= {}; const L = (P.lados[A.lado] ||= {}); L.esp = !(L.esp ?? P.esp); }
+        }
+        aplicarAjusteLant(); return;
       }
       if (k.startsWith('t:')) { const n = k.slice(2); A.teste = { ...A.teste, [n]: !A.teste[n] }; civico.testeLant(A.bus, A.teste); desenharAjusteLant(); return; }
       const [sn, campo] = k.split(':'), passo = CAMPOS_LANT.find((c) => c[0] === campo)[2] * (sn === '+' ? 1 : -1);

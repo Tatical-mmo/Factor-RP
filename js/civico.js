@@ -1690,7 +1690,7 @@ function geometriaLant(g, glb, C) {
       _rc.set(o.clone().applyMatrix4(m), d.clone().negate().transformDirection(m)); _rc.far = 6;
       const h = _rc.intersectObjects(alvos, false)[0];
       const q = h ? h.point.clone().applyMatrix4(inv).addScaledVector(d, 0.025) : o.addScaledVector(d, -3);
-      pos.push(q.x, q.y, q.z); uv.push(u, v);
+      pos.push(q.x, q.y, q.z); uv.push(C.esp ? 1 - u : u, v);   // esp: o admin virou o desenho (espelho)
     }
     for (let j = 0; j < NV; j++) for (let i = 0; i < NU; i++) { const a = j * (NU + 1) + i, b = a + 1, c = a + NU + 1, e = c + 1; if (sg > 0) idx.push(a, b, c, b, e, c); else idx.push(a, c, b, b, c, e); }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
