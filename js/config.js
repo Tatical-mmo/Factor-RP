@@ -70,6 +70,11 @@ export const PERSONAGENS_EVENTO = [   // limitados (Meshy): só o admin dá de p
   // 21v: limitados pequenos (vitrine do admin por tempo limitado); escala: menores que os outros personagens
   { id: 'Lobo_Arlequim', nome: 'Lobo Arlequim', escala: 0.78 },
   { id: 'Guaxinim_Tropical', nome: 'Guaxinim Tropical', escala: 0.72 },
+  { id: 'Capivara_Artilheira', nome: 'Capivara Artilheira', escala: 0.74 },
+  { id: 'Gatinho_HipHop', nome: 'Gatinho Hip Hop', escala: 0.72 },
+  { id: 'Macaco_Mochileiro', nome: 'Macaco Mochileiro', escala: 0.72 },
+  { id: 'Cachorro_Moletom', nome: 'Cachorro de Moletom', escala: 0.72 },
+  { id: 'Vanguarda_Azul', nome: 'Vanguarda Azul' },   // tamanho normal
 ];
 
 // grátis ao criar a conta; os outros custam 8.000 na loja de personagens (mesma lista do banco)
