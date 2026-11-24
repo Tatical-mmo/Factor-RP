@@ -67,6 +67,9 @@ export const PERSONAGENS_EVENTO = [   // limitados (Meshy): só o admin dá de p
   { id: 'Renegado_Neon', nome: 'Renegado Neon', soPresente: true, bau: true },
   { id: 'Sentinela_Neon', nome: 'Sentinela Neon', soPresente: true, bau: true },
   { id: 'Sentinela_Brasa', nome: 'Sentinela Brasa', soPresente: true, bau: true },
+  // 21v: limitados pequenos (vitrine do admin por tempo limitado); escala: menores que os outros personagens
+  { id: 'Lobo_Arlequim', nome: 'Lobo Arlequim', escala: 0.78 },
+  { id: 'Guaxinim_Tropical', nome: 'Guaxinim Tropical', escala: 0.72 },
 ];
 
 // grátis ao criar a conta; os outros custam 8.000 na loja de personagens (mesma lista do banco)

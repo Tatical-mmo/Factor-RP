@@ -1446,7 +1446,7 @@ function adaptarClipe(clip, cenaR, cenaN) {
 // cabelo alto ou boné fica com o corpo menor (pescoço de 1,29 a 1,41 m). Escala cada um para o pescoço ficar a
 // 1,40 m: corpo, cabeça e ombros ficam iguais e colete/máscara/capacete encaixam do mesmo jeito em todos.
 const ALTURA_PESCOCO = 1.40;
-function padronizarTamanho(modelo, gltf) {
+function padronizarTamanho(modelo, gltf, id) {
   if (gltf.userData.escalaPadrao === undefined) {
     let pescoco = null; gltf.scene.updateMatrixWorld(true);
     gltf.scene.traverse((o) => { if (!pescoco && o.isBone && /neck$/.test((o.name || '').toLowerCase().replace(/[^a-z0-9_]/g, ''))) pescoco = o; });
@@ -1455,6 +1455,8 @@ function padronizarTamanho(modelo, gltf) {
     gltf.userData.escalaPadrao = k > 0.85 && k < 1.25 ? k : 1;
   }
   if (gltf.userData.escalaPadrao !== 1) modelo.scale.multiplyScalar(gltf.userData.escalaPadrao);
+  const peq = PERSONAGENS_EVENTO.find((p) => p.id === id)?.escala;   // 21v: personagens pequenos (bichinhos)
+  if (peq) modelo.scale.multiplyScalar(peq);
 }
 const VERSAO_GLB_PERS = { Medico: 'mao1' };   // arquivo corrigido: o celular baixa de novo (médico: mão esquerda presa num osso da cabeça)
 async function criarAvatar(pasta, id) {
@@ -1465,7 +1467,7 @@ async function criarAvatar(pasta, id) {
     try { gltf = await carregarGLB(url); break; } catch (e) { console.warn('modelo não carregou:', url, e); }
   }
   const modelo = SkeletonUtils.clone(gltf.scene);
-  if (pasta === 'personagens') padronizarTamanho(modelo, gltf);
+  if (pasta === 'personagens') padronizarTamanho(modelo, gltf, id);
   if (!gltf.userData.clipes) {
     let anims = gltf.animations;
     const robo = pasta === 'personagens' ? await obterRoboBase() : null;
