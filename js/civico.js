@@ -478,10 +478,29 @@ function separarCauda(base, C) {
   }
   if (grupo.children.length) { grupo.position.set(0, C.y, C.z); base.add(grupo); }
 }
+// 22c: rotor de cauda feito no jogo (os modelos do executivo/resgate/bombeiros e o da empresa vieram sem): cubo e
+// duas pás em cruz, de lado na cauda, girando no eixo x; um disco translúcido aparece quando gira rápido
+const MAT_CAUDA = {};
+export function rotorCaudaNovo(r = 0.75, cor = '#3a3d42') {
+  const m = MAT_CAUDA[cor] ||= new THREE.MeshStandardMaterial({ color: cor, roughness: 0.55, metalness: 0.5 });
+  const g = new THREE.Group(); g.name = 'rotorCauda';
+  const cubo = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.16, 12).rotateZ(Math.PI / 2), m); g.add(cubo);
+  for (const a of [0, Math.PI / 2]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.02, 2 * r, 0.1), m); p.rotation.x = a; p.position.x = 0.05; g.add(p); }
+  const disco = new THREE.Mesh(new THREE.CircleGeometry(r, 24).rotateY(Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#222', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }));
+  disco.position.x = 0.05; disco.name = 'discoCauda'; disco.visible = false; g.add(disco);
+  return g;
+}
+// onde fica o rotor de trás em cada modelo (coordenadas do próprio arquivo, ao lado da deriva)
+const CAUDA_NOVA = { helicoptero_executivo: { x: 0.42, y: 3.45, z: -5.7, r: 0.78 } };
+function caudaNova(g, glb) {
+  const C = CAUDA_NOVA[glb]; if (!C || g.getObjectByName('rotorCauda')) return;
+  const corpo = g.getObjectByName('corpo'), pai = corpo?.parent || g;
+  const rc = rotorCaudaNovo(C.r); rc.position.set(C.x, C.y, C.z); pai.add(rc);
+}
 // gira o rotor de cauda junto com o principal (bem mais rápido); "vel" é a velocidade do rotor principal
 export function girarCauda(o, dt, vel) {
   const c = o.userData.rotorCauda !== undefined ? o.userData.rotorCauda : (o.userData.rotorCauda = o.getObjectByName('rotorCauda') || null);
-  if (c) c.rotation.x += dt * vel * 2.6;
+  if (c) { c.rotation.x += dt * vel * 2.6; const d = c.getObjectByName('discoCauda'); if (d) d.visible = vel > 15; }
 }
 export function girarHelices(o, dt, ligado) {
   const l = o.userData.listaHelices ||= (() => { const r = []; o.traverse((x) => { if (x.name === 'helice') r.push(x); }); return r; })();
@@ -1181,6 +1200,7 @@ function modeloCarroBase(modelo, cor) {
     if (VIDROS[GLB_CARRO[modelo]]) { g.updateMatrixWorld(true); vidrosEscuros(g, VIDROS[GLB_CARRO[modelo]]); }
     if (GLB_CARRO[modelo] === 'caminhao') { bauLiso(g); g.add(traseiraBau()); }
     try { montarRodas(g, GLB_CARRO[modelo]); } catch (e) { console.warn('rodas:', modelo, e); }   // depois da pintura: as rodas e o chassi têm cor própria
+    caudaNova(g, GLB_CARRO[modelo]);   // 22c
     adicionarLuzes(g, modelo);
     cacheCarro.set(chave, g);
     return g.clone();

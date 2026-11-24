@@ -474,7 +474,7 @@ function heliDeFogo(dt) {
     heliNpc = { obj, f, fase: 'sobe', t: 0, jato: 0, rotor: obj.getObjectByName('rotor') };
   }
   const h = heliNpc, o = h.obj.position, f = incendios.find((q) => q.id === h.f.id);
-  h.t += dt; if (h.rotor) { h.rotor.rotation.y += dt * 28; civico.rotorRapido(h.rotor, true); }
+  h.t += dt; if (h.rotor) { h.rotor.rotation.y += dt * 28; civico.rotorRapido(h.rotor, true); } civico.girarCauda(h.obj, dt, 28);   // 22c: rotor de trás
   { const bd = h.obj.getObjectByName('balde'); if (bd) bd.visible = o.y > pad.y + 2.5; }
   const voar = (x, z, y, vel) => {   // anda em linha reta até (x, z) e ajusta a altura
     const dx = x - o.x, dz = z - o.z, d = Math.hypot(dx, dz), passo = Math.min(d, vel * dt);

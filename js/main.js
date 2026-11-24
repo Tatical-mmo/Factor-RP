@@ -1432,8 +1432,8 @@ const ANIM_POSTURA = ['deitado_arma', 'deitado_recarga', 'deitado', 'rastejar_tr
 const CURVAS_ROLAR = {"rolar_frente":[[0.0,0.0,0.0],[0.1,-0.021,0.044],[0.2,-0.035,0.118],[0.3,-0.041,0.24],[0.4,-0.029,0.425],[0.5,-0.007,0.656],[0.6,0.037,0.922],[0.7,0.072,1.192],[0.8,0.066,1.435],[0.9,0.08,1.556],[1.0,0.088,1.644],[1.1,0.055,1.744],[1.2,0.027,1.833],[1.3,0.003,1.91],[1.4,-0.005,2.008],[1.5,0.004,2.109],[1.6,0.017,2.176],[1.7,0.038,2.213],[1.8,0.059,2.236],[1.9,0.069,2.25],[2.0,0.072,2.261],[2.1,0.073,2.268],[2.2,0.075,2.273],[2.3,0.077,2.274],[2.4,0.08,2.273],[2.5,0.082,2.273]],"rolar_dir":[[0.0,0.0,0.0],[0.1,-0.184,-0.049],[0.2,-0.5,-0.11],[0.3,-0.749,-0.153],[0.4,-1.003,-0.196],[0.5,-1.268,-0.213],[0.6,-1.498,-0.203],[0.7,-1.731,-0.201],[0.8,-1.918,-0.192],[0.9,-2.15,-0.172],[1.0,-2.365,-0.137],[1.1,-2.478,-0.128],[1.2,-2.54,-0.133],[1.3,-2.606,-0.127],[1.4,-2.694,-0.101],[1.5,-2.768,-0.046],[1.6,-2.825,0.003],[1.7,-2.906,0.07],[1.8,-2.98,0.121],[1.9,-3.055,0.172],[2.0,-3.104,0.216],[2.1,-3.129,0.235],[2.2,-3.146,0.239],[2.3,-3.155,0.239],[2.4,-3.165,0.239]],"rolar_esq":[[0.0,0.0,0.0],[0.1,0.184,-0.049],[0.2,0.5,-0.11],[0.3,0.749,-0.153],[0.4,1.003,-0.196],[0.5,1.268,-0.213],[0.6,1.498,-0.203],[0.7,1.731,-0.201],[0.8,1.918,-0.192],[0.9,2.15,-0.172],[1.0,2.365,-0.137],[1.1,2.478,-0.128],[1.2,2.54,-0.133],[1.3,2.606,-0.127],[1.4,2.694,-0.101],[1.5,2.768,-0.046],[1.6,2.825,0.003],[1.7,2.906,0.07],[1.8,2.98,0.121],[1.9,3.055,0.172],[2.0,3.104,0.216],[2.1,3.129,0.235],[2.2,3.146,0.239],[2.3,3.155,0.239],[2.4,3.165,0.239]]};
 // 22a: celular na mão: selfie (braço esticado), fotografar (as duas mãos) e mexer no celular (Papo Reto, Galeria)
 const ANIM_CEL = ['selfie', 'fotografar', 'feed', 'insta'], NA_MAO = new Set(['celular', ...ANIM_CEL]);
-for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA, ...ANIM_POSTURA, ...ANIM_CEL]) ANIM_EXTRAS.add(n);
-const ARQ_EXTRA = (nome) => (ANIM_CEL.includes(nome) ? 'assets/personagens/animacoes_celular.glb?v=1' : ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=9' : 'assets/personagens/animacoes_emotes.glb?v=2');
+for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA, ...ANIM_POSTURA, ...ANIM_CEL, 'sentado']) ANIM_EXTRAS.add(n);   // 22c: sentado (do Diguin) serve para todos
+const ARQ_EXTRA = (nome) => (nome === 'sentado' ? 'assets/personagens/animacoes_sentado.glb?v=1' : ANIM_CEL.includes(nome) ? 'assets/personagens/animacoes_celular.glb?v=1' : ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=9' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
 function obterBaseExtra(arq) {
   if (!basesExtra.has(arq)) basesExtra.set(arq, carregarGLB(arq).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { basesExtra.delete(arq); return null; }));
@@ -5056,6 +5056,7 @@ function criarVeiculoBase(tipo, danificado) {
       const rotor = new THREE.Group(); rotor.position.y = 3.9; rotor.add(disco);
       for (const a of [0, Math.PI / 2]) { const pa = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.04, 10), new THREE.MeshBasicMaterial({ color: '#333', transparent: true, opacity: 0.5 })); pa.rotation.y = a; rotor.add(pa); }
       o.add(rotor); o.userData.rotor = rotor; rotor.visible = false;
+      const rc = civico.rotorCaudaNovo(0.7); rc.position.set(0.3, 3.0, -5.15); o.add(rc); o.userData.rotorCauda = rc;   // 22c: o modelo veio sem rotor de trás
     }
     return o;
   }
@@ -6512,7 +6513,7 @@ const FALAS_ROBO = [['Tudo em ordem por aqui.', 'ordem'], ['Ronda tranquila.', '
 const FALAS_GENTE = [['Oi! Tudo bem?', 'oi'], ['Que calor hoje!', 'calor'], ['Viu o preço do chocolate?', 'chocolate'], ['Vou pegar o trem.', 'trem'], ['Ouvi uma sirene…', 'sirene'], ['Bom dia!', 'bomdia'], ['Até mais!', 'ate'],
   ['O ônibus da Viação passou cheio hoje.', 'onibus'], ['Derrubaram o poste de novo…', 'poste'], ['Boa noite! Cuidado por aí.', 'noite'], ['Acho que vai chover.', 'chuva'], ['Já sabe em quem vai votar pra prefeito?', 'prefeito']];
 // ---------------------------------------------------------------- vozes dubladas
-const PERS_MULHER = new Set(['Moca_Academia', 'Moca_Trancas', 'Moradora', 'Executiva', 'Enfermeira', 'Gaucha', 'Ruiva', 'Dona_Salao', 'Dona_Empresa', 'Soldada', 'Maloqueira', 'Medica', 'Dona_Morro', 'Agente_Secreta', 'Vovo']);
+const PERS_MULHER = new Set(['Samy', 'Taty', 'Moca_Academia', 'Moca_Trancas', 'Moradora', 'Executiva', 'Enfermeira', 'Gaucha', 'Ruiva', 'Dona_Salao', 'Dona_Empresa', 'Soldada', 'Maloqueira', 'Medica', 'Dona_Morro', 'Agente_Secreta', 'Vovo']);
 const ehMulher = (av) => PERS_MULHER.has(av?.personagemId);
 const sufixoGente = (av) => (ehMulher(av) ? '_f' : (av?.personagemId || '').length % 2 ? '_m' : '_m2');   // dois homens: cada skin fica sempre com a mesma voz
 const sufixoReacao = (av) => (ehMulher(av) ? '_f' : '_m');
@@ -9946,7 +9947,7 @@ function sentarNoVeiculo(av, mesh, modelo, lugar = 0) {
   const A = civico.ABERTOS[modelo]; if (!A || !av || !mesh) return false;
   const L = A.lugares[lugar]; if (!L) return false;
   // passageiro do helicóptero com animação própria de sentado (sorteada uma vez): toca ela em vez da pose por código
-  if (av.sentadoAnim === undefined) { const op = Object.keys(av.clipes || {}).filter((n) => n.startsWith('sentado_')); av.sentadoAnim = op.length ? op[(Math.random() * op.length) | 0] : null; }
+  if (av.sentadoAnim === undefined) { const op = Object.keys(av.clipes || {}).filter((n) => n.startsWith('sentado_')); av.sentadoAnim = op.length ? op[(Math.random() * op.length) | 0] : 'sentado'; }   // 22c: sem animação própria: a de sentado de todos
   const anim = A.abs && lugar > 0 && av.sentadoAnim;
   if (anim) { if (av.nomeAtual !== anim) av.tocar(anim, { fade: 0.2 }); }
   else if (av.nomeAtual !== 'idle') av.tocar('idle', { fade: 0.15 });

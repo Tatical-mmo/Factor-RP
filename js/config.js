@@ -75,6 +75,7 @@ export const PERSONAGENS_EVENTO = [   // limitados (Meshy): só o admin dá de p
   { id: 'Macaco_Mochileiro', nome: 'Macaco Mochileiro', escala: 0.72 },
   { id: 'Cachorro_Moletom', nome: 'Cachorro de Moletom', escala: 0.72 },
   { id: 'Vanguarda_Azul', nome: 'Vanguarda Azul' },   // tamanho normal
+  { id: 'Smith', nome: 'Smith' }, { id: 'Samy', nome: 'Samy' }, { id: 'Jeff', nome: 'Jeff' }, { id: 'Taty', nome: 'Taty' }, { id: 'Diguin', nome: 'Diguin' },   // 22c
 ];
 
 // grátis ao criar a conta; os outros custam 8.000 na loja de personagens (mesma lista do banco)
