@@ -160,6 +160,7 @@ export const CARROS = {
   presidencial: { nome: 'Presidencial', preco: 0, vel: 12 },
   militar: { nome: 'Jipe do Exército', preco: 0, vel: 14 },
   exercito_caminhao: { nome: 'Caminhão do Exército', preco: 0, vel: 11 },
+  guincho: { nome: 'Guincho', preco: 0, vel: 11 },   // 22d: reboque dos veículos com pneu furado
   helicoptero_exercito: { nome: 'Helicóptero do Exército', preco: 0, vel: 26, voa: true },
   ovni: { nome: 'Óvni do Exército', preco: 0, vel: 62, voa: true },
   caca_leve: { nome: 'Caça leve', preco: 0, vel: 95, voa: true, jato: true },
@@ -198,7 +199,7 @@ export const CARROS = {
 };
 // arrancada: segundos para chegar perto da velocidade máxima. Os leves arrancam rápido; ônibus e caminhões, devagar.
 const ARRANCADA = { moto_250: 3.6, moto_650: 2.4, esportivo: 3, classico: 3, popular: 5, viatura: 5, ambulancia: 5.5, presidencial: 5.5, suv: 6.5, militar: 6.5, van: 6.5,
-  caminhao: 11, caminhao_escola: 11, caminhao_lixo: 11, bombeiros: 11, exercito_caminhao: 11, tanque: 12,
+  caminhao: 11, guincho: 11, caminhao_escola: 11, caminhao_lixo: 11, bombeiros: 11, exercito_caminhao: 11, tanque: 12,
   onibus: 12, onibus_urbano: 12, onibus_apache: 12, onibus_busscar: 12, onibus_executivo: 14, onibus_executivo2: 15, onibus_dois_andares: 15, onibus_articulado: 16,
   onibus_amarelo: 12, onibus_branco: 12, onibus_laranja: 12, onibus_brasilsul: 15, onibus_viacao: 14,
   onibus_rod_dourado: 14, onibus_rod_amarelo: 13.5, onibus_rod_vermelho: 13, onibus_rod_branco: 13, onibus_rod_02: 14, onibus_rod_04: 14, onibus_rod_06: 15.5 };
@@ -224,8 +225,8 @@ function bloco(g, m, w, h, d, x, y, z) {
 }
 
 export function iniciar(contexto) { ctx = contexto; }
-const GLB_CARRO = { moto_250: 'moto_250', moto_650: 'moto_650', van: 'van', tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', helicoptero_resgate: 'helicoptero_executivo', helicoptero_bombeiros: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', classico: 'carro_classico', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', caminhao_escola: 'caminhao', caminhao_lixo: 'caminhao_lixo', onibus_urbano: 'onibus_urbano', onibus_executivo: 'onibus_executivo', onibus_executivo2: 'onibus_executivo2', onibus_dois_andares: 'onibus_dois_andares', onibus_apache: 'onibus_apache', onibus_busscar: 'onibus_busscar', onibus_articulado: 'onibus_articulado', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande', aviao_gigante: 'aviao_gigante' };
-const SEM_TINTA = new Set(['moto_250', 'moto_650', 'onibus_executivo2', 'onibus_dois_andares', 'aviao_pequeno', 'aviao_medio', 'aviao_grande', 'aviao_gigante', 'tanque', 'presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
+const GLB_CARRO = { guincho: 'guincho', moto_250: 'moto_250', moto_650: 'moto_650', van: 'van', tanque: 'tanque', militar: 'exercito_jipe', exercito_caminhao: 'exercito_caminhao', helicoptero_exercito: 'helicoptero_exercito', helicoptero: 'helicoptero_executivo', helicoptero_resgate: 'helicoptero_executivo', helicoptero_bombeiros: 'helicoptero_executivo', viatura: 'carro_suv', popular: 'carro_popular', classico: 'carro_classico', suv: 'carro_suv', esportivo: 'carro_esportivo', presidencial: 'carro_presidencial', ambulancia: 'ambulancia', bombeiros: 'caminhao_bombeiros', onibus: 'onibus_grande', caminhao_escola: 'caminhao', caminhao_lixo: 'caminhao_lixo', onibus_urbano: 'onibus_urbano', onibus_executivo: 'onibus_executivo', onibus_executivo2: 'onibus_executivo2', onibus_dois_andares: 'onibus_dois_andares', onibus_apache: 'onibus_apache', onibus_busscar: 'onibus_busscar', onibus_articulado: 'onibus_articulado', aviao_pequeno: 'aviao_pequeno', aviao_medio: 'aviao_medio', aviao_grande: 'aviao_grande', aviao_gigante: 'aviao_gigante' };
+const SEM_TINTA = new Set(['guincho', 'moto_250', 'moto_650', 'onibus_executivo2', 'onibus_dois_andares', 'aviao_pequeno', 'aviao_medio', 'aviao_grande', 'aviao_gigante', 'tanque', 'presidencial', 'ambulancia', 'bombeiros', 'militar', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero']);
 
 // prefeitura neoclássica: salão, colunas, frontão, cúpula e bandeiras
 export function montarPrefeitura() {
@@ -873,6 +874,8 @@ export const RODAS = {
   viatura_civil: { estilo: 'suv', eixos: [[-1.35, 0.4], [1.4, 0.4]], cy: 0.4, xo: 1.0, xi: 0.6, corte: [1.1, 0.06, 0.08] },
   viatura_prf: { estilo: 'suv', eixos: [[-1.38, 0.42], [1.35, 0.42]], cy: 0.42, xo: 0.98, xi: 0.62, corte: [1.1, 0.06, 0.08] },
   caveirao: { estilo: 'militar', eixos: [[-2.09, 0.48], [-1.08, 0.48], [1.51, 0.48]], cy: 0.48, xo: 1.23, xi: 0.85, corte: [1.1, 0.06, 0.08] },
+  // 22d: guincho (Meshy): as rodas do modelo saem e entram as do ônibus
+  guincho: { estilo: 'onibus', eixos: [[-1.26, 0.57], [2.65, 0.57]], cy: 0.57, xo: 1.35, xi: 0.9, corte: [1.1, 0.06, 0.08] },
 };
 const LARG_RODA = { classico: 0.32, carro: 0.30, esporte: 0.32, suv: 0.36, pesado: 0.30, onibus: 0.30, militar: 0.38 };   // onibus: a roda padrão da frota Fator RP (21r)
 const comRodas = new Set();

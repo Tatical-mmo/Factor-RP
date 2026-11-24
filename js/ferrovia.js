@@ -188,7 +188,9 @@ function montarTrens(l, mats, modelos) {
       const g = modelos[c.tipo].clone(); ctx.scene.add(g);
       // modelo 3D por fora; o feito por código (com o interior) aparece só para quem está dentro do trem
       let ext = null;
-      if (modelos.glb) { ext = modelos.glb.clone(); ext.scale.set(0.66, 0.8, c.len / 15); ctx.scene.add(ext); g.visible = false; }
+      // 22d: locomotiva e vagões novos (verdes); um pouco mais compridos para os engates encostarem
+      const glb = (c.tipo === 'loco' ? modelos.loco3d : modelos.vagao3d) || modelos.glb, novo = glb && glb !== modelos.glb;
+      if (glb) { ext = glb.clone(); ext.scale.set(0.66, 0.8, (c.len + (novo ? 1.5 : 0)) / 15); ctx.scene.add(ext); g.visible = false; }
       return { g, ext, len: c.len, off: offs[i], b: c.len / 2 - 2.6, tipo: c.tipo, x: 0, z: 0, yaw: 0 };
     }),
     est: null, tetoOculto: false,
@@ -290,7 +292,7 @@ export function nomeParada(l, lado) { return lado === 'centro' ? (l.sinal < 0 ? 
 export function montar(contexto) {
   ctx = contexto;
   const mats = materiaisTrem();
-  const modelos = { loco: modeloLoco(mats), vagao: modeloVagao(mats), glb: ctx.modelo?.('trem') || null };
+  const modelos = { loco: modeloLoco(mats), vagao: modeloVagao(mats), glb: ctx.modelo?.('trem') || null, loco3d: ctx.modelo?.('trem_loco') || null, vagao3d: ctx.modelo?.('trem_vagao') || null };
   for (const [i, c] of [{ nome: 'Linha Norte', destino: 'Vila Serra', sinal: -1 }, { nome: 'Linha Sul', destino: 'Porto Sul', sinal: 1 }].entries()) {
     const t = tracado(c.sinal);
     const l = { ...c, ...t, id: i, fase: i * 37.5 };

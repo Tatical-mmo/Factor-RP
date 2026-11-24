@@ -93,7 +93,7 @@ export const MODELOS = [
   'moto_250', 'moto_650', 'van', 'helicoptero', 'carro_popular', 'carro_suv', 'carro_esportivo', 'carro_presidencial', 'robo_motorista', 'ambulancia', 'caminhao_bombeiros',
   'exercito_jipe', 'exercito_caminhao', 'helicoptero_exercito', 'helicoptero_executivo', 'trem', 'navio', 'arvore_comum', 'arvore_pinheiro', 'arvore_palmeira',
   'tanque', 'onibus_amarelo', 'onibus_branco', 'onibus_laranja', 'caminhao_lixo', 'prop_arvore', 'prop_pinheiro', 'empresa_f0', 'empresa_f1', 'empresa_f2', 'empresa_f3', 'transp_f0', 'transp_f1', 'transp_f2', 'transp_f3', 'fabrica_aberta', 'aero_torre', 'aero_quiosque', 'rodo_cidade', 'obra_cras', 'predio_prefeitura', 'predio_prf', 'npc_bruxo', 'ave_corvo', 'ave_pombo', 'obra_camara', 'obra_varredores', 'aero_terminal', 'aero_hangar', 'aviao_pequeno', 'aviao_medio', 'aviao_grande', 'aviao_gigante', 'onibus_rod_dourado', 'onibus_rod_amarelo', 'onibus_rod_vermelho', 'onibus_rod_branco', 'onibus_rod_02', 'onibus_rod_04', 'onibus_rod_06', 'arma_policia', 'arma_prf', 'arma_exercito', 'arma_militar', 'arma_grande_porte',
-  'terminal_rodoviario', 'arvore_carvalho', 'poca_tinta', 'arma_rpg', 'arma_bazuca', 'arma_ponto50', 'foguete',
+  'terminal_rodoviario', 'cabine_estac', 'guincho', 'trem_loco', 'trem_vagao', 'arvore_carvalho', 'poca_tinta', 'arma_rpg', 'arma_bazuca', 'arma_ponto50', 'foguete',
 ];
 
 // Cidade central: grade de quarteirões

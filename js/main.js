@@ -896,22 +896,30 @@ function rodaAtingida(obj, ponto) {
   return -1;
 }
 function avisarPneu(id, m) { conexao?.enviar('pneu', { id, m }); }
+// 22d: pneu furado solta faíscas do aro no chão, onde ele encosta
+function faiscarRoda(mesh, i) {
+  const rd = civico.rodasDe(mesh)[i]; if (!rd || !mesh) return;
+  const p = rd.getWorldPosition(new THREE.Vector3()); p.y = alturaChao(p.x, p.z) + 0.08;
+  faiscar(p, 12);
+}
 function furarPneuCarro(v, i) {
   if ((v.d.pneus >> i) & 1) return;
-  v.d.pneus = (v.d.pneus || 0) | (1 << i); sons.tocar('soco_metal', { vol: 0.6, dist: Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z), raio: 40, velocidade: 0.6 });
+  v.d.pneus = (v.d.pneus || 0) | (1 << i); faiscarRoda(v.mesh, i); sons.tocar('soco_metal', { vol: 0.6, dist: Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z), raio: 40, velocidade: 0.6 });
   rede.furarPneu(v.d.id, i, v.mesh.position.x, v.mesh.position.z).then((m) => { v.d.pneus = m; avisarPneu(v.d.id, m); }).catch(() => {});
 }
 function furarMeuPneu(i) {
   const c = jogador.carro; if (!c || c.voa || !c.mesh || i < 0) return;
   const v = c.id ? carrosMundo.get(c.id) : null, m0 = v ? v.d.pneus || 0 : c.pneus || 0; if ((m0 >> i) & 1) return;
   const m = m0 | (1 << i); aviso('💥 Furaram um pneu! O carro vai puxar para o lado.', 3); tremor = Math.max(tremor, 0.25);
+  faiscarRoda(c.mesh, i);
   if (v) { v.d.pneus = m; rede.furarPneu(c.id, i, jogador.pos.x, jogador.pos.z).then((mm) => { v.d.pneus = mm; avisarPneu(c.id, mm); }).catch(() => {}); }
   else { c.pneus = m; civico.aplicarPneus(c.mesh, m); }
 }
 function receberPneu(e) {
   const id = Number(e.id), m = Number(e.m) || 0, v = carrosMundo.get(id);
-  if (v) { v.d.pneus = m; civico.aplicarPneus(v.mesh, m, !!v.d.queimado); }
-  for (const r of remotos.values()) if (Number(r.carroId) === id && r.carro) civico.aplicarPneus(r.carro, m);
+  const novos = (mascara, antes) => { for (let i = 0; i < 4; i++) if (((mascara >> i) & 1) && !((antes >> i) & 1)) return i; return -1; };
+  if (v) { const ri = novos(m, v.d.pneus || 0); v.d.pneus = m; civico.aplicarPneus(v.mesh, m, !!v.d.queimado); if (ri >= 0) faiscarRoda(v.mesh, ri); }
+  for (const r of remotos.values()) if (Number(r.carroId) === id && r.carro) { const ri = novos(m, r.carro.userData.pneuMask ?? 0); civico.aplicarPneus(r.carro, m); if (ri >= 0) faiscarRoda(r.carro, ri); }
 }
 function atualizarPneus() {
   for (const v of carrosMundo.values()) if (v.mesh) civico.aplicarPneus(v.mesh, v.d.pneus || 0, !!v.d.queimado || v.mesh.userData.queimaTotal);
@@ -989,7 +997,7 @@ function addColisorCaixa(obj, encolher = 0.6) {
   return b;
 }
 
-const CORES_MAPA = { estacionamento: '#1f6feb', oficina: '#e0a020', terrenoOficina: '#f1c40f', ferro_velho: '#7a4a2a', delegacia: '#4f7bd8', loja: '#e05a4f', empresa: '#9aa0a8', transportadora: '#e39b3a', casa: '#8c5a3c', base_cla: '#c43b3b', sede_bope: '#111111' };
+const CORES_MAPA = { patioGuincho: '#d66e14', estacionamento: '#1f6feb', oficina: '#e0a020', terrenoOficina: '#f1c40f', ferro_velho: '#7a4a2a', delegacia: '#4f7bd8', loja: '#e05a4f', empresa: '#9aa0a8', transportadora: '#e39b3a', casa: '#8c5a3c', base_cla: '#c43b3b', sede_bope: '#111111' };
 
 function colocarPredio(nome, x, z, rotY) {
   const obj = typeof nome === 'string' ? clonar(nome) : nome;   // nome do modelo ou um grupo pronto (prédio feito por código)
@@ -1432,8 +1440,9 @@ const ANIM_POSTURA = ['deitado_arma', 'deitado_recarga', 'deitado', 'rastejar_tr
 const CURVAS_ROLAR = {"rolar_frente":[[0.0,0.0,0.0],[0.1,-0.021,0.044],[0.2,-0.035,0.118],[0.3,-0.041,0.24],[0.4,-0.029,0.425],[0.5,-0.007,0.656],[0.6,0.037,0.922],[0.7,0.072,1.192],[0.8,0.066,1.435],[0.9,0.08,1.556],[1.0,0.088,1.644],[1.1,0.055,1.744],[1.2,0.027,1.833],[1.3,0.003,1.91],[1.4,-0.005,2.008],[1.5,0.004,2.109],[1.6,0.017,2.176],[1.7,0.038,2.213],[1.8,0.059,2.236],[1.9,0.069,2.25],[2.0,0.072,2.261],[2.1,0.073,2.268],[2.2,0.075,2.273],[2.3,0.077,2.274],[2.4,0.08,2.273],[2.5,0.082,2.273]],"rolar_dir":[[0.0,0.0,0.0],[0.1,-0.184,-0.049],[0.2,-0.5,-0.11],[0.3,-0.749,-0.153],[0.4,-1.003,-0.196],[0.5,-1.268,-0.213],[0.6,-1.498,-0.203],[0.7,-1.731,-0.201],[0.8,-1.918,-0.192],[0.9,-2.15,-0.172],[1.0,-2.365,-0.137],[1.1,-2.478,-0.128],[1.2,-2.54,-0.133],[1.3,-2.606,-0.127],[1.4,-2.694,-0.101],[1.5,-2.768,-0.046],[1.6,-2.825,0.003],[1.7,-2.906,0.07],[1.8,-2.98,0.121],[1.9,-3.055,0.172],[2.0,-3.104,0.216],[2.1,-3.129,0.235],[2.2,-3.146,0.239],[2.3,-3.155,0.239],[2.4,-3.165,0.239]],"rolar_esq":[[0.0,0.0,0.0],[0.1,0.184,-0.049],[0.2,0.5,-0.11],[0.3,0.749,-0.153],[0.4,1.003,-0.196],[0.5,1.268,-0.213],[0.6,1.498,-0.203],[0.7,1.731,-0.201],[0.8,1.918,-0.192],[0.9,2.15,-0.172],[1.0,2.365,-0.137],[1.1,2.478,-0.128],[1.2,2.54,-0.133],[1.3,2.606,-0.127],[1.4,2.694,-0.101],[1.5,2.768,-0.046],[1.6,2.825,0.003],[1.7,2.906,0.07],[1.8,2.98,0.121],[1.9,3.055,0.172],[2.0,3.104,0.216],[2.1,3.129,0.235],[2.2,3.146,0.239],[2.3,3.155,0.239],[2.4,3.165,0.239]]};
 // 22a: celular na mão: selfie (braço esticado), fotografar (as duas mãos) e mexer no celular (Papo Reto, Galeria)
 const ANIM_CEL = ['selfie', 'fotografar', 'feed', 'insta'], NA_MAO = new Set(['celular', ...ANIM_CEL]);
-for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA, ...ANIM_POSTURA, ...ANIM_CEL, 'sentado']) ANIM_EXTRAS.add(n);   // 22c: sentado (do Diguin) serve para todos
-const ARQ_EXTRA = (nome) => (nome === 'sentado' ? 'assets/personagens/animacoes_sentado.glb?v=1' : ANIM_CEL.includes(nome) ? 'assets/personagens/animacoes_celular.glb?v=1' : ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=9' : 'assets/personagens/animacoes_emotes.glb?v=2');
+const SENTADOS = ['sentado', 'sentado2', 'sentado3', 'sentado4', 'sentado5', 'sentado6', 'sentado7', 'sentado8'];   // 22d: sentados do Diguin (parado, cochilando, conversando, comemorando...)
+for (const n of [...ANIM_LANC, ...ANIM_RECARGA, ...ANIM_MIRA, ...ANIM_POSTURA, ...ANIM_CEL, ...SENTADOS]) ANIM_EXTRAS.add(n);   // 22c: sentado (do Diguin) serve para todos
+const ARQ_EXTRA = (nome) => (/^sentado\d?$/.test(nome) ? 'assets/personagens/animacoes_sentado.glb?v=2' : ANIM_CEL.includes(nome) ? 'assets/personagens/animacoes_celular.glb?v=1' : ANIM_CORRIDA.includes(nome) ? 'assets/personagens/animacoes_corrida.glb?v=1' : ANIM_LANC.includes(nome) ? 'assets/personagens/animacoes_lancador.glb?v=1' : ANIM_RECARGA.includes(nome) ? 'assets/personagens/animacoes_recarga.glb?v=1' : ANIM_MIRA.includes(nome) ? 'assets/personagens/animacoes_mira.glb?v=1' : ANIM_POSTURA.includes(nome) ? 'assets/personagens/animacoes_postura.glb?v=9' : 'assets/personagens/animacoes_emotes.glb?v=2');
 const basesExtra = new Map();
 function obterBaseExtra(arq) {
   if (!basesExtra.has(arq)) basesExtra.set(arq, carregarGLB(arq).then((g) => { g.scene.updateMatrixWorld(true); return g; }).catch(() => { basesExtra.delete(arq); return null; }));
@@ -2263,7 +2272,7 @@ function sairCarroLocal() {
 }
 // direção arcade: o controle aponta para onde o carro deve ir (como andar a pé)
 function dirigir(dt) {
-  const c = jogador.carro, fp = c.mesh && !c.voa ? civico.puxaoPneus(c.mesh) : { p: 0, n: 0 }, max = (c.max || civico.CARROS[c.modelo]?.vel || 15) * (fp.n ? Math.max(0.35, 1 - 0.2 * fp.n) : 1);   // 22b: pneu furado: mais lento
+  const c = jogador.carro, fp = c.mesh && !c.voa ? civico.puxaoPneus(c.mesh) : { p: 0, n: 0 }, max = (c.max || civico.CARROS[c.modelo]?.vel || 15) * (fp.n ? Math.max(0.35, 1 - 0.2 * fp.n) : 1) * (mecanicoMeu ? 0 : 1);   // 22b: pneu furado: mais lento; 22d: parado enquanto o mecânico troca
   if (civico.CARROS[c.modelo]?.moto && !c.moto) entrarMoto(c);   // 21i: moto de qualquer jeito (teste de veículos do admin, roubada…): piloto em cima
   if (c.dano === undefined) { c.dano = danoGuardado(c); if (c.dano >= 50) veicFumando.add(c); }
   { const qv = volantePref && !c.voa && !c.aviao && !c.jato && !c.moto && !civico.CARROS[c.modelo]?.moto; if (qv !== comVolanteUI) { comVolanteUI = qv; document.body.classList.toggle('comVolante', qv); if (!qv) pedais.volanteA = null; } }
@@ -4292,7 +4301,7 @@ async function iniciarJogo(perfil) {
   iniciarLogistica();
   celular.iniciarCelular({
     hora: () => { const h = horaAtual || 0; return `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`; }, lugares: lugaresCelular, veiculos: veiculosCelular, marcar: (a) => rastrear(a),
-    abrirJanela: (q) => $(q === 'empresa' ? 'btEmpresa' : 'btCla')?.click(), chamarMecanico, chamarSamu, vida: () => Math.round(jogador.vida ?? 100), estacionamentoPerto: estacionamentoMaisPerto,
+    abrirJanela: (q) => $(q === 'empresa' ? 'btEmpresa' : 'btCla')?.click(), chamarMecanico, chamarSamu, pneuFurado: () => { const c = jogador.carro, v = typeof c?.id === 'number' ? carrosMundo.get(c.id) : null; const n = v && v.d.dono === jogador.perfil?.id && !mecanicoMeu ? bitsDe(v.d.pneus || 0) : 0; return n ? { n } : null; }, trocarPneuAqui: () => { if (Math.abs(jogador.carro?.vel || 0) > 0.5) { aviso('Pare o carro para o mecânico trocar o pneu.', 3); return; } chamarMecanicoPneu(false); }, vida: () => Math.round(jogador.vida ?? 100), estacionamentoPerto: estacionamentoMaisPerto,
     saldoMudou: () => rede.carregarPerfil(jogador.perfil.id).then((p) => { if (p) { jogador.perfil.moedas = p.moedas; atualizarInfo(); } }).catch(() => {}), aoFechar: () => { if (jogador.emote === 'celular' || jogador.emote === 'insta') jogador.emote = null; },
     moedas: () => jogador.perfil?.moedas || 0, lojaOnline, comprarOnline, miniaturaCarro,
     online: (id) => remotos.has(id), euId: () => jogador.perfil?.id, aviso, toqueCelular,
@@ -4309,6 +4318,7 @@ async function iniciarJogo(perfil) {
   });
   if ($('btCelular')) $('btCelular').onclick = () => abrirCelular();
   try { montarEstacionamentos(); } catch (e) { console.warn('estacionamentos:', e); }
+  try { montarPatioGuincho(); } catch (e) { console.warn('pátio do guincho:', e); }
   try { montarOficinas(); } catch (e) { console.warn('oficinas:', e); }
   try { montarSirenes(); } catch (e) { console.warn('sirenes', e); } atualizarEstadoBau(); atualizarEstadoNatal();
   montarMonumento(); try { montarViacao(); } catch (e) { console.warn('viacao', e); }
@@ -4498,7 +4508,7 @@ function conectarMultiplayer(perfil) {
     explosao: (e) => { if (!congelados.has(e.de)) receberExplosao(e); },
     voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, dm: (m) => { if (m?.para === jogador.perfil?.id && amigosIds.has(m.de)) celular.mensagemChegou(m.de, remotos.get(m.de)?.meta?.nome); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => { if (!congelados.has(d.de)) receberDano(d); }, atropelo: (d) => { if (!congelados.has(d.de)) receberAtropelo(d); }, chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
-    toqueCel: (e) => receberToqueCel(e), abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, derrubar: (e) => receberDerrubar(e), danoTiro: (e) => { if (e.alvo !== jogador.perfil?.id) return; danoTiroNoMeuVeiculo(Number(e.d) || 0); if (e.pneu != null) furarMeuPneu(Number(e.pneu)); }, pneu: (e) => receberPneu(e), danoQueda: (e) => { if (e.alvo === jogador.perfil?.id) danoNoMeuVeiculo(Math.min(40, Math.max(0, +e.d || 0))); }, viacao: () => atualizarEstadoViacao(), somSoco: (e) => sons.tocar(e.k ? 'soco1' : 'soco2', { vol: 0.85, dist: Math.hypot((+e.x || 0) - jogador.pos.x, (+e.z || 0) - jogador.pos.z), raio: 30 }), navio: (e) => receberNavio(e),
+    toqueCel: (e) => receberToqueCel(e), abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, derrubar: (e) => receberDerrubar(e), danoTiro: (e) => { if (e.alvo !== jogador.perfil?.id) return; danoTiroNoMeuVeiculo(Number(e.d) || 0); if (e.pneu != null) furarMeuPneu(Number(e.pneu)); }, pneu: (e) => receberPneu(e), pneuNpc: (e) => receberPaneNpc(e, true), danoQueda: (e) => { if (e.alvo === jogador.perfil?.id) danoNoMeuVeiculo(Math.min(40, Math.max(0, +e.d || 0))); }, viacao: () => atualizarEstadoViacao(), somSoco: (e) => sons.tocar(e.k ? 'soco1' : 'soco2', { vol: 0.85, dist: Math.hypot((+e.x || 0) - jogador.pos.x, (+e.z || 0) - jogador.pos.z), raio: 30 }), navio: (e) => receberNavio(e),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -5489,6 +5499,11 @@ function bolaEmVeiculo(b, danificar) {
     return { hit, pai: v.mesh };
   }
   for (const v of viaturas) if (v.obj?.visible && perto(v.obj.position)) { const hit = tocaModelo(v.obj, b); if (hit) return { hit, pai: v.obj }; }
+  for (const [ref, o, rr] of npcsComPneu()) if (perto(o.position, rr)) {   // 22d: NPCs que andam (van, bombeiros, ônibus)
+    const hit = tocaModelo(o, b); if (!hit) continue;
+    if (danificar) { let ri = rodaAtingida(o, hit.ponto); if (ri < 0) ri = rodaMaisPerto(o, hit.ponto, 0.7); if (ri >= 0) furarPneuNpc(ref, o, ri); }
+    return { hit, pai: o };
+  }
   for (const [id, r] of remotos) if (r.carro && r.carroModelo !== 'caveirao' && id !== jogador.passageiro?.piloto && perto(r.carro.position, 4)) {
     const hit = tocaModelo(r.carro, b); if (!hit) continue;
     if (danificar) { const ri = rodaAtingida(r.carro, hit.ponto); conexao?.enviar('danoTiro', { alvo: id, d: Math.round(danoTiroVeic(b) * 10) / 10, ...(ri >= 0 ? { pneu: ri } : {}) }); }
@@ -5496,6 +5511,7 @@ function bolaEmVeiculo(b, danificar) {
   }
   for (const [k, l] of largadosRua) if (l.mesh && perto(l.mesh.position)) {
     const hit = tocaModelo(l.mesh, b); if (!hit) continue;
+    if (danificar && !(l.queima > 0)) { const ri = rodaAtingida(l.mesh, hit.ponto); if (ri >= 0) furarPneuNpc('rua:' + k, l.mesh, ri); }   // 22d
     if (danificar && !(l.queima > 0)) tiroEmVeiculoParado('rua:' + k, l.x, l.z, 'Carro', 1, danoTiroVeic(b));
     return { hit, pai: l.mesh };
   }
@@ -5503,6 +5519,7 @@ function bolaEmVeiculo(b, danificar) {
     const c = mundo.carroRua(k), cx = c?.colOrig || c?.col; if (!c || !cx) continue;
     const ch = alturaChao(c.x, c.z), a = _vMeio.copy(p).addScaledVector(_dirB.copy(b.v).normalize(), -2.5);
     const hit = tocaCaixa(a.clone(), p, cx, ch + 0.15, ch + 1.35); if (!hit) continue;
+    if (danificar) tiroNaRodaDaVaga(k, hit.ponto);   // 22d: pneu do carro da vaga
     if (danificar) tiroEmVeiculoParado('rua:' + k, c.x, c.z, 'Carro', 1, danoTiroVeic(b));
     return { hit, pai: null };
   }
@@ -9947,7 +9964,7 @@ function sentarNoVeiculo(av, mesh, modelo, lugar = 0) {
   const A = civico.ABERTOS[modelo]; if (!A || !av || !mesh) return false;
   const L = A.lugares[lugar]; if (!L) return false;
   // passageiro do helicóptero com animação própria de sentado (sorteada uma vez): toca ela em vez da pose por código
-  if (av.sentadoAnim === undefined) { const op = Object.keys(av.clipes || {}).filter((n) => n.startsWith('sentado_')); av.sentadoAnim = op.length ? op[(Math.random() * op.length) | 0] : 'sentado'; }   // 22c: sem animação própria: a de sentado de todos
+  if (av.sentadoAnim === undefined) { const op = Object.keys(av.clipes || {}).filter((n) => n.startsWith('sentado_')); av.sentadoAnim = op.length ? op[(Math.random() * op.length) | 0] : SENTADOS[(Math.random() * SENTADOS.length) | 0]; }   // 22c/22d: sem animação própria: uma das 8 de sentado, sorteada
   const anim = A.abs && lugar > 0 && av.sentadoAnim;
   if (anim) { if (av.nomeAtual !== anim) av.tocar(anim, { fade: 0.2 }); }
   else if (av.nomeAtual !== 'idle') av.tocar('idle', { fade: 0.15 });
@@ -10507,7 +10524,7 @@ function quadroJogo() {
   voz.atualizar(dt); atualizarOficinasJog(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarRotulos(); atualizarCongelados(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   diag('ônibus/aviação/rodas');
-  atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); atualizarSinaisJog(dt); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
+  atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); atualizarPanes(dt); atualizarSinaisJog(dt); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
   diag('rede');
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
@@ -11834,6 +11851,7 @@ function sequestroSemCla() {
 }
 // botão extra dos crimes de clã (ao lado do botão de ação, que continua com Entrar/Arrombar/Dirigir)
 function contextoCrime() {
+  { const mp = contextoMecanicoPneu(); if (mp) return mp; }   // 22d
   { const ap = contextoAvePresente(); if (ap) return ap; }
   if (jogador.carregando) return null;
   { const r = contextoRacoes(); if (r) return r; }
@@ -12001,6 +12019,251 @@ async function saquear(fn, alvo) {
   } catch (e) { aviso(e.message, 3); }
   finally { sequestrando = false; }
 }
+// ---------------------------------------------------------------- 22d: pneu furado nos NPCs e o guincho
+// Um tiro na roda de um NPC (van, caminhão dos bombeiros, ônibus) ou de um carro parado na vaga fura o pneu, e a pane
+// fica salva no banco (npc_panes) para todos verem igual. O NPC encosta no meio-fio com o pisca-alerta ligado e espera:
+//  * 1 pneu: chega uma Saveiro com pneus na caçamba, desce o mecânico, troca o pneu em 1 minuto e os dois vão embora.
+//  * 2 ou mais: chega o guincho; os passageiros descem e o veículo é rebocado. Ele fica no pátio do guincho (Vila
+//    Serra, 40 x 30 m, 8 vagas) por dois dias do jogo e depois volta a rodar.
+// O horário do NPC fica segurado durante a pane (o atraso cresce), então ele volta de onde parou.
+const PATIO_GUINCHO = { x0: 93, x1: 133, z0: -975, z1: -945 };
+const VAGAS_GUINCHO = Array.from({ length: 8 }, (_, i) => ({ x: 99 + (i & 3) * 10, z: i < 4 ? -967 : -953, ang: i < 4 ? 0 : Math.PI }));
+const panes = new Map();   // ref -> { ref, mask, x, z, ang, guincho, vaga, t0, fim, patio, cena }
+const comPane = new Set();   // objetos com pneu/alerta mexidos pela pane (para desfazer)
+const T_SAV = { para: 3, chega: [6, 24], anda: [24, 28], trab: [28, 88], volta: [88, 92], sai: [92, 100] };
+const T_GUI = { para: 3, chega: [6, 30], anda: [30, 36], trab: [36, 44], volta: [44, 48], reboca: [40, 48], leva: 48 };
+const T_MEU = { para: 0, chega: [0, 15], anda: [15, 19], trab: [19, 79], volta: [79, 83], sai: [83, 90] };
+const bitsDe = (m) => { let n = 0; for (let i = 0; i < 8; i++) n += (m >> i) & 1; return n; };
+const primeiroBit = (m) => { for (let i = 0; i < 8; i++) if ((m >> i) & 1) return i; return 0; };
+const suave = (u) => { u = Math.min(1, Math.max(0, u)); return u * u * (3 - 2 * u); };
+function linhaPane(r) {
+  return { ref: r.ref, mask: +r.mask || 0, x: +r.x, z: +r.z, ang: +r.ang || 0, guincho: !!r.guincho, vaga: r.vaga ?? null,
+    t0: Date.parse(r.criado_em), fim: Date.parse(r.fim_em), patio: r.patio_ate ? Date.parse(r.patio_ate) : 0 };
+}
+// o veículo de cada pane: van, caminhão da ronda dos bombeiros ou ônibus (o carro da vaga é à parte)
+function npcDaPane(ref) {
+  const i = ref.indexOf(':'), t = ref.slice(0, i), k = ref.slice(i + 1);
+  if (t === 'van') { const v = vansNpc.find((x) => x.id === +k); return v && !v.roubada ? { obj: v.obj, st: v.st, comp: 5.4 } : null; }
+  if (t === 'bomb') { const v = rondasBombeiros[+k]; return v ? { obj: v.obj, st: v.st, comp: 8.2, oculto: !v.obj.visible } : null; }
+  if (t === 'bus') { const b = onibusNpc.find((o) => o.ativo && o.chB === k); const st = estadoBus.get(k); return st ? { obj: b && !b.leve ? b.mesh : null, st, comp: b?.comp || 12, bus: b } : null; }
+  return null;
+}
+// NPCs que levam tiro na roda (o que se mexe pelas ruas)
+function* npcsComPneu() {
+  for (const v of vansNpc) if (!v.roubada && v.obj.visible) yield ['van:' + v.id, v.obj, 3.2];
+  for (let i = 0; i < rondasBombeiros.length; i++) if (rondasBombeiros[i].obj.visible) yield ['bomb:' + i, rondasBombeiros[i].obj, 5];
+  for (const b of onibusNpc) if (b.ativo && !b.leve && b.mesh.visible && b.chB) yield ['bus:' + b.chB, b.mesh, Math.max(6, b.comp / 2 + 1)];
+}
+function rodaMaisPerto(obj, p, raio = 1.1) {
+  const l = civico.rodasDe(obj); if (!l.length) return -1;
+  obj.updateMatrixWorld(true); let m = -1, d = raio;
+  l.forEach((piv, i) => { const q = piv.getWorldPosition(_vf), dd = Math.hypot(q.x - p.x, q.z - p.z); if (dd < d && p.y < q.y + 0.6) { d = dd; m = i; } });
+  return m;
+}
+// tiro numa roda de NPC: o servidor guarda a pane e avisa todo mundo
+function furarPneuNpc(ref, obj, i) {
+  const P = panes.get(ref); if (P && ((P.mask >> i) & 1 || P.guincho)) return;
+  if (P && P.patio && agoraServidor() > P.fim) return;   // no pátio
+  faiscarRoda(obj, i);
+  sons.tocar('soco_metal', { vol: 0.6, dist: Math.hypot(obj.position.x - jogador.pos.x, obj.position.z - jogador.pos.z), raio: 40, velocidade: 0.6 });
+  rede.pneuNpc.furar(ref, i, obj.position.x, obj.position.z, obj.rotation.y).then((r) => { if (r?.ref) { receberPaneNpc(r, true); conexao?.enviar('pneuNpc', r); } }).catch(() => {});
+}
+// carro parado na vaga (instanciado): vira um carro de verdade ali mesmo, com o pneu murcho
+function carroDaVaga(k) {
+  if (largadosRua.has(k)) return largadosRua.get(k).mesh;
+  const c = mundo.carroRua(k); if (!c) return null;
+  mundo.tirarCarroRua(k, true);
+  const mesh = civico.modeloCarro(MODELO_RUA[c.tipo] || 'popular', c.cor); mesh.position.set(c.x, alturaChao(c.x, c.z), c.z); mesh.rotation.y = c.rot; scene.add(mesh);
+  largadosRua.set(k, { mesh, x: c.x, z: c.z, r: c.rot, ate: agoraServidor() + 600000 });
+  return mesh;
+}
+function tiroNaRodaDaVaga(k, p) {
+  const c = mundo.carroRua(k); if (!c || p.y - alturaChao(c.x, c.z) > 0.95) return;
+  const tmp = civico.modeloCarro(MODELO_RUA[c.tipo] || 'popular', c.cor); tmp.position.set(c.x, alturaChao(c.x, c.z), c.z); tmp.rotation.y = c.rot;
+  const i = rodaMaisPerto(tmp, p, 0.9); if (i < 0) return;
+  const mesh = carroDaVaga(k); if (mesh) furarPneuNpc('rua:' + k, mesh, i);
+}
+function receberPaneNpc(r, novo = false) {
+  if (!r?.ref) return;
+  const P = linhaPane(r), velho = panes.get(P.ref), novos = P.mask & ~(velho?.mask || 0);
+  if (velho) P.cena = velho.cena;
+  panes.set(P.ref, P);
+  if (P.ref.startsWith('rua:')) { const k = +P.ref.slice(4), m = carroDaVaga(k), l = largadosRua.get(k); if (l) l.ate = Math.max(l.ate, P.fim); if (m) { civico.aplicarPneus(m, P.mask, !!m.userData.queimaTotal); comPane.add(m); } }
+  if (novos && (novo || velho)) { const o = objDaPane(P); if (o) faiscarRoda(o, primeiroBit(novos)); }   // faísca só no furo que acabou de acontecer
+}
+function posicaoPane(ref) { const P = panes.get(ref); if (!P) return null; if (agoraServidor() >= P.fim && P.vaga != null) return VAGAS_GUINCHO[P.vaga]; return P; }
+function objDaPane(P) { if (P.ref.startsWith('rua:')) return largadosRua.get(+P.ref.slice(4))?.mesh || null; return npcDaPane(P.ref)?.obj || null; }
+let tempoPanes = 0, carregandoPanes = false;
+function carregarPanes() {
+  if (carregandoPanes) return; carregandoPanes = true;
+  rede.pneuNpc.ativas().then((l) => {
+    const vistos = new Set();
+    for (const r of l || []) { vistos.add(r.ref); receberPaneNpc(r); }
+    for (const [ref, P] of panes) if (!vistos.has(ref) && agoraServidor() > (P.patio || P.fim)) terminarPane(P);
+  }).catch(() => {}).finally(() => { carregandoPanes = false; });
+}
+// ---- cena: Saveiro/guincho e o mecânico
+function pontoPane(P, s, lat) { const fx = Math.sin(P.ang), fz = Math.cos(P.ang), rx = -Math.cos(P.ang), rz = Math.sin(P.ang); return { x: P.x + fx * s + rx * lat, z: P.z + fz * s + rz * lat }; }
+function atoresPane(P) {
+  const C = P.cena ||= {};
+  if (!C.v) {
+    C.v = civico.modeloCarro(P.guincho ? 'guincho' : 'saveiro', P.guincho ? '#ffffff' : '#e9e9e4'); C.v.visible = false; scene.add(C.v);
+    if (!P.guincho) {   // pneus na caçamba
+      const base = modelos.roda_carro;
+      if (base) for (const [z, y] of [[-1.05, 0.78], [-1.05, 1.0], [-1.65, 0.78]]) { const r = base.clone(true); r.rotation.z = Math.PI / 2; r.scale.set(0.4, 0.33, 0.33); r.position.set(0, y, z); C.v.add(r); }
+    }
+  }
+  if (!C.mec && !C.mecPedido) {
+    C.mecPedido = true;
+    criarAvatar('personagens', 'Mecanico').then((av) => { if (P.cena !== C) return; C.mec = av; av.raiz.visible = false; scene.add(av.raiz); avataresObra.add(av); av.tocar('idle'); }).catch(() => {});
+  }
+  return C;
+}
+function limparAtores(P) {
+  const C = P.cena; if (!C) return;
+  if (C.v) scene.remove(C.v);
+  if (C.mec) { scene.remove(C.mec.raiz); avataresObra.delete(C.mec); }
+  P.cena = null;
+}
+function colocarAtor(o, q, ang, visivel = true) { o.position.set(q.x, alturaChao(q.x, q.z), q.z); o.rotation.y = ang; o.visible = visivel && !jogador.dentroCasa; }
+// o mecânico anda de a até b (no intervalo [t0,t1]) e depois fica abaixado na roda
+function mecanicoAnda(av, a, b, u, anim = 'walk') {
+  const q = { x: a.x + (b.x - a.x) * u, z: a.z + (b.z - a.z) * u };
+  colocarAtor(av.raiz, q, Math.atan2(b.x - a.x, b.z - a.z));
+  if (av.nomeAtual !== anim) av.tocar(anim, { velocidade: 1 });
+}
+function rodaMundo(obj, i) { const l = civico.rodasDe(obj); const piv = l[i] || l[0]; if (!piv) return null; obj.updateMatrixWorld(true); const q = piv.getWorldPosition(new THREE.Vector3()); return { x: q.x, z: q.z, piv }; }
+// cena da Saveiro (ou do guincho que só troca o pneu, no carro do jogador): T diz os tempos
+function cenaTroca(P, e, veh, T, comp) {
+  const C = atoresPane(P), lat = P.ref === 'meu' ? 0 : P.lat ?? 1.3, atras = -(comp / 2 + (P.guincho ? 4.6 : 2.6) + 1.2);
+  let vis = false, s = -45, la = lat;
+  if (e >= T.chega[0] && e < T.chega[1]) { vis = true; s = -45 + (atras + 45) * (1 - (1 - (e - T.chega[0]) / (T.chega[1] - T.chega[0])) ** 2); }
+  else if (e >= T.chega[1] && e < T.sai[0]) { vis = true; s = atras; }
+  else if (e >= T.sai[0] && e < T.sai[1]) { vis = true; const u = (e - T.sai[0]) / (T.sai[1] - T.sai[0]); s = atras + (comp + 50) * u * u; la = lat + (-1.6 - lat) * suave(u * 3); }
+  const q = pontoPane(P, s, la); colocarAtor(C.v, q, P.ang, vis); C.v.userData.alerta = vis && e >= T.chega[1];
+  if (!C.mec) return;
+  const av = C.mec, porta = pontoPane(P, atras + 0.6, la - 1.3);
+  const rd = veh ? rodaMundo(veh, primeiroBit(P.mask)) : null;
+  if (!rd || e < T.anda[0] || e >= T.volta[1]) { av.raiz.visible = false; return; }
+  const rx = -Math.cos(veh.rotation.y), rz = Math.sin(veh.rotation.y), lado = Math.sign((rd.x - veh.position.x) * rx + (rd.z - veh.position.z) * rz) || 1;
+  const fora = { x: rd.x + rx * lado * 0.8, z: rd.z + rz * lado * 0.8 };   // do lado de fora da roda
+  if (e < T.anda[1]) mecanicoAnda(av, porta, fora, (e - T.anda[0]) / (T.anda[1] - T.anda[0]));
+  else if (e < T.trab[1]) { colocarAtor(av.raiz, fora, Math.atan2(rd.x - fora.x, rd.z - fora.z)); if (av.nomeAtual !== 'abaixado') av.tocar('abaixado'); }
+  else mecanicoAnda(av, fora, porta, (e - T.volta[0]) / (T.volta[1] - T.volta[0]));
+}
+// cena do guincho no NPC: para na frente, o mecânico engata, o veículo sobe atrás e os dois vão embora
+function cenaReboque(P, e, veh, comp) {
+  const C = atoresPane(P), T = T_GUI, lat = P.lat ?? 1.3, frente = comp / 2 + 4.2 + 1.0, gancho = 4.2 + comp / 2 + 0.3;
+  let s = -50, la = -1.8, vis = false;
+  if (e >= T.chega[0] && e < T.chega[1]) { vis = true; const u = (e - T.chega[0]) / (T.chega[1] - T.chega[0]); s = -50 + (frente + 50) * (1 - (1 - u) ** 2); la = u < 0.8 ? -1.8 : -1.8 + (lat + 1.8) * suave((u - 0.8) / 0.2); }
+  else if (e >= T.chega[1]) { vis = true; la = lat; const t = e - T.leva; s = frente + (t <= 0 ? 0 : t < 5 ? 0.8 * t * t : 20 + 8 * (t - 5)); if (s - frente > 70) vis = false; }
+  colocarAtor(C.v, pontoPane(P, s, la), P.ang, vis); C.v.userData.alerta = vis;
+  // o veículo rebocado
+  if (veh) {
+    const k = e < T.reboca[0] ? 0 : Math.min(1, (e - T.reboca[0]) / (T.reboca[1] - T.reboca[0]));
+    const sv = e < T.leva ? k * (frente - gancho) : s - gancho;
+    const q = pontoPane(P, sv, lat); veh.position.set(q.x, alturaChao(q.x, q.z) + 0.45 * k, q.z); veh.rotation.y = P.ang; veh.rotation.x = -0.07 * k;
+    veh.visible = (e < T.leva || vis) && !jogador.dentroCasa;
+  }
+  if (!C.mec) return;
+  const av = C.mec, porta = pontoPane(P, frente - 1.5, lat - 1.5), engate = pontoPane(P, comp / 2 + 0.6, lat - 0.9);
+  if (e < T.anda[0] || e >= T.volta[1]) { av.raiz.visible = false; return; }
+  if (e < T.anda[1]) mecanicoAnda(av, porta, engate, (e - T.anda[0]) / (T.anda[1] - T.anda[0]));
+  else if (e < T.trab[1]) { colocarAtor(av.raiz, engate, P.ang + Math.PI); if (av.nomeAtual !== 'abaixado') av.tocar('abaixado'); }
+  else mecanicoAnda(av, engate, porta, (e - T.volta[0]) / (T.volta[1] - T.volta[0]));
+}
+function terminarPane(P) {
+  limparAtores(P); panes.delete(P.ref);
+  const o = objDaPane(P);
+  if (o) { civico.aplicarPneus(o, 0, !!o.userData.queimaTotal); o.userData.alerta = false; o.rotation.x = 0; comPane.delete(o); }
+}
+function atualizarPanes(dt) {
+  if ((tempoPanes -= dt) <= 0) { tempoPanes = 15; if (jogador.perfil) carregarPanes(); }
+  const agora = agoraServidor();
+  if (mecanicoMeu) atualizarMecanicoMeu(agora);
+  if (!panes.size) return;
+  const usados = new Set();
+  for (const P of [...panes.values()]) {
+    if (agora > (P.patio || P.fim)) { terminarPane(P); continue; }
+    if (P.ref.startsWith('rua:')) { const m = objDaPane(P); if (m) usados.add(m); continue; }   // o carro da vaga só fica murcho
+    const N = npcDaPane(P.ref); if (!N) continue;
+    if (N.st) N.st.atraso = (N.st.atraso || 0) + dt;   // o horário fica segurado
+    const veh = N.obj, e = (agora - P.t0) / 1000, perto = Math.hypot(P.x - jogador.pos.x, P.z - jogador.pos.z) < 260;
+    if (agora >= P.fim) {   // no pátio do guincho
+      if (P.cena) limparAtores(P);
+      if (veh && P.vaga != null) { const V = VAGAS_GUINCHO[P.vaga]; veh.position.set(V.x, alturaChao(V.x, V.z), V.z); veh.rotation.set(0, V.ang, 0); veh.userData.alerta = false; veh.visible = !jogador.dentroCasa && Math.hypot(V.x - jogador.pos.x, V.z - jogador.pos.z) < 300; usados.add(veh); civico.aplicarPneus(veh, P.mask); comPane.add(veh); }
+      else if (veh) veh.visible = false;
+      continue;
+    }
+    if (!veh) continue;
+    usados.add(veh); comPane.add(veh);
+    // encosta no meio-fio (nos primeiros segundos) e liga o pisca-alerta
+    P.lat = N.bus ? 0.8 : 1.3;   // o ônibus já anda mais perto da calçada
+    const u = suave(e / T_SAV.para), q = pontoPane(P, 0, P.lat * u);
+    if (!P.guincho || e < T_GUI.reboca[0]) { veh.position.set(q.x, alturaChao(q.x, q.z), q.z); veh.rotation.y = P.ang; veh.rotation.x = 0; }
+    veh.userData.alerta = true;
+    const visMask = !P.guincho && e >= T_SAV.trab[1] ? 0 : P.mask;
+    if (veh.userData.paneMask !== visMask) { civico.aplicarPneus(veh, visMask); veh.userData.paneMask = visMask; }
+    // os passageiros descem quando vem o guincho
+    if (P.guincho && N.bus && jogador.onibus && N.bus.L === jogador.onibus.L && N.bus.m === jogador.onibus.m && e > T_GUI.para) descerOnibus(N.bus.e?.s ?? 0, '🚌 Furaram dois pneus do ônibus: todos descem, o guincho vai levá-lo para o pátio.');
+    if (!perto) { if (P.cena) limparAtores(P); if (P.guincho && e >= T_GUI.leva) veh.visible = false; continue; }
+    if (P.guincho) cenaReboque(P, e, veh, N.comp); else cenaTroca(P, e, veh, T_SAV, N.comp);
+  }
+  for (const o of comPane) if (!usados.has(o)) { civico.aplicarPneus(o, 0, !!o.userData.queimaTotal); o.userData.alerta = false; o.userData.paneMask = 0; o.rotation.x = 0; comPane.delete(o); }
+}
+// ---- mecânico para o veículo do jogador: botão (veículo da empresa, a empresa paga) ou celular (seu carro, 200 por pneu)
+let mecanicoMeu = null;
+function contextoMecanicoPneu() {
+  const c = jogador.carro; if (!c?.mesh || c.voa || mecanicoMeu || jogador.dentroCasa) return null;
+  if (!(civico.puxaoPneus(c.mesh).n > 0) || Math.abs(c.vel || 0) > 0.5) return null;
+  if (!(c.servico || (c.caminhao && !c.sequestrado))) return null;
+  return ['pneu furado: chamar o mecânico (a empresa paga)', '🔧 Mecânico', () => chamarMecanicoPneu(true)];
+}
+async function chamarMecanicoPneu(empresa) {
+  const c = jogador.carro; if (!c?.mesh || mecanicoMeu) return;
+  const meu = typeof c.id === 'number' ? carrosMundo.get(c.id) : null;
+  const mask = meu ? meu.d.pneus || 0 : c.pneus || 0; if (!mask) { aviso('Os pneus estão bons.', 2); return; }
+  if (!empresa) {
+    if (!meu || meu.d.dono !== jogador.perfil?.id) { aviso('O mecânico do celular só atende o seu carro.', 3); return; }
+    try { const preco = await rede.pneuNpc.mecanico(c.id); aviso(`🔧 Mecânico a caminho (${preco} moedas). Espere parado: ele troca em 1 minuto.`, 4); } catch (e) { aviso(e.message, 3); return; }
+  } else aviso('🔧 A empresa chamou o mecânico. Espere parado: ele troca em 1 minuto.', 4);
+  mecanicoMeu = { ref: 'meu', mask, guincho: bitsDe(mask) >= 2, t0: agoraServidor(), x: c.mesh.position.x, z: c.mesh.position.z, ang: c.mesh.rotation.y, carro: c, meu, cena: null };
+}
+function atualizarMecanicoMeu(agora) {
+  const M = mecanicoMeu, c = M.carro, e = (agora - M.t0) / 1000, T = T_MEU;
+  if (jogador.carro !== c || !c.mesh) { limparAtores(M); mecanicoMeu = null; return; }
+  M.x = c.mesh.position.x; M.z = c.mesh.position.z; M.ang = c.mesh.rotation.y;
+  sinalJog.alerta = true;
+  cenaTroca(M, e, c.mesh, T, M.guincho ? 4.4 : 4.2);
+  if (e >= T.trab[1] && !M.trocou) {
+    M.trocou = true;
+    if (M.meu) { M.meu.d.pneus = 0; avisarPneu(M.meu.d.id, 0); } else c.pneus = 0;
+    civico.aplicarPneus(c.mesh, 0); aviso('🛞 Pneus trocados! Pode seguir.', 3);
+  }
+  if (e >= T.sai[1]) { limparAtores(M); mecanicoMeu = null; sinalJog.alerta = false; }
+}
+// pátio do guincho (Vila Serra): piso, faixas das vagas, cerca e placa
+function montarPatioGuincho() {
+  const P = PATIO_GUINCHO, w = P.x1 - P.x0, d = P.z1 - P.z0, cx = (P.x0 + P.x1) / 2, cz = (P.z0 + P.z1) / 2, y = alturaChao(cx, cz);
+  const g = new THREE.Group();
+  const piso = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, d), new THREE.MeshStandardMaterial({ color: '#4a4c50', roughness: 0.95 })); piso.position.set(cx, y + 0.02, cz); piso.receiveShadow = true; g.add(piso);
+  const branco = new THREE.MeshBasicMaterial({ color: '#e8e8e0' });
+  for (const V of VAGAS_GUINCHO) for (const sx of [-1, 1]) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 12), branco); f.position.set(V.x + sx * 4.6, y + 0.09, V.z); g.add(f); }
+  const tela = new THREE.MeshStandardMaterial({ color: '#8d949a', roughness: 0.5, metalness: 0.6, transparent: true, opacity: 0.55 });
+  const poste = new THREE.MeshStandardMaterial({ color: '#5b6066', roughness: 0.6, metalness: 0.5 });
+  const lado = (x0, z0, x1, z1) => {
+    const L = Math.hypot(x1 - x0, z1 - z0); if (L < 0.5) return;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(L, 2.2, 0.05), tela); m.position.set((x0 + x1) / 2, y + 1.1, (z0 + z1) / 2); m.rotation.y = -Math.atan2(z1 - z0, x1 - x0); g.add(m);
+    colisores.push({ tipo: 'caixa', x0: Math.min(x0, x1) - 0.15, x1: Math.max(x0, x1) + 0.15, z0: Math.min(z0, z1) - 0.15, z1: Math.max(z0, z1) + 0.15 });
+    for (let k = 0; k <= Math.floor(L / 3); k++) { const t = Math.min(1, (k * 3) / L), p = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.4, 0.1), poste); p.position.set(x0 + (x1 - x0) * t, y + 1.2, z0 + (z1 - z0) * t); g.add(p); }
+  };
+  lado(P.x0, P.z0, P.x1, P.z0); lado(P.x1, P.z0, P.x1, P.z1); lado(P.x0, P.z1, P.x1, P.z1);
+  lado(P.x0, P.z0, P.x0, -966); lado(P.x0, -954, P.x0, P.z1);   // portão aberto do lado da rua (oeste)
+  { const ent = new THREE.Mesh(new THREE.BoxGeometry(6, 0.1, 12), piso.material); ent.position.set(P.x0 - 3, alturaChao(P.x0 - 3, -960) + 0.02, -960); ent.receiveShadow = true; g.add(ent); }   // entrada pela rua
+  const pl = textoSprite('Pátio do Guincho', { escala: 0.8, fundo: 'rgba(214,110,20,.95)' }); pl.position.set(P.x0, y + 3.2, -960); g.add(pl);
+  scene.add(g);
+  itensMapa.push({ tipo: 'patioGuincho', x0: P.x0, x1: P.x1, z0: P.z0, z1: P.z1 });
+}
 // ---------------------------------------------------------------- estacionamentos grátis (um guichê por quarteirão)
 const ESTACIONAMENTOS = [];
 function montarEstacionamentos() {
@@ -12011,13 +12274,22 @@ function montarEstacionamentos() {
   g.fillStyle = '#1f6feb'; g.fillRect(0, 0, 128, 128); g.fillStyle = '#fff'; g.font = '900 100px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('P', 64, 70);
   const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
   const placa = new THREE.InstancedMesh(new THREE.BoxGeometry(0.9, 0.9, 0.08).translate(0, 2.85, 0), new THREE.MeshStandardMaterial({ map: tx, roughness: 0.5 }), lista.length);
+  // 22d: cabine azul com o guarda (modelo). O guarda olha para +z no modelo, e a rua fica ao sul (+z) do guichê: ele
+  // fica sempre de frente para a rua. Uma malha só, então vai num InstancedMesh (uma chamada de desenho para todas).
+  let nova = null;
+  const mod = modelos.cabine_estac;
+  if (mod) {
+    mod.updateMatrixWorld(true); let m0 = null; mod.traverse((o) => { if (o.isMesh && !m0) m0 = o; });
+    if (m0) { const geo = m0.geometry.clone().applyMatrix4(m0.matrixWorld); nova = new THREE.InstancedMesh(geo, m0.material, lista.length); nova.castShadow = true; nova.receiveShadow = true; }
+  }
   lista.forEach(([x, z, meia, y], k) => {
-    const gx = x + 4, gz = z + meia - 1.6, vz = z + meia + 1.25;   // guichê na calçada do lado sul; vaga na faixa junto ao meio-fio
-    const mt = new THREE.Matrix4().makeTranslation(gx, y, gz); cabine.setMatrixAt(k, mt); placa.setMatrixAt(k, mt);
-    colisores.push({ tipo: 'caixa', x0: gx - 0.75, x1: gx + 0.75, z0: gz - 0.6, z1: gz + 0.6 });
+    const gx = x + 4, gz = z + meia - (nova ? 1.95 : 1.6), vz = z + meia + 1.25;   // guichê na calçada do lado sul; vaga na faixa junto ao meio-fio
+    const mt = new THREE.Matrix4().makeTranslation(gx, y, gz); cabine.setMatrixAt(k, mt); placa.setMatrixAt(k, mt); if (nova) nova.setMatrixAt(k, mt);
+    colisores.push(nova ? { tipo: 'caixa', x0: gx - 0.85, x1: gx + 0.85, z0: gz - 1.05, z1: gz + 1.05 } : { tipo: 'caixa', x0: gx - 0.75, x1: gx + 0.75, z0: gz - 0.6, z1: gz + 0.6 });
     ESTACIONAMENTOS.push({ x: gx, z: gz, vaga: { x: x - 2, z: vz, ang: Math.PI / 2 } });
     itensMapa.push({ tipo: 'estacionamento', x0: gx - 1.5, x1: gx + 1.5, z0: gz - 1.5, z1: gz + 1.5 });
   });
+  if (nova) { scene.add(nova); cabine.dispose(); placa.dispose(); return; }
   cabine.castShadow = true; scene.add(cabine, placa);
 }
 const posFora = () => (jogador.dentroCasa && jogador.saidaSala ? jogador.saidaSala : jogador.pos);   // dentro de uma sala: onde fica a porta
@@ -14745,7 +15017,8 @@ function montarMiniRodoviarias() {
 let montadosQuadro = 0;
 // põe (ou reaproveita) o ônibus físico de uma saída no lugar q
 function colocarOnibus(L, m, chB, st, q, e, usados) {
-  const longe = Math.abs(q.x - jogador.pos.x) + Math.abs(q.z - jogador.pos.z) > 320 && !(jogador.onibus && jogador.onibus.L === L && jogador.onibus.m === m);
+  const pp = panes.size ? posicaoPane('bus:' + chB) : null, qv = pp || q;   // 22d: na pane (ou no pátio do guincho) o ônibus aparece onde está parado
+  const longe = Math.abs(qv.x - jogador.pos.x) + Math.abs(qv.z - jogador.pos.z) > 320 && !(jogador.onibus && jogador.onibus.L === L && jogador.onibus.m === m);
   const mod = modeloSaida(L, m), chave = `${L.id}|${mod}`, i = usados.get(chave) || 0; usados.set(chave, i + 1);
   const doTipo = onibusNpc.filter((x) => x.chave === chave);   // reaproveita os ônibus da mesma linha e modelo
   // longe da câmera o ônibus é só um marcador vazio (não monta o modelo): monta de verdade quando chega perto
@@ -15303,6 +15576,7 @@ function prepararTransporte() {
   { const D = mundo.AREA51.deserto; mundo.limparArea(D.x0, D.z0, D.x1, D.z1); }   // deserto da Área 51
   mundo.abrirTrilha([[216, 945], [760, 945], [760, 1000]], 7); mundo.abrirTrilha([[400, 945], [400, 975]], 7); mundo.limparArea(250, 938, 900, 1112);   // Base Aérea e a rua até ela
   mundo.limparArea(118, 1061, 126, 1069);   // guarita de alistamento (GUARITA_ALIST)
+  mundo.limparArea(PATIO_GUINCHO.x0 - 2, PATIO_GUINCHO.z0 - 2, PATIO_GUINCHO.x1 + 2, PATIO_GUINCHO.z1 + 2);   // 22d: pátio do guincho
   mundo.limparArea(COMPRADOR.x - 9, COMPRADOR.z - 8, COMPRADOR.x + 9, COMPRADOR.z + 11);   // armazém do Seu Tonho: sem árvore na frente
   mundo.semEstacionar([[AUTOESCOLA.x0 - 12, AUTOESCOLA.saida.z], [AUTOESCOLA.x1 + 6, AUTOESCOLA.saida.z]]);
   for (const a of AEROPORTOS) {

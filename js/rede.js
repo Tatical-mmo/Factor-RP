@@ -402,6 +402,7 @@ function traduzirRpc(m) {
     'moedas insuficientes': 'Moedas insuficientes.',
     'fora do evento': 'Essa arma não está à venda agora (só durante o evento).',
     'os pneus estao bons': 'Os pneus desse carro estão bons.', 'roda invalida': 'Roda inválida.',
+    'veiculo no patio': 'Esse veículo está no pátio do guincho.', 'o carro esta queimado: leve na oficina': 'O carro está queimado: leve na oficina.',
     'compre esse celular na loja': 'Compre esse celular na Loja de celulares.', 'voce ja tem esse celular': 'Você já tem esse celular.', 'modelo invalido': 'Modelo inválido.',
     'escolha um celular primeiro': 'Escolha o seu celular primeiro.', 'foto invalida': 'Foto inválida.', 'esse @usuario ja existe': 'Esse @usuário já existe. Escolha outro.',
     'crie seu perfil no Papo Reto': 'Crie o seu perfil no Papo Reto primeiro.', 'muitos posts: espere um pouco': 'Muitos posts seguidos: espere um pouco.',
@@ -630,6 +631,12 @@ export const propagarFogo = (origem, ref, x, z, nome, porte) => rpc('propagar_fo
 export const consertarCarro = (id) => rpc('consertar_carro', { p_carro: id });
 export const furarPneu = (id, roda, x, z) => rpc('furar_pneu', { p_carro: id, p_roda: roda, p_x: x, p_z: z });   // 22b
 export const trocarPneus = (id) => rpc('trocar_pneus', { p_carro: id });
+// 22d: pneu furado nos NPCs (encostam e esperam a Saveiro ou o guincho) e o mecânico do celular
+export const pneuNpc = {
+  furar: (ref, roda, x, z, ang) => rpc('furar_pneu_npc', { p_ref: ref, p_roda: roda, p_x: x, p_z: z, p_ang: ang }),
+  ativas: () => rpc('npc_panes_ativas'),
+  mecanico: (id) => rpc('mecanico_pneus', { p_carro: id }),
+};
 export const incendiarVeiculo = (ref, x, z, nome, porte) => rpc('incendiar_veiculo', { p_ref: ref, p_x: x, p_z: z, p_nome: nome, p_porte: porte });
 export const destruirVeiculo = (ref, x, z, nome, porte) => rpc('destruir_veiculo', { p_ref: ref, p_x: x, p_z: z, p_nome: nome, p_porte: porte });   // 21y: tiro final ou foguete
 export const cativeiro = {

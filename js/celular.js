@@ -146,6 +146,7 @@ async function desenhar(manterMsg = false) {
   } else if (tela === 'mecanico') {
     const vs = ctx.veiculos();
     c.innerHTML = `${voltar}<h3>🔧 Mecânico</h3><p><small>O mecânico traz o veículo e deixa na rua mais perto de você. Cobra 100 + 1 moeda a cada 10 m (da carteira). Grátis: busque no guichê 🅿️ de um estacionamento.</small></p>
+      ${(() => { const pf = ctx.pneuFurado?.(); return pf ? `<div class="card"><b>🛞 Pneu furado</b><small>${pf.n} pneu${pf.n > 1 ? 's' : ''} no seu carro. O mecânico vem ${pf.n > 1 ? 'de guincho' : 'de Saveiro'} até onde você está e troca em 1 minuto (200 por pneu).</small><div><button class="bt" data-pneuaqui="1">🛞 Trocar aqui (${fmt(pf.n * 200)})</button></div></div>` : ''; })()}
       ${vs.length ? vs.map((v) => `<div class="card"><b>${esc(v.nome)}</b><small>${esc(v.info)}</small><div>${v.longe ? `<button class="bt" data-mec="${v.id}">🔧 Chamar (${fmt(v.preco)})</button>` : ''}<button class="bt sec" data-ate="${v.x},${v.z}" data-nome="${esc(v.nome)}">📍 Onde está</button></div></div>`).join('') : '<p>Você não tem veículo comprado. Compre na Concessionária.</p>'}`;
   } else if (tela === 'estac') {
     const e = ctx.estacionamentoPerto?.();
@@ -228,6 +229,7 @@ async function desenhar(manterMsg = false) {
   if ($('celCamera')) $('celCamera').onclick = () => ctx.abrirCamera?.();
   c.querySelectorAll('[data-ate]').forEach((b) => { b.onclick = () => { const [x, z] = b.dataset.ate.split(',').map(Number); ctx.marcar({ nome: b.dataset.nome, x, z }); msg('📍 Marcado no mapa.'); }; });
   c.querySelectorAll('[data-abrir]').forEach((b) => { b.onclick = () => { fechar(); ctx.abrirJanela(b.dataset.abrir); }; });
+  c.querySelectorAll('[data-pneuaqui]').forEach((b) => { b.onclick = () => { ctx.trocarPneuAqui?.(); fechar?.(); }; });
   c.querySelectorAll('[data-mec]').forEach((b) => { b.onclick = () => executar(() => ctx.chamarMecanico(Number(b.dataset.mec)), (r) => r || '🔧 O mecânico está trazendo o veículo.'); });
 }
 
