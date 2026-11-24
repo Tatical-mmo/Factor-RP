@@ -1667,7 +1667,7 @@ export const LANT_PADRAO = {
 const lantCfg = JSON.parse(JSON.stringify(LANT_PADRAO));
 export const lantConfig = (glb) => lantCfg[glb] || null;
 export const pecasLant = (C) => (!C ? [] : C.pecas ? C.pecas : [C]);
-const texLant = {}, geoLant = new Map();
+const texLant = {};
 function texturasLant(des) {
   if (texLant[des]) return texLant[des];
   const D = DESENHOS_LANT[des], tl = new THREE.TextureLoader(), t = {};
@@ -1675,33 +1675,62 @@ function texturasLant(des) {
   return (texLant[des] = t);
 }
 // geometria dos dois lados (no espaço do modelo), feita uma vez por modelo + medida
-function geometriaLant(g, glb, C) {
-  const chave = glb + JSON.stringify(C); if (geoLant.has(chave)) return geoLant.get(chave);
-  const alvos = []; g.traverse((o) => { if (!o.isMesh) return; for (let p = o; p && p !== g; p = p.parent) if (['rodas', 'luzes', 'sinais', 'lantDes', 'chassi'].includes(p.name)) return; alvos.push(o); });
-  g.updateMatrixWorld(true); const m = g.matrixWorld, inv = new THREE.Matrix4().copy(m).invert();
-  const NU = 12, NV = 16, prop = DESENHOS_LANT[C.des]?.prop || 0.28, r = [];
-  for (const sg of [1, -1]) {
-    const C0 = C; C = { ...C0, ...(C0.lados?.[sg > 0 ? 'E' : 'D'] || {}) };   // 22e: ajuste só de um lado
-    const W = C.w ?? C.h * prop, th = (C.ang ?? 30) * Math.PI / 180;
-    const d = new THREE.Vector3(Math.sin(th) * sg, 0, -Math.cos(th)), lado = new THREE.Vector3(Math.cos(th) * sg, 0, Math.sin(th));
-    const pos = [], uv = [], idx = [];
-    for (let j = 0; j <= NV; j++) for (let i = 0; i <= NU; i++) {
-      const u = i / NU, v = j / NV, o = new THREE.Vector3(sg * C.x, C.y + v * C.h, C.z).addScaledVector(lado, (u - 0.5) * W).addScaledVector(d, 3);
-      _rc.set(o.clone().applyMatrix4(m), d.clone().negate().transformDirection(m)); _rc.far = 6;
-      const h = _rc.intersectObjects(alvos, false)[0];
-      const q = h ? h.point.clone().applyMatrix4(inv).addScaledVector(d, 0.025) : o.addScaledVector(d, -3);
-      pos.push(q.x, q.y, q.z); uv.push(C.esp ? 1 - u : u, v);   // esp: o admin virou o desenho (espelho)
+// só a parte de trás da lataria (no espaço do modelo), uma vez por modelo: os raios testam poucos triângulos
+// (antes cada ajuste testava o ônibus inteiro e o celular travava)
+const trasLant = new Map();
+function lataTraseira(g, glb) {
+  if (trasLant.has(glb)) return trasLant.get(glb);
+  g.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), mm = new THREE.Matrix4();
+  const tris = []; let zmin = Infinity; const lista = [];
+  g.traverse((o) => { if (!o.isMesh || !o.geometry?.attributes.position) return; for (let p = o; p && p !== g; p = p.parent) if (['rodas', 'luzes', 'sinais', 'lantDes', 'chassi'].includes(p.name)) return; lista.push(o); });
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (const o of lista) {
+    mm.multiplyMatrices(inv, o.matrixWorld); const pos = o.geometry.attributes.position, idx = o.geometry.index, n = idx ? idx.count : pos.count;
+    for (let k = 0; k < n; k += 3) {
+      const i0 = idx ? idx.getX(k) : k, i1 = idx ? idx.getX(k + 1) : k + 1, i2 = idx ? idx.getX(k + 2) : k + 2;
+      a.fromBufferAttribute(pos, i0).applyMatrix4(mm); b.fromBufferAttribute(pos, i1).applyMatrix4(mm); c.fromBufferAttribute(pos, i2).applyMatrix4(mm);
+      const zc = (a.z + b.z + c.z) / 3; zmin = Math.min(zmin, zc); tris.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, zc);
     }
+  }
+  // fundo do ônibus: pelos 2% de trás (um triângulo solto lá longe não pode puxar o corte)
+  const zs = []; for (let k = 9; k < tris.length; k += 10) zs.push(tris[k]); zs.sort((p, q) => p - q); zmin = zs[Math.floor(zs.length * 0.02)] ?? zmin;
+  const out = []; for (let k = 0; k < tris.length; k += 10) if (tris[k + 9] < zmin + 3) for (let q = 0; q < 9; q++) out.push(tris[k + q]);
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+  const malha = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })); malha.updateMatrixWorld(true);
+  trasLant.set(glb, malha); return malha;
+}
+// pontos de um lado (no espaço do modelo), guardados por medida; o espelho só troca a textura (não refaz nada)
+const ladoLant = new Map();
+function pontosLant(g, glb, C, sg) {
+  const chave = glb + sg + JSON.stringify([C.des, C.x, C.y, C.z, C.h, C.w, C.ang]); if (ladoLant.has(chave)) return ladoLant.get(chave);
+  const alvo = lataTraseira(g, glb), NU = 8, NV = 12, prop = DESENHOS_LANT[C.des]?.prop || 0.28;
+  const W = C.w ?? C.h * prop, th = (C.ang ?? 30) * Math.PI / 180;
+  const d = new THREE.Vector3(Math.sin(th) * sg, 0, -Math.cos(th)), lado = new THREE.Vector3(Math.cos(th) * sg, 0, Math.sin(th)), dn = d.clone().negate();
+  const pos = [];
+  for (let j = 0; j <= NV; j++) for (let i = 0; i <= NU; i++) {
+    const u = i / NU, v = j / NV, o = new THREE.Vector3(sg * C.x, C.y + v * C.h, C.z).addScaledVector(lado, (u - 0.5) * W).addScaledVector(d, 3);
+    _rc.set(o, dn); _rc.far = 6; const h = _rc.intersectObject(alvo, false)[0];
+    const q = h ? h.point.clone().addScaledVector(d, 0.025) : o.addScaledVector(d, -3);
+    pos.push(q.x, q.y, q.z);
+  }
+  const r = { pos, NU, NV }; ladoLant.set(chave, r); return r;
+}
+function geometriaLant(g, glb, C) {
+  const r = [];
+  for (const sg of [1, -1]) {
+    const L = { ...C, ...(C.lados?.[sg > 0 ? 'E' : 'D'] || {}) };   // 22e: ajuste só de um lado
+    const { pos, NU, NV } = pontosLant(g, glb, L, sg), uv = [], idx = [];
+    for (let j = 0; j <= NV; j++) for (let i = 0; i <= NU; i++) uv.push(L.esp ? 1 - i / NU : i / NU, j / NV);   // esp: o admin virou o desenho
     for (let j = 0; j < NV; j++) for (let i = 0; i < NU; i++) { const a = j * (NU + 1) + i, b = a + 1, c = a + NU + 1, e = c + 1; if (sg > 0) idx.push(a, b, c, b, e, c); else idx.push(a, c, b, b, c, e); }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
     r.push({ geo, lado: sg > 0 ? 'E' : 'D' });
-    C = C0;
   }
-  geoLant.set(chave, r); return r;
+  return r;
 }
 function montarLantDes(o) {
-  const glb = o.userData.glb, velho = o.getObjectByName('lantDes');
-  if (velho) { o.remove(velho); o.userData.lantDes = null; }
+  const glb = o.userData.glb;
+  for (let velho = o.getObjectByName('lantDes'); velho; velho = o.getObjectByName('lantDes')) { velho.parent.remove(velho); velho.traverse((m) => { if (m.isMesh && m.name === 'base') m.geometry.dispose(); }); }
+  o.userData.lantDes = null;
   const pecas = pecasLant(glb && lantCfg[glb]).filter((p) => DESENHOS_LANT[p.des]);
   const tras = (vis) => o.traverse((c) => { if (c.isSprite && c.userData.tras && c.parent?.name === 'luzes') c.visible = vis; });
   if (!pecas.length) { tras(true); return; }
