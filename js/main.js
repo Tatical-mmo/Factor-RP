@@ -873,6 +873,41 @@ function danoNoMeuVeiculo(d) {
   if (c.dano >= 100) { if (!c.pegouFogo) { c.pegouFogo = 5; aviso('🔥 O veículo pegou fogo! Saia já: ele explode em 5 s!', 4); } }
   else aviso(`💥 Algo arremessado acertou o veículo! ${Math.round(100 - c.dano)}%`, 2);
 }
+// ---- 21y: tiros nos veículos. Um carro comum sem blindagem explode com 25 tiros de fuzil; a blindagem leve da
+// oficina segura metade (50 tiros). RPG e bazuca explodem na hora qualquer veículo que pegarem (e matam os NPCs).
+const DANO_FUZIL = 26, TIROS_CARRO = 25;
+const danoTiroVeic = (b) => Math.max(0.5, (b.pd ? 100 : b.dano || 20) * (100 / TIROS_CARRO) / DANO_FUZIL);
+function blindadoLeve(id) { const v = carrosMundo.get(id); return !!(v?.d?.blindado && v.d.blind_hp > 0); }
+function danoTiroNoMeuVeiculo(d) {
+  const c = jogador.carro; if (!c || c.voa || c.explodiu || c.modelo === 'caveirao') return;
+  if (c.id && blindadoLeve(c.id)) d *= 0.5;
+  c.dano = Math.min(100, (c.dano || 0) + d); guardarDanoVeiculo(c); tremor = Math.max(tremor, 0.12);
+  if (c.dano >= 50) veicFumando.add(c);
+  if (c.dano >= 100) { if (!c.pegouFogo) { c.pegouFogo = 5; aviso('🔥 O veículo foi baleado e pegou fogo! Saia já: ele explode em 5 s!', 4); } }
+  else if (!c._avTiro || performance.now() - c._avTiro > 2500) { c._avTiro = performance.now(); aviso(`🔫 Estão atirando no seu veículo! ${Math.round(100 - c.dano)}%`, 2); }
+}
+// dano dos tiros nos veículos parados (só quem atira conta; o tiro que passa de 100% explode o veículo para todos)
+const danoTiroParado = new Map();
+let explodindoRef = new Set();
+function tiroEmVeiculoParado(ref, x, z, nome, porte, d) {
+  if (explodindoRef.has(ref) || veiculoEmChamas(ref)) return;
+  const v = Math.min(100, (danoTiroParado.get(ref) || 0) + d); danoTiroParado.set(ref, v);
+  if (v >= 100) destruirVeiculoRef(ref, x, z, nome, porte);
+}
+function destruirVeiculoRef(ref, x, z, nome, porte) {
+  if (explodindoRef.has(ref) || veiculoEmChamas(ref)) return; explodindoRef.add(ref); danoTiroParado.delete(ref);
+  efeitoExplosao(x, alturaChao(x, z), z, porte >= 2 ? 1.8 : 1.3, false);
+  rede.destruirVeiculo(ref, x, z, nome, porte).then(() => servicos.recarregarFogo()).catch(() => {}).finally(() => setTimeout(() => explodindoRef.delete(ref), 4000));
+}
+// tudo que um foguete pega num raio: carros de jogador parados, carros da rua (na vaga ou largados) e quem dirige
+function foguetaoNosVeiculos(p, raio) {
+  for (const v of carrosMundo.values()) {
+    if (!v.mesh?.visible || v.d.queimado || jogador.carro?.id === v.d.id) continue;
+    const q = v.mesh.position; if (Math.hypot(q.x - p.x, q.z - p.z) < raio) destruirVeiculoRef('car:' + v.d.id, q.x, q.z, civico.CARROS[v.d.modelo]?.nome || 'Carro', 1);
+  }
+  for (const k of mundo.carrosRuaRaio(p.x, p.z, raio)) { const c = mundo.carroRua(k); if (c && !largadosRua.has(k)) destruirVeiculoRef('rua:' + k, c.x, c.z, 'Carro', 1); }
+  for (const [k, l] of largadosRua) if (l.mesh && !(l.queima > 0) && Math.hypot(l.x - p.x, l.z - p.z) < raio) destruirVeiculoRef('rua:' + k, l.x, l.z, 'Carro', 1);
+}
 // dirigindo: o que estiver na frente (ou atrás, de ré) do veículo cai
 function derrubarNoCaminho(c) {
   if (Math.abs(c.vel) < 2.5 || !c.mesh) return;
@@ -4319,7 +4354,7 @@ function conectarMultiplayer(perfil) {
     explosao: (e) => { if (!congelados.has(e.de)) receberExplosao(e); },
     voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, dm: (m) => { if (m?.para === jogador.perfil?.id && amigosIds.has(m.de)) celular.mensagemChegou(m.de, remotos.get(m.de)?.meta?.nome); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => { if (!congelados.has(d.de)) receberDano(d); }, atropelo: (d) => { if (!congelados.has(d.de)) receberAtropelo(d); }, chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
-    toqueCel: (e) => receberToqueCel(e), abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, derrubar: (e) => receberDerrubar(e), danoQueda: (e) => { if (e.alvo === jogador.perfil?.id) danoNoMeuVeiculo(Math.min(40, Math.max(0, +e.d || 0))); }, viacao: () => atualizarEstadoViacao(), somSoco: (e) => sons.tocar(e.k ? 'soco1' : 'soco2', { vol: 0.85, dist: Math.hypot((+e.x || 0) - jogador.pos.x, (+e.z || 0) - jogador.pos.z), raio: 30 }), navio: (e) => receberNavio(e),
+    toqueCel: (e) => receberToqueCel(e), abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, derrubar: (e) => receberDerrubar(e), danoTiro: (e) => { if (e.alvo === jogador.perfil?.id) danoTiroNoMeuVeiculo(Number(e.d) || 0); }, danoQueda: (e) => { if (e.alvo === jogador.perfil?.id) danoNoMeuVeiculo(Math.min(40, Math.max(0, +e.d || 0))); }, viacao: () => atualizarEstadoViacao(), somSoco: (e) => sons.tocar(e.k ? 'soco1' : 'soco2', { vol: 0.85, dist: Math.hypot((+e.x || 0) - jogador.pos.x, (+e.z || 0) - jogador.pos.z), raio: 30 }), navio: (e) => receberNavio(e),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -5323,9 +5358,15 @@ function acertoDaBola(b) {
   // atira encostado no carro não acertar o próprio
   if (b.orig && Math.hypot(p.x - b.orig.x, p.z - b.orig.z) > 1.2) {
     const bloq = (q) => q && Math.hypot(p.x - q.x, p.z - q.z) < 1.5 && p.y < q.y + 1.35;
-    for (const v of carrosMundo.values()) if (v.mesh?.visible && bloq(v.mesh.position)) { manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
-    for (const v of viaturas) if (v.obj?.visible && bloq(v.obj.position)) { manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
-    for (const [, r] of remotos) if (r.carro && r.carroModelo !== 'caveirao' && bloq(r.carro.position)) { manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
+    const furo = () => { faiscar(p.clone()); sons.tocar('soco_metal', { vol: 0.5, dist: Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z), raio: 50, velocidade: 1.6 }); };
+    for (const v of carrosMundo.values()) if (v.mesh?.visible && bloq(v.mesh.position)) {   // 21y: a bala estraga o carro
+      furo(); if (!v.d.queimado && jogador.carro?.id !== v.d.id) tiroEmVeiculoParado('car:' + v.d.id, v.mesh.position.x, v.mesh.position.z, civico.CARROS[v.d.modelo]?.nome || 'Carro', 1, danoTiroVeic(b) * (blindadoLeve(v.d.id) ? 0.5 : 1));
+      return true;
+    }
+    for (const v of viaturas) if (v.obj?.visible && bloq(v.obj.position)) { furo(); return true; }
+    for (const [id, r] of remotos) if (r.carro && r.carroModelo !== 'caveirao' && bloq(r.carro.position)) { furo(); conexao?.enviar('danoTiro', { alvo: id, d: Math.round(danoTiroVeic(b) * 10) / 10 }); return true; }
+    for (const [k, l] of largadosRua) if (l.mesh && bloq(l.mesh.position)) { furo(); if (!(l.queima > 0)) tiroEmVeiculoParado('rua:' + k, l.x, l.z, 'Carro', 1, danoTiroVeic(b)); return true; }
+    for (const k of mundo.carrosRuaRaio(p.x, p.z, 1.6)) { const c = mundo.carroRua(k); if (c && p.y < alturaChao(c.x, c.z) + 1.35) { furo(); tiroEmVeiculoParado('rua:' + k, c.x, c.z, 'Carro', 1, danoTiroVeic(b)); return true; } }
   }
   for (const [id, r] of remotos) {
     if (!r.av?.raiz.visible) continue;
@@ -5830,6 +5871,12 @@ function atualizarChamadas() {
 function chamarCarro(v, recolher) {
   if (jogador.carro?.id === v.d.id) { aviso('Você já está nesse carro.'); return; }
   const destino = recolher ? { x: 120 + (v.d.id % 5) * 7, z: -119 } : pertoDeMim();
+  if (recolher) {   // 21y: recolher é na hora: o carro some de onde está e já aparece na Concessionária
+    v.chamada = null; v.mesh.position.set(destino.x, alturaChao(destino.x, destino.z), destino.z); v.mesh.rotation.y = 0;
+    v.d = { ...v.d, x: destino.x, z: destino.z, ang: 0 };
+    rede.carros.estacionar(v.d.id, destino.x, destino.z, 0).catch(() => {});
+    aviso('🚗 Veículo recolhido: ele já está na Concessionária.', 3); return;
+  }
   v.chamada = { rota: servicos.rotaRuas({ x: v.mesh.position.x, z: v.mesh.position.z }, destino), t0: performance.now(), vel: 15,
     msg: recolher ? '' : `🚗 Seu ${civico.CARROS[v.d.modelo]?.nome || 'carro'} chegou. Toque em Dirigir.` };
   aviso(recolher ? 'O robô está levando o carro para a Concessionária.' : `🚗 O robô motorista está trazendo o carro (~${Math.ceil(v.chamada.rota.total / 15)} s).`, 3);
@@ -12194,7 +12241,7 @@ function atualizarQueimados(dt) {
     const k = +f.ref.slice(4), c = mundo.carroRua(k); if (!c || largadosRua.has(k)) continue;
     mundo.tirarCarroRua(k, true);   // o carro está onde o fogo está (vaga ou onde foi largado)
     const mesh = civico.modeloCarro(MODELO_RUA[c.tipo] || 'popular', c.cor); mesh.position.set(f.x, alturaChao(f.x, f.z), f.z); mesh.rotation.y = c.rot; scene.add(mesh);
-    largadosRua.set(k, { mesh, x: f.x, z: f.z, r: c.rot, ate: Date.parse(f.inicio) + 360000 });   // depois de ~6 min volta uma vaga nova
+    largadosRua.set(k, { mesh, x: f.x, z: f.z, r: c.rot, ate: Date.parse(f.inicio) + 300000 });   // 21y: 5 min depois volta uma vaga nova
   }
   for (const f of servicos.listaIncendios()) {
     if (f.tipo !== 'veiculo' || !f.ref) continue;
@@ -17912,7 +17959,12 @@ function explosaoFoguete(p, dano, menos) {
   }
   // muito perto de quem atirou (tiro no chão ou na parede à frente): machuca e pode matar
   if (!jogador.carro && !jogador.morto) { const v = ok(jogador.pos); if (v > 0 && !jogador.perfil?.imortal) { jogador.vida -= absorverEscudo(v); desenharFome(); if (jogador.vida <= 0) morrerLocal(); else aviso('💥 A explosão do seu foguete te atingiu!', 2.5); } }
-  for (const n of npcs) { if (n.caido > 0 || !n.av.raiz.visible) continue; const v = ok(n.av.raiz.position); if (v <= 0) continue; if (n.policia) acertarPoliciaNPC(n, v); else if (n.civil) acertarCivil(n, v); }
+  for (const n of npcs) {   // 21y: NPC pego pelo foguete morre (perto) ou se machuca (mais longe)
+    if (n.caido > 0 || !n.av.raiz.visible) continue; let v = ok(n.av.raiz.position); if (v <= 0) continue;
+    if (p.distanceTo(n.av.raiz.position) < 3.2) v = 100;
+    if (n.policia) acertarPoliciaNPC(n, v); else if (n.civil) acertarCivil(n, v);
+  }
+  foguetaoNosVeiculos(p, 3.8);   // 21y: veículos parados no raio explodem na hora
 }
 // vida da minha aeronave: "bala" (fuzil, ponto 50) ou "foguete" (RPG, bazuca). O helicóptero do Exército tem blindagem leve:
 // as balas só gastam a blindagem; o foguete gasta a blindagem e um pouco da vida

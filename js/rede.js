@@ -132,6 +132,7 @@ export function conectarCidade(perfil, eventos) {
   canal.on('broadcast', { event: 'derrubar' }, ({ payload }) => eventos.derrubar?.(payload));
   canal.on('broadcast', { event: 'viacao' }, ({ payload }) => eventos.viacao?.(payload));
   canal.on('broadcast', { event: 'danoQueda' }, ({ payload }) => eventos.danoQueda?.(payload));
+  canal.on('broadcast', { event: 'danoTiro' }, ({ payload }) => eventos.danoTiro?.(payload));   // 21y: tiro no veículo que eu dirijo
   canal.on('broadcast', { event: 'missil' }, ({ payload }) => eventos.missil?.(payload));
   canal.on('broadcast', { event: 'congelar' }, ({ payload }) => eventos.congelar?.(payload));
   canal.on('broadcast', { event: 'travado' }, ({ payload }) => eventos.travado?.(payload));
@@ -620,6 +621,7 @@ export const explodirIncendio = (id) => rpc('explodir_incendio', { p_incendio: i
 export const propagarFogo = (origem, ref, x, z, nome, porte) => rpc('propagar_fogo', { p_origem: origem, p_ref: ref, p_x: x, p_z: z, p_nome: nome, p_porte: porte });
 export const consertarCarro = (id) => rpc('consertar_carro', { p_carro: id });
 export const incendiarVeiculo = (ref, x, z, nome, porte) => rpc('incendiar_veiculo', { p_ref: ref, p_x: x, p_z: z, p_nome: nome, p_porte: porte });
+export const destruirVeiculo = (ref, x, z, nome, porte) => rpc('destruir_veiculo', { p_ref: ref, p_x: x, p_z: z, p_nome: nome, p_porte: porte });   // 21y: tiro final ou foguete
 export const cativeiro = {
   capturar: (alvo, local) => rpc('capturar_refem', { p_alvo: alvo, p_local: local }),
   libertar: (alvo) => rpc('libertar_refem', { p_alvo: alvo }),
