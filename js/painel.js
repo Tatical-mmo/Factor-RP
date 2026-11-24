@@ -70,6 +70,7 @@ function desenhar() {
   else if (aba === 'denuncias') abaDenuncias();
   else if (aba === 'carreiras') abaCarreiras();
   else if (aba === 'cidade') abaCidade();
+  else if (aba === 'lanternas') { aba = 'eu'; fechar(); ctx.ajusteLanternas?.(); }   // 22e: faixa de ajuste em cima do jogo
 }
 
 // ------------------------------------------------------------ jogadores

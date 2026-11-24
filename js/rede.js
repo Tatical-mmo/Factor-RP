@@ -631,6 +631,11 @@ export const propagarFogo = (origem, ref, x, z, nome, porte) => rpc('propagar_fo
 export const consertarCarro = (id) => rpc('consertar_carro', { p_carro: id });
 export const furarPneu = (id, roda, x, z) => rpc('furar_pneu', { p_carro: id, p_roda: roda, p_x: x, p_z: z });   // 22b
 export const trocarPneus = (id) => rpc('trocar_pneus', { p_carro: id });
+// 22e: lanternas desenhadas dos ônibus (medidas por modelo; só o admin salva)
+export const lanternas = {
+  listar: async () => { try { const { data } = await sb.from('lanternas_onibus').select('modelo,cfg'); return data || []; } catch { return []; } },
+  salvar: (modelo, cfg) => rpc('admin_salvar_lanterna', { p_modelo: modelo, p_cfg: cfg }),
+};
 // 22d: pneu furado nos NPCs (encostam e esperam a Saveiro ou o guincho) e o mecânico do celular
 export const pneuNpc = {
   furar: (ref, roda, x, z, ang) => rpc('furar_pneu_npc', { p_ref: ref, p_roda: roda, p_x: x, p_z: z, p_ang: ang }),

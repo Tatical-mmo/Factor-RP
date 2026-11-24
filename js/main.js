@@ -4405,6 +4405,7 @@ async function iniciarJogo(perfil) {
   iniciarPainel({
     perfil: () => jogador.perfil,
     ajustarFarda: () => abrirEditorFarda(),
+    ajusteLanternas: () => abrirAjusteLanternas(),   // 22e
     relogio: () => ({ ...ajusteHora, hora: horaAtual }),
     deslocParaHora: (h) => deslocParaHora(h),
     relogioMudou: (c) => aplicarRelogio(c),
@@ -4508,7 +4509,7 @@ function conectarMultiplayer(perfil) {
     explosao: (e) => { if (!congelados.has(e.de)) receberExplosao(e); },
     voz: (m) => { if (!seguranca.protegido()) voz.receber(m); }, dm: (m) => { if (m?.para === jogador.perfil?.id && amigosIds.has(m.de)) celular.mensagemChegou(m.de, remotos.get(m.de)?.meta?.nome); }, gesto: (g) => receberGesto(g), clima: () => carregarClima(), assalto: (a) => avisoAssalto(a), algemaNpc: (m) => receberAlgemaNpc(m), torre: (m) => receberTorre(m), torreOk: (m) => receberTorreOk(m), fiscal: (m) => receberFiscal(m), lixo: (m) => receberLixo(m), bueiro: (m) => receberBueiro(m), carroRua: (m) => receberCarroRua(m), onibusSeq: (m) => receberOnibusSeq(m), denuncia: (m) => receberDenuncia(m), reset: (m) => { if (remotos.get(m?.de)?.meta?.cargo !== 'admin') return; aviso('🧹 O mapa foi resetado. Recarregando…', 3); setTimeout(() => location.reload(), 2500); },   // só vale se veio de um admin on-line
     dano: (d) => { if (!congelados.has(d.de)) receberDano(d); }, atropelo: (d) => { if (!congelados.has(d.de)) receberAtropelo(d); }, chat: (m) => receberChat(m), tatica: (e) => receberTatica(e),
-    toqueCel: (e) => receberToqueCel(e), abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, derrubar: (e) => receberDerrubar(e), danoTiro: (e) => { if (e.alvo !== jogador.perfil?.id) return; danoTiroNoMeuVeiculo(Number(e.d) || 0); if (e.pneu != null) furarMeuPneu(Number(e.pneu)); }, pneu: (e) => receberPneu(e), pneuNpc: (e) => receberPaneNpc(e, true), danoQueda: (e) => { if (e.alvo === jogador.perfil?.id) danoNoMeuVeiculo(Math.min(40, Math.max(0, +e.d || 0))); }, viacao: () => atualizarEstadoViacao(), somSoco: (e) => sons.tocar(e.k ? 'soco1' : 'soco2', { vol: 0.85, dist: Math.hypot((+e.x || 0) - jogador.pos.x, (+e.z || 0) - jogador.pos.z), raio: 30 }), navio: (e) => receberNavio(e),
+    toqueCel: (e) => receberToqueCel(e), abducao: (e) => receberAbducao(e), abducaoRes: (e) => receberAbducaoRes(e), ovniVisto: (e) => receberOvniVisto(e), ovniAbducao: (e) => receberOvniAbducao(e), missil: (e) => receberMissil(e), travado: (e) => receberTravado(e), missilAcerto: (e) => receberMissilAcerto(e), aeroDano: (e) => { if (e.alvo === jogador.perfil?.id) danoAeronave(Number(e.v) || 0, 'bala'); }, cruzeiro: (e) => receberCruzeiro(e), sirene: (e) => tocarSirenes(Math.min(60, Number(e.seg) || 15), true), bau: (e) => receberBau(e), natal: () => { natalAvisou = false; tirarNatal(); atualizarEstadoNatal(); }, derrubar: (e) => receberDerrubar(e), danoTiro: (e) => { if (e.alvo !== jogador.perfil?.id) return; danoTiroNoMeuVeiculo(Number(e.d) || 0); if (e.pneu != null) furarMeuPneu(Number(e.pneu)); }, pneu: (e) => receberPneu(e), pneuNpc: (e) => receberPaneNpc(e, true), lantCfg: () => carregarLanternas(), danoQueda: (e) => { if (e.alvo === jogador.perfil?.id) danoNoMeuVeiculo(Math.min(40, Math.max(0, +e.d || 0))); }, viacao: () => atualizarEstadoViacao(), somSoco: (e) => sons.tocar(e.k ? 'soco1' : 'soco2', { vol: 0.85, dist: Math.hypot((+e.x || 0) - jogador.pos.x, (+e.z || 0) - jogador.pos.z), raio: 30 }), navio: (e) => receberNavio(e),
     meta: () => metaPresenca(),
   });
   window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAgora(); });
@@ -12019,6 +12020,75 @@ async function saquear(fn, alvo) {
   } catch (e) { aviso(e.message, 3); }
   finally { sequestrando = false; }
 }
+// ---------------------------------------------------------------- 22e: lanternas desenhadas dos ônibus (ajuste do admin)
+// Faixa pequena no rodapé (o jogo continua aparecendo): escolhe o modelo e o desenho, ajusta com − e + e vê na hora
+// num ônibus parado na sua frente (de costas para você). Salvar grava no banco e vale para todos.
+const MODELOS_LANT = ['onibus_rod_02', 'onibus_rod_04', 'onibus_rod_06', 'onibus_rod_vermelho', 'onibus_rod_branco', 'onibus_rod_amarelo', 'onibus_rod_dourado', 'onibus_amarelo', 'onibus_branco', 'onibus_laranja'];
+const CAMPOS_LANT = [['y', 'Altura', 0.01], ['h', 'Tamanho', 0.02], ['w', 'Largura', 0.01], ['x', 'Lateral', 0.01], ['z', 'Fundo', 0.02], ['ang', 'Quina', 2]];
+let lantPedidas = false;
+const escLant = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function carregarLanternas() {
+  rede.lanternas.listar().then((l) => { for (const r of l) civico.definirLantCfg(r.modelo, r.cfg); }).catch(() => {});
+}
+let ajLant = null;
+function abrirAjusteLanternas() {
+  if (jogador.perfil?.cargo !== 'admin') return;
+  if (ajLant) return;
+  const el = document.createElement('div'); el.id = 'ajLant';
+  el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:6px;z-index:60;background:rgba(18,22,28,.9);color:#eee;font:12px system-ui,sans-serif;padding:6px 8px;border-radius:10px;max-width:96vw;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;justify-content:center;pointer-events:auto';
+  document.body.appendChild(el);
+  ajLant = { el, modelo: MODELOS_LANT[0], bus: null, teste: { ligado: true }, cfg: null };
+  el.addEventListener('pointerdown', (e) => e.stopPropagation()); el.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+  trocarModeloLant(ajLant.modelo);
+}
+function fecharAjusteLanternas() {
+  if (!ajLant) return;
+  if (ajLant.bus) scene.remove(ajLant.bus);
+  // desfaz o que não foi salvo: volta para o padrão e depois para o que está no banco
+  civico.definirLantCfg(ajLant.modelo, civico.LANT_PADRAO[ajLant.modelo] || null); carregarLanternas(); ajLant.el.remove(); ajLant = null;
+}
+function trocarModeloLant(m) {
+  const A = ajLant; A.modelo = m;
+  A.cfg = { ...(civico.lantConfig(m) || civico.LANT_PADRAO[m] || { des: 'nenhuma', x: 1.1, z: -7, y: 0.9, h: 1.0, w: 0.4, ang: 30 }) };
+  if (!civico.lantConfig(m)) A.cfg.des = A.cfg.des || 'nenhuma';
+  if (A.bus) scene.remove(A.bus);
+  const b = civico.modeloCarro(m, '#ffffff'), fx = Math.sin(jogador.yaw), fz = Math.cos(jogador.yaw), d = civico.CARROS[m] ? 12 : 12;
+  b.position.set(jogador.pos.x + fx * d, alturaChao(jogador.pos.x + fx * d, jogador.pos.z + fz * d), jogador.pos.z + fz * d); b.rotation.y = jogador.yaw; scene.add(b);
+  A.bus = b; civico.testeLant(b, A.teste); desenharAjusteLant();
+}
+function aplicarAjusteLant() {
+  const A = ajLant; civico.definirLantCfg(A.modelo, A.cfg);
+  if (A.bus) civico.testeLant(A.bus, A.teste);
+  desenharAjusteLant();
+}
+function desenharAjusteLant() {
+  const A = ajLant, C = A.cfg, bt = (id, t, extra = '') => `<button data-l="${id}" style="padding:4px 7px;border:0;border-radius:6px;background:#2d3540;color:#fff;font:inherit${extra}">${t}</button>`;
+  const liga = (k, t) => bt('t:' + k, t, A.teste[k] ? ';background:#c0392b' : '');
+  A.el.innerHTML = `<b>🚌 Lanternas</b>
+    <select data-l="modelo" style="font:inherit">${MODELOS_LANT.map((m) => `<option value="${m}" ${m === A.modelo ? 'selected' : ''}>${escLant(civico.CARROS[m]?.nome || m)}</option>`).join('')}</select>
+    <select data-l="des" style="font:inherit"><option value="nenhuma">Sem desenho (bolas)</option>${Object.entries(civico.DESENHOS_LANT).map(([k, d]) => `<option value="${k}" ${k === C.des ? 'selected' : ''}>${escLant(d.nome)}</option>`).join('')}</select>
+    ${CAMPOS_LANT.map(([k, t]) => `<span style="white-space:nowrap">${t} ${bt('-:' + k, '−')}<b style="display:inline-block;min-width:36px;text-align:center">${(+C[k]).toFixed(k === 'ang' ? 0 : 2)}</b>${bt('+:' + k, '+')}</span>`).join('')}
+    <span style="white-space:nowrap">${liga('ligado', 'Lanterna')}${liga('freio', 'Freio')}${liga('alerta', 'Alerta')}${liga('re', 'Ré')}</span>
+    ${bt('salvar', '💾 Salvar', ';background:#1f7a3a')}${bt('padrao', 'Padrão')}${bt('fechar', '✖')}`;
+  A.el.querySelectorAll('[data-l]').forEach((e) => {
+    const k = e.dataset.l;
+    if (e.tagName === 'SELECT') { e.onchange = () => { if (k === 'modelo') trocarModeloLant(e.value); else { C.des = e.value; aplicarAjusteLant(); } }; return; }
+    e.onclick = () => {
+      if (k === 'fechar') { fecharAjusteLanternas(); return; }
+      if (k === 'padrao') { A.cfg = { ...(civico.LANT_PADRAO[A.modelo] || { ...C, des: 'nenhuma' }) }; aplicarAjusteLant(); return; }
+      if (k === 'salvar') {
+        const cfg = Object.fromEntries(Object.entries(A.cfg).map(([a, v]) => [a, typeof v === 'number' ? Math.round(v * 1000) / 1000 : v]));
+        rede.lanternas.salvar(A.modelo, cfg).then(() => { aviso('💾 Lanterna salva: vale para todos.', 2.5); conexao?.enviar('lantCfg', { modelo: A.modelo }); }).catch((er) => aviso(er.message, 3));
+        return;
+      }
+      if (k.startsWith('t:')) { const n = k.slice(2); A.teste = { ...A.teste, [n]: !A.teste[n] }; civico.testeLant(A.bus, A.teste); desenharAjusteLant(); return; }
+      const [s, campo] = k.split(':'), passo = CAMPOS_LANT.find((c) => c[0] === campo)[2];
+      C[campo] = +((+C[campo] || 0) + (s === '+' ? passo : -passo)).toFixed(3);
+      if (C.des === 'nenhuma') C.des = Object.keys(civico.DESENHOS_LANT)[0];
+      aplicarAjusteLant();
+    };
+  });
+}
 // ---------------------------------------------------------------- 22d: pneu furado nos NPCs e o guincho
 // Um tiro na roda de um NPC (van, caminhão dos bombeiros, ônibus) ou de um carro parado na vaga fura o pneu, e a pane
 // fica salva no banco (npc_panes) para todos verem igual. O NPC encosta no meio-fio com o pisca-alerta ligado e espera:
@@ -12179,6 +12249,7 @@ function terminarPane(P) {
 }
 function atualizarPanes(dt) {
   if ((tempoPanes -= dt) <= 0) { tempoPanes = 15; if (jogador.perfil) carregarPanes(); }
+  if (!lantPedidas && jogador.perfil) { lantPedidas = true; carregarLanternas(); }   // 22e: medidas das lanternas (do banco)
   const agora = agoraServidor();
   if (mecanicoMeu) atualizarMecanicoMeu(agora);
   if (!panes.size) return;

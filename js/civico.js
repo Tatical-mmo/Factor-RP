@@ -1171,7 +1171,7 @@ function dobrarSanfona(m, u, gr) {
 }
 // carros: frente em +Z, chão em y = 0
 const cacheCarro = new Map();
-export function modeloCarro(modelo, cor) { const o = modeloCarroBase(modelo, cor); if (o.getObjectByName('luzes')) comLuz.add(o); if (o.getObjectByName('rodas')) comRodas.add(o); return o; }
+export function modeloCarro(modelo, cor) { const o = modeloCarroBase(modelo, cor); try { montarLantDes(o); } catch (e) { console.warn('lanterna:', e); } if (o.getObjectByName('luzes')) comLuz.add(o); if (o.getObjectByName('rodas')) comRodas.add(o); return o; }
 function modeloCarroBase(modelo, cor) {
   if (JATOS[modelo]) {   // caças: por código ou do GLB, sem pintura
     const glb = ctx?.modelo?.(modelo), k = modelo + (glb ? 1 : 0);
@@ -1623,6 +1623,79 @@ const LAMPADAS = {
 LAMPADAS.caminhao = LAMPADAS.caminhao_escola;   // caminhão das empresas (mesmo modelo)
 LAMPADAS.saveiro_som = LAMPADAS.saveiro; LAMPADAS.viatura = LAMPADAS.viatura_pm;
 const _rc = new THREE.Raycaster();
+// ---- 22e: lanterna traseira desenhada (ônibus). O desenho (base + LEDs + seta + ré, cada um numa textura) é jogado
+// na lataria por raios inclinados na quina: dobra da traseira para a lateral, como a de verdade. Cada modelo tem a sua
+// medida (altura, lateral, fundo, largura, tamanho e ângulo da quina), ajustável pelo admin (aba Lanternas) e salva no
+// banco para todos. Com ela, as bolas de brilho de trás somem nesse modelo.
+export const DESENHOS_LANT = { neobus: { nome: 'Neobus (LEDs em X)', arq: 'assets/lanternas/neobus_', prop: 256 / 916 }, marcopolo: { nome: 'Marcopolo Paradiso G7', arq: 'assets/lanternas/marcopolo_', prop: 256 / 496 }, viaggio: { nome: 'Marcopolo Viaggio G7', arq: 'assets/lanternas/viaggio_', prop: 256 / 408 }, busscar: { nome: 'Busscar Jum Buss 360', arq: 'assets/lanternas/busscar_', prop: 256 / 1348 } };
+export const LANT_PADRAO = {   // medidas iniciais (pela lanterna pintada de cada modelo); o admin ajusta na aba Lanternas
+  onibus_rod_02: { des: 'neobus', x: 1.16, z: -7.12, y: 0.9, h: 1.1, w: 0.31, ang: 30 },
+  onibus_rod_06: { des: 'marcopolo', x: 1.02, z: -7.28, y: 0.5, h: 1.2, w: 0.5, ang: 30 },
+  onibus_rod_vermelho: { des: 'marcopolo', x: 1.06, z: -6.64, y: 0.8, h: 1.0, w: 0.44, ang: 30 },
+  onibus_rod_04: { des: 'busscar', x: 1.12, z: -7.14, y: 0.85, h: 1.35, w: 0.3, ang: 30 },
+  onibus_rod_branco: { des: 'viaggio', x: 1.08, z: -6.56, y: 0.9, h: 0.85, w: 0.46, ang: 30 },
+};
+const lantCfg = { ...LANT_PADRAO };
+export const lantConfig = (glb) => lantCfg[glb] || null;
+const texLant = {}, geoLant = new Map();
+function texturasLant(des) {
+  if (texLant[des]) return texLant[des];
+  const D = DESENHOS_LANT[des], tl = new THREE.TextureLoader(), t = {};
+  for (const k of ['base', 'led', 'seta', 're']) { t[k] = tl.load(`${D.arq}${k}.webp`); t[k].colorSpace = THREE.SRGBColorSpace; t[k].anisotropy = 4; }
+  return (texLant[des] = t);
+}
+// geometria dos dois lados (no espaço do modelo), feita uma vez por modelo + medida
+function geometriaLant(g, glb, C) {
+  const chave = glb + JSON.stringify(C); if (geoLant.has(chave)) return geoLant.get(chave);
+  const alvos = []; g.traverse((o) => { if (!o.isMesh) return; for (let p = o; p && p !== g; p = p.parent) if (['rodas', 'luzes', 'sinais', 'lantDes', 'chassi'].includes(p.name)) return; alvos.push(o); });
+  g.updateMatrixWorld(true); const m = g.matrixWorld, inv = new THREE.Matrix4().copy(m).invert();
+  const NU = 14, NV = 20, prop = DESENHOS_LANT[C.des]?.prop || 0.28, W = C.w ?? C.h * prop, th = (C.ang ?? 30) * Math.PI / 180, r = [];
+  for (const sg of [1, -1]) {
+    const d = new THREE.Vector3(Math.sin(th) * sg, 0, -Math.cos(th)), lado = new THREE.Vector3(Math.cos(th) * sg, 0, Math.sin(th));
+    const pos = [], uv = [], idx = [];
+    for (let j = 0; j <= NV; j++) for (let i = 0; i <= NU; i++) {
+      const u = i / NU, v = j / NV, o = new THREE.Vector3(sg * C.x, C.y + v * C.h, C.z).addScaledVector(lado, (u - 0.5) * W).addScaledVector(d, 3);
+      _rc.set(o.clone().applyMatrix4(m), d.clone().negate().transformDirection(m)); _rc.far = 6;
+      const h = _rc.intersectObjects(alvos, false)[0];
+      const q = h ? h.point.clone().applyMatrix4(inv).addScaledVector(d, 0.025) : o.addScaledVector(d, -3);
+      pos.push(q.x, q.y, q.z); uv.push(sg > 0 ? u : 1 - u, v);
+    }
+    for (let j = 0; j < NV; j++) for (let i = 0; i < NU; i++) { const a = j * (NU + 1) + i, b = a + 1, c = a + NU + 1, e = c + 1; if (sg > 0) idx.push(a, b, c, b, e, c); else idx.push(a, c, b, b, c, e); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+    r.push({ geo, lado: sg > 0 ? 'E' : 'D' });
+  }
+  geoLant.set(chave, r); return r;
+}
+function montarLantDes(o) {
+  const glb = o.userData.glb, velho = o.getObjectByName('lantDes');
+  if (velho) { o.remove(velho); o.userData.lantDes = null; }
+  const C = glb && lantCfg[glb];
+  const tras = (vis) => o.traverse((c) => { if (c.isSprite && c.userData.tras && c.parent?.name === 'luzes') c.visible = vis; });
+  if (!C || !DESENHOS_LANT[C.des]) { tras(true); return; }
+  const T = texturasLant(C.des), G = new THREE.Group(); G.name = 'lantDes';
+  const add = (geo, mat, nome) => { const m = new THREE.Mesh(geo, mat); m.name = nome; m.renderOrder = 2; G.add(m); return m; };
+  const brilho = (t) => new THREE.MeshBasicMaterial({ map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
+  const base = new THREE.MeshStandardMaterial({ map: T.base, transparent: true, alphaTest: 0.3, roughness: 0.25, metalness: 0.1, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1 });
+  const L = { led: brilho(T.led), re: brilho(T.re), setaE: brilho(T.seta), setaD: brilho(T.seta) };
+  for (const { geo, lado } of geometriaLant(o, glb, C)) { add(geo, base, 'base'); add(geo, L.led, 'led'); add(geo, L.re, 're'); add(geo, lado === 'E' ? L.setaE : L.setaD, 'seta'); }
+  o.add(G); o.userData.lantDes = L; tras(false);
+  comLuz.add(o);
+}
+function acenderLantDes(o, u, ligado) {
+  const L = u.lantDes, S = u.lantTeste || u.sinal || {}, vis = o.visible;
+  L.led.opacity = !vis ? 0 : S.freio ? 1 : ligado ? 0.5 : 0;
+  L.re.opacity = vis && S.re ? 1 : 0;
+  const p = S.pisca ?? ((tLuz % 0.8) < 0.42);
+  L.setaE.opacity = vis && (S.alerta || S.seta > 0) && p ? 1 : 0;
+  L.setaD.opacity = vis && (S.alerta || S.seta < 0) && p ? 1 : 0;
+}
+// medida nova (do admin ou do banco): refaz a lanterna em todos os ônibus desse modelo que estão na cena
+export function definirLantCfg(glb, C) {
+  if (C) lantCfg[glb] = { ...C }; else delete lantCfg[glb];
+  for (const o of comLuz) if (o.userData.glb === glb) montarLantDes(o);
+}
+// teste do admin: força ligado/freio/seta/ré num veículo
+export function testeLant(o, estado) { if (o) o.userData.lantTeste = estado; }
 // profundidade da lataria em (x, y), vindo de fora pela frente (lado 1) ou por trás (-1); null se não acertar
 function zLataria(g, x, y, lado, e) {
   const alvos = []; g.traverse((o) => { if (!o.isMesh) return; for (let p = o; p && p !== g; p = p.parent) if (p.name === 'rodas' || p.name === 'luzes' || p.name === 'sinais') return; alvos.push(o); });
@@ -1640,21 +1713,21 @@ function lampadasMedidas(g, tipo, e, L, w) {
   const [fx, fy, fs] = T.f, [tx, ty, tw, th] = T.t, tt = Math.min(Math.max(tw, th), 0.3);
   const nT = th > 0.35 ? Math.ceil(th / 0.28) : 1, ysT = Array.from({ length: nT }, (_, i) => (nT === 1 ? ty : ty - th / 2 + th * (i + 0.5) / nT));   // lanterna alta (ônibus): várias, empilhadas
   for (const x of lados(fx)) sp(M.farol, x, fy, zf(x, fy), fs * 2.6);
-  for (const x of lados(tx)) for (const y of ysT) sp(M.lanterna, x, y, zt(x, y), tt * 2.2);
+  for (const x of lados(tx)) for (const y of ysT) sp(M.lanterna, x, y, zt(x, y), tt * 2.2).userData.tras = true;
   // facho no chão (igual ao de antes)
   const moto = /^moto/.test(tipo), comp = moto ? 9 : 12, fe = new THREE.Mesh(new THREE.PlaneGeometry(moto ? 2.6 : 4.8, comp).rotateX(-Math.PI / 2), M.feixe);
   fe.position.set(0, e.min.y + 0.06, e.max.z + comp / 2 - 0.5); fe.rotation.y = Math.PI; fe.renderOrder = 3; L.add(fe);
   // sinais: sempre presentes, cada lâmpada acende sozinha (a montagem fica escondida enquanto nada está aceso)
   const S = new THREE.Group(); S.name = 'sinais'; S.visible = false; g.add(S);
-  for (const x of lados(tx)) for (const y of ysT) sp(M.freio, x, y, zt(x, y) - 0.01, tt * 2.6, S, 'freio');
+  for (const x of lados(tx)) for (const y of ysT) sp(M.freio, x, y, zt(x, y) - 0.01, tt * 2.6, S, 'freio').userData.tras = true;
   if (T.lat) {   // ônibus: luzes laterais âmbar ao longo da carroceria (a cada ~3 m)
     const meia = Math.min(1.32, w / 2 - 0.02), n = Math.max(2, Math.round((e.max.z - e.min.z - 2.4) / 3));
     for (let i = 0; i <= n; i++) { const z = e.min.z + 1.2 + (e.max.z - e.min.z - 2.4) * i / n; for (const x of [meia, -meia]) sp(M.seta, x, T.lat, z, 0.3, S, 'lateral'); }
   }
-  if (T.re !== null) { const [rx, ry] = T.re || [Math.max(0.15, tx - tw / 2 - 0.08), ty]; for (const x of lados(rx)) sp(M.re, x, ry, zt(x, ry) - 0.01, 0.32, S, 're'); }
+  if (T.re !== null) { const [rx, ry] = T.re || [Math.max(0.15, tx - tw / 2 - 0.08), ty]; for (const x of lados(rx)) sp(M.re, x, ry, zt(x, ry) - 0.01, 0.32, S, 're').userData.tras = true; }
   const [sfx, sfy] = T.sf || [fx + fs * 0.55, fy], [stx, sty] = T.st || [tx + tw / 2 - 0.02, ty + (th > 0.25 ? th * 0.3 : 0)];
   for (const x of [sfx, -sfx]) sp(M.seta, x, sfy, zf(x, sfy) + 0.01, 0.42, S, x > 0 ? 'setaE' : 'setaD');
-  for (const x of [stx, -stx]) sp(M.seta, x, sty, zt(x, sty) - 0.02, 0.42, S, x > 0 ? 'setaE' : 'setaD');
+  for (const x of [stx, -stx]) sp(M.seta, x, sty, zt(x, sty) - 0.02, 0.42, S, x > 0 ? 'setaE' : 'setaD').userData.tras = true;
   return true;
 }
 function adicionarLuzes(g, tipo, chave = null) {
@@ -1737,9 +1810,10 @@ function sinaisDo(o, u, ult, dt) {
   let algo = false;
   for (const c of S.children) {
     const on = c.name === 'freio' ? freio : c.name === 're' ? re : c.name === 'lateral' ? (alerta || seta !== 0) && pisca : (alerta || (c.name === 'setaE' ? seta > 0 : seta < 0)) && pisca;
-    c.visible = on; algo ||= on;
+    c.visible = on && !(c.userData.tras && u.lantDes); algo ||= c.visible;
   }
   S.visible = algo && o.visible;
+  u.sinal = { freio, re, seta, alerta, pisca };   // 22e: a lanterna desenhada acende pelo mesmo estado
 }
 export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
   let melhor = null;
@@ -1759,6 +1833,7 @@ export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
     u.ultLuz = { x: _f.x, y: _f.y, z: _f.z };
     const ligado = noite > 0.25 && tLuz < (u.ativoAte || 0) && o.visible;
     L.visible = ligado;
+    if (u.lantDes) acenderLantDes(o, u, ligado || u.lantTeste?.ligado);
     const G = o.getObjectByName('giroflex'); if (G) G.visible = o.visible && (tLuz < (u.ativoAte || 0) || !!u.giroflex);
     if (!L.userData.aereo) continue;
     // farol de pouso (avião, perto do chão) / holofote (helicóptero, no ar): mancha de luz no chão
