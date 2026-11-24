@@ -1228,7 +1228,7 @@ class Avatar {
     // 20y: na recarga a arma acompanha a mão direita (posição e inclinação). A inclinação é a diferença entre a mão
     // agora e a mão na pose normal com a arma (guardada enquanto não está recarregando); entra e sai suave.
     // 20p: recarga abaixado/deitado também. 20w: abaixado/deitado/rastejando com arma, a arma vai na mão (antes ficava na altura do peito em pé, voando)
-    const recar = /^recarga_|_recarga$|^(deitado_arma|rastejar_arma|abaixado_arma|abaixar_arma|levantar_abaixado_arma|agachado_frente|agachado_tras|cobertura_|granada_abaixado)/.test(this.nomeAtual || '');
+    const recar = /^recarga_|_recarga$|^corrida_rifle$|^(deitado_arma|rastejar_arma|abaixado_arma|abaixar_arma|levantar_abaixado_arma|agachado_frente|agachado_tras|cobertura_|granada_abaixado)/.test(this.nomeAtual || '');
     this._rk = (this._rk || 0) + ((recar ? 1 : 0) - (this._rk || 0)) * 0.18;
     this.raiz.getWorldQuaternion(_qRaizArma).invert();
     _qMaoArma.copy(_qRaizArma).multiply(this.maoD.getWorldQuaternion(_qTmpArma));   // mão no espaço do personagem
@@ -3593,7 +3593,7 @@ function atualizarNPCs(dt) {
       continue;
     }
     if (n.policia) {
-      if (n.av.armaNpc && !n.bope && !(n.caido > 0)) { const v = !!(n.hostil > 0 || n.perseguindo || n.cerco); if (v !== n.av.armaNpc.visible) { n.av.armaNpc.visible = v; if (!v) n.av.tocar('walk', { velocidade: 0.85 }); } }   // saca a arma só em ação
+      if (n.av.armaNpc && !n.bope && !(n.caido > 0)) { const v = !!(n.hostil > 0 || n.perseguindo || n.cerco) && !jogador.rendido; if (v !== n.av.armaNpc.visible) { n.av.armaNpc.visible = v; if (!v) n.av.tocar('walk', { velocidade: 0.85 }); } }   // saca a arma só em ação
       if (remotoAtivo(n) && !(n.caido > 0) && !n.cerco && !n.perseguindo && !(n.hostil > 0)) { mostrarRoboRemoto(n, dt); continue; }
       if (n.animRemota) { n.animRemota = null; n.av.tocar('walk', { velocidade: 0.85 }); }
       if (policiaNPCReage(n, dt)) { publicarRobo(n, dt, n.av.raiz); continue; }
@@ -19533,6 +19533,7 @@ function passoBot(b, dt) {
   andarBot(b, T.x + Math.sin(a) * r, T.z + Math.cos(a) * r, vel, dt, dT < 35 ? T : null);
   b.tiro -= dt;
   if (jogador.rendido) b.tiro = Math.max(b.tiro, 0.5);   // rendido: ninguém atira; os do cerco vêm prender
+  if (av.armaNpc && b.papel === 'cercar') av.armaNpc.visible = !jogador.rendido;   // 21w: quem vem algemar guarda a arma (mãos livres)
   if (b.papel === 'distrair' && dT < 28 && b.tiro <= 0) { b.tiro = 0.45 + Math.random() * 0.2; atirarBot(b, T, '#f4f4f4', false); }
   if (b.papel === 'abater' && dT < 32 && b.tiro <= 0) { b.tiro = 0.9 + Math.random() * 0.3; atirarBot(b, T, '#c0392b', true); }
   if (b.papel === 'cercar' && dT < 1.4 && !j.carro && !j.passageiro && !j.morto && !op.prendendo) {
