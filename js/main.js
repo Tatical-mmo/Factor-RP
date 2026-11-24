@@ -2834,7 +2834,23 @@ const geoFeixe = new THREE.BoxGeometry(0.07, 0.07, 2.5).translate(0, 0, -1.25), 
 // gatilho segurado (20m): arma de rajada (laser) continua atirando enquanto o botão / clique estiver apertado
 const gatilho = { segurando: false, avisou: 0 };
 const geoBola = new THREE.SphereGeometry(0.07, 10, 8);
-const geoMancha = new THREE.CircleGeometry(0.35, 14);
+// 21z: tinta de airsoft de verdade: a bola estoura NA superfície (raio no modelo do carro, face da parede, ponto exato
+// do chão), deixa uma mancha com borda irregular e pingos (4 desenhos) e respinga gotas que caem e pintam o chão
+const geoMancha = new THREE.PlaneGeometry(1, 1), geoGota = new THREE.SphereGeometry(0.022, 5, 4);
+const TEX_TINTA = [0, 1, 2, 3].map((k) => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d'); g.fillStyle = '#fff';
+  let s = 1234 + k * 977; const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const bola = (x, y, r) => { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); };
+  bola(64, 64, 24 + rnd() * 6);
+  for (let i = 0; i < 9; i++) { const a = rnd() * 6.283, d = 14 + rnd() * 14; bola(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 7 + rnd() * 9); }   // borda irregular
+  for (let i = 0; i < 7; i++) {   // escorridos para fora
+    const a = rnd() * 6.283, d = 30 + rnd() * 20, w = 2 + rnd() * 3;
+    g.lineWidth = w; g.lineCap = 'round'; g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(64 + Math.cos(a) * 20, 64 + Math.sin(a) * 20); g.lineTo(64 + Math.cos(a) * d, 64 + Math.sin(a) * d); g.stroke();
+    bola(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, w * 0.9 + rnd() * 2);
+  }
+  for (let i = 0; i < 16; i++) { const a = rnd() * 6.283, d = 40 + rnd() * 22; bola(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 1 + rnd() * 2.6); }   // pingos soltos
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+});
 const CORES_TINTA = ['#ff3e6c', '#35d07f', '#3ea8ff', '#ffd23e', '#b05cff', '#ff8a2a'];
 // 21g: central de rádio da polícia (sai do rádio da viatura, um pouco depois da fala do policial)
 function radioCentral(v, nome) {
@@ -3512,12 +3528,61 @@ function atualizarFaiscas(dt) {
 }
 // ponto no peito de um avatar (para as faíscas de quem leva o tiro)
 const peitoDe = (raiz) => new THREE.Vector3(raiz.position.x + Math.sin(raiz.rotation.y) * 0.25, raiz.position.y + 1.25, raiz.position.z + Math.cos(raiz.rotation.y) * 0.25);
-function manchar(p, normal, cor) {
-  const m = new THREE.Mesh(geoMancha, new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
-  m.position.copy(p).addScaledVector(normal, 0.03); m.lookAt(p.clone().add(normal)); m.scale.setScalar(0.7 + Math.random() * 0.6);
-  scene.add(m); manchas.push(m);
-  if (manchas.length > 80) { const v = manchas.shift(); scene.remove(v); v.material.dispose(); }
+function manchar(p, normal, cor, tam = 1, pai = null) {
+  const m = new THREE.Mesh(geoMancha, new THREE.MeshBasicMaterial({ map: TEX_TINTA[Math.floor(Math.random() * 4)], color: cor, transparent: true, alphaTest: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+  m.position.copy(p).addScaledVector(normal, 0.012); m.lookAt(_vf.copy(m.position).add(normal)); m.rotateZ(Math.random() * 6.283);
+  m.scale.setScalar((0.3 + Math.random() * 0.14) * tam); m.userData.t0 = performance.now();
+  if (pai) { pai.updateMatrixWorld(true); pai.worldToLocal(m.position); m.quaternion.premultiply(pai.getWorldQuaternion(new THREE.Quaternion()).invert()); m.scale.divideScalar(pai.scale.x || 1); pai.add(m); } else scene.add(m);
+  manchas.push(m);
+  if (manchas.length > 90) { const v = manchas.shift(); v.parent?.remove(v); v.material.dispose(); }
 }
+// a bola estoura: gotas saem em leque (para o lado de onde veio) e as que caem no chão viram pingos
+const gotas = [];
+function respingarTinta(p, cor, normal, n = 9) {
+  const mat = new THREE.MeshBasicMaterial({ color: cor, transparent: true }), nn = normal || _vf.set(0, 0.3, 0);
+  for (let k = 0; k < n; k++) {
+    const m = new THREE.Mesh(geoGota, mat); m.position.copy(p).addScaledVector(nn, 0.04);
+    const v = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).normalize().multiplyScalar(1.2 + Math.random() * 2.2).addScaledVector(nn, 1.6);
+    m.scale.setScalar(0.6 + Math.random() * 0.9); scene.add(m); gotas.push({ m, v, t: 0, mat, cor, pinga: k < 3 });
+  }
+}
+function atualizarGotas(dt) {
+  for (let i = gotas.length - 1; i >= 0; i--) {
+    const g = gotas[i]; g.t += dt; g.v.y -= 9.8 * dt; g.m.position.addScaledVector(g.v, dt);
+    const ch = alturaChao(g.m.position.x, g.m.position.z), cai = g.m.position.y <= ch + 0.01;
+    if (cai && g.pinga) manchar(_vMeio.set(g.m.position.x, ch + 0.005, g.m.position.z), new THREE.Vector3(0, 1, 0), g.cor, 0.22);
+    if (cai || g.t > 0.9) { scene.remove(g.m); gotas.splice(i, 1); if (!gotas.some((x) => x.mat === g.mat)) g.mat.dispose(); }
+  }
+  // manchas velhas somem devagar (2 min)
+  const ag = performance.now();
+  for (let i = manchas.length - 1; i >= 0; i--) { const m = manchas[i], id = (ag - m.userData.t0) / 1000; if (id > 110) { m.material.opacity = Math.max(0, 1 - (id - 110) / 10); if (id > 120) { m.parent?.remove(m); m.material.dispose(); manchas.splice(i, 1); } } }
+}
+// onde a bola encosta num modelo 3D (carro, viatura…): raio pelo caminho dela; devolve ponto e normal de verdade
+const _rcTinta = new THREE.Raycaster(), _dirB = new THREE.Vector3();
+function tocaModelo(obj, b) {
+  const p = b.m.position; _dirB.copy(b.v).normalize();
+  _rcTinta.set(_vMeio.copy(p).addScaledVector(_dirB, -2.5), _dirB); _rcTinta.far = 3.2; _rcTinta.camera = camP;
+  for (const h of _rcTinta.intersectObject(obj, true)) {
+    if (!h.object.isMesh || !h.object.visible || h.object.material?.transparent && h.object.material.opacity < 0.3 || h.object.userData?.efeito || manchas.includes(h.object)) continue;
+    const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : _dirB.clone().negate();
+    if (n.dot(_dirB) > 0) n.negate();
+    return { ponto: h.point, normal: n };
+  }
+  return null;
+}
+// bola × caixa (colisor de parede, carro da rua): ponto de entrada no segmento a→b
+function tocaCaixa(a, b2, c, y0, y1) {
+  let t0 = 0, t1 = 1, nx = 0, nz = 0, ny = 0;
+  for (const [o, d, lo, hi, eixo] of [[a.x, b2.x - a.x, c.x0, c.x1, 'x'], [a.y, b2.y - a.y, y0, y1, 'y'], [a.z, b2.z - a.z, c.z0, c.z1, 'z']]) {
+    if (Math.abs(d) < 1e-6) { if (o < lo || o > hi) return null; continue; }
+    let ta = (lo - o) / d, tb = (hi - o) / d, s = -1; if (ta > tb) { [ta, tb] = [tb, ta]; s = 1; }
+    if (ta > t0) { t0 = ta; nx = eixo === 'x' ? s : 0; ny = eixo === 'y' ? s : 0; nz = eixo === 'z' ? s : 0; }
+    t1 = Math.min(t1, tb); if (t0 > t1) return null;
+  }
+  if (!nx && !ny && !nz) return null;
+  return { ponto: new THREE.Vector3().copy(a).lerp(b2, t0), normal: new THREE.Vector3(nx, ny, nz) };
+}
+function estourar(b, hit, pai) { manchar(hit.ponto, hit.normal, b.cor, 1, pai); respingarTinta(hit.ponto, b.cor, hit.normal); }
 // 21b: paredes seguram a bala: as do civil (prefeitura, banco…), as do mapa (casas, prédios, muros — antes atravessava)
 // e os prédios. Testa o ponto e o meio do passo (bala rápida não pula parede fina). Muro baixo só segura até a altura dele.
 const _vMeio = new THREE.Vector3(), _rcTopo = new THREE.Raycaster();
@@ -3549,14 +3614,14 @@ function balaNaParede(ant, p) {
     ver(colisores); if (!achou) mundo.colidir(q, 0.12, (l) => ver(l));
     if (!achou) for (const pr of predios) { const bx = pr.caixa; if (q.x > bx.min.x && q.x < bx.max.x && q.z > bx.min.z && q.z < bx.max.z && q.y > bx.min.y && q.y < bx.max.y) { achou = { x0: bx.min.x, x1: bx.max.x, z0: bx.min.z, z1: bx.max.z }; break; } }
     if (achou) {
-      const c = achou, cx = (c.x0 + c.x1) / 2, cz = (c.z0 + c.z1) / 2;
+      const c = achou, cx = (c.x0 + c.x1) / 2, cz = (c.z0 + c.z1) / 2; balaNaParede.c = c;
       return Math.abs(ant.x - cx) / Math.max(0.01, c.x1 - c.x0) > Math.abs(ant.z - cz) / Math.max(0.01, c.z1 - c.z0) ? new THREE.Vector3(Math.sign(ant.x - cx), 0, 0) : new THREE.Vector3(0, 0, Math.sign(ant.z - cz));
     }
   }
   return null;
 }
 function atualizarBolas(dt) {
-  atualizarFaiscas(dt);
+  atualizarFaiscas(dt); atualizarGotas(dt);
   for (let i = bolas.length - 1; i >= 0; i--) {
     const b = bolas[i]; b.vida -= dt; b.v.y -= (b.g ?? 9.8) * dt;
     const ant = b.m.position.clone(); b.m.position.addScaledVector(b.v, dt);
@@ -3565,9 +3630,21 @@ function atualizarBolas(dt) {
     if (b.laser) { b.m.quaternion.setFromUnitVectors(EIXO_Z, _vf.copy(b.v).normalize()); b.m.scale.z = Math.min(1, Math.max(0.001, b.m.position.distanceTo(b.ini) / 2.5)); }
     let fim = false;
     if (b.minha) fim = acertoNoAlvo(b) || acertoDaBola(b);
-    if (!fim) { const n = balaNaParede(ant, b.m.position); if (n) { manchar(ant, n, b.cor); fim = true; } }
+    if (!fim && !b.minha) { const h = bolaEmVeiculo(b, false); if (h) { estourar(b, h.hit, h.pai); fim = true; } }   // 21z: a dos outros também para no carro
+    if (!fim) {
+      const n = balaNaParede(ant, b.m.position);
+      if (n) {   // 21z: estoura na face da parede (antes ficava no ar, onde a bola estava no quadro anterior)
+        const c = balaNaParede.c, ch = alturaChao(ant.x, ant.z);
+        const h = c && tocaCaixa(ant, b.m.position, c, ch - 1, (c.top ?? 50) + 0.01);
+        estourar(b, h && h.normal.y === 0 ? h : { ponto: ant, normal: n }); fim = true;
+      }
+    }
     const chao = alturaChao(b.m.position.x, b.m.position.z);
-    if (!fim && (b.m.position.y <= chao + 0.02 || b.vida <= 0)) { manchar(new THREE.Vector3(b.m.position.x, chao + 0.01, b.m.position.z), new THREE.Vector3(0, 1, 0), b.cor); fim = true; }
+    if (!fim && b.m.position.y <= chao + 0.02) {   // no chão: o ponto exato onde a curva cruza o chão
+      const cha = alturaChao(ant.x, ant.z), t = Math.max(0, Math.min(1, (ant.y - cha) / Math.max(1e-4, ant.y - cha - (b.m.position.y - chao))));
+      const q = new THREE.Vector3().copy(ant).lerp(b.m.position, t); q.y = alturaChao(q.x, q.z);
+      estourar(b, { ponto: q, normal: new THREE.Vector3(0, 1, 0) }); fim = true;
+    } else if (!fim && b.vida <= 0) fim = true;   // acabou o alcance no ar: some (antes pintava o chão embaixo)
     if (fim && b.tanque && b.minha && !b.explodiu) { b.explodiu = true; explodir(b.m.position); }
     if (fim) { scene.remove(b.m); b.m.material.dispose(); b.m.children[0]?.material.dispose(); bolas.splice(i, 1); }
   }
@@ -5330,43 +5407,70 @@ function acertoNoAlvo(b) {
   }
   return false;
 }
+// 21z: bola num veículo: só para se encostar no modelo de verdade (antes parava num cilindro de 1,5 m e a tinta ficava
+// no ar). Com danificar, também estraga o carro (21y). Devolve o ponto do impacto e o objeto onde a mancha gruda.
+function bolaEmVeiculo(b, danificar) {
+  const p = b.m.position;
+  const perto = (q, r = 3) => q && Math.hypot(p.x - q.x, p.z - q.z) < r && p.y < q.y + 3.6 && p.y > q.y - 0.3;
+  for (const v of carrosMundo.values()) if (v.mesh?.visible && jogador.carro?.id !== v.d.id && perto(v.mesh.position)) {
+    const hit = tocaModelo(v.mesh, b); if (!hit) continue;
+    if (danificar && !v.d.queimado) tiroEmVeiculoParado('car:' + v.d.id, v.mesh.position.x, v.mesh.position.z, civico.CARROS[v.d.modelo]?.nome || 'Carro', 1, danoTiroVeic(b) * (blindadoLeve(v.d.id) ? 0.5 : 1));
+    return { hit, pai: v.mesh };
+  }
+  for (const v of viaturas) if (v.obj?.visible && perto(v.obj.position)) { const hit = tocaModelo(v.obj, b); if (hit) return { hit, pai: v.obj }; }
+  for (const [id, r] of remotos) if (r.carro && r.carroModelo !== 'caveirao' && id !== jogador.passageiro?.piloto && perto(r.carro.position, 4)) {
+    const hit = tocaModelo(r.carro, b); if (!hit) continue;
+    if (danificar) conexao?.enviar('danoTiro', { alvo: id, d: Math.round(danoTiroVeic(b) * 10) / 10 });
+    return { hit, pai: r.carro };
+  }
+  for (const [k, l] of largadosRua) if (l.mesh && perto(l.mesh.position)) {
+    const hit = tocaModelo(l.mesh, b); if (!hit) continue;
+    if (danificar && !(l.queima > 0)) tiroEmVeiculoParado('rua:' + k, l.x, l.z, 'Carro', 1, danoTiroVeic(b));
+    return { hit, pai: l.mesh };
+  }
+  for (const k of mundo.carrosRuaRaio(p.x, p.z, 3)) {   // carros parados na rua (instanciados): a caixa do colisor
+    const c = mundo.carroRua(k), cx = c?.colOrig || c?.col; if (!c || !cx) continue;
+    const ch = alturaChao(c.x, c.z), a = _vMeio.copy(p).addScaledVector(_dirB.copy(b.v).normalize(), -2.5);
+    const hit = tocaCaixa(a.clone(), p, cx, ch + 0.15, ch + 1.35); if (!hit) continue;
+    if (danificar) tiroEmVeiculoParado('rua:' + k, c.x, c.z, 'Carro', 1, danoTiroVeic(b));
+    return { hit, pai: null };
+  }
+  return null;
+}
+// tinta em quem leva o tiro: mancha no corpo (gruda no personagem) e respingo
+function tintaPessoa(b, raiz) {
+  const hit = tocaModelo(raiz, b);
+  if (hit) { manchar(hit.ponto, hit.normal, b.cor, 0.55, raiz); respingarTinta(hit.ponto, b.cor, hit.normal, 7); }
+  else respingarTinta(b.m.position, b.cor, _dirB.copy(b.v).normalize().negate(), 7);
+}
 function acertoDaBola(b) {
   const p = b.m.position;
   if (cacada && esquadra.pronto) {   // atirou nos soldados da caçada: eles revidam
-    for (const u of esquadra.soldados) { const q = u.av.raiz.position; if (u.av.raiz.visible && Math.hypot(p.x - q.x, p.z - q.z) < 0.6 && p.y > q.y && p.y < q.y + 2) { marcarAcerto(); esquadra.hostil = 60; manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); aviso('🎖️ Você atirou no Exército: os soldados estão revidando!', 2.5); return true; } }
-    for (const u of esquadra.jipes) { const q = u.obj.position; if (u.obj.visible && Math.hypot(p.x - q.x, p.z - q.z) < 2.2 && p.y < q.y + 2.5) { esquadra.hostil = 60; manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; } }
+    for (const u of esquadra.soldados) { const q = u.av.raiz.position; if (u.av.raiz.visible && Math.hypot(p.x - q.x, p.z - q.z) < 0.6 && p.y > q.y && p.y < q.y + 2) { marcarAcerto(); esquadra.hostil = 60; tintaPessoa(b, u.av.raiz); aviso('🎖️ Você atirou no Exército: os soldados estão revidando!', 2.5); return true; } }
+    for (const u of esquadra.jipes) { const q = u.obj.position; if (u.obj.visible && Math.hypot(p.x - q.x, p.z - q.z) < 2.2 && p.y < q.y + 2.5) { const h = tocaModelo(u.obj, b); if (!h) continue; esquadra.hostil = 60; estourar(b, h, u.obj); return true; } }
   }
   if (b.tanque) return acertoTanque(b);
   if (p.y - alturaChao(p.x, p.z) > 2.5 && balaNaAeronave(b)) return true;   // bala no ar: aeronave de outro jogador
   for (const n of npcs) {
     if (!n.policia) continue;
     const q = n.av.raiz.position;
-    if (n.caido <= 0 && Math.hypot(p.x - q.x, p.z - q.z) < 0.55 && p.y > q.y + 0.1 && p.y < q.y + 2) { marcarAcerto(); acertarPoliciaNPC(n, b.pd ? 100 : b.dano || 20); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
+    if (n.caido <= 0 && Math.hypot(p.x - q.x, p.z - q.z) < 0.55 && p.y > q.y + 0.1 && p.y < q.y + 2) { marcarAcerto(); acertarPoliciaNPC(n, b.pd ? 100 : b.dano || 20); tintaPessoa(b, n.av.raiz); return true; }
   }
   for (const n of npcs) {   // moradores da rua
     if (!n.civil || n.caido > 0 || !n.av.raiz.visible) continue;
     const q = n.av.raiz.position;
-    if (Math.hypot(p.x - q.x, p.z - q.z) < 0.5 && p.y > q.y + 0.1 && p.y < q.y + 1.9) { marcarAcerto(); acertarCivil(n, b.pd ? 100 : b.dano || 20); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
+    if (Math.hypot(p.x - q.x, p.z - q.z) < 0.5 && p.y > q.y + 0.1 && p.y < q.y + 1.9) { marcarAcerto(); acertarCivil(n, b.pd ? 100 : b.dano || 20); tintaPessoa(b, n.av.raiz); return true; }
   }
-  if (fantasmasBope.size && acertoFantasmaBope(p, b.pd ? 100 : b.dano || 20)) { marcarAcerto(); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
+  if (fantasmasBope.size && acertoFantasmaBope(p, b.pd ? 100 : b.dano || 20)) { marcarAcerto(); respingarTinta(p, b.cor, _dirB.copy(b.v).normalize().negate()); return true; }
   for (const [id, r] of remotos) {
     if (r.carroModelo !== 'caveirao' || !r.carro || id === jogador.passageiro?.piloto) continue;
     const q = r.carro.position;
-    if (Math.hypot(p.x - q.x, p.z - q.z) < 2.6 && p.y < q.y + 3.2) { conexao?.enviar('tatica', { k: 'bl', alvo: id, v: Math.round((b.dano || 20) * 0.3), de: jogador.perfil.id }); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true; }
+    if (Math.hypot(p.x - q.x, p.z - q.z) < 2.6 && p.y < q.y + 3.2) { const h = tocaModelo(r.carro, b); if (!h) continue; conexao?.enviar('tatica', { k: 'bl', alvo: id, v: Math.round((b.dano || 20) * 0.3), de: jogador.perfil.id }); estourar(b, h, r.carro); return true; }
   }
   // 20p: veículo no caminho segura a bala (cobertura atrás de carro de verdade). Só depois de 1,2 m do cano, para quem
   // atira encostado no carro não acertar o próprio
   if (b.orig && Math.hypot(p.x - b.orig.x, p.z - b.orig.z) > 1.2) {
-    const bloq = (q) => q && Math.hypot(p.x - q.x, p.z - q.z) < 1.5 && p.y < q.y + 1.35;
-    const furo = () => { faiscar(p.clone()); sons.tocar('soco_metal', { vol: 0.5, dist: Math.hypot(p.x - jogador.pos.x, p.z - jogador.pos.z), raio: 50, velocidade: 1.6 }); };
-    for (const v of carrosMundo.values()) if (v.mesh?.visible && bloq(v.mesh.position)) {   // 21y: a bala estraga o carro
-      furo(); if (!v.d.queimado && jogador.carro?.id !== v.d.id) tiroEmVeiculoParado('car:' + v.d.id, v.mesh.position.x, v.mesh.position.z, civico.CARROS[v.d.modelo]?.nome || 'Carro', 1, danoTiroVeic(b) * (blindadoLeve(v.d.id) ? 0.5 : 1));
-      return true;
-    }
-    for (const v of viaturas) if (v.obj?.visible && bloq(v.obj.position)) { furo(); return true; }
-    for (const [id, r] of remotos) if (r.carro && r.carroModelo !== 'caveirao' && bloq(r.carro.position)) { furo(); conexao?.enviar('danoTiro', { alvo: id, d: Math.round(danoTiroVeic(b) * 10) / 10 }); return true; }
-    for (const [k, l] of largadosRua) if (l.mesh && bloq(l.mesh.position)) { furo(); if (!(l.queima > 0)) tiroEmVeiculoParado('rua:' + k, l.x, l.z, 'Carro', 1, danoTiroVeic(b)); return true; }
-    for (const k of mundo.carrosRuaRaio(p.x, p.z, 1.6)) { const c = mundo.carroRua(k); if (c && p.y < alturaChao(c.x, c.z) + 1.35) { furo(); tiroEmVeiculoParado('rua:' + k, c.x, c.z, 'Carro', 1, danoTiroVeic(b)); return true; } }
+    const h = bolaEmVeiculo(b, true); if (h) { estourar(b, h.hit, h.pai); return true; }
   }
   for (const [id, r] of remotos) {
     if (!r.av?.raiz.visible) continue;
@@ -5374,14 +5478,14 @@ function acertoDaBola(b) {
     const deit = /^(deitado|rastejar|deitar)/.test(pn), abx = /^(abaixado|abaixar|agachado|cobertura|granada_abaixado)/.test(pn);   // 20p: abaixado/deitado é alvo menor
     if (Math.hypot(p.x - q.x, p.z - q.z) < (deit ? 0.85 : 0.5) && p.y > q.y + 0.05 && p.y < q.y + (deit ? 0.55 : abx ? 1.25 : 1.9)) {
       marcarAcerto(); if (b.pd) acertoDourado(id); else { aplicarDanoRemoto(id, b.dano || 20); if (b.critico) aviso('💥 Acerto crítico!', 1.2); }
-      if (ARMADURAS[r.meta?.arm]) faiscar(p.clone()); else manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor);   // armadura: faísca em vez de tinta
+      if (ARMADURAS[r.meta?.arm]) faiscar(p.clone()); else tintaPessoa(b, r.av.raiz);   // armadura: faísca em vez de tinta
       return true;
     }
   }
   for (const c of caminhoes.values()) {
     if (c.d.status !== 'em_rota' || c.d.roubado) continue;
     if (Math.hypot(p.x - c.obj.position.x, p.z - c.obj.position.z) < 2.3 && p.y < 3.5) {
-      atacarCaminhao(c); manchar(p.clone(), new THREE.Vector3(0, 1, 0), b.cor); return true;
+      const h = tocaModelo(c.obj, b); if (!h) continue; atacarCaminhao(c); estourar(b, h, c.obj); return true;
     }
   }
   return false;
