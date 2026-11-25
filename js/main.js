@@ -1666,26 +1666,71 @@ function caixaDoVeiculo(m) {
   b = { x0: Math.max(-1.6, x0 * k), x1: Math.min(1.6, x1 * k), z0: Math.max(-9.5, z0 * k), z1: Math.min(9.5, z1 * k), y1: Number.isFinite(y1) ? Math.min(5, y1 * k) : 1.6 };
   caixasVeic.set(m, b); return b;
 }
-function empurrarDeVeiculo(p, raio, m, x = m.position.x, z = m.position.z, ang = m.rotation.y) {
+// ---- 22s: peso dos veículos nas batidas. Quem é mais pesado é menos empurrado (a van não leva mais o ônibus junto) e a
+// pancada troca velocidade de verdade: o mais leve quica e roda, o mais pesado quase não sente.
+const MASSAS = [[/tanque/, 40], [/articulado/, 11], [/onibus/, 9], [/bombeiros/, 8], [/lixo|caveirao/, 7], [/caminhao/, 6], [/guincho/, 5], [/ambulancia/, 2.2],
+  [/van|kombi|sprinter/, 2], [/suv|jipe|viatura|militar|policia|prf/, 1.4], [/moto/, 0.3]];
+function massaVeiculo(mod) { mod = String(mod || ''); for (const [re, m] of MASSAS) if (re.test(mod)) return m; return 1; }
+let contatoVeic = null;   // enquanto o meu veículo resolve as batidas: { massa, contatos: Map(malha -> { nx, nz, d }) }
+function empurrarDeVeiculo(p, raio, m, x = m.position.x, z = m.position.z, ang = m.rotation.y, dinamico = false) {
   const b = caixaDoVeiculo(m), s = Math.sin(ang), c = Math.cos(ang), dx = p.x - x, dz = p.z - z;
   const lx = dx * c - dz * s, lz = dx * s + dz * c;   // lado (x do veículo) e frente (z do veículo)
   if (lx < b.x0 - raio || lx > b.x1 + raio || lz < b.z0 - raio || lz > b.z1 + raio) return;
   const pe = lx - (b.x0 - raio), pd = (b.x1 + raio) - lx, pt = lz - (b.z0 - raio), pf = (b.z1 + raio) - lz, mn = Math.min(pe, pd, pt, pf);
   let nx = lx, nz = lz;
   if (mn === pe) nx = b.x0 - raio; else if (mn === pd) nx = b.x1 + raio; else if (mn === pt) nz = b.z0 - raio; else nz = b.z1 + raio;
-  p.x = x + nx * c + nz * s; p.z = z - nx * s + nz * c;
+  const qx = x + nx * c + nz * s, qz = z - nx * s + nz * c;
+  if (contatoVeic && dinamico) {   // o outro também anda: eu só saio da frente na proporção do peso dele
+    const mo = massaVeiculo(m.userData?.modelo), parte = Math.max(0.08, Math.min(1, mo / (contatoVeic.massa + mo))), ex = qx - p.x, ez = qz - p.z, d = Math.hypot(ex, ez);
+    if (d > 1e-5) { const k = contatoVeic.contatos.get(m); if (!k || d > k.d) contatoVeic.contatos.set(m, { nx: ex / d, nz: ez / d, d }); }
+    p.x += ex * parte; p.z += ez * parte; return;
+  }
+  p.x = qx; p.z = qz;
+}
+const ultPosVeic = new WeakMap();   // malha -> { x, z, t } (para saber a velocidade de quem bateu)
+function velVeiculo(m) {
+  const t = performance.now(), u = ultPosVeic.get(m), x = m.position.x, z = m.position.z; ultPosVeic.set(m, { x, z, t });
+  if (!u || t - u.t > 300 || t - u.t < 1) return { vx: 0, vz: 0 };
+  const k = 1000 / (t - u.t); return { vx: (x - u.x) * k, vz: (z - u.z) * k };
+}
+// depois de resolver as batidas do quadro: a pancada (troca de velocidade pelo peso), o giro, o tranco e o dano
+function impactosVeiculo(c) {
+  if (!contatoVeic) return;
+  const mp = contatoVeic.massa, yaw = jogador.yaw, fx = Math.sin(yaw), fz = Math.cos(yaw);
+  for (const [m, k] of contatoVeic.contatos) {
+    const vo = velVeiculo(m), vmx = fx * c.vel, vmz = fz * c.vel;
+    const fecha = -((vmx - vo.vx) * k.nx + (vmz - vo.vz) * k.nz);   // > 0: estavam se aproximando
+    m.userData.batidaT ??= 0;
+    if (fecha < 1.2 || performance.now() - m.userData.batidaT < 600) continue;
+    m.userData.batidaT = performance.now();
+    const mo = massaVeiculo(m.userData?.modelo), r = mo / (mp + mo), dv = 1.3 * fecha * r;   // 30% de "quique"
+    const dvx = k.nx * dv, dvz = k.nz * dv;
+    c.vel += dvx * fx + dvz * fz;
+    c.omega = (c.omega || 0) + Math.max(-1.5, Math.min(1.5, (dvx * fz - dvz * fx) * 0.18));   // batida de lado: roda um pouco
+    const forca = fecha * r;
+    tremor = Math.max(tremor, Math.min(0.5, forca * 0.05));
+    sons.tocar('soco_metal', { vol: Math.min(1, 0.35 + forca * 0.06), dist: 0, raio: 60, velocidade: mp > 4 ? 0.6 : 0.8 });
+    if (forca > 3 && performance.now() - (c.batida || 0) > 1200) {
+      c.batida = performance.now(); if (c.aula) c.aula.batidas++;
+      c.dano = Math.min(100, (c.dano || 0) + Math.min(40, forca * 2.2)); guardarDanoVeiculo(c);
+      if (c.dano >= 50) veicFumando.add(c);
+      if (c.dano >= 100) { if (!c.pegouFogo) { c.pegouFogo = 5; aviso('🔥 O veículo pegou fogo! Saia já: ele explode em 5 s!', 4); } }
+      else aviso(`💥 Batida! Veículo ${Math.round(100 - c.dano)}%`, 1.6);
+    }
+  }
+  contatoVeic = null;
 }
 const noChao = (m) => m.position.y <= alturaChao(m.position.x, m.position.z) + 2;
 function colidirCarros(p, raio) {
   const meu = jogador.carro?.mesh;
   for (const v of carrosMundo.values()) { const m = v.mesh; if (m === meu || v.chamada || !aparece(m) || !noChao(m)) continue; empurrarDeVeiculo(p, raio, m); }
   for (const l of largadosRua.values()) if (l.mesh && l.mesh !== meu && aparece(l.mesh)) empurrarDeVeiculo(p, raio, l.mesh);
-  for (const q of seqOnibus.values()) if (q.mesh && q.mesh !== meu && aparece(q.mesh)) empurrarDeVeiculo(p, raio, q.mesh);
-  for (const v of viaturas) if (v.obj !== meu && aparece(v.obj)) empurrarDeVeiculo(p, raio, v.obj);
-  for (const v of vansNpc) if (v.obj !== meu && aparece(v.obj)) empurrarDeVeiculo(p, raio, v.obj);
-  for (const v of rondasBombeiros) if (v.obj !== meu && aparece(v.obj)) empurrarDeVeiculo(p, raio, v.obj);
-  for (const o of servicos.veiculosNpc()) if (o !== meu && aparece(o)) empurrarDeVeiculo(p, raio, o);
-  for (const r of remotos.values()) if (r.carro && r.carro !== meu && aparece(r.carro) && noChao(r.carro)) empurrarDeVeiculo(p, raio, r.carro);
+  for (const q of seqOnibus.values()) if (q.mesh && q.mesh !== meu && aparece(q.mesh)) empurrarDeVeiculo(p, raio, q.mesh, undefined, undefined, undefined, true);
+  for (const v of viaturas) if (v.obj !== meu && aparece(v.obj)) empurrarDeVeiculo(p, raio, v.obj, undefined, undefined, undefined, true);
+  for (const v of vansNpc) if (v.obj !== meu && aparece(v.obj)) empurrarDeVeiculo(p, raio, v.obj, undefined, undefined, undefined, true);
+  for (const v of rondasBombeiros) if (v.obj !== meu && aparece(v.obj)) empurrarDeVeiculo(p, raio, v.obj, undefined, undefined, undefined, true);
+  for (const o of servicos.veiculosNpc()) if (o !== meu && aparece(o)) empurrarDeVeiculo(p, raio, o, undefined, undefined, undefined, true);
+  for (const r of remotos.values()) if (r.carro && r.carro !== meu && aparece(r.carro) && noChao(r.carro)) empurrarDeVeiculo(p, raio, r.carro, undefined, undefined, undefined, true);
 }
 function resolverMoveis(p, raio) {
   // caminhão em movimento
@@ -2334,7 +2379,7 @@ function dirigir(dt) {
     const rx = jogador.pos.x + Math.sin(y0) * zr + Math.sin(y0) * c.vel * dt, rz = jogador.pos.z + Math.cos(y0) * zr + Math.cos(y0) * c.vel * dt;
     jogador.pos.x = rx - Math.sin(y1) * zr; jogador.pos.z = rz - Math.cos(y1) * zr;
   }
-  if (!c.voa) { derrubarNoCaminho(c); colidirVeiculo(c, dt); resolverColisao(jogador.pos, c.raio || 1.3); colisaoChassi(c); }
+  if (!c.voa) { contatoVeic = { massa: massaVeiculo(c.modelo), contatos: new Map() }; derrubarNoCaminho(c); colidirVeiculo(c, dt); resolverColisao(jogador.pos, c.raio || 1.3); colisaoChassi(c); impactosVeiculo(c); }   // 22s: peso nas batidas
   const andou = Math.hypot(jogador.pos.x - antes.x, jogador.pos.z - antes.z), esperado = Math.abs(c.vel) * dt;
   if (esperado > 0.01 && andou < esperado * 0.6) {          // bateu
     if (c.moto && Math.abs(c.vel) > 7) { quedaMoto(c, 'frente'); return; }   // 21h: de moto, o piloto voa
@@ -5884,7 +5929,7 @@ function corposNaRua() {
   const r = [];
   const chao = (o) => o.position.y < alturaChao(o.position.x, o.position.z) + 1.5;
   for (const c of caminhoes.values()) if (c.obj.visible && chao(c.obj)) pontosDoVeiculo(r, c.obj, c.obj.position.x, c.obj.position.z, c.obj.rotation.y, c.d.tipo === 'caminhao' ? 1.4 : 1.6);   // caminhão comprido: vários círculos ao longo dele
-  for (const v of carrosMundo.values()) if (v.mesh.visible) r.push({ o: v.mesh, x: v.mesh.position.x, z: v.mesh.position.z, r: 1.4 });
+  for (const v of carrosMundo.values()) if (v.mesh.visible) r.push({ o: v.mesh, x: v.mesh.position.x, z: v.mesh.position.z, r: 1.4, parado: true });
   for (const [id, x] of remotos) {
     if (x.carro) { pontosDoVeiculo(r, x.carro, x.carro.position.x, x.carro.position.z, x.carro.rotation.y, 1.5); veicJogador.add(x.carro); }
     else if (x.av?.raiz.visible) r.push({ x: x.av.raiz.position.x, z: x.av.raiz.position.z, r: 0.45, pessoa: id, faixa: naFaixaPedestre(x.av.raiz.position.x, x.av.raiz.position.z) });
@@ -6046,7 +6091,11 @@ function colidirVeiculo(c, dt) {
       continue;
     }
     // empurrão limitado: no máximo o quanto o veículo andou neste quadro (nunca dispara)
-    const empurra = Math.min(min - d, Math.abs(c.vel) * dt + 0.03);
+    let empurra = Math.min(min - d, Math.abs(c.vel) * dt + 0.03);
+    if (o.o && !o.parado && contatoVeic) {   // 22s: veículo andando: eu saio na proporção do peso dele (e conta como pancada)
+      const mo = massaVeiculo(o.o.userData?.modelo); empurra *= Math.max(0.08, Math.min(1, mo / (contatoVeic.massa + mo)));
+      const k = contatoVeic.contatos.get(o.o); if (!k || min - d > k.d) contatoVeic.contatos.set(o.o, { nx: dx / d, nz: dz / d, d: min - d });
+    }
     p.x += dx / d * empurra; p.z += dz / d * empurra;
   }
 }
@@ -10615,7 +10664,7 @@ function quadroJogo() {
   voz.atualizar(dt); atualizarOficinasJog(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarRotulos(); atualizarCongelados(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   diag('ônibus/aviação/rodas');
-  atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); atualizarPanes(dt); atualizarSinaisJog(dt); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
+  atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); atualizarPanes(dt); atualizarSinaisJog(dt); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); { const dr = civico.distRe(); if (dr < 45) sons.continuo('marcha_re', 0.55 * sons.perto(dr, 45)); }   // 22s: bipe de ré; civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
   diag('rede');
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
@@ -15752,7 +15801,7 @@ function colidirOnibus(p, raio) {
     if (!b.ativo || !b.mesh.visible) continue;
     if (jogador.onibus && b.L === jogador.onibus.L && b.m === jogador.onibus.m) continue;
     if (b.mesh === jogador.carro?.mesh) continue;
-    empurrarDeVeiculo(p, raio, b.mesh, b.x, b.z, b.ang);   // a lataria inteira (12 a 14 m), não só três círculos
+    empurrarDeVeiculo(p, raio, b.mesh, b.x, b.z, b.ang, true);   // a lataria inteira (12 a 14 m), não só três círculos
   }
 }
 // ---- passageiro: embarca num ônibus parado (ponto ou plataforma) e desce no ponto que quiser

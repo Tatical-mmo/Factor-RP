@@ -130,9 +130,10 @@ function montarComposer() {
     cor = new ShaderPass(COR);
     saida = new OutputPass();
     comp.addPass(passeRender);
-    try { ao = new GTAOPass(cena, new THREE.PerspectiveCamera(), Math.max(256, sz.x / 2), Math.max(256, sz.y / 2)); ao.updateGtaoMaterial({ radius: 2.5, distanceExponent: 1.6, thickness: 3, scale: 1.4, samples: 16 }); ao.blendIntensity = 1; ao.enabled = comAO || maxima;
-      // placas, letreiros, partículas e vidros não entram na conta da sombra de contato (viravam manchas pretas)
-      ao.overrideVisibility = function () { const c = this._visibilityCache; this.scene.traverse((o) => { c.set(o, o.visible); if (o.isPoints || o.isLine || o.isSprite || (o.material && (o.material.transparent || o.material.depthWrite === false))) o.visible = false; }); };
+    try { ao = new GTAOPass(cena, new THREE.PerspectiveCamera(), Math.max(256, sz.x / 2), Math.max(256, sz.y / 2)); ao.updateGtaoMaterial({ radius: 0.9, distanceExponent: 2, thickness: 0.8, scale: 1, samples: 16 }); ao.updatePdMaterial?.({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 }); ao.blendIntensity = 0.9;   // 22s: raio curto e "espessura" fina: sem a mancha escura em volta das mãos e de objetos finos ao.enabled = comAO || maxima;
+      // placas, letreiros, partículas e vidros não entram na conta da sombra de contato (viravam manchas pretas); 22s: nem
+      // os personagens (a conta não anima o esqueleto: o braço "parado em T" deixava uma sombra escura perto das mãos)
+      ao.overrideVisibility = function () { const c = this._visibilityCache; this.scene.traverse((o) => { c.set(o, o.visible); if (o.isPoints || o.isLine || o.isSprite || o.isSkinnedMesh || (o.material && (o.material.transparent || o.material.depthWrite === false))) o.visible = false; }); };
       comp.addPass(ao); } catch (e) { console.warn('oclusão indisponível', e); ao = null; }
     comp.addPass(bloom); comp.addPass(saida); comp.addPass(cor);
   } catch (e) { console.warn('pós-processamento indisponível', e); falhou = true; comp = null; }

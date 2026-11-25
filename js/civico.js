@@ -1890,6 +1890,8 @@ function sinaisDo(o, u, ult, dt) {
     seta = tLuz < (u.setaAte || 0) ? u.setaInf : 0;
   }
   const pisca = (tLuz % 0.8) < 0.42, re = v < -0.4;
+  // 22s: bipe de ré: ônibus e caminhões (guincho, de empresa, de lixo, bombeiros) dando ré, o mais perto de quem joga
+  if (re && o.visible && /onibus|caminhao|guincho|lixo|bombeiros/.test(u.modelo || '')) { const f = ctx?.foco?.(); if (f) reMin = Math.min(reMin, Math.hypot(_f.x - f.x, _f.z - f.z)); }
   let algo = false;
   for (const c of S.children) {
     const on = c.name === 'freio' ? freio : c.name === 're' ? re : c.name === 'lateral' ? (alerta || seta !== 0) && pisca : (alerta || (c.name === 'setaE' ? seta > 0 : seta < 0)) && pisca;
@@ -1898,8 +1900,10 @@ function sinaisDo(o, u, ult, dt) {
   S.visible = algo && o.visible;
   u.sinal = { freio, re, seta, alerta, pisca };   // 22e: a lanterna desenhada acende pelo mesmo estado
 }
+let reMin = Infinity;
+export const distRe = () => reMin;
 export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
-  let melhor = null;
+  let melhor = null; reMin = Infinity;
   if (!M) return;
   tLuz += dt;
   M.estrobo.opacity = (tLuz % 1.3) < 0.07 || ((tLuz % 1.3) > 0.18 && (tLuz % 1.3) < 0.24) ? 1 : 0;   // pisca-pisca duplo
