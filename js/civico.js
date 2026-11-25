@@ -1924,6 +1924,17 @@ function sinaisDo(o, u, ult, dt) {
 }
 let reMin = Infinity;
 export const distRe = () => reMin;
+// 22z4: faróis e lanternas acesos agora (para o reflexo no chão molhado): fn(x, y, z, 0 = farol | 1 = lanterna)
+const _pl = new THREE.Vector3();
+export function pontosDeLuz(fn) {
+  if (!M) return;
+  for (const o of comLuz) {
+    if (!o.visible || !o.parent) continue; const L = _luzesDe(o); if (!L?.visible || L.userData.aereo) continue;
+    for (const s of L.children) if (s.isSprite && (s.material === M.farol || s.material === M.lanterna)) { s.getWorldPosition(_pl); fn(_pl.x, _pl.y, _pl.z, s.material === M.farol ? 0 : 1); }
+  }
+}
+const _luzesMapa = new WeakMap();
+function _luzesDe(o) { let L = _luzesMapa.get(o); if (L === undefined) { L = o.getObjectByName('luzes') || null; _luzesMapa.set(o, L); } return L; }
 export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
   let melhor = null; reMin = Infinity;
   if (!M) return;

@@ -17,7 +17,7 @@ let ctx = null, cfg = { auto: true, chance_chuva: 30, chance_tempestade: 15, cha
 let tipo = 'limpo', forca = 0, chao = 0, esperaChao = 0, tipoChao = 'chuva', clarao = 0, ultimoPos = null, proxRelampago = 6;
 let gotas = null, flocos = null, pocas = null, neveChao = null, centroChao = null;
 const toque = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
-const NG = toque ? 900 : 1600, NF = toque ? 700 : 1200, NP = 90;
+const NG = toque ? 1400 : 2200, NF = toque ? 1100 : 1800, NP = 90;   // 22z4: chuva e neve mais cheias
 const CAIXA = { x: 46, y: 30, z: 46 };
 
 export function definirConfig(c) { if (c) cfg = { ...cfg, ...c }; }
@@ -48,7 +48,9 @@ export function iniciar(c) {
   const pf = new Float32Array(NF * 3), fase = new Float32Array(NF);
   for (let i = 0; i < NF; i++) { pf.set([(Math.random() - 0.5) * CAIXA.x * 2, Math.random() * CAIXA.y, (Math.random() - 0.5) * CAIXA.z * 2], i * 3); fase[i] = Math.random() * 6.28; }
   const gf = new THREE.BufferGeometry(); gf.setAttribute('position', new THREE.BufferAttribute(pf, 3));
-  flocos = new THREE.Points(gf, new THREE.PointsMaterial({ color: '#ffffff', size: toque ? 3 : 3.5, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false }));
+  // 22z4: floco redondo e macio (antes era um quadradinho), maior perto da câmera
+  const cf = document.createElement('canvas'); cf.width = cf.height = 32; { const g = cf.getContext('2d'), r = g.createRadialGradient(16, 16, 0, 16, 16, 16); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.45, 'rgba(255,255,255,.8)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 32, 32); }
+  flocos = new THREE.Points(gf, new THREE.PointsMaterial({ color: '#ffffff', map: new THREE.CanvasTexture(cf), size: 0.3, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false }));
   flocos.frustumCulled = false; flocos.visible = false; flocos.userData.fase = fase; ctx.scene.add(flocos);
   // poças (brilhantes) e montinhos de neve (foscos)
   const disco = new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2);
@@ -145,12 +147,12 @@ export function atualizar(dt, seg, ciclo, centro, luzes) {
   const chuva = tipo === 'chuva' || tipo === 'tempestade', neve = tipo === 'neve';
 
   // escurecer
-  const esc = f * ({ chuva: 0.42, tempestade: 0.6, neve: 0.3 }[tipo] || 0);
+  const esc = f * ({ chuva: 0.42, tempestade: 0.6, neve: 0.38 }[tipo] || 0);
   if (esc > 0 && !centro?.dentro) {   // dentro de prédio a luz é a das lâmpadas: chuva não escurece
     luzes.sol.intensity *= 1 - esc * 0.85;
     luzes.hemi.intensity *= 1 - esc * 0.45;
     luzes.cena.environmentIntensity *= 1 - esc * 0.5;
-    luzes.cena.background.lerp(neve ? COR_NEVE : COR_CHUVA, esc * 1.1);
+    { const bg = luzes.cena.background, lum = bg.r * 0.3 + bg.g * 0.55 + bg.b * 0.15; _alvo.copy(neve ? COR_NEVE : COR_CHUVA).multiplyScalar(Math.min(1, Math.max(0.1, lum * 2.4))); bg.lerp(_alvo, esc * 1.1); }   // 22z4: de noite o céu da chuva fica escuro (antes clareava para cinza)
   }
   // relâmpago: clareia logo antes de cada trovão do áudio
   if (tipo === 'tempestade' && f > 0.3) {
@@ -171,9 +173,9 @@ export function atualizar(dt, seg, ciclo, centro, luzes) {
   gotas.visible = chuva && f > 0.01 && !centro.dentro; flocos.visible = neve && f > 0.01 && !centro.dentro;
   if (gotas.visible) {
     const forte = tipo === 'tempestade', a = gotas.geometry.attributes.position.array, v = gotas.userData.vel;
-    const vy = (forte ? 34 : 24) * dt, vx = (forte ? 6 : 2.5) * dt, mostrar = Math.floor(NG * (forte ? 1 : 0.55) * f);
+    const vy = (forte ? 34 : 24) * dt, vx = (forte ? 6 : 2.5) * dt, mostrar = Math.floor(NG * (forte ? 1 : 0.65) * f);
     gotas.geometry.setDrawRange(0, mostrar * 2);
-    gotas.material.opacity = (forte ? 0.55 : 0.42) * Math.min(1, f * 1.5);
+    gotas.material.opacity = (forte ? 0.6 : 0.48) * Math.min(1, f * 1.5);
     gotas.position.set(centro.x, centro.y, centro.z);
     for (let i = 0; i < mostrar; i++) {
       const o = i * 6; let y = a[o + 1] - vy * v[i], x = a[o] + vx * v[i];
@@ -194,11 +196,11 @@ export function atualizar(dt, seg, ciclo, centro, luzes) {
   }
 
   // poças e neve no chão: aparecem com o tempo e somem 3 s depois que ele abre
-  if (f > 0.15) { esperaChao = 3; tipoChao = neve ? 'neve' : 'chuva'; chao = Math.min(1, chao + dt / (neve ? 25 : 15)); }
-  else if (chao > 0) { esperaChao -= dt; if (esperaChao <= 0) chao = Math.max(0, chao - dt / 1.2); }
+  if (f > 0.15) { esperaChao = 3; tipoChao = neve ? 'neve' : 'chuva'; chao = Math.min(1, chao + dt / (neve ? 60 : 15)); }   // 22z4: a neve vai cobrindo em ~1 min
+  else if (chao > 0) { esperaChao -= dt; if (esperaChao <= 0) chao = Math.max(0, chao - dt / (tipoChao === 'neve' ? 45 : 1.2)); }   // a neve derrete devagar
   const m = tipoChao === 'neve' ? neveChao : pocas, outro = m === pocas ? neveChao : pocas;
   outro.visible = false;
-  m.visible = chao > 0.01 && !centro.dentro;
+  m.visible = chao > 0.01 && !centro.dentro && m !== neveChao;   // 22z4: a neve agora acumula no próprio chão (tempo.js): sem os montinhos soltos
   if (m.visible) {
     if (!centroChao || Math.hypot(centro.x - centroChao.x, centro.z - centroChao.z) > 16) espalhar(centro.x, centro.z);
     m.material.opacity = (m === pocas ? (pocas.material.userData.ultra ? 0.95 : 0.62) : 0.92) * chao;
@@ -210,8 +212,9 @@ export function atualizar(dt, seg, ciclo, centro, luzes) {
   sons.continuo('tempestade', tipo === 'tempestade' ? 0.7 * f : 0);
   sons.continuo('nevasca', neve ? 0.55 * f : 0);
 }
-const COR_CHUVA = new THREE.Color('#5a6470'), COR_NEVE = new THREE.Color('#c8d2dc'), COR_CLARAO = new THREE.Color('#e8eeff');
+const _alvo = new THREE.Color(), COR_CHUVA = new THREE.Color('#5a6470'), COR_NEVE = new THREE.Color('#c8d2dc'), COR_CLARAO = new THREE.Color('#e8eeff');
 let aoRelampago = null;
 export const ouvirRelampago = (fn) => { aoRelampago = fn; };
 function relampago() { clarao = 0.42; aoRelampago?.(); }
 export const fatorTempo = () => (tipo === 'limpo' ? 0 : forca);
+export const neveNoChao = () => (tipoChao === 'neve' ? chao : 0);   // 22z4: o quanto a neve já cobriu (0..1)

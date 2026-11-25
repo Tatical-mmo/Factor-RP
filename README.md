@@ -1845,6 +1845,11 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Oficinas autorizadas (18h + SQL 110)**:
   - Duas oficinas de NPC com cobertura, balcão e placa, laranja no mapa (`montarOficinas`): **Oficina do Zé** em Vila Serra (preço base, o carro fica 2 min na oficina e some do mapa) e **Garagem Premium** no quarteirão ao lado da Concessionária (30% mais cara, na hora). Para usar, o jogador estaciona o carro na vaga embaixo da cobertura e toca em 🔧 Oficina no balcão.
   - **Serviços** (`oficina_servico`, pago da carteira): pintura em 10 cores (2.000); motor 1, 2 e 3 com +10, +20 e +30% de velocidade máxima (8.000, 20.000, 45.000; `max` no `entrarCarro`); blindagem leve (30.000). O carro blindado aguenta a primeira explosão de tanque e gasta a blindagem; refazer custa a metade. Para arrombar, são 3 golpes no vidro. A janela 🚗 Veículos mostra o motor, a blindagem e se o carro está na oficina.
+## 22z4
+- Chuva/tempestade: gotas na tela (aparecem, secam e escorrem, com refração), reflexos compridos das luzes no asfalto molhado (postes, faróis, lanternas), asfalto mais escuro e liso, chuva mais cheia, halo nos postes e noite chuvosa escura (antes clareava para cinza). Gotas e reflexos: gráfico Alto para cima.
+- Neve: acumula de verdade em tudo virado para cima (rua, calçada, grama, telhados, copas, carros) em ~1 min, com marcas escuras de pneu nas ruas; derrete em ~45 s quando abre. Flocos redondos e maiores, neblina mais fechada. Vale em todos os gráficos. Mar e rio não acumulam.
+- Arquivo novo: js/tempo.js.
+
 ## 22z3
 - Farol: a luz agora sai de cada farol. Um facho no ar por farol (forte na lâmpada, inclinado até o chão uns 11 m à frente; 15 m nos grandes) e uma mancha no chão por farol, começando à frente do para-choque. Antes era uma mancha só, colada embaixo do veículo.
 

@@ -25,6 +25,7 @@ import * as sons from './sons.js';
 import * as voz from './voz.js';
 import * as seguranca from './seguranca.js';
 import * as clima from './clima.js';
+import * as tempo from './tempo.js';   // 22z4: neve acumulada, reflexos na chuva
 import * as ceu from './ceu.js';
 import * as semaforos from './semaforos.js';
 import * as eixos from './eixos.js';
@@ -343,7 +344,7 @@ function atualizarCeu(t) {
   hemi.intensity = 0.5 + 0.45 * dia;   // menos luz "chapada": sombras com mais volume (22t: a noite um pouco mais clara)
   hemi.color.copy(CEU.hemiNoite).lerp(CEU.hemiDia, dia);
   hemi.groundColor.copy(CEU.chaoNoite).lerp(CEU.chaoDia, dia);
-  scene.environmentIntensity = 0.12 + 0.33 * dia + 0.35 * molhadoAtual;   // chão molhado reflete mais
+  scene.environmentIntensity = 0.12 + 0.33 * dia + 0.35 * molhadoAtual * (0.25 + 0.75 * dia);   // 22z4: de noite a chuva não clareia a cena (ficava tudo cinza)   // chão molhado reflete mais
   scene.background.copy(CEU.noite).lerp(CEU.dia, dia).lerp(CEU.tarde, tarde * 0.5);
   if (hq) {
     scene.background.copy(ceu.corHorizonte());
@@ -356,7 +357,7 @@ function atualizarCeu(t) {
   mundo.definirNoite(noite);
   noiteAtual = noite;
   // neblina leve no fundo da cena (mesma cor do céu): dá profundidade e esconde o fim do mapa
-  if (scene.fog) { const ul = visual.maximaAtiva() ? 1.5 : /^(ultra|alto)$/.test(visual.nivelAtual()) ? 1.25 : 1; /* alto vê tão longe quanto o ultra */ scene.fog.color.copy(scene.background); scene.fog.near = (175 + (1 - molhadoAtual) * 25) * ul; scene.fog.far = (330 - molhadoAtual * 90) * ul; }
+  if (scene.fog) { const ul = visual.maximaAtiva() ? 1.5 : /^(ultra|alto)$/.test(visual.nivelAtual()) ? 1.25 : 1; /* alto vê tão longe quanto o ultra */ scene.fog.color.copy(scene.background); scene.fog.near = (175 + (1 - molhadoAtual) * 25 - tempo.neve() * 70) * ul; scene.fog.far = (330 - molhadoAtual * 90 - tempo.neve() * 110) * ul; }   // 22z4: nevando, a neblina fecha
   // câmera 3D (atrás do personagem e primeira pessoa): distância de visão curta, como no Minecraft. O que fica além
   // some na neblina e nem é desenhado; conforme você anda, o que está na frente aparece e o de trás some.
   if (scene.fog && modo3D()) {
@@ -4399,6 +4400,7 @@ async function iniciarJogo(perfil) {
   mundo.montar({ scene, texturaCanvas, ruido, textoSprite, modelo: (n) => modelos[n], qualidade: () => visual.nivelAtual(), repintar: (m, cor) => civico.repintarMaterial(m, cor) });
   ferrovia.montar({ scene, textoSprite, modelo: (n) => modelos[n] });
   ceu.iniciar(scene); clima.ouvirRelampago(() => ceu.raio(foco(), alturaChao, camAtiva === camP ? camP : null));
+  tempo.iniciar({ scene, alturaChao, naRua, postes: () => mundo.LUZES_POSTE, luzesVeiculos: (fn) => civico.pontosDeLuz(fn) });
   clima.iniciar({ scene, alturaChao, naRua, mudou: (t) => { if (jogador.avatar) aviso(t === 'limpo' ? '☀️ O tempo abriu.' : { chuva: '🌧️ Começou a chover.', tempestade: '⛈️ Tempestade chegando! Fique atento aos raios.', neve: '❄️ Começou a nevar.' }[t], 3.5); } });
   carregarClima();
   montarCargueiro(); montarBueiros(); montarEsconderijos();
@@ -10708,6 +10710,11 @@ function quadroJogo() {
   ceu.atualizar(dt, camAtiva, noiteAtual, clima.atual(), clima.fatorTempo(), camAtiva === camP, SOL_DIR, horaAtual);
   clima.atualizar(dt, agoraServidor() / 1000, CICLO_DIA, { x: foco().x, y: (foco().y || 0) - 2, z: foco().z, dentro: !!jogador.dentroCasa && !averiguando }, { sol, hemi, cena: scene });
   tempoClima -= dt; if (tempoClima <= 0) { tempoClima = 30; carregarClima(); }
+  { // 22z4: neve no chão, reflexos das luzes na rua molhada e gotas na tela
+    const dentroT = !!jogador.dentroCasa && !averiguando, tc = clima.atual();
+    tempo.atualizar(dt, { cam: camAtiva.position, molhado: molhadoAtual, noite: noiteAtual, alvoNeve: clima.neveNoChao(), dentro: dentroT, qualidade: visual.nivelAtual() });
+    visual.gotasTela(dentroT || (tc !== 'chuva' && tc !== 'tempestade') ? 0 : clima.fatorTempo() * (tc === 'tempestade' ? 1 : 0.6), performance.now() / 1000);
+  }
   diag('mundo (LOD)');
   mundo.atualizar(dt); clima.aguaUltra(visual.nivelAtual() === 'ultra');
   mundo.carrosPerto(foco().x, foco().z, dt);

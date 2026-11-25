@@ -363,10 +363,11 @@ function criarMateriais() {
     tronco: new THREE.MeshStandardMaterial({ color: '#6b4a2e', roughness: 0.9 }),
     copa: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85, flatShading: true, vertexColors: true }),
     chaoHorizonte: new THREE.MeshStandardMaterial({ color: '#5b5e64', roughness: 0.95 }),
-    agua: new THREE.MeshStandardMaterial({ color: '#3e7ea6', roughness: 0.12, metalness: 0.25, normalMap: ondas, normalScale: new THREE.Vector2(0.6, 0.6) }),
+    agua: new THREE.MeshStandardMaterial({ color: '#3e7ea6', roughness: 0.12, metalness: 0.25, normalMap: ondas, normalScale: new THREE.Vector2(0.6, 0.6), userData: { semNeve: true } }),   // 22z4: mar e rio não acumulam neve
     concreto: new THREE.MeshStandardMaterial({ color: '#b9b3a7', roughness: 0.9 }),
     morro: new THREE.MeshStandardMaterial({ color: '#7d8f63', roughness: 1, flatShading: true }),
   };
+  MAT.asfalto.userData.asfalto = true;   // 22z4: na neve as ruas ganham as marcas dos pneus
   return MAT;
 }
 export const materiais = () => MAT;
@@ -1684,14 +1685,15 @@ export function definirNoite(n) {
   if (matCabeca) matCabeca.emissiveIntensity = n * 2.2;
   if (matLed) matLed.emissiveIntensity = n * 2.4;
   if (matLampFav) matLampFav.emissiveIntensity = n * 1.6;
-  if (matHalo) { matHalo.opacity = n * 0.85; matHalo.userData.malha.visible = n > 0.05; }
+  if (matHalo) { matHalo.opacity = n * 0.85 * (1 + 0.35 * haloChuva); matHalo.userData.malha.visible = n > 0.05; }
   if (matPoca) { matPoca.opacity = n * 0.62; matPoca.userData.malha.visible = n > 0.02; }   // 22t: rua iluminada de verdade embaixo dos postes
 }
 // chuva: asfalto e calçada escurecem e ficam lisos (refletem o céu e as luzes)
-let molhadoAntes = -1;
+let molhadoAntes = -1, haloChuva = 0;
 export function molhar(f) {
   if (!MAT || Math.abs(f - molhadoAntes) < 0.01) return; molhadoAntes = f;
-  MAT.asfalto.roughness = 0.88 - 0.62 * f; MAT.asfalto.color.setScalar(1 - 0.3 * f); MAT.asfalto.envMapIntensity = 1 + 1.6 * f;
+  haloChuva = f; if (matHalo) { matHalo.size = 2.6 * (1 + 0.45 * f); definirNoite(UNI.uNoite.value); }   // 22z4: na chuva a luz do poste abre um halo
+  MAT.asfalto.roughness = 0.88 - 0.7 * f; MAT.asfalto.color.setScalar(1 - 0.42 * f); MAT.asfalto.envMapIntensity = 1 + 2.2 * f;   // 22z4: mais escuro e liso (espelha mais)
   MAT.calcada.roughness = 0.92 - 0.45 * f; MAT.calcada.color.setScalar(1 - 0.2 * f); MAT.calcada.envMapIntensity = 1 + 0.8 * f;
 }
 // gráfico ultra: água mais lisa e espelhada, ondas mais marcadas e andando mais rápido (reflete o céu e o sol)
@@ -1714,7 +1716,7 @@ export function atualizar(dt) {
       }
       g.putImageData(img, 0, 0);
       const fina = new THREE.CanvasTexture(cv); fina.wrapS = fina.wrapT = THREE.RepeatWrapping; fina.colorSpace = THREE.NoColorSpace; fina.repeat.set(140, 60);
-      MAT.aguaUltra = new THREE.MeshPhysicalMaterial({ color: '#0a3550', roughness: 0.06, metalness: 0, ior: 1.333, specularIntensity: 0.75, envMapIntensity: 1.05,
+      MAT.aguaUltra = new THREE.MeshPhysicalMaterial({ userData: { semNeve: true }, color: '#0a3550', roughness: 0.06, metalness: 0, ior: 1.333, specularIntensity: 0.75, envMapIntensity: 1.05,
         normalMap: fina, normalScale: new THREE.Vector2(0.8, 0.8), clearcoat: 1, clearcoatRoughness: 0.02, clearcoatNormalMap: A.normalMap, clearcoatNormalScale: new THREE.Vector2(0.9, 0.9) });
     }
     const de = ultra ? A : MAT.aguaUltra, para = ultra ? MAT.aguaUltra : A;
