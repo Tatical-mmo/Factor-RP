@@ -283,8 +283,8 @@ function posicionarSol(x, z) {
   sol.target.position.copy(c); sol.position.copy(c).addScaledVector(SOL_DIR, 80);
 }
 function ajustarSombraQualidade() {
-  const S = visual.nivelAtual() === 'ultra' ? 64 : SOMBRA;
-  if (sol.shadow.camera.right !== S) { Object.assign(sol.shadow.camera, { left: -S, right: S, top: S, bottom: -S, far: S > 40 ? 260 : 160 }); sol.shadow.camera.updateProjectionMatrix(); }
+  const S = visual.maximaAtiva() ? 96 : visual.nivelAtual() === 'ultra' ? 64 : SOMBRA;   // 22q: Máxima cobre ainda mais
+  if (sol.shadow.camera.right !== S) { Object.assign(sol.shadow.camera, { left: -S, right: S, top: S, bottom: -S, far: S > 70 ? 320 : S > 40 ? 260 : 160 }); sol.shadow.camera.updateProjectionMatrix(); }
 }
 Object.assign(sol.shadow.camera, { left: -SOMBRA, right: SOMBRA, top: SOMBRA, bottom: -SOMBRA, near: 1, far: 160 });
 sol.shadow.bias = -0.0004;
@@ -299,7 +299,7 @@ try {
   localStorage.setItem('fator_perdeu', marcas.join(','));
   if (marcas.length >= 2) {   // caiu 2 vezes em 10 minutos: aí sim baixa um nível (uma queda só é normal ao trocar de app)
     localStorage.removeItem('fator_perdeu');
-    const n = visual.nivelAtual(), novo = n === 'ultra' ? 'alto' : n === 'alto' ? 'medio' : n === 'medio' ? 'baixo' : null;
+    const n = visual.nivelEscolhido(), novo = n === 'maxima' ? 'ultra' : n === 'ultra' ? 'alto' : n === 'alto' ? 'medio' : n === 'medio' ? 'baixo' : null;
     if (novo) { visual.definirNivel(novo); baixouQualidade = visual.NIVEIS[novo]; }
   }
 } catch { /* sem armazenamento */ }
@@ -351,11 +351,11 @@ function atualizarCeu(t) {
   mundo.definirNoite(noite);
   noiteAtual = noite;
   // neblina leve no fundo da cena (mesma cor do céu): dá profundidade e esconde o fim do mapa
-  if (scene.fog) { const ul = /^(ultra|alto)$/.test(visual.nivelAtual()) ? 1.25 : 1; /* alto vê tão longe quanto o ultra */ scene.fog.color.copy(scene.background); scene.fog.near = (175 + (1 - molhadoAtual) * 25) * ul; scene.fog.far = (330 - molhadoAtual * 90) * ul; }
+  if (scene.fog) { const ul = visual.maximaAtiva() ? 1.5 : /^(ultra|alto)$/.test(visual.nivelAtual()) ? 1.25 : 1; /* alto vê tão longe quanto o ultra */ scene.fog.color.copy(scene.background); scene.fog.near = (175 + (1 - molhadoAtual) * 25) * ul; scene.fog.far = (330 - molhadoAtual * 90) * ul; }
   // câmera 3D (atrás do personagem e primeira pessoa): distância de visão curta, como no Minecraft. O que fica além
   // some na neblina e nem é desenhado; conforme você anda, o que está na frente aparece e o de trás some.
   if (scene.fog && modo3D()) {
-    const q = visual.nivelAtual(), alcance = q === 'ultra' || q === 'alto' ? 380 : q === 'medio' ? 190 : 140;   // ultra: ~7 quarteirões
+    const q = visual.nivelAtual(), alcance = visual.maximaAtiva() ? 480 : q === 'ultra' || q === 'alto' ? 380 : q === 'medio' ? 190 : 140;   // ultra: ~7 quarteirões
     scene.fog.far = Math.min(scene.fog.far, alcance); scene.fog.near = Math.min(scene.fog.near, alcance * 0.45);
     if (Math.abs(camP.far - (alcance + 5)) > 1) { camP.far = alcance + 5; camP.updateProjectionMatrix(); }
   }
@@ -456,8 +456,8 @@ function aplicarPrefs() {
   if (typeof pr.volante === 'boolean' && pr.volante !== volantePref) { volantePref = pr.volante; rotuloVolante(); }
   $('btChassi')?.classList.toggle('oculto', jogador.perfil?.cargo !== 'admin');
   if (typeof pr.ajudaMira === 'boolean' && pr.ajudaMira !== ajudaMira) { ajudaMira = pr.ajudaMira; const sp = $('btAjudaMira')?.querySelector('span'); if (sp) sp.textContent = `Ajuda de mira: ${ajudaMira ? 'ligada' : 'desligada'}`; }
-  if (baixouQualidade) salvarPref('grafico', visual.nivelAtual());   // o jogo baixou sozinho (sem memória): guarda o novo
-  else if (visual.NIVEIS[pr.grafico] && pr.grafico !== visual.nivelAtual()) {
+  if (baixouQualidade) salvarPref('grafico', visual.nivelEscolhido());   // o jogo baixou sozinho (sem memória): guarda o novo
+  else if (visual.NIVEIS[pr.grafico] && pr.grafico !== visual.nivelEscolhido()) {
     visual.definirNivel(pr.grafico); ajustarCamera(); ajustarSombraQualidade();
     const b = $('btGrafico'); if (b) b.querySelector('span').textContent = `Gráficos: ${visual.NIVEIS[pr.grafico]}`;
   }
@@ -4435,13 +4435,15 @@ async function iniciarJogo(perfil) {
   $('btChassi').onclick = () => { alternarDebugChassi(); $('menuBar').classList.remove('aberto'); };
   $('btVeiculos').onclick = () => abrirServico('veiculos');
   $('btAmigos').onclick = () => abrirServico('amigos');
-  const rotuloGrafico = () => { const b = $('btGrafico'); if (b) b.querySelector('span').textContent = `Gráficos: ${visual.NIVEIS[visual.nivelAtual()]}`; };
+  const rotuloGrafico = () => { const b = $('btGrafico'); if (b) b.querySelector('span').textContent = `Gráficos: ${visual.NIVEIS[visual.nivelEscolhido()]}${visual.modoAuto() ? ' (auto)' : ''}`; };
   rotuloGrafico();
+  // 22q: o jogo escolheu sozinho (aparelho não aguentou): avisa e atualiza o menu
+  visual.aoMudarNivel((n) => { rotuloGrafico(); ajustarCamera(); ajustarSombraQualidade(); aviso(`⚙️ Gráficos ajustados para ${visual.NIVEIS[n]} para o jogo rodar liso neste aparelho (dá para trocar no menu)`, 4); });
   $('btGrafico').onclick = () => {
-    const ordem = ['baixo', 'medio', 'alto', 'ultra'], prox = ordem[(ordem.indexOf(visual.nivelAtual()) + 1) % ordem.length];
+    const ordem = ['baixo', 'medio', 'alto', 'ultra', 'maxima'], prox = ordem[(ordem.indexOf(visual.nivelEscolhido()) + 1) % ordem.length];
     visual.definirNivel(prox); rotuloGrafico(); ajustarCamera(); ajustarSombraQualidade(); salvarPref('grafico', prox);
     const aa = TOQUE && ((prox === 'baixo') !== (NIVEL_INICIAL === 'baixo')) ? ' · as bordas lisas mudam ao reabrir o jogo' : '';   // 22p
-    aviso(`✨ Gráficos: ${visual.NIVEIS[prox]}${prox === 'baixo' ? ' (mais leve, sem efeitos)' : prox === 'alto' ? ' (mais bonito, pesa mais)' : prox === 'ultra' ? ' (máximo: vê mais longe, sombras e texturas nítidas; pesa bastante)' : ''}${aa}`, 3.5);
+    aviso(`✨ Gráficos: ${visual.NIVEIS[prox]}${prox === 'baixo' ? ' (mais leve, sem efeitos)' : prox === 'alto' ? ' (mais bonito, pesa mais)' : prox === 'ultra' ? ' (vê mais longe, sombras e texturas nítidas; pesa bastante)' : prox === 'maxima' ? ' (para PC forte e celular topo de linha: sombra de contato, sombras e visão ainda mais longe)' : ''}${aa}`, 3.5);
   };
   $('btConta').onclick = () => { abrirServico('conta'); $('menuBar').classList.remove('aberto'); };
   carregarBloqueios();

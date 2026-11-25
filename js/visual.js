@@ -13,10 +13,13 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 
-export const NIVEIS = { baixo: 'Baixa', medio: 'Média', alto: 'Alta', ultra: 'Ultra' };
+export const NIVEIS = { baixo: 'Baixa', medio: 'Média', alto: 'Alta', ultra: 'Ultra', maxima: 'Máxima' };
+// 22q: "Máxima" = tudo do Ultra + sombra de contato (oclusão), sombras cobrindo mais área, resolução cheia até 3x e
+// visão mais longe. Para o resto do jogo ela é o Ultra (nivelAtual() devolve 'ultra'); maximaAtiva() diz se está nela.
+const ORDEM = ['baixo', 'medio', 'alto', 'ultra', 'maxima'];
 const comEfeitos = () => nivel === 'alto' || nivel === 'ultra';
 const CHAVE = 'fator_qualidade';
-let R = null, cena = null, sol = null, comp = null, passeRender = null, bloom = null, cor = null, saida = null, nivel = 'medio';
+let R = null, cena = null, sol = null, comp = null, passeRender = null, bloom = null, cor = null, saida = null, nivel = 'medio', maxima = false, auto = false, aoMudar = null;
 let toque = false, falhou = false, ao = null, comAO = false;
 // 22q (prévia): sombra de contato (oclusão de ambiente) na Alta e na Ultra
 export function definirAO(on) { comAO = !!on; if (comAO) montarComposer(); if (ao) ao.enabled = comAO; }
@@ -49,6 +52,7 @@ let base = 1, escala = 1, janela = { n: 0, lentos: 0, t: 0 }, folga = 0;
 export const escalaResolucao = () => escala;
 export function adaptar(dt) {
   if (!R || document.hidden) return;   // aba escondida: não conta (um engasgo único pesa só 1 quadro na conta)
+  conferirAuto(dt);
   janela.n++; janela.t += Math.min(dt, 0.5); if (dt > 1 / 45) janela.lentos++;
   if (janela.t < 2) return;
   const frac = janela.lentos / janela.n; janela = { n: 0, lentos: 0, t: 0 };
@@ -58,16 +62,57 @@ export function adaptar(dt) {
   else folga = 0;
   if (Math.abs(nova - escala) > 0.001) { escala = nova; R.setPixelRatio(base * escala); redimensionar(); }
 }
+export const nivelEscolhido = () => (maxima ? 'maxima' : nivel);
+export const maximaAtiva = () => maxima;
+export const modoAuto = () => auto;
+export function aoMudarNivel(fn) { aoMudar = fn; }
 export function iniciar(renderer, scene, luzSol, ehToque) {
   R = renderer; cena = scene; sol = luzSol; toque = ehToque;
-  let salvo = null; try { salvo = localStorage.getItem(CHAVE); } catch { /* sem armazenamento */ }
-  nivel = NIVEIS[salvo] ? salvo : 'medio';
+  let salvo = null; try { salvo = localStorage.getItem(CHAVE); auto = localStorage.getItem(CHAVE + '_auto') === '1'; } catch { /* sem armazenamento */ }
+  if (!NIVEIS[salvo]) { salvo = sugerirNivel(); auto = true; try { localStorage.setItem(CHAVE, salvo); localStorage.setItem(CHAVE + '_auto', '1'); } catch { /* nada */ } }
+  usar(salvo);
   aplicar();
 }
-export function definirNivel(n) {
-  if (!NIVEIS[n]) return; nivel = n;
-  try { localStorage.setItem(CHAVE, n); } catch { /* nada */ }
+function usar(n) { maxima = n === 'maxima'; nivel = maxima ? 'ultra' : n; }
+// manual (menu ou conta): o jogo para de escolher sozinho
+export function definirNivel(n, { automatico = false } = {}) {
+  if (!NIVEIS[n]) return; usar(n);
+  if (!automatico) auto = false;
+  try { localStorage.setItem(CHAVE, n); localStorage.setItem(CHAVE + '_auto', auto ? '1' : '0'); } catch { /* nada */ }
   aplicar();
+}
+// ---- 22q: detecção do aparelho (primeira vez que abre): pela placa de vídeo, memória e núcleos. Depois, nos primeiros
+// minutos, o FPS de verdade confirma (ver adaptar): se não aguentar, desce um nível sozinho.
+export function infoGPU() {
+  try { const gl = R.getContext(), x = gl.getExtension('WEBGL_debug_renderer_info'); return String(x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER) || ''); } catch { return ''; }
+}
+function sugerirNivel() {
+  const g = infoGPU(), mem = navigator.deviceMemory || 4, nuc = navigator.hardwareConcurrency || 4;
+  if (/SwiftShader|llvmpipe|Software|Microsoft Basic/i.test(g)) return 'baixo';
+  if (toque) {
+    if (/Adreno \(TM\) (7[3-9]\d|8\d\d)|Adreno.*(7[3-9]\d|8\d\d)|Immortalis|Mali-G(7[7-9]|[7-9]\d\d)|Apple GPU|Xclipse/i.test(g) && mem >= 6) return 'alto';
+    if (/Adreno.*[3-5]\d\d|Adreno.*6[0-1]\d|Mali-(4|T|G5[0-2])|PowerVR/i.test(g) || mem <= 3) return 'baixo';
+    return 'medio';
+  }
+  if (/RTX|RX ?[67]\d{3}|RX ?9\d{3}|Radeon Pro|Apple M[1-9] (Pro|Max|Ultra)/i.test(g)) return 'maxima';
+  if (/GTX ?(10[6-8]|16|9[78])|RX ?5[5-9]\d\d|RX ?5\d{3}|Arc|Apple M[1-9]/i.test(g)) return 'ultra';
+  if (/Iris Xe|Radeon(\(TM\))? Graphics|Vega/i.test(g)) return 'alto';
+  if (/Intel/i.test(g)) return 'medio';
+  return nuc >= 8 && mem >= 8 ? 'alto' : 'medio';
+}
+let medida = { t: 0, n: 0, quedas: 0, espera: 6 };
+function conferirAuto(dt) {   // em modo automático: média de FPS a cada 10 s; abaixo de 32 com a resolução já no mínimo, desce um nível
+  if (!auto || medida.quedas >= 2) return;
+  if (medida.espera > 0) { medida.espera -= dt; return; }   // começo da partida (carregando coisas): não conta
+  medida.t += Math.min(dt, 0.5); medida.n++;
+  if (medida.t < 10) return;
+  const fps = medida.n / medida.t; medida.t = 0; medida.n = 0;
+  if (fps < 32 && escala <= 0.61) {
+    const i = ORDEM.indexOf(nivelEscolhido()); if (i <= 0) return;
+    medida.quedas++; medida.espera = 4; escala = 1;
+    definirNivel(ORDEM[i - 1], { automatico: true });
+    aoMudar?.(ORDEM[i - 1]);
+  }
 }
 function montarComposer() {
   if (comp || falhou) return;
@@ -85,14 +130,17 @@ function montarComposer() {
     cor = new ShaderPass(COR);
     saida = new OutputPass();
     comp.addPass(passeRender);
-    try { ao = new GTAOPass(cena, new THREE.PerspectiveCamera(), Math.max(256, sz.x / 2), Math.max(256, sz.y / 2)); ao.updateGtaoMaterial({ radius: 2.5, distanceExponent: 1.6, thickness: 3, scale: 1.4, samples: 16 }); ao.blendIntensity = 1; ao.enabled = comAO; comp.addPass(ao); } catch (e) { console.warn('oclusão indisponível', e); ao = null; }
+    try { ao = new GTAOPass(cena, new THREE.PerspectiveCamera(), Math.max(256, sz.x / 2), Math.max(256, sz.y / 2)); ao.updateGtaoMaterial({ radius: 2.5, distanceExponent: 1.6, thickness: 3, scale: 1.4, samples: 16 }); ao.blendIntensity = 1; ao.enabled = comAO || maxima;
+      // placas, letreiros, partículas e vidros não entram na conta da sombra de contato (viravam manchas pretas)
+      ao.overrideVisibility = function () { const c = this._visibilityCache; this.scene.traverse((o) => { c.set(o, o.visible); if (o.isPoints || o.isLine || o.isSprite || (o.material && (o.material.transparent || o.material.depthWrite === false))) o.visible = false; }); };
+      comp.addPass(ao); } catch (e) { console.warn('oclusão indisponível', e); ao = null; }
     comp.addPass(bloom); comp.addPass(saida); comp.addPass(cor);
   } catch (e) { console.warn('pós-processamento indisponível', e); falhou = true; comp = null; }
 }
 function aplicar() {
   if (!R) return;
   const dpr = window.devicePixelRatio || 1;
-  const pr = nivel === 'baixo' ? 1 : nivel === 'medio' ? Math.min(dpr, toque ? 1.25 : 2) : nivel === 'ultra' ? Math.min(dpr, 2.5) : Math.min(dpr, toque ? 1.5 : 2);   // celular na média: 1,25x (bem mais leve, quase a mesma nitidez)
+  const pr = nivel === 'baixo' ? 1 : nivel === 'medio' ? Math.min(dpr, toque ? 1.25 : 2) : nivel === 'ultra' ? Math.min(dpr, maxima ? 3 : 2.5) : Math.min(dpr, toque ? 1.5 : 2);   // celular na média: 1,25x (bem mais leve, quase a mesma nitidez)
   base = pr; R.setPixelRatio(pr * escala);
   R.shadowMap.type = nivel === 'baixo' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
   // 21o: Alta e Ultra com ACES (filme: mais contraste e cor mais rica, brilho do sol sem estourar); Baixa e Média
@@ -103,6 +151,7 @@ function aplicar() {
   if (sol && sol.shadow.mapSize.x !== tam) { sol.shadow.mapSize.set(tam, tam); sol.shadow.map?.dispose(); sol.shadow.map = null; }
   cena.traverse((o) => { if (o.material && !Array.isArray(o.material)) o.material.needsUpdate = true; });   // troca do tipo de sombra
   if (comEfeitos()) montarComposer();
+  if (ao) ao.enabled = comAO || maxima;
   nitidas();   // liga ou desliga o relevo e a nitidez do ultra
   redimensionar();
 }
@@ -151,6 +200,6 @@ export function ajustar(noite, molhado) {
 }
 export function render(camera) {
   if (!comEfeitos() || !comp) { R.render(cena, camera); return; }
-  passeRender.camera = camera; if (ao) { ao.camera = camera; ao.enabled = comAO; }
+  passeRender.camera = camera; if (ao) { ao.camera = camera; ao.enabled = comAO || maxima; }
   try { comp.render(); } catch (e) { console.warn('pós-processamento desligado', e); falhou = true; comp = null; R.render(cena, camera); }
 }
