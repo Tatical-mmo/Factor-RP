@@ -53,7 +53,7 @@ export const PERSONAGENS_EVENTO = [   // limitados (Meshy): só o admin dá de p
   { id: 'Androide_Moletom', nome: 'Androide de Moletom', soPresente: true, bau: true },
   { id: 'Bandido_Balaclava', nome: 'Bandido de Balaclava', soPresente: true, bau: true },
   { id: 'Ciborgue_Futuro', nome: 'Ciborgue do Futuro', soPresente: true, bau: true },
-  { id: 'Dragao_Azul', nome: 'Filhote de Dragão Azul', soPresente: true, bau: true },
+  { id: 'Dragao_Azul', nome: 'Filhote de Dragão Azul', soPresente: true, bau: true, tarja: 'Limitado', tarjaRubi: true },
   { id: 'Rapaz_Jaqueta', nome: 'Rapaz de Jaqueta', soPresente: true, bau: true },
   { id: 'Urbano_Tranquilo', nome: 'Urbano Tranquilo', soPresente: true, bau: true },
   { id: 'Forca_Estilo', nome: 'Força com Estilo', soPresente: true, bau: true },
@@ -68,12 +68,12 @@ export const PERSONAGENS_EVENTO = [   // limitados (Meshy): só o admin dá de p
   { id: 'Sentinela_Neon', nome: 'Sentinela Neon', soPresente: true, bau: true },
   { id: 'Sentinela_Brasa', nome: 'Sentinela Brasa', soPresente: true, bau: true },
   // 21v: limitados pequenos (vitrine do admin por tempo limitado); escala: menores que os outros personagens
-  { id: 'Lobo_Arlequim', nome: 'Lobo Arlequim', escala: 0.78 },
-  { id: 'Guaxinim_Tropical', nome: 'Guaxinim Tropical', escala: 0.72 },
-  { id: 'Capivara_Artilheira', nome: 'Capivara Artilheira', escala: 0.74 },
-  { id: 'Gatinho_HipHop', nome: 'Gatinho Hip Hop', escala: 0.72 },
-  { id: 'Macaco_Mochileiro', nome: 'Macaco Mochileiro', escala: 0.72 },
-  { id: 'Cachorro_Moletom', nome: 'Cachorro de Moletom', escala: 0.72 },
+  { id: 'Lobo_Arlequim', nome: 'Lobo Arlequim', escala: 0.78, tarja: 'Limitado', tarjaRubi: true },
+  { id: 'Guaxinim_Tropical', nome: 'Guaxinim Tropical', escala: 0.72, tarja: 'Limitado', tarjaRubi: true },
+  { id: 'Capivara_Artilheira', nome: 'Capivara Artilheira', escala: 0.74, tarja: 'Limitado', tarjaRubi: true },
+  { id: 'Gatinho_HipHop', nome: 'Gatinho Hip Hop', escala: 0.72, tarja: 'Limitado', tarjaRubi: true },
+  { id: 'Macaco_Mochileiro', nome: 'Macaco Mochileiro', escala: 0.72, tarja: 'Limitado', tarjaRubi: true },
+  { id: 'Cachorro_Moletom', nome: 'Cachorro de Moletom', escala: 0.72, tarja: 'Limitado', tarjaRubi: true },
   { id: 'Vanguarda_Azul', nome: 'Vanguarda Azul' },   // tamanho normal
   { id: 'Smith', nome: 'Smith' }, { id: 'Samy', nome: 'Samy' }, { id: 'Jeff', nome: 'Jeff' }, { id: 'Taty', nome: 'Taty' }, { id: 'Diguin', nome: 'Diguin' },   // 22c
   { id: 'Luket', nome: 'Luket', tarja: 'Luket' },   // 22z5: quem veste ganha a tarja dourada "Luket" embaixo do nome

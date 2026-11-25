@@ -821,18 +821,22 @@ function atualizarRotulos() {
 }
 
 // 22z5: tarja dourada embaixo do nome (canto inferior esquerdo, colada) para quem veste um personagem com tarja (Luket)
-const TARJAS = Object.fromEntries(PERSONAGENS_EVENTO.filter((p) => p.tarja).map((p) => [p.id, p.tarja])), texTarjas = new Map();
-function texturaTarja(txt) {
-  if (texTarjas.has(txt)) return texTarjas.get(txt);
+// 22z6: bichinhos ganham "Limitado" em rubi (moldura dourada); a chave leva o estilo junto
+const TARJAS = Object.fromEntries(PERSONAGENS_EVENTO.filter((p) => p.tarja).map((p) => [p.id, (p.tarjaRubi ? 'rubi|' : 'ouro|') + p.tarja])), texTarjas = new Map();
+function texturaTarja(chave) {
+  if (texTarjas.has(chave)) return texTarjas.get(chave);
+  const [estilo, txt] = chave.split('|'), rubi = estilo === 'rubi';
   const tam = 18, c = document.createElement("canvas"), g = c.getContext("2d"); g.font = `800 ${tam}px Georgia, "Times New Roman", serif`;
   const w = Math.ceil(g.measureText(txt).width) + 22, h = tam + 12; c.width = w; c.height = h;
   g.fillStyle = 'rgba(18,16,10,.9)'; g.beginPath(); g.roundRect(1, 1, w - 2, h - 2, 6); g.fill();
   const borda = g.createLinearGradient(0, 0, w, h); borda.addColorStop(0, '#fff1a8'); borda.addColorStop(0.5, '#d4a017'); borda.addColorStop(1, '#8a6410');
   g.strokeStyle = borda; g.lineWidth = 2; g.stroke();
   g.font = `800 ${tam}px Georgia, "Times New Roman", serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-  const ouro = g.createLinearGradient(0, 4, 0, h - 4); ouro.addColorStop(0, '#fff6c2'); ouro.addColorStop(0.45, '#f5c542'); ouro.addColorStop(0.55, '#d9a21b'); ouro.addColorStop(1, '#9c6e0c');
+  const ouro = g.createLinearGradient(0, 4, 0, h - 4);
+  if (rubi) { ouro.addColorStop(0, '#ff9aae'); ouro.addColorStop(0.45, '#e8174f'); ouro.addColorStop(0.55, '#c00d3e'); ouro.addColorStop(1, '#7a0624'); }   // letra rubi
+  else { ouro.addColorStop(0, '#fff6c2'); ouro.addColorStop(0.45, '#f5c542'); ouro.addColorStop(0.55, '#d9a21b'); ouro.addColorStop(1, '#9c6e0c'); }
   g.fillStyle = ouro; g.fillText(txt, w / 2, h / 2 + 1);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; texTarjas.set(txt, t); return t;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; texTarjas.set(chave, t); return t;
 }
 function porTarja(s, txt) {
   if (!s) return;
