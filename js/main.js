@@ -14563,6 +14563,9 @@ const RODO = { x: 135, z: -243, x0: 113, x1: 157, z0: -265, z1: -221, baia: -230
 // terminal rodoviário (inspirado no Tietê): as plataformas (RODO) + o quarteirão a leste (pátio de espera e saguão).
 // A rua x = 162 entre os dois quarteirões foi fechada (mundo.js) e virou parte do terminal
 const TERMINAL_RODO = { x0: 113, x1: 211, z0: -265, z1: -221, saguao: { x: 186.5, z: -232, w: 49, d: 22 }, quadra: { x: 189, z: -243 } };
+// 22n: perto do terminal o ônibus NPC anda a ~16 km/h (V_RODO); "perto" = até MARGEM_RODO m das plataformas e do saguão
+const V_RODO = 4.5, MARGEM_RODO = 45;
+const pertoRodo = (x, z) => x > RODO.x0 - MARGEM_RODO && x < TERMINAL_RODO.x1 + MARGEM_RODO && z > RODO.z0 - MARGEM_RODO && z < RODO.z1 + MARGEM_RODO;
 // cinco plataformas na Rodoviária (oeste → leste). As linhas "circulares" não param na plataforma: passam na calçada
 // do lado leste da rodoviária (ponto Rodoviária) e rodam sem parar o dia todo.
 const PLAT = [117.5, 126.1, 134.7, 143.3, 151.9];
@@ -14673,25 +14676,52 @@ function montarParadasLinha(L) {
   tabelaLinha(L);
 }
 // tabela: chegada e saída em cada ponto (segundos depois da saída da plataforma)
+// 22n: perto do terminal rodoviário o trecho "conta" mais comprido (o ônibus vai a ~16 km/h ali): o horário inteiro
+// já nasce com esse tempo a mais, igual para todos os jogadores
+function distEfetiva(L, s0, s1) {
+  const N = Math.max(8, Math.ceil((s1 - s0) / 6)); let d = 0;
+  for (let k = 0; k < N; k++) { const q = pontoCaminho(L, s0 + (s1 - s0) * (k + 0.5) / N); d += (s1 - s0) / N * (pertoRodo(q.x, q.z) ? V_ONIBUS / V_RODO : 1); }
+  return d;
+}
 function tabelaLinha(L) {
-  let t = 0, sAnt = 0; L.tab = [];
-  for (const p of L.pontos) { const chega = t + (p.s - sAnt) / V_ONIBUS + 2; L.tab.push({ chega, sai: chega + ESPERA_PONTO }); t = chega + ESPERA_PONTO; sAnt = p.s; }
-  L.R = t + (L.sFila - sAnt) / V_ONIBUS + 2;           // volta inteira até a fila
+  let t = 0, sAnt = 0; L.tab = []; L.warp = [];
+  for (const p of L.pontos) { const chega = t + distEfetiva(L, sAnt, p.s) / V_ONIBUS + 2; L.tab.push({ chega, sai: chega + ESPERA_PONTO }); t = chega + ESPERA_PONTO; sAnt = p.s; }
+  L.R = t + distEfetiva(L, sAnt, L.sFila) / V_ONIBUS + 2;           // volta inteira até a fila
   L.H = L.circular ? (L.R + (L.terminal || 0)) / L.k : (L.R + FOLGA_FILA) / (L.k - 1);   // intervalo entre saídas (circular: roda sem parar; com terminal, espera lá)
   L.C = L.circular ? L.R + (L.terminal || 0) : L.k * L.H;                  // ciclo de cada ônibus
 }
 for (const L of LINHAS) { montarCaminho(L); montarParadasLinha(L); }
 const LINHA_ID = Object.fromEntries(LINHAS.map((L) => [L.id, L]));
 // posição (s) de um ônibus e. segundos depois de sair; "ponto" = índice do ponto onde está parado
+// 22n: dentro de cada trecho, o tempo se distribui pela mesma conta (devagar perto do terminal). Tabela: fração do tempo -> s.
+function sNoTrecho(L, i, s0, s1, u) {
+  const cache = (L.warp ||= []), N = 48;
+  let T = cache[i];
+  if (T === undefined) {
+    const dens = [];
+    for (let k = 0; k <= N; k++) { const q = pontoCaminho(L, s0 + (s1 - s0) * k / N); dens.push(pertoRodo(q.x, q.z) ? V_ONIBUS / V_RODO : 1); }
+    if (dens.every((d) => d === 1)) T = cache[i] = null;
+    else {
+      const sm = dens.map((d, k) => (dens[Math.max(0, k - 2)] + dens[Math.max(0, k - 1)] + d + dens[Math.min(N, k + 1)] + dens[Math.min(N, k + 2)]) / 5);   // sem tranco
+      const c = [0]; for (let k = 1; k <= N; k++) c.push(c[k - 1] + (sm[k - 1] + sm[k]) / 2);
+      const tot = c[N]; T = cache[i] = new Float32Array(N + 1);
+      let k = 0;
+      for (let j = 0; j <= N; j++) { const f = (j / N) * tot; while (k < N - 1 && c[k + 1] < f) k++; const t = (f - c[k]) / Math.max(1e-6, c[k + 1] - c[k]); T[j] = (k + Math.min(1, Math.max(0, t))) / N; }
+    }
+  }
+  if (!T) return s0 + (s1 - s0) * u;
+  const x = u * N, j = Math.min(N - 1, Math.floor(x)), f = x - j;
+  return s0 + (s1 - s0) * (T[j] + (T[j + 1] - T[j]) * f);
+}
 function sNaRota(L, e) {
   let sAnt = 0, tAnt = 0;
   for (let i = 0; i < L.pontos.length; i++) {
     const p = L.pontos[i], tb = L.tab[i];
-    if (e < tb.chega) return { s: sAnt + (p.s - sAnt) * THREE.MathUtils.smootherstep((e - tAnt) / (tb.chega - tAnt), 0, 1) };
+    if (e < tb.chega) return { s: sNoTrecho(L, i, sAnt, p.s, THREE.MathUtils.smootherstep((e - tAnt) / (tb.chega - tAnt), 0, 1)) };
     if (e < tb.sai) return { s: p.s, ponto: i };
     sAnt = p.s; tAnt = tb.sai;
   }
-  return { s: sAnt + (L.sFila - sAnt) * THREE.MathUtils.smootherstep((e - tAnt) / (L.R - tAnt), 0, 1) };
+  return { s: sNoTrecho(L, L.pontos.length, sAnt, L.sFila, THREE.MathUtils.smootherstep((e - tAnt) / (L.R - tAnt), 0, 1)) };
 }
 const horaSaida = (L, m) => L.fase + m * L.H;
 // algumas saídas do sistema atrasam (igual para todos): o ônibus fica na plataforma 15 a 35 s depois do horário
