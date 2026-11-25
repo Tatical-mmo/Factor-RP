@@ -1801,7 +1801,10 @@ function lampadasMedidas(g, tipo, e, L, w) {
   for (const x of lados(tx)) for (const y of ysT) sp(M.freio, x, y, zt(x, y) - 0.01, tt * 2.6, S, 'freio').userData.tras = true;
   if (T.lat) {   // ônibus: luzes laterais âmbar ao longo da carroceria (a cada ~3 m)
     const meia = Math.min(1.32, w / 2 - 0.02), n = Math.max(2, Math.round((e.max.z - e.min.z - 2.4) / 3));
-    for (let i = 0; i <= n; i++) { const z = e.min.z + 1.2 + (e.max.z - e.min.z - 2.4) * i / n; for (const x of [meia, -meia]) sp(M.seta, x, T.lat, z, 0.3, S, 'lateral'); }
+    // 22x: só na lataria: nada em cima das rodas (eixos do modelo e rodas já montadas)
+    const ex = (RODAS[tipo]?.eixos || []).map(([z, r]) => [z, r]).concat(rodasDe(g).map((p) => [p.position.z, 0.55]));
+    const naRoda = (z) => ex.some(([ez, r]) => Math.abs(z - ez) < r + 0.4);
+    for (let i = 0; i <= n; i++) { const z = e.min.z + 1.2 + (e.max.z - e.min.z - 2.4) * i / n; if (naRoda(z)) continue; for (const x of [meia, -meia]) sp(M.seta, x, T.lat, z, 0.3, S, x > 0 ? 'latE' : 'latD'); }
   }
   if (T.re !== null) { const [rx, ry] = T.re || [Math.max(0.15, tx - tw / 2 - 0.08), ty]; for (const x of lados(rx)) sp(M.re, x, ry, zt(x, ry) - 0.01, 0.32, S, 're').userData.tras = true; }
   const [sfx, sfy] = T.sf || [fx + fs * 0.55, fy], [stx, sty] = T.st || [tx + tw / 2 - 0.02, ty + (th > 0.25 ? th * 0.3 : 0)];
@@ -1895,7 +1898,8 @@ function sinaisDo(o, u, ult, dt) {
   if (re && o.visible && /onibus|caminhao|guincho|lixo|bombeiros/.test(u.modelo || '')) { const f = ctx?.foco?.(); if (f) reMin = Math.min(reMin, Math.hypot(_f.x - f.x, _f.z - f.z)); }
   let algo = false;
   for (const c of S.children) {
-    const on = c.name === 'freio' ? freio : c.name === 're' ? re : c.name === 'lateral' ? (alerta || seta !== 0) && pisca : (alerta || (c.name === 'setaE' ? seta > 0 : seta < 0)) && pisca;
+    const lat = c.name === 'latE' || c.name === 'latD', piscaLado = alerta || (c.name === 'latE' ? seta > 0 : seta < 0);   // 22x: lateral só pisca do lado da seta (alerta: os dois); com farol fica acesa fixa
+    const on = c.name === 'freio' ? freio : c.name === 're' ? re : lat ? (piscaLado ? pisca : !!u.luzesAcesas) : (alerta || (c.name === 'setaE' ? seta > 0 : seta < 0)) && pisca;
     c.visible = on && !(c.userData.tras && u.lantDes); algo ||= c.visible;
   }
   S.visible = algo && o.visible;
@@ -1920,7 +1924,7 @@ export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
     if (ult && Math.hypot(_f.x - ult.x, _f.y - ult.y, _f.z - ult.z) > 0.03) u.ativoAte = tLuz + 4;
     u.ultLuz = { x: _f.x, y: _f.y, z: _f.z };
     const ligado = o.visible && ((noite > 0.25 && tLuz < (u.ativoAte || 0)) || !!u.farolOn);   // 22p: farol ligado na mão (ou deixado aceso) vale de dia também
-    L.visible = ligado;
+    L.visible = ligado; u.luzesAcesas = ligado;   // 22x: a lateral do ônibus fica acesa fixa junto com o farol
     if (u.lantDes) acenderLantDes(o, u, ligado || u.lantTeste?.ligado);
     const G = o.getObjectByName('giroflex'); if (G) G.visible = o.visible && (tLuz < (u.ativoAte || 0) || !!u.giroflex);
     if (!L.userData.aereo) continue;

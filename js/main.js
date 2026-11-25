@@ -187,12 +187,16 @@ function tocarMusicaCarregamento() {
 function tocarMusicaJa(a) {
   if (musicaAcabou || preparandoFim() || !a.paused) return;   // já tocando (login → carregamento): continua de onde está
   a.volume = 0; a.currentTime = 0;
-  const ir = () => (musicaAcabou || !a.paused ? Promise.resolve() : a.play().then(() => fadeMusica(a, 0.55, 1.6)).catch(() => {}));
+  const ir = () => (musicaAcabou || !a.paused ? Promise.resolve() : a.play().then(() => { if (musicaAcabou) a.pause(); else fadeMusica(a, 0.55, 1.6); }).catch(() => {}));   // 22x: o play() demora no celular: se o jogo abriu nesse meio tempo, não volta a subir o volume
   // navegador bloqueou o som automático: começa no primeiro toque/tecla
   ir().then(() => { if (a.paused && !musicaAcabou) { const tentar = () => ir(); document.addEventListener('pointerdown', tentar, { once: true }); document.addEventListener('keydown', tentar, { once: true }); } });
 }
 const preparandoFim = () => $('carregando').style.opacity === '0';
-function pararMusicaCarregamento() { musicaAcabou = true; const a = $('musicaCarregamento'); if (!a || a.paused) return; fadeMusica(a, 0, 4, () => a.pause()); }   // 20l: some aos poucos (4 s)
+function pararMusicaCarregamento() {
+  musicaAcabou = true; const a = $('musicaCarregamento'); if (!a) return;
+  if (!a.paused) fadeMusica(a, 0, 4, () => a.pause());
+  setTimeout(() => { clearInterval(musicaFade); a.pause(); a.removeAttribute('src'); a.load(); }, 4300);   // 22x: garantia: para de vez (mesmo se algo tentou tocar de novo)
+}   // 20l: some aos poucos (4 s)
 function comecar(perfil) {
   mostrar('carregando');
   iniciarJogo(perfil).catch((e) => { console.error(e); $('progressoTxt').textContent = 'Erro ao carregar: ' + e.message; });

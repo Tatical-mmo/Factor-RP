@@ -1845,6 +1845,11 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Oficinas autorizadas (18h + SQL 110)**:
   - Duas oficinas de NPC com cobertura, balcão e placa, laranja no mapa (`montarOficinas`): **Oficina do Zé** em Vila Serra (preço base, o carro fica 2 min na oficina e some do mapa) e **Garagem Premium** no quarteirão ao lado da Concessionária (30% mais cara, na hora). Para usar, o jogador estaciona o carro na vaga embaixo da cobertura e toca em 🔧 Oficina no balcão.
   - **Serviços** (`oficina_servico`, pago da carteira): pintura em 10 cores (2.000); motor 1, 2 e 3 com +10, +20 e +30% de velocidade máxima (8.000, 20.000, 45.000; `max` no `entrarCarro`); blindagem leve (30.000). O carro blindado aguenta a primeira explosão de tanque e gasta a blindagem; refazer custa a metade. Para arrombar, são 3 golpes no vidro. A janela 🚗 Veículos mostra o motor, a blindagem e se o carro está na oficina.
+## 22x
+- Tela de carregamento com 10 fotos novas tiradas no gráfico Máxima (Metrópole, centro, rodoviária, aeroporto, monumento, favela da Serra, Porto Sul, Vila Serra, Morro do Porto e a cidade à noite). Nomes novos (cena22_*) para não pegar cópia velha guardada no aparelho; se as fotos demorarem, a tela mostra assim mesmo depois de 2 s.
+- A música do carregamento para de vez quando o jogo abre (antes podia voltar a tocar se o celular demorasse para começar o som).
+- Luzes laterais dos ônibus: piscam só do lado da seta (alerta: os dois lados); com o farol ligado ficam acesas fixas; não ficam mais em cima dos pneus.
+
 ## 22w
 - Viaturas (também perseguindo) e caminhões de serviço indo para chamada agora podem ter pneu furado; ficam parados até o guincho.
 - RPG/bazuca explode viaturas, vans e caminhões de serviço em movimento (pegam fogo onde estão).
