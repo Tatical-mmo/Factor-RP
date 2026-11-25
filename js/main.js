@@ -956,23 +956,28 @@ function faiscarRoda(mesh, i) {
   const p = rd.getWorldPosition(new THREE.Vector3()); p.y = alturaChao(p.x, p.z) + 0.08;
   faiscar(p, 12);
 }
+// 22y: tiro no pneu: a pancada da bala e o pneu esvaziando (som enviado pelo dono)
+function somPneu(o) {
+  const dist = Math.hypot(o.position.x - jogador.pos.x, o.position.z - jogador.pos.z);
+  sons.tocar('soco_metal', { vol: 0.5, dist, raio: 40, velocidade: 0.6 }); sons.tocar('pneu_furado', { vol: 0.9, dist, raio: 45 });
+}
 function furarPneuCarro(v, i) {
   if ((v.d.pneus >> i) & 1) return;
-  v.d.pneus = (v.d.pneus || 0) | (1 << i); faiscarRoda(v.mesh, i); sons.tocar('soco_metal', { vol: 0.6, dist: Math.hypot(v.mesh.position.x - jogador.pos.x, v.mesh.position.z - jogador.pos.z), raio: 40, velocidade: 0.6 });
+  v.d.pneus = (v.d.pneus || 0) | (1 << i); faiscarRoda(v.mesh, i); somPneu(v.mesh);
   rede.furarPneu(v.d.id, i, v.mesh.position.x, v.mesh.position.z).then((m) => { v.d.pneus = m; avisarPneu(v.d.id, m); }).catch(() => {});
 }
 function furarMeuPneu(i) {
   const c = jogador.carro; if (!c || c.voa || !c.mesh || i < 0) return;
   const v = c.id ? carrosMundo.get(c.id) : null, m0 = v ? v.d.pneus || 0 : c.pneus || 0; if ((m0 >> i) & 1) return;
   const m = m0 | (1 << i); aviso('💥 Furaram um pneu! O carro vai puxar para o lado.', 3); tremor = Math.max(tremor, 0.25);
-  faiscarRoda(c.mesh, i);
+  faiscarRoda(c.mesh, i); somPneu(c.mesh);
   if (v) { v.d.pneus = m; rede.furarPneu(c.id, i, jogador.pos.x, jogador.pos.z).then((mm) => { v.d.pneus = mm; avisarPneu(c.id, mm); }).catch(() => {}); }
   else { c.pneus = m; civico.aplicarPneus(c.mesh, m); }
 }
 function receberPneu(e) {
   const id = Number(e.id), m = Number(e.m) || 0, v = carrosMundo.get(id);
   const novos = (mascara, antes) => { for (let i = 0; i < 4; i++) if (((mascara >> i) & 1) && !((antes >> i) & 1)) return i; return -1; };
-  if (v) { const ri = novos(m, v.d.pneus || 0); v.d.pneus = m; civico.aplicarPneus(v.mesh, m, !!v.d.queimado); if (ri >= 0) faiscarRoda(v.mesh, ri); }
+  if (v) { const ri = novos(m, v.d.pneus || 0); v.d.pneus = m; civico.aplicarPneus(v.mesh, m, !!v.d.queimado); if (ri >= 0) { faiscarRoda(v.mesh, ri); somPneu(v.mesh); } }
   for (const r of remotos.values()) if (Number(r.carroId) === id && r.carro) { const ri = novos(m, r.carro.userData.pneuMask ?? 0); civico.aplicarPneus(r.carro, m); if (ri >= 0) faiscarRoda(r.carro, ri); }
 }
 function atualizarPneus() {
@@ -3531,6 +3536,7 @@ function atualizarAtomicos(dt) {
   }
 }
 function efeitoExplosao(x, y, z, k = 1, tinta = true, semOnda = false) {
+  if (!tinta && y - alturaChao(x, z) < 2.5) marcarQueimado(x, z, 2.2 * k, null);   // 22z: chão chamuscado onde explodiu
   const fogo = new THREE.Mesh(geoExplosao, new THREE.MeshBasicMaterial({ color: '#ffb23a', transparent: true, opacity: 0.95, toneMapped: false }));
   const fumaca = new THREE.Mesh(geoExplosao, new THREE.MeshStandardMaterial({ color: '#3b3b3b', transparent: true, opacity: 0.6, roughness: 1, depthWrite: false }));
   const tt = tinta ? new THREE.Mesh(geoExplosao, new THREE.MeshStandardMaterial({ color: '#1f9e46', transparent: true, opacity: 0.9, roughness: 0.6 })) : null;
@@ -10014,7 +10020,8 @@ function atualizarJogador(dt) {
     // 22v: em pé com a mira de centro, andando, o corpo vira para onde o analógico aponta (como sem arma); só fica
     // virado para a mira parado, atirando ou logo depois do tiro (aí anda de lado/de costas, como antes)
     const mirandoAgora = performance.now() - (j.tiroEm || 0) < 900 || !!gatilho.segurando;
-    if (miraC.ligada && (!j.postura || j.abxEmPe) && (vel === 0 || mirandoAgora)) j.yaw = vel === 0 && !mirandoAgora ? suavizarAngulo(j.yaw, miraC.yaw, dt * 10) : miraC.yaw;
+    // 22y: andando, o corpo segue sempre o analógico (mesmo atirando); só parado ele vira para a mira (na hora, se atirando)
+    if (miraC.ligada && (!j.postura || j.abxEmPe) && vel === 0) j.yaw = mirandoAgora ? miraC.yaw : suavizarAngulo(j.yaw, miraC.yaw, dt * 10);
     else if (miraC.ligada && vel === 0) j.yaw = suavizarAngulo(j.yaw, miraC.yaw, dt * 6);   // 20p: abaixado/deitado parado: vira para a mira
     // animação conforme o estado
     if (j.morto) { /* fica caído */ }
@@ -10025,7 +10032,7 @@ function atualizarJogador(dt) {
       else if (j.carregando) av.tocar('carry_walk', { velocidade: 1 });
       else if (j.postura && !j.abxEmPe) animPostura(av, j, true, ix);
       else if (j.armado && recargaAtual(j)) animRecarga(av, correr ? 'correndo' : 'andando', recargaAtual(j));
-      else if (j.armado && miraC.ligada && mirandoAgora && !(correr && turbinado()) && (iy < -0.2 || Math.abs(ix) > Math.max(0.25, iy * 1.1))) {   // 20o: mirando (22v: atirando), para trás ou de lado
+      else if (false && j.armado && miraC.ligada && mirandoAgora && !(correr && turbinado()) && (iy < -0.2 || Math.abs(ix) > Math.max(0.25, iy * 1.1))) {   // 20o: mirando (22v: atirando), para trás ou de lado
         if (iy < 0 && -iy >= Math.abs(ix) * 0.8) av.tocar(forca > 0.75 ? 'mira_tras_rapido' : 'mira_tras_lento', { velocidade: 1 });
         else av.tocar(ix > 0 ? 'mira_lado_dir' : 'mira_lado_esq', { velocidade: 1 });
       }
@@ -10732,7 +10739,7 @@ function quadroJogo() {
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   diag('remotos/voz');
   atualizarRemotos(dt); atualizarTatica(dt);
-  voz.atualizar(dt); atualizarOficinasJog(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarRotulos(); atualizarCongelados(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
+  voz.atualizar(dt); atualizarOficinasJog(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarMarcasQueimado(); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarRotulos(); atualizarCongelados(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   diag('ônibus/aviação/rodas');
   atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); atualizarPanes(dt); atualizarSinaisJog(dt); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); { const dr = civico.distRe(); if (dr < 45) sons.continuo('marcha_re', 0.55 * sons.perto(dr, 45)); } /* 22s: bipe de ré */ civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
@@ -12049,6 +12056,7 @@ function veiculoPorRef(ref) {
   if (t === 'van') { const v = vansNpc.find((x) => x.id === +k); return v?.roubada && jogador.carro?.vanNpc !== v ? { mesh: v.obj, x: v.obj.position.x, z: v.obj.position.z, l: v } : null; }
   if (t === 'via') { const v = viaturas.find((x) => x.id === +k); return v?.roubada && jogador.carro?.viatura !== v ? { mesh: v.obj, x: v.obj.position.x, z: v.obj.position.z, l: v } : null; }
   if (t === 'seq') { const s = seqOnibus.get(+k); return s?.mesh ? { mesh: s.mesh, x: s.mesh.position.x, z: s.mesh.position.z, l: s } : null; }
+  if (t === 'serv') { const n = servicos.npcDaChave(k); return n?.obj && n.destruidoAte ? { mesh: n.obj, x: n.obj.position.x, z: n.obj.position.z, l: null } : null; }   // 22z: caminhão de serviço que explodiu
   return null;
 }
 // crimes de clã: membro de clã (ou o admin, para testar). Sem clã, o botão aparece mas explica a regra.
@@ -12369,10 +12377,10 @@ function rodaMaisPerto(obj, p, raio = 1.1) {
 }
 // tiro numa roda de NPC: o servidor guarda a pane e avisa todo mundo
 function furarPneuNpc(ref, obj, i) {
+  if (obj.userData.queimado || veiculoEmChamas(ref)) return;   // 22z: carcaça queimada: não abre chamado de pneu
   const P = panes.get(ref); if (P && ((P.mask >> i) & 1 || P.guincho)) return;
   if (P && P.patio && agoraServidor() > P.fim) return;   // no pátio
-  faiscarRoda(obj, i);
-  sons.tocar('soco_metal', { vol: 0.6, dist: Math.hypot(obj.position.x - jogador.pos.x, obj.position.z - jogador.pos.z), raio: 40, velocidade: 0.6 });
+  faiscarRoda(obj, i); somPneu(obj);
   rede.pneuNpc.furar(ref, i, obj.position.x, obj.position.z, obj.rotation.y).then((r) => { if (r?.ref) { receberPaneNpc(r, true); conexao?.enviar('pneuNpc', r); } }).catch(() => {});
 }
 // carro parado na vaga (instanciado): vira um carro de verdade ali mesmo, com o pneu murcho
@@ -12535,6 +12543,7 @@ function atualizarPanes(dt) {
       continue;
     }
     if (!veh) continue;
+    if (veh.userData.queimado || veiculoEmChamas(P.ref)) { if (P.cena) limparAtores(P); veh.userData.alerta = false; continue; }   // 22z: explodiu/pegou fogo: o mecânico não vem mais (nem o guincho com fogo)
     usados.add(veh); comPane.add(veh);
     // encosta no meio-fio (nos primeiros segundos) e liga o pisca-alerta
     P.lat = N.bus ? 0.8 : 1.3;   // o ônibus já anda mais perto da calçada
@@ -13164,6 +13173,7 @@ function atualizarQueimados(dt) {
   }
   for (const f of servicos.listaIncendios()) {
     if (f.tipo !== 'veiculo' || !f.ref) continue;
+    marcarQueimado(f.x, f.z, f.porte >= 2 ? 4.6 : 3.4, f.ref);   // 22z: chão queimado embaixo do veículo em chamas
     const v = veiculoPorRef(f.ref); if (!v) continue;
     const q = f.explodiu_em ? 1 : Math.min(1, Math.max(0, ((agora - Date.parse(f.inicio)) / 1000 - 20) / 70));   // 21y/22b: explodiu: carcaça preta na hora
     if (v.l) v.l.queima = Math.max(v.l.queima || 0, q);
@@ -13173,6 +13183,57 @@ function atualizarQueimados(dt) {
   atualizarPneus();
   // o veículo da empresa voltou para o dono (garagem): sai novo, sem a pintura de queimado
   for (const c of caminhoes.values()) if (c.obj?.userData.queimado && c.d.status !== 'dirigido') { limparQueimado(c.obj); c.queima = 0; }
+}
+// ---- 22z: marca de queimado no chão (fuligem com raios da explosão). Fica enquanto o fogo ou a carcaça estiverem lá;
+// depois que levam o veículo, fica mais 1 min 30 s e some aos poucos.
+const marcasQueimado = [], MARCA_FICA = 90, MARCA_SOME = 25;
+let texMarca = null;
+function texturaMarca() {
+  if (texMarca) return texMarca;
+  const N = 256, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d');
+  let sd = 7; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+  const r0 = g.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+  r0.addColorStop(0, 'rgba(8,6,5,0.92)'); r0.addColorStop(0.35, 'rgba(14,11,9,0.85)'); r0.addColorStop(0.62, 'rgba(30,22,16,0.45)'); r0.addColorStop(1, 'rgba(40,30,20,0)');
+  g.fillStyle = r0; g.fillRect(0, 0, N, N);
+  g.globalCompositeOperation = 'source-over';
+  for (let i = 0; i < 46; i++) {   // raios da explosão
+    const a = rnd() * Math.PI * 2, l = N * (0.28 + rnd() * 0.22), w = 2 + rnd() * 7;
+    const gr = g.createLinearGradient(N / 2, N / 2, N / 2 + Math.cos(a) * l, N / 2 + Math.sin(a) * l);
+    gr.addColorStop(0, 'rgba(10,8,6,0.55)'); gr.addColorStop(1, 'rgba(10,8,6,0)');
+    g.strokeStyle = gr; g.lineWidth = w; g.lineCap = 'round'; g.beginPath(); g.moveTo(N / 2, N / 2); g.lineTo(N / 2 + Math.cos(a) * l, N / 2 + Math.sin(a) * l); g.stroke();
+  }
+  for (let i = 0; i < 90; i++) {   // manchas soltas (borda irregular) e cinza
+    const a = rnd() * Math.PI * 2, d = N * (0.05 + rnd() * 0.33), r = 3 + rnd() * 16;
+    g.fillStyle = rnd() < 0.2 ? `rgba(70,64,58,${0.25 + rnd() * 0.25})` : `rgba(12,9,7,${0.2 + rnd() * 0.4})`;
+    g.beginPath(); g.arc(N / 2 + Math.cos(a) * d, N / 2 + Math.sin(a) * d, r, 0, Math.PI * 2); g.fill();
+  }
+  // apaga a borda de fora (círculo suave), para não ficar um quadrado
+  g.globalCompositeOperation = 'destination-in';
+  const r1 = g.createRadialGradient(N / 2, N / 2, N * 0.3, N / 2, N / 2, N / 2); r1.addColorStop(0, 'rgba(0,0,0,1)'); r1.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = r1; g.fillRect(0, 0, N, N);
+  texMarca = new THREE.CanvasTexture(c); texMarca.colorSpace = THREE.SRGBColorSpace; return texMarca;
+}
+const geoMarca = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+function marcarQueimado(x, z, r, ref) {
+  const ja = marcasQueimado.find((m) => (ref ? m.ref === ref : !m.ref && Math.hypot(m.x - x, m.z - z) < r * 0.5));
+  if (ja) { ja.visto = performance.now(); if (ja.r < r) { ja.r = r; ja.mesh.scale.set(r * 2, 1, r * 2); } return; }
+  if (marcasQueimado.length >= 40) { const v = marcasQueimado.shift(); scene.remove(v.mesh); v.mesh.material.dispose(); }
+  const mat = new THREE.MeshBasicMaterial({ map: texturaMarca(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  const mesh = new THREE.Mesh(geoMarca, mat); mesh.position.set(x, alturaChao(x, z) + 0.035, z); mesh.rotation.y = Math.random() * Math.PI * 2; mesh.scale.set(r * 2, 1, r * 2); mesh.renderOrder = 2;
+  scene.add(mesh); marcasQueimado.push({ mesh, x, z, r, ref, visto: performance.now() });
+}
+function atualizarMarcasQueimado() {
+  const agora = performance.now();
+  for (let i = marcasQueimado.length - 1; i >= 0; i--) {
+    const m = marcasQueimado[i];
+    if (m.ref) {   // a carcaça ainda está lá: a marca continua inteira
+      const v = veiculoPorRef(m.ref), o = v?.mesh;
+      if (o?.visible && o.userData.queimado && Math.hypot(o.position.x - m.x, o.position.z - m.z) < m.r + 2) m.visto = agora;
+    }
+    const s = (agora - m.visto) / 1000;
+    m.mesh.material.opacity = s < MARCA_FICA ? 1 : Math.max(0, 1 - (s - MARCA_FICA) / MARCA_SOME);
+    if (s > MARCA_FICA + MARCA_SOME) { scene.remove(m.mesh); m.mesh.material.dispose(); marcasQueimado.splice(i, 1); }
+  }
 }
 function limparQueimado(mesh) {
   mesh.userData.queimaTotal = false; civico.aplicarPneus(mesh, 0, false);

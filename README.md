@@ -1845,6 +1845,15 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Oficinas autorizadas (18h + SQL 110)**:
   - Duas oficinas de NPC com cobertura, balcão e placa, laranja no mapa (`montarOficinas`): **Oficina do Zé** em Vila Serra (preço base, o carro fica 2 min na oficina e some do mapa) e **Garagem Premium** no quarteirão ao lado da Concessionária (30% mais cara, na hora). Para usar, o jogador estaciona o carro na vaga embaixo da cobertura e toca em 🔧 Oficina no balcão.
   - **Serviços** (`oficina_servico`, pago da carteira): pintura em 10 cores (2.000); motor 1, 2 e 3 com +10, +20 e +30% de velocidade máxima (8.000, 20.000, 45.000; `max` no `entrarCarro`); blindagem leve (30.000). O carro blindado aguenta a primeira explosão de tanque e gasta a blindagem; refazer custa a metade. Para arrombar, são 3 golpes no vidro. A janela 🚗 Veículos mostra o motor, a blindagem e se o carro está na oficina.
+## 22z
+- Marca de chão queimado (fuligem com os raios da explosão) onde algo explode e embaixo de veículo em chamas. Fica enquanto o fogo ou a carcaça estiverem lá; depois que levam o veículo, fica 1 min 30 s e some aos poucos (25 s).
+- Veículo que explodiu ou pegou fogo: o mecânico/guincho do pneu furado não aparece mais (e não abre chamado novo de pneu em carcaça).
+- Carcaça do caminhão de serviço que explodiu também conta como obstrução e segura a marca.
+
+## 22y
+- Armado em pé: andando, o personagem sempre vira para onde anda, mesmo atirando (sai o andar de lado/de costas). Parado, vira na hora para onde está mirando.
+- Som novo de pneu esvaziando quando um tiro fura o pneu (carros de jogadores, NPCs, viaturas, ônibus; também para quem está perto vendo).
+
 ## 22x
 - Tela de carregamento com 10 fotos novas tiradas no gráfico Máxima (Metrópole, centro, rodoviária, aeroporto, monumento, favela da Serra, Porto Sul, Vila Serra, Morro do Porto e a cidade à noite). Nomes novos (cena22_*) para não pegar cópia velha guardada no aparelho; se as fotos demorarem, a tela mostra assim mesmo depois de 2 s.
 - A música do carregamento para de vez quando o jogo abre (antes podia voltar a tocar se o celular demorasse para começar o som).

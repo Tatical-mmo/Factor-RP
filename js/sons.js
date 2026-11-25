@@ -6,7 +6,7 @@
 
 const ARQUIVOS = ['sirene_bombeiros', 'sirene_ambulancia', 'sirene_policia', 'helicoptero_baixo', 'helicoptero_alto',
   'buzina_trem', 'trem_andando', 'robo_conversando', 'tiro', 'laser',
-  'carro_partida', 'passaros', 'explosao_carro', 'explosao_grande', 'explosao_longe', 'explosao_agua', 'corvos', 'apagado', 'em_cana', 'soco1', 'soco2', 'soco_metal',
+  'carro_partida', 'passaros', 'explosao_carro', 'explosao_grande', 'explosao_longe', 'explosao_agua', 'corvos', 'apagado', 'em_cana', 'soco1', 'soco2', 'soco_metal', 'pneu_furado',
   ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].flatMap((i) => [`passo_duro_${i}`, `passo_grama_${i}`])];   // 20g: passos um a um (sorteados), não mais um laço
 const SOB_DEMANDA = ['marcha_re', 'onibus_viagem', 'cidade_ambiente', 'cidade_noite', 'noite_cidades', 'chuva', 'tempestade', 'nevasca', 'aviao_fora', 'aviao_dentro', 'aviao_pequeno', 'aviao_medio', 'onibus_grande', 'onibus_pequeno',
   // motores novos (laços de marcha lenta e de rotação alta), baixados quando tocam pela primeira vez
