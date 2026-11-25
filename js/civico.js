@@ -1662,7 +1662,7 @@ export const LANT_PADRAO = {
   onibus_rod_vermelho: { des: 'marcopolo', x: 1.06, z: -6.64, y: 0.8, h: 1.0, w: 0.44, ang: 30 },
   onibus_rod_branco: { des: 'viaggio', x: 1.08, z: -6.56, y: 0.9, h: 0.85, w: 0.46, ang: 30 },
   onibus_rod_dourado: { des: 'paradiso_g6', x: 1.0, z: -7.14, y: 1.0, h: 1.1, w: 0.42, ang: 30 },
-  onibus_branco: { des: 'torino', x: 1.0, z: -6.06, y: 0.7, h: 1.15, w: 0.42, ang: 25 },   // 22l: o conjunto do Torino (carcaça + LEDs) cobre a pintura torta
+  onibus_branco: { des: 'torino', x: 1.0, z: -6.06, y: 0.7, h: 1.15, w: 0.42, ang: 25, rev: 2 },   // 22l: o conjunto do Torino (carcaça + LEDs) cobre a pintura torta
   onibus_laranja: redondas(0.97, -6.37, 0.82, 0.24),
   onibus_amarelo: { pecas: [
     { des: 'apache07_v1', x: 1.16, z: -6.09, y: 1.55, h: 0.55, w: 0.1, ang: 35 }, { des: 'apache07_b1', x: 1.04, z: -6.09, y: 1.55, h: 0.55, w: 0.1, ang: 25 },
@@ -1765,7 +1765,10 @@ function acenderLantDes(o, u, ligado) {
   for (const m of L.setaE) m.opacity = sE; for (const m of L.setaD) m.opacity = sD;
 }
 // medida nova (do admin ou do banco): refaz a lanterna em todos os ônibus desse modelo que estão na cena
-export function definirLantCfg(glb, C) {
+export function definirLantCfg(glb, C, doBanco = false) {
+  // 22m: quando a lanterna padrão de um modelo muda (rev maior), a medida salva antes no banco deixa de valer:
+  // o ônibus passa a usar a lanterna nova sem o admin precisar apagar nada
+  if (doBanco && C && (LANT_PADRAO[glb]?.rev || 0) > (C.rev || 0)) C = LANT_PADRAO[glb];
   if (C) lantCfg[glb] = { ...C }; else delete lantCfg[glb];
   for (const o of comLuz) if (o.userData.glb === glb) montarLantDes(o);
 }

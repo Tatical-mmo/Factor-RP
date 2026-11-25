@@ -12034,7 +12034,7 @@ const CAMPOS_LANT = [['y', 'Altura', 0.01], ['h', 'Tamanho', 0.02], ['w', 'Largu
 let lantPedidas = false;
 const escLant = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function carregarLanternas() {
-  rede.lanternas.listar().then((l) => { for (const r of l) civico.definirLantCfg(r.modelo, r.cfg); }).catch(() => {});
+  rede.lanternas.listar().then((l) => { for (const r of l) civico.definirLantCfg(r.modelo, r.cfg, true); }).catch(() => {});
 }
 let ajLant = null;
 function abrirAjusteLanternas() {
@@ -12095,7 +12095,7 @@ function desenharAjusteLant() {
       if (k === 'padrao') { A.cfg = JSON.parse(JSON.stringify(civico.LANT_PADRAO[A.modelo] || { ...C, des: 'nenhuma' })); A.peca = -1; aplicarAjusteLant(); return; }
       if (k === 'salvar') {
         const arred = (o) => Object.fromEntries(Object.entries(o).map(([a, v]) => [a, typeof v === 'number' ? Math.round(v * 1000) / 1000 : v && typeof v === 'object' ? arred(v) : v]));
-        const cfg = A.cfg.pecas ? { pecas: A.cfg.pecas.map(arred) } : arred(A.cfg);
+        const cfg = A.cfg.pecas ? { pecas: A.cfg.pecas.map(arred) } : arred(A.cfg); cfg.rev = civico.LANT_PADRAO[A.modelo]?.rev || 0;
         rede.lanternas.salvar(A.modelo, cfg).then(() => { aviso('💾 Lanterna salva: vale para todos.', 2.5); conexao?.enviar('lantCfg', { modelo: A.modelo }); }).catch((er) => aviso(er.message, 3));
         return;
       }
