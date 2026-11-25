@@ -414,6 +414,8 @@ function atualizarNpcs(dt) {
   const agora = performance.now(), t = agora / 1000;
   for (const [chave, n] of npcs) {
     if (agora < n.t0) continue;
+    if (n.destruidoAte && agora > n.destruidoAte) { ctx.scene.remove(n.obj); npcs.delete(chave); continue; }   // 22w: a carcaça é recolhida
+    if (n.pausa) { n.atraso += dt; civico.atualizarSirenes(0, n.obj); continue; }   // 22w: parado (pneu furado ou destruído)
     // trânsito: espera quem estiver na frente (o atraso é recuperado depois, um pouco mais rápido)
     if (n.obj.visible && !n.chegou || n.volta) {
       const o = n.obj.position, bloq = n.obj.visible && (ctx.obstaculo?.(o.x, o.z, n.obj.rotation.y, n.obj) || (n.volta && ctx.sinal?.(o.x, o.z, n.obj.rotation.y)));   // voltando (sem sirene) respeita o sinal
@@ -509,6 +511,13 @@ export function chamarAmbulancia(chave, alvo, aoChegar, atraso = 1.5) {
 }
 export function cancelarAmbulancia(chave) { voltarNpc('amb' + chave); }
 export function veiculosNpc() { const r = []; for (const n of npcs.values()) if (n.obj.visible) r.push(n.obj); return r; }
+// 22w: os de serviço (bombeiros indo para um incêndio, ambulância) também furam pneu e explodem com foguete.
+// Chave dos que podem: só letras, números e ponto (vira a ref "serv:<chave>" no banco).
+export function npcsComChave() { const r = []; for (const [k, n] of npcs) if (n.obj.visible && !n.volta && /^[a-z0-9.]{1,24}$/.test(k)) r.push([k, n]); return r; }
+export function npcDaChave(k) { return npcs.get(k) || null; }
+// pane (pneu furado): para onde está e o horário espera; destruído (foguete): fica parado queimando e some depois
+export function pausarNpc(k, on) { const n = npcs.get(k); if (n) n.pausa = !!on; }
+export function destruirNpc(k, ms = 180000) { const n = npcs.get(k); if (!n) return; n.pausa = true; n.destruidoAte = performance.now() + ms; }
 
 export function atualizar(dt) {
   if (!ctx) return;

@@ -1845,3 +1845,9 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Oficinas autorizadas (18h + SQL 110)**:
   - Duas oficinas de NPC com cobertura, balcão e placa, laranja no mapa (`montarOficinas`): **Oficina do Zé** em Vila Serra (preço base, o carro fica 2 min na oficina e some do mapa) e **Garagem Premium** no quarteirão ao lado da Concessionária (30% mais cara, na hora). Para usar, o jogador estaciona o carro na vaga embaixo da cobertura e toca em 🔧 Oficina no balcão.
   - **Serviços** (`oficina_servico`, pago da carteira): pintura em 10 cores (2.000); motor 1, 2 e 3 com +10, +20 e +30% de velocidade máxima (8.000, 20.000, 45.000; `max` no `entrarCarro`); blindagem leve (30.000). O carro blindado aguenta a primeira explosão de tanque e gasta a blindagem; refazer custa a metade. Para arrombar, são 3 golpes no vidro. A janela 🚗 Veículos mostra o motor, a blindagem e se o carro está na oficina.
+## 22w
+- Viaturas (também perseguindo) e caminhões de serviço indo para chamada agora podem ter pneu furado; ficam parados até o guincho.
+- RPG/bazuca explode viaturas, vans e caminhões de serviço em movimento (pegam fogo onde estão).
+- O guincho leva o veículo rebocado por ruas até o pátio, sem sumir no caminho.
+- SQL novo: `supabase/157_pneus_viaturas.sql` (rodar no Supabase).
+

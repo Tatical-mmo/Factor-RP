@@ -996,6 +996,20 @@ function foguetaoNosVeiculos(p, raio) {
   }
   for (const k of mundo.carrosRuaRaio(p.x, p.z, raio)) { const c = mundo.carroRua(k); if (c && !largadosRua.has(k)) destruirVeiculoRef('rua:' + k, c.x, c.z, 'Carro', 1); }
   for (const [k, l] of largadosRua) if (l.mesh && !(l.queima > 0) && Math.hypot(l.x - p.x, l.z - p.z) < raio) destruirVeiculoRef('rua:' + k, l.x, l.z, 'Carro', 1);
+  // 22w: viaturas, vans e os de serviço andando também explodem: param onde estão e pegam fogo
+  const r2 = raio + 1.5, perto = (o) => o.visible && Math.hypot(o.position.x - p.x, o.position.z - p.z) < r2;
+  for (const v of viaturas) if (!v.roubada && perto(v.obj) && jogador.carro?.viatura !== v) {
+    v.roubada = true; v.largadaAte = agoraServidor() + 180000; v.perseguindo = false; v.pe = null;
+    destruirVeiculoRef('via:' + v.id, v.obj.position.x, v.obj.position.z, 'Viatura', 1); pintarQueimado(v.obj, 1);
+  }
+  for (const v of vansNpc) if (!v.roubada && perto(v.obj) && jogador.carro?.vanNpc !== v) {
+    v.roubada = true; v.largadaAte = agoraServidor() + 420000;
+    destruirVeiculoRef('van:' + v.id, v.obj.position.x, v.obj.position.z, 'Van', 1); pintarQueimado(v.obj, 1);
+  }
+  for (const [k, n] of servicos.npcsComChave()) if (perto(n.obj)) {
+    servicos.destruirNpc(k); pintarQueimado(n.obj, 1);
+    destruirVeiculoRef('serv:' + k, n.obj.position.x, n.obj.position.z, n.modelo === 'bombeiros' ? 'Caminhão dos bombeiros' : 'Ambulância', n.modelo === 'bombeiros' ? 2 : 1);
+  }
 }
 // dirigindo: o que estiver na frente (ou atrás, de ré) do veículo cai
 function derrubarNoCaminho(c) {
@@ -9175,6 +9189,7 @@ function atualizarViaturas(dt) {
   const cacado = ((j.perfil?.recompensa || 0) > 0 || atacou) && !j.morto && !(j.pena > 0) && !j.dentroCasa && !j.trem;
   for (const v of viaturas) {
     const o = v.obj;
+    if (!v.roubada && panes.has('via:' + v.id)) { v.perseguindo = false; civico.atualizarSirenes(0, o); continue; }   // 22w: pneu furado: parada (o guincho cuida)
     civico.atualizarSirenes(v.perseguindo || remotoAtivo(v) ? t : 0, o);
     if (v.roubada) { if (jogador.carro?.viatura !== v) atualizarViaturaRoubada(v); if (v.pe) atualizarViaturaAPe(v, dt); continue; }
     if (v.pe) { atualizarViaturaAPe(v, dt); if (v.pe && !v.pe.volta) { v.perseguindo = true; publicarRobo(v, dt, o); v.perseguindo = false; } continue; }
@@ -12330,6 +12345,8 @@ function npcDaPane(ref) {
   if (t === 'van') { const v = vansNpc.find((x) => x.id === +k); return v && !v.roubada ? { obj: v.obj, st: v.st, comp: 5.4 } : null; }
   if (t === 'bomb') { const v = rondasBombeiros[+k]; return v ? { obj: v.obj, st: v.st, comp: 8.2, oculto: !v.obj.visible } : null; }
   if (t === 'bus') { const b = onibusNpc.find((o) => o.ativo && o.chB === k); const st = estadoBus.get(k); return st ? { obj: b && !b.leve ? b.mesh : null, st, comp: b?.comp || 12, bus: b } : null; }
+  if (t === 'via') { const v = viaturas.find((x) => x.id === +k); return v && !v.roubada ? { obj: v.obj, st: v.st ||= { atraso: 0 }, comp: 4.8 } : null; }   // 22w
+  if (t === 'serv') { const n = servicos.npcDaChave(k); return n ? { obj: n.obj, st: null, comp: n.modelo === 'bombeiros' ? 8.2 : 5.6, serv: k } : null; }   // 22w
   return null;
 }
 // NPCs que levam tiro na roda (o que se mexe pelas ruas)
@@ -12337,6 +12354,8 @@ function* npcsComPneu() {
   for (const v of vansNpc) if (!v.roubada && v.obj.visible) yield ['van:' + v.id, v.obj, 3.2];
   for (let i = 0; i < rondasBombeiros.length; i++) if (rondasBombeiros[i].obj.visible) yield ['bomb:' + i, rondasBombeiros[i].obj, 5];
   for (const b of onibusNpc) if (b.ativo && !b.leve && b.mesh.visible && b.chB) yield ['bus:' + b.chB, b.mesh, Math.max(6, b.comp / 2 + 1)];
+  for (const v of viaturas) if (!v.roubada && !v.pe && v.obj.visible) yield ['via:' + v.id, v.obj, 3.2];   // 22w: viaturas (também perseguindo)
+  for (const [k, n] of servicos.npcsComChave()) yield ['serv:' + k, n.obj, n.modelo === 'bombeiros' ? 5 : 3.4];   // 22w: bombeiros indo para o fogo, ambulância
 }
 function rodaMaisPerto(obj, p, raio = 1.1) {
   const l = civico.rodasDe(obj); if (!l.length) return -1;
@@ -12435,12 +12454,41 @@ function cenaTroca(P, e, veh, T, comp) {
   else if (e < T.trab[1]) { colocarAtor(av.raiz, fora, Math.atan2(rd.x - fora.x, rd.z - fora.z)); if (av.nomeAtual !== 'abaixado') av.tocar('abaixado'); }
   else mecanicoAnda(av, fora, porta, (e - T.volta[0]) / (T.volta[1] - T.volta[0]));
 }
+// 22w: caminho do guincho até o pátio (Vila Serra) pelas ruas e pela rodovia: da Metrópole sai pela rua até a
+// rodovia norte (x = -162), sobe até Vila Serra e entra no pátio; de Porto Sul passa pela Metrópole antes
+const V_GUINCHO = 12;   // m/s (~43 km/h)
+function rotaGuincho(P, saida) {
+  const pts = [], por = (l) => { for (const q of l || []) { const u = pts[pts.length - 1]; if (!u || Math.hypot(u.x - q.x, u.z - q.z) > 0.5) pts.push({ x: q.x, z: q.z }); } };
+  const ruas = (a, b) => mundo.caminhoRuas(a, b) || [a, b];
+  if (saida.z < -700) por(ruas(saida, { x: 81, z: -945 }));   // já está em Vila Serra
+  else {
+    let de = saida;
+    if (saida.z > 700) { por(ruas(saida, { x: 81, z: 945 })); por([{ x: 216, z: 945 }, { x: 216, z: -108 }]); de = { x: 216, z: -108 }; }   // Porto Sul: sobe pela Av. Leste
+    por(ruas(de, { x: -162, z: -108 })); por([{ x: -162, z: -945 }, { x: 81, z: -945 }]);
+  }
+  const V = P.vaga != null ? VAGAS_GUINCHO[P.vaga] : { x: 113, z: -960, ang: 0 };
+  por([{ x: 96, z: -945 }, { x: V.x, z: V.z + (V.ang === 0 ? 9 : -9) }, { x: V.x, z: V.z }]);
+  const lado = ladoDireito(pts.slice(0, -2)).concat(pts.slice(-2));   // pela faixa da direita (no pátio, no meio)
+  return { pts: lado, ac: caminhoComp(lado) };
+}
 // cena do guincho no NPC: para na frente, o mecânico engata, o veículo sobe atrás e os dois vão embora
 function cenaReboque(P, e, veh, comp) {
   const C = atoresPane(P), T = T_GUI, lat = P.lat ?? 1.3, frente = comp / 2 + 4.2 + 1.0, gancho = 4.2 + comp / 2 + 0.3;
   let s = -50, la = -1.8, vis = false;
   if (e >= T.chega[0] && e < T.chega[1]) { vis = true; const u = (e - T.chega[0]) / (T.chega[1] - T.chega[0]); s = -50 + (frente + 50) * (1 - (1 - u) ** 2); la = u < 0.8 ? -1.8 : -1.8 + (lat + 1.8) * suave((u - 0.8) / 0.2); }
-  else if (e >= T.chega[1]) { vis = true; la = lat; const t = e - T.leva; s = frente + (t <= 0 ? 0 : t < 5 ? 0.8 * t * t : 20 + 8 * (t - 5)); if (s - frente > 70) vis = false; }
+  else if (e >= T.chega[1]) { vis = true; la = lat; const t = e - T.leva; s = frente + (t <= 0 ? 0 : t < 5 ? 0.8 * t * t : 20 + 8 * (t - 5)); }
+  // 22w: depois de engatar, os dois seguem pelas ruas até o pátio (antes sumiam uns 70 m à frente)
+  if (e >= T.leva) {
+    P.rota ||= rotaGuincho(P, pontoPane(P, frente, lat));
+    const R = P.rota, tot = R.ac[R.ac.length - 1], V = Math.max(V_GUINCHO, tot / 120), t = e - T.leva, d = Math.min(tot, t < 3 ? 0.5 * 4 * t * t : 18 + V * (t - 3));   // trajeto longo (outra cidade): na rodovia vai mais rápido (no máximo ~2 min)
+    P.fimRota = P.t0 + (T.leva + 3 + Math.max(0, tot - 18) / V) * 1000;
+    const a = pontoNoCaminho(R.pts, R.ac, d), b = pontoNoCaminho(R.pts, R.ac, Math.max(0, d - gancho));
+    const ve = Math.hypot(a.x - jogador.pos.x, a.z - jogador.pos.z) < 260 && !jogador.dentroCasa;
+    colocarAtor(C.v, a, a.ang, ve); C.v.userData.alerta = ve;
+    if (veh) { const ang = Math.atan2(a.x - b.x, a.z - b.z); veh.position.set(b.x, alturaChao(b.x, b.z) + 0.45, b.z); veh.rotation.y = ang; veh.rotation.x = -0.07; veh.visible = ve; }
+    if (C.mec) C.mec.raiz.visible = false;
+    return;
+  }
   colocarAtor(C.v, pontoPane(P, s, la), P.ang, vis); C.v.userData.alerta = vis;
   // o veículo rebocado
   if (veh) {
@@ -12458,6 +12506,7 @@ function cenaReboque(P, e, veh, comp) {
 }
 function terminarPane(P) {
   limparAtores(P); panes.delete(P.ref);
+  if (P.ref.startsWith('serv:')) servicos.pausarNpc(P.ref.slice(5), false);   // 22w: volta a andar
   const o = objDaPane(P);
   if (o) { civico.aplicarPneus(o, 0, !!o.userData.queimaTotal); o.userData.alerta = false; o.rotation.x = 0; comPane.delete(o); }
 }
@@ -12473,8 +12522,9 @@ function atualizarPanes(dt) {
     if (P.ref.startsWith('rua:')) { const m = objDaPane(P); if (m) usados.add(m); continue; }   // o carro da vaga só fica murcho
     const N = npcDaPane(P.ref); if (!N) continue;
     if (N.st) N.st.atraso = (N.st.atraso || 0) + dt;   // o horário fica segurado
+    if (N.serv) servicos.pausarNpc(N.serv, true);   // 22w: o de serviço espera parado
     const veh = N.obj, e = (agora - P.t0) / 1000, perto = Math.hypot(P.x - jogador.pos.x, P.z - jogador.pos.z) < 260;
-    if (agora >= P.fim) {   // no pátio do guincho
+    if (agora >= Math.max(P.fim, P.fimRota || 0)) {   // no pátio do guincho (22w: depois que o guincho chegou lá)
       if (P.cena) limparAtores(P);
       if (veh && P.vaga != null) { const V = VAGAS_GUINCHO[P.vaga]; veh.position.set(V.x, alturaChao(V.x, V.z), V.z); veh.rotation.set(0, V.ang, 0); veh.userData.alerta = false; veh.visible = !jogador.dentroCasa && Math.hypot(V.x - jogador.pos.x, V.z - jogador.pos.z) < 300; usados.add(veh); civico.aplicarPneus(veh, P.mask); comPane.add(veh); }
       else if (veh) veh.visible = false;
@@ -12491,7 +12541,8 @@ function atualizarPanes(dt) {
     if (veh.userData.paneMask !== visMask) { civico.aplicarPneus(veh, visMask); veh.userData.paneMask = visMask; }
     // os passageiros descem quando vem o guincho
     if (P.guincho && N.bus && jogador.onibus && N.bus.L === jogador.onibus.L && N.bus.m === jogador.onibus.m && e > T_GUI.para) descerOnibus(N.bus.e?.s ?? 0, '🚌 Furaram dois pneus do ônibus: todos descem, o guincho vai levá-lo para o pátio.');
-    if (!perto) { if (P.cena) limparAtores(P); if (P.guincho && e >= T_GUI.leva) veh.visible = false; continue; }
+    if (P.guincho && e >= T_GUI.leva) { cenaReboque(P, e, veh, N.comp); continue; }   // 22w: indo para o pátio (aparece onde estiver)
+    if (!perto) { if (P.cena) limparAtores(P); continue; }
     if (P.guincho) cenaReboque(P, e, veh, N.comp); else cenaTroca(P, e, veh, T_SAV, N.comp);
   }
   for (const o of comPane) if (!usados.has(o)) { civico.aplicarPneus(o, 0, !!o.userData.queimaTotal); o.userData.alerta = false; o.userData.paneMask = 0; o.rotation.x = 0; comPane.delete(o); }
