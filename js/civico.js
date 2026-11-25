@@ -1639,6 +1639,7 @@ export const DESENHOS_LANT = {
   busscar: { nome: 'Busscar Jum Buss 360', arq: 'assets/lanternas/busscar_', prop: 256 / 1348, camadas: L3 },
   paradiso_g6: { nome: 'Marcopolo Paradiso G6', arq: 'assets/lanternas/paradiso_g6_', prop: 256 / 592, camadas: L3 },
   // peças soltas (cada uma ajustável sozinha)
+  moldura_redondas: { nome: 'Moldura vermelha (atrás das redondas)', arq: 'assets/lanternas/moldura_redondas_', prop: 160 / 448, camadas: [], fundo: true },
   redonda_ambar: { nome: 'Redonda âmbar (seta)', arq: 'assets/lanternas/redonda_ambar_', prop: 1, camadas: ['seta'] },
   redonda_vermelha: { nome: 'Redonda vermelha (lanterna)', arq: 'assets/lanternas/redonda_vermelha_', prop: 1, camadas: ['led'] },
   redonda_branca: { nome: 'Redonda branca (ré)', arq: 'assets/lanternas/redonda_branca_', prop: 1, camadas: ['re'] },
@@ -1660,7 +1661,7 @@ export const LANT_PADRAO = {
   onibus_rod_vermelho: { des: 'marcopolo', x: 1.06, z: -6.64, y: 0.8, h: 1.0, w: 0.44, ang: 30 },
   onibus_rod_branco: { des: 'viaggio', x: 1.08, z: -6.56, y: 0.9, h: 0.85, w: 0.46, ang: 30 },
   onibus_rod_dourado: { des: 'paradiso_g6', x: 1.0, z: -7.14, y: 1.0, h: 1.1, w: 0.42, ang: 30 },
-  onibus_branco: redondas(1.0, -6.06, 0.9, 0.26),
+  onibus_branco: { pecas: [{ des: 'moldura_redondas', x: 1.0, z: -6.06, y: 0.78, h: 0.98, w: 0.36, ang: 25 }, ...redondas(1.0, -6.06, 0.9, 0.26).pecas] },   // 22k: moldura cobre a pintura torta
   onibus_laranja: redondas(0.97, -6.37, 0.82, 0.24),
   onibus_amarelo: { pecas: [
     { des: 'apache07_v1', x: 1.16, z: -6.09, y: 1.55, h: 0.55, w: 0.1, ang: 35 }, { des: 'apache07_b1', x: 1.04, z: -6.09, y: 1.55, h: 0.55, w: 0.1, ang: 25 },
@@ -1713,7 +1714,7 @@ function pontosLant(g, glb, C, sg) {
   for (let j = 0; j <= NV; j++) for (let i = 0; i <= NU; i++) {
     const u = i / NU, v = j / NV, o = new THREE.Vector3(sg * C.x, C.y + v * C.h, C.z).addScaledVector(lado, (u - 0.5) * W).addScaledVector(d, 3);
     _rc.set(o, dn); _rc.far = 6; const h = _rc.intersectObject(alvo, false)[0];
-    const q = h ? h.point.clone().addScaledVector(d, 0.025) : o.addScaledVector(d, -3);
+    const q = h ? h.point.clone().addScaledVector(d, DESENHOS_LANT[C.des]?.fundo ? 0.012 : 0.025) : o.addScaledVector(d, -3);
     pos.push(q.x, q.y, q.z);
   }
   const r = { pos, NU, NV }; ladoLant.set(chave, r); return r;
