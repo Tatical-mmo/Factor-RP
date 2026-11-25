@@ -11,12 +11,15 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 
 export const NIVEIS = { baixo: 'Baixa', medio: 'Média', alto: 'Alta', ultra: 'Ultra' };
 const comEfeitos = () => nivel === 'alto' || nivel === 'ultra';
 const CHAVE = 'fator_qualidade';
 let R = null, cena = null, sol = null, comp = null, passeRender = null, bloom = null, cor = null, saida = null, nivel = 'medio';
-let toque = false, falhou = false;
+let toque = false, falhou = false, ao = null, comAO = false;
+// 22q (prévia): sombra de contato (oclusão de ambiente) na Alta e na Ultra
+export function definirAO(on) { comAO = !!on; if (comAO) montarComposer(); if (ao) ao.enabled = comAO; }
 
 // cor do filme: contraste, saturação, vinheta e um leve tom (quente de dia, azulado à noite)
 const COR = {
@@ -39,6 +42,22 @@ const COR = {
 };
 
 export function nivelAtual() { return nivel; }
+// ---- 22q: resolução dinâmica. Quando o aparelho não aguenta (muita gente, chuva, explosão), a imagem é desenhada
+// com menos pixels por um tempo (até 60% da resolução do nível) e volta aos poucos quando sobra folga. É o que mais
+// tira as "travadinhas": o jogo prefere ficar um pouco menos nítido a perder quadros.
+let base = 1, escala = 1, janela = { n: 0, lentos: 0, t: 0 }, folga = 0;
+export const escalaResolucao = () => escala;
+export function adaptar(dt) {
+  if (!R || document.hidden) return;   // aba escondida: não conta (um engasgo único pesa só 1 quadro na conta)
+  janela.n++; janela.t += Math.min(dt, 0.5); if (dt > 1 / 45) janela.lentos++;
+  if (janela.t < 2) return;
+  const frac = janela.lentos / janela.n; janela = { n: 0, lentos: 0, t: 0 };
+  let nova = escala;
+  if (frac > 0.25) { nova = Math.max(0.6, escala - 0.1); folga = 0; }
+  else if (frac < 0.04) { if (++folga >= 2) { nova = Math.min(1, escala + 0.05); folga = 0; } }
+  else folga = 0;
+  if (Math.abs(nova - escala) > 0.001) { escala = nova; R.setPixelRatio(base * escala); redimensionar(); }
+}
 export function iniciar(renderer, scene, luzSol, ehToque) {
   R = renderer; cena = scene; sol = luzSol; toque = ehToque;
   let salvo = null; try { salvo = localStorage.getItem(CHAVE); } catch { /* sem armazenamento */ }
@@ -65,14 +84,16 @@ function montarComposer() {
       m.needsUpdate = true; } }
     cor = new ShaderPass(COR);
     saida = new OutputPass();
-    comp.addPass(passeRender); comp.addPass(bloom); comp.addPass(saida); comp.addPass(cor);
+    comp.addPass(passeRender);
+    try { ao = new GTAOPass(cena, new THREE.PerspectiveCamera(), Math.max(256, sz.x / 2), Math.max(256, sz.y / 2)); ao.updateGtaoMaterial({ radius: 2.5, distanceExponent: 1.6, thickness: 3, scale: 1.4, samples: 16 }); ao.blendIntensity = 1; ao.enabled = comAO; comp.addPass(ao); } catch (e) { console.warn('oclusão indisponível', e); ao = null; }
+    comp.addPass(bloom); comp.addPass(saida); comp.addPass(cor);
   } catch (e) { console.warn('pós-processamento indisponível', e); falhou = true; comp = null; }
 }
 function aplicar() {
   if (!R) return;
   const dpr = window.devicePixelRatio || 1;
   const pr = nivel === 'baixo' ? 1 : nivel === 'medio' ? Math.min(dpr, toque ? 1.25 : 2) : nivel === 'ultra' ? Math.min(dpr, 2.5) : Math.min(dpr, toque ? 1.5 : 2);   // celular na média: 1,25x (bem mais leve, quase a mesma nitidez)
-  R.setPixelRatio(pr);
+  base = pr; R.setPixelRatio(pr * escala);
   R.shadowMap.type = nivel === 'baixo' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
   // 21o: Alta e Ultra com ACES (filme: mais contraste e cor mais rica, brilho do sol sem estourar); Baixa e Média
   // seguem com o neutro (mais claro e leve de ler no celular)
@@ -130,6 +151,6 @@ export function ajustar(noite, molhado) {
 }
 export function render(camera) {
   if (!comEfeitos() || !comp) { R.render(cena, camera); return; }
-  passeRender.camera = camera;
+  passeRender.camera = camera; if (ao) { ao.camera = camera; ao.enabled = comAO; }
   try { comp.render(); } catch (e) { console.warn('pós-processamento desligado', e); falhou = true; comp = null; R.render(cena, camera); }
 }

@@ -9,7 +9,9 @@ import * as THREE from 'three';
 
 export const ESTILO = { predio: 0, casa: 1, favela: 2, metal: 3, militar: 4, vidro: 5, naval: 6 };
 let NOITE = { value: 0 };
-export function ligarNoite(u) { NOITE = u; }   // o uniform uNoite do mundo (0 dia, 1 noite)
+export function ligarNoite(u) { NOITE = u; }
+// 22q: "realismo" (prévia): manchas de reboco, escorrido de chuva e sujeira no pé das paredes (0 desliga, 1 liga)
+export const REAL = { value: 0 };   // o uniform uNoite do mundo (0 dia, 1 noite)
 
 // parâmetros de cada estilo: térreo, altura do andar, largura do vão, pilar do canto
 const PAR = [
@@ -26,7 +28,7 @@ export function materialFachada({ estilo = 0, attr = false, porta = null, loja =
   const uPar = new THREE.Vector4(...(P ? [P.t, P.a, P.b, P.p] : PAR[e]));
   const uPorta = porta === null ? (e === 1 || e === 3 || e === 4 || e === 6 ? 1 : 0) : (porta ? 1 : 0);
   m.onBeforeCompile = (s) => {
-    s.uniforms.uNoite = NOITE; s.uniforms.uEst = { value: e }; s.uniforms.uPar = { value: uPar }; s.uniforms.uPorta = { value: uPorta }; s.uniforms.uLoja = { value: loja };
+    s.uniforms.uNoite = NOITE; s.uniforms.uReal = REAL; s.uniforms.uEst = { value: e }; s.uniforms.uPar = { value: uPar }; s.uniforms.uPorta = { value: uPorta }; s.uniforms.uLoja = { value: loja };
     s.vertexShader = s.vertexShader.replace('#include <common>', `#include <common>
       varying vec3 vLoc; varying vec3 vNl; flat varying vec3 vEsc; flat varying float vSeed; flat varying float vEst; flat varying vec3 vInfo;
       ${attr ? 'attribute float aEstilo; attribute vec3 aInfo;' : 'uniform float uEst; uniform float uLoja;'}`)
@@ -40,7 +42,7 @@ export function materialFachada({ estilo = 0, attr = false, porta = null, loja =
       vSeed = fract(sin(dot(mmF[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
       ${attr ? 'vEst = aEstilo; vInfo = aInfo;' : 'vEst = uEst; vInfo = vec3(0.0, 0.0, uLoja);'}`);
     s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>
-      uniform float uNoite; uniform vec4 uPar; uniform float uPorta;
+      uniform float uNoite; uniform float uReal; uniform vec4 uPar; uniform float uPorta;
       varying vec3 vLoc; varying vec3 vNl; flat varying vec3 vEsc; flat varying float vSeed; flat varying float vEst; flat varying vec3 vInfo;
       float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float caixa(vec2 p, vec2 a, vec2 b){ vec2 q = step(a, p) * step(p, b); return q.x * q.y; }
@@ -149,6 +151,13 @@ export function materialFachada({ estilo = 0, attr = false, porta = null, loja =
         cor = mix(cor, corVidro, vidro);
         vec3 cm = E == 1 ? vec3(0.95, 0.94, 0.9) : E == 2 ? vec3(0.18, 0.18, 0.19) : (E == 4 || E == 6) ? vec3(0.92, 0.9, 0.84) : vec3(0.2, 0.21, 0.22);
         cor = mix(cor, cm, moldura * 0.95);
+        if (uReal > 0.5) {   // 22q: reboco irregular, escorridos de chuva, pé da parede e beirada da laje mais sujos
+          float nA = ruido(vec2(u, y) * 0.45 + vSeed * 31.0), nB = mix(ruido(vec2(u, y) * 2.3 + 7.0), 0.5, fx);
+          float esc = smoothstep(0.5, 0.9, ruido(vec2(u * 1.1 + vSeed * 17.0, y * 0.08))) * (0.6 + 0.4 * ruido(vec2(u * 3.0, y * 0.5)));
+          float pe = 1.0 - smoothstep(0.0, 1.6, vLoc.y * vEsc.y), sob = smoothstep(alt - 0.7, alt, y);
+          float k = 1.0 + (nA - 0.5) * 0.26 + (nB - 0.5) * 0.12 - (esc * 0.24 + sob * 0.12) * (1.0 - vidro) - pe * 0.34;
+          cor = mix(cor, vec3(dot(cor, vec3(0.3, 0.59, 0.11))) * vec3(1.02, 0.97, 0.9), 0.12 * (1.0 - vidro)) * k;
+        }
         diffuseColor.rgb = cor;
       } else if (E == 3) {   // telha metálica ondulada em cima
         float ut = vLoc.x * vEsc.x, fxt = clamp(fwidth(ut) * 6.0 - 0.5, 0.0, 1.0);

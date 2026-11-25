@@ -10569,6 +10569,7 @@ function camLenta() {
 function quadroJogo() {
   const dtBruto = relogio.getDelta(); dtRealQ = Math.min(dtBruto, 0.5) * camLenta();   // 21t: o tempo real do quadro (a espera no trânsito conta por ele)
   const dt = Math.min(dtBruto, 0.05) * camLenta();
+  if (!preparando) visual.adaptar(dtBruto);   // 22q: resolução dinâmica (segura o FPS no aparelho que está rodando)
   diag('céu/clima');
   eixos.restaurar();   // a lógica do quadro usa a posição de sempre; o desenho das curvas volta no fim
   ferrovia.atualizar(agoraServidor() / 1000);
@@ -14733,7 +14734,7 @@ function montarCaminho(L) {
     // saída: ré reta para fora da baia e depois esterçando (a traseira vai para o leste, o nariz fica para o oeste),
     // engata e segue pela faixa de saída até o portão oeste, virando direto para a rua
     const Bp = [B.x, B.z], Rv = [B.x + 10, B.z - 11], E = ruaPts[0], dE = dir(ruaPts[0], ruaPts[1]);
-    ini = [Bp, ...bez(Bp, [-fx, -fz], Rv, O, 10, 5)];
+    ini = [Bp, ...bez(Bp, [-fx, -fz], Rv, O, 7, 5)];
     if (Rv[0] - 18 > 134) { const P = [Rv[0] - 18, MEGA.zSai]; ini.push(...bez(Rv, W, P, W, 6, 6), [134, MEGA.zSai], ...bez([134, MEGA.zSai], W, E, dE, 11, 11).slice(0, -1)); }
     else ini.push(...bez(Rv, W, E, dE, Math.max(6, (Rv[0] - E[0]) * 0.5), 11).slice(0, -1));
     // chegada: curva do portão leste para a faixa de chegada, segue até a altura da baia e entra de frente
@@ -14905,7 +14906,7 @@ function estadoSaida(L, m, t) {
 const proximaSaidaLinha = (L, t) => Math.ceil((t - L.fase) / L.H);
 const saidasOcupadas = new Set();   // '2.123' assumidas por motoristas jogadores (vindas da presença)
 const onibusNpc = [];               // { mesh, L, m, x, z, ang, parado, ativo }
-const baiasDonos = new Map();   // 22p: baia da mega rodoviária -> ônibus que reservou
+const baiasDonos = new Map(), filaMegaPos = [];   // 22p: baia da mega rodoviária -> ônibus que reservou
 const estadoBus = new Map(), pontosOcupados = [], pontosAntes = [], juncaoAntes = [], juncaoAgora = [];        // 'linha.saída' -> { atraso, sVis, bloq, fantasma }: atraso local de quem esperou no trânsito
 let paradasMontadas = false, minhaVolta = null, placasRodo = [];
 // modelo do ônibus de cada saída: as linhas alternam entre os modelos (o mesmo ônibus físico mantém o modelo)
@@ -15493,6 +15494,7 @@ function atualizarOnibus(dt) {
   pontosOcupados.length = 0; for (const o of pontosAntes) pontosOcupados.push(o);
   for (const b of onibusNpc) b.ativo = false;
   // 22p: baias da mega rodoviária ocupadas (quem reservou e continua aparecendo)
+  filaMegaPos.length = 0;
   baiasDonos.clear(); for (const [k2, s2] of estadoBus) if (s2.baiaN) { if (s2.vistoEm > t - 20) { if (!baiasDonos.has(s2.baiaN)) baiasDonos.set(s2.baiaN, k2); } else s2.baiaN = 0; }
   for (const L of LINHAS) {
     const m0 = Math.floor((t - L.fase) / L.H);
@@ -15511,15 +15513,24 @@ function atualizarOnibus(dt) {
       }
       // 22p: mega rodoviária: reserva uma das 3 baias da linha ao chegar (a primeira livre) e solta quando sai para a rua
       if (L.vars) {
-        st.vistoEm = t;
+        st.vistoEm = t; st.mot = '';
         const chegando = (e.rota && e.s > L.sFim - 0.5) || e.fila || e.baia, saindo = e.rota && e.s < L.sIni + 0.5;
+        if (st.baiaN && baiasDonos.get(st.baiaN) !== chB && chegando && (st.sAnt === undefined || st.sAnt <= L.sFila + 0.5)) st.baiaN = 0;   // baia já é de outro: escolhe de novo
         if (st.baiaN && !chegando && !saindo) { if (baiasDonos.get(st.baiaN) === chB) baiasDonos.delete(st.baiaN); st.baiaN = 0; }
         if (!st.baiaN && (chegando || saindo)) {
           // na faixa de chegada só serve baia cuja curva ainda está à frente (senão ele "pularia" para trás)
           const sReal = st.mAnt === m && st.sAnt !== undefined ? st.sAnt : e.fila || e.baia ? L.sFila : e.s, dAnd = sReal - L.sFim, cabe = (n) => !chegando || dAnd < 0.5 || ((L.vars[n] || L).sFila - (L.vars[n] || L).sFim) >= dAnd - 0.5;
           const livre = GRUPO_BAIAS[L.id].find((n) => !baiasDonos.has(n) && cabe(n));
-          if (livre) { st.baiaN = livre; baiasDonos.set(livre, chB); }
-          else if (saindo) st.baiaN = GRUPO_BAIAS[L.id][0];   // (carregou o jogo agora) sai da dele
+          // 22q: sair sem ter estado numa baia não pode (antes ele "aparecia" na baia dele mesmo ocupada e ficava um
+          // dentro do outro). Quem estava na fila segura o horário e continua na fila; só quem acabou de aparecer
+          // (jogo recém-aberto) sai de uma baia, e só se ela estiver livre
+          const veioDaFila = saindo && (st.mAnt !== undefined || st.filaMega);
+          if (livre) { st.baiaN = livre; baiasDonos.set(livre, chB); if (veioDaFila) st.entrando = true; }   // da fila: primeiro entra na baia, depois sai
+          else if (saindo) { st.atraso += dt; e = { s: L.sFila, fila: true, parado: true }; }
+        }
+        if (st.entrando) {   // estava na fila quando deu o horário: entra na baia (o horário espera) e só então sai
+          if (st.mAnt === m && st.sVis !== undefined && st.sVis >= L.L - 0.3) st.entrando = false;
+          else { st.atraso += dt; e = { s: L.L, baia: true, parado: true }; }
         }
         L.varAtual = st.baiaN ? L.vars[st.baiaN] : null;
       }
@@ -15553,13 +15564,18 @@ function atualizarOnibus(dt) {
       }
       // plataforma: só entra quem achar a baia livre; na fila, um atrás do outro (14 m cada), na ordem de chegada
       if (L.vars) {   // 22p: com baia reservada entra direto e espera o horário parado nela; sem baia, fila na entrada (ordem de chegada, qualquer linha)
-        if (st.baiaN && (e.fila || e.baia)) e = { s: L.L, baia: true, parado: true, atrasado: e.atrasado };
+        if (st.baiaN && (e.fila || e.baia)) {
+          const sa = st.mAnt === m ? st.sAnt : undefined;
+          // ainda não chegou no ponto de virar (vinha atrás de outros na faixa): anda até lá como na rua, respeitando o da frente
+          if (sa !== undefined && sa < L.sFila - 0.5) { st.atraso += dt; e = { s: Math.min(L.sFila, sa + 7 * dt), rota: true, parado: false, chegando: true }; }
+          else e = { s: L.L, baia: true, parado: true, atrasado: e.atrasado };
+        }
         // antes de cruzar a faixa de saída para entrar na baia: espera quem está saindo (de ré perto da baia ou passando na faixa)
         if (st.baiaN && (e.rota || e.baia) && e.s > L.sFila - 0.5 && (st.sAnt === undefined || st.sAnt <= L.sFila + 0.5)) {
           const T = pontoCaminho(L, L.sFila), Bb = BAIAS[st.baiaN - 1];
-          const saindoPerto = onibusNpc.some((o) => o.vivo && o.chB !== chB && o.L.vars && o.e?.rota && o.e.s < o.L.sIni && o.e.s > 0.4 &&
+          const saindoPerto = onibusNpc.some((o) => o.vivo && o.chB !== chB && o.L.vars && o.e?.rota && o.e.s < o.L.sIni && o.e.s > 1.2 &&
             ((o.e.s < (o.L.sRe || 0) + 2 && Math.hypot(o.x - Bb.x, o.z - Bb.z) < 16) || (o.z > MEGA.zChega + 3 && o.x > Bb.x - 8 && o.x < T.x + 24)));
-          if (saindoPerto) { st.atraso += dt; e = { ...e, s: Math.min(e.s, L.sFila), rota: true, baia: false, parado: true, chegando: true }; }
+          if (saindoPerto) { st.mot = 'cruzar'; st.atraso += dt; e = { ...e, s: Math.min(e.s, L.sFila), rota: true, baia: false, parado: true, chegando: true }; }
         }
         else if (!st.baiaN && (e.fila || e.baia || (e.rota && e.s > L.sFila))) {
           if (e.fila || e.baia) st.atraso += dt; else st.atraso += dt;
@@ -15567,7 +15583,10 @@ function atualizarOnibus(dt) {
           const alvo = L.sFila;   // espera na faixa de chegada, no ponto de virar para a baia dela (quem vem atrás para atrás dele)
           let sl = e.fila || e.baia ? alvo : Math.min(e.s, alvo);
           if (st.sAnt !== undefined && st.mAnt === m && sl > st.sAnt) sl = Math.min(sl, st.sAnt + 7 * dt);
-          e = { ...e, s: sl, rota: !(e.fila || e.baia), fila: !!(e.fila || e.baia), parado: true, chegando: true };
+          // 22q: vaga de fila ainda livre neste quadro (sem isso, dois da mesma linha paravam no mesmo lugar)
+          for (let i = 0; i < 40; i++) { const qq = pontoCaminho(L, sl); if (!filaMegaPos.some((p) => Math.hypot(p.x - qq.x, p.z - qq.z) < passoFila(L) + 1)) break; sl -= 1; }
+          { const qq = pontoCaminho(L, sl); filaMegaPos.push({ x: qq.x, z: qq.z }); }
+          e = { ...e, s: sl, rota: true, fila: false, baia: false, parado: true, chegando: true };   // como "rota": a checagem de não encostar no da frente vale na fila
           st.filaMega = true;
         } else { st.filaMega = false; st.filaDesde = undefined; }
       } else if (!L.circular) {
@@ -15617,14 +15636,28 @@ function atualizarOnibus(dt) {
       if (!L.circular && e.rota && !e.fila && !e.baia && e.s < (L.vars ? L.sIni + 25 : 35)) {   // 22p: na mega, um sai por vez: a vez vale até ele passar o portão oeste e andar um pouco na rua
         const sa = st.mAnt === m ? st.sAnt : undefined, d = SAIDA_RODO.dono;
         let outro = d && d !== chB && t - SAIDA_RODO.t < 0.6;
+        if (outro && L.vars && st.baiaN) {   // 22q: todos os que estão saindo já engataram e vão para o oeste: quem está bem a leste deles pode começar a ré (sai atrás)
+          const bx = BAIAS[st.baiaN - 1].x, saindoAgora = onibusNpc.filter((o) => o.vivo && o.chB !== chB && o.L.vars && o.e?.rota && o.e.s > 0.4 && o.e.s < o.L.sIni + 25);
+          if (saindoAgora.length && saindoAgora.every((o) => o.e.s > (o.L.sRe || 0) + 3 && bx > o.x + 18)) outro = false;
+        }
+        if (L.vars && !outro && (sa === undefined || sa < 2) && e.s > 0.35 && st.baiaN) {   // 22q: alguém entrando numa baia aqui perto: espera ele estacionar
+          const Bm = BAIAS[st.baiaN - 1];
+          if (onibusNpc.some((o) => { if (!o.vivo || o.chB === chB || !o.L.vars) return false; const n2 = estadoBus.get(o.chB)?.baiaN, B2 = n2 && BAIAS[n2 - 1]; const entrando = (o.e?.baia || (o.e?.rota && o.e.s > o.L.sFila - 1.5)) && B2 && Math.hypot(o.x - B2.x, o.z - B2.z) > 0.8; return entrando && Math.hypot(o.x - Bm.x, o.z - Bm.z) < 26; })) outro = true;
+        }
         if (L.vars && !outro && (sa === undefined || sa < 2) && e.s > 0.35) {   // 22p: livre: sai primeiro quem está esperando há mais tempo
           const w = SAIDA_RODO.espera; w.set(chB, { desde: w.get(chB)?.desde ?? t, visto: t });
           for (const [k2, v] of w) if (t - v.visto > 1) w.delete(k2);
           const prim = [...w].sort((a, b) => a[1].desde - b[1].desde || (a[0] < b[0] ? -1 : 1))[0];
           if (prim && prim[0] !== chB) outro = true;
         }
-        if (outro && (sa === undefined || sa < 2)) { const alvo = sa !== undefined ? Math.max(0.3, sa) : 0.3; if (e.s > alvo) { e = segurarAte(L, m, t, st, alvo) || e; q = pontoCaminho(L, e.s); } }
+        if (outro && (sa === undefined || sa < 2)) { st.mot = 'vez'; const alvo = sa !== undefined ? Math.max(0.3, sa) : 0.3; if (e.s > alvo) { e = segurarAte(L, m, t, st, alvo) || e; q = pontoCaminho(L, e.s); } }
         else if (e.s > 0.35 && (!outro || d === chB)) { SAIDA_RODO.dono = chB; SAIDA_RODO.t = t; SAIDA_RODO.espera.delete(chB); }
+      }
+      // 22q: saída oeste: se o da frente ainda está parado logo depois do portão, espera antes de entrar na curva da rua
+      if (L.vars && e.rota && !e.fila && !e.baia && e.s > L.sIni - 24 && e.s < L.sIni + 12) {
+        const E = pontoCaminho(L, L.sIni), sa = st.mAnt === m ? st.sAnt : undefined;
+        const ocupado = onibusNpc.some((o) => o.vivo && o.chB !== chB && o.L.vars && o.e?.rota && o.e.s > o.L.sIni - 4 && o.e.s < o.L.sIni + 40 && Math.hypot(o.x - E.x, o.z - E.z) < 18);
+        if (ocupado) { st.mot = 'portao'; const alvo = Math.max(sa ?? 0, Math.min(e.s, L.sIni - 24)); if (e.s > alvo) { e = segurarAte(L, m, t, st, alvo) || e; q = pontoCaminho(L, e.s); } }
       }
       if (!L.circular && !L.vars && e.rota && !e.fila && !e.baia && e.s < 9) {
         const sa = st.mAnt === m ? st.sAnt : undefined, X = pontoCaminho(L, 9);
@@ -15640,7 +15673,7 @@ function atualizarOnibus(dt) {
         const encosta = (qq) => { const fx = Math.sin(qq.ang), fz = Math.cos(qq.ang); return onibusNpc.filter((o) => {
           if (!o.vivo || o.chB === chB || Math.cos(o.ang - qq.ang) < 0.5) return false;
           const dx = o.x - qq.x, dz = o.z - qq.z, d = dx * fx + dz * fz;
-          return Math.abs(dx * fz - dz * fx) < 2.2 && d < (cp + o.comp) / 2 + 1.5 && (d > 0.3 || (d > -0.3 && o.chB < chB));
+          return Math.abs(dx * fz - dz * fx) < 2.2 && d < (cp + o.comp) / 2 + (L.vars && naRodoviaria(qq.x, qq.z, 8) ? 3 : 1.5) && (d > 0.3 || (d > -0.3 && o.chB < chB));   // 22q: na rodoviária, 3 m entre um e outro
         }); };
         // perto da rodoviária os caminhos se cruzam (entradas, saídas, circulares): vale o retângulo inteiro, em qualquer
         // direção. Só não avança se o passo novo encostaria em alguém (se já estavam encostados, deixa separar).
@@ -15658,6 +15691,7 @@ function atualizarOnibus(dt) {
         const qa = pontoCaminho(L, sAnt), novos = [...encosta(q), ...cruza(q)], antes = new Set([...encosta(qa), ...cruza(qa)]);
         const afasta = (o) => antes.has(o) && Math.hypot(o.x - q.x, o.z - q.z) >= Math.hypot(o.x - qa.x, o.z - qa.z) - 0.01;
         if (novos.length && !novos.every(afasta)) {
+          st.mot = 'encosta:' + novos.map((o) => o.chB).join('/');
           if (e.chegando) e = { ...e, s: sAnt };
           else {   // procura o atraso que deixa o ônibus no mesmo lugar do quadro anterior
             let lo = st.atraso, hi = st.atraso + 8;

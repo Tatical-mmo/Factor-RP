@@ -2,7 +2,7 @@
 // Tudo é gerado por código e desenhado com InstancedMesh para rodar leve no celular.
 import * as THREE from 'three';
 import { CIDADE } from './config.js';
-import { materialFachada, materialTelhaCidade, ligarNoite } from './arquitetura.js';
+import { materialFachada, materialTelhaCidade, ligarNoite, REAL } from './arquitetura.js';
 
 const { quarteiroes: N, quarteirao: QB, rua: RW, calcada: CW } = CIDADE;
 export const PASSO = QB + RW;
@@ -242,7 +242,7 @@ export const UNI = { uNoite: { value: 0 }, uTerreo: { value: null } };
 function materialMundo(params, modo, esc = [4, 3.5]) {
   const m = new THREE.MeshStandardMaterial(params);
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uNoite = UNI.uNoite; sh.uniforms.uTerreo = UNI.uTerreo;
+    sh.uniforms.uNoite = UNI.uNoite; sh.uniforms.uTerreo = UNI.uTerreo; sh.uniforms.uReal = REAL;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
 varying float vTopo; varying float vAlt; varying float vLoja;
 ${modo === 'fachada' ? 'attribute float aLoja;' : ''}`)
@@ -261,6 +261,22 @@ ${modo === 'fachada' ? 'attribute float aLoja;' : ''}`)
     vMapUv = ${modo === 'fachada' ? '(abs(wn.x) > 0.5 ? vec2(wp.z, wp.y) : vec2(wp.x, wp.y))' : 'wp.xz'} / vec2(${esc[0].toFixed(2)}, ${esc[1].toFixed(2)});
     #endif
   }`);
+    if (modo === 'topo') {   // 22q: realismo: remendos e manchas grandes no asfalto, calçada e grama (em metros reais, sem repetir)
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+uniform float uReal;
+float h21r(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float rdr(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h21r(i), h21r(i + vec2(1, 0)), f.x), mix(h21r(i + vec2(0, 1)), h21r(i + vec2(1, 1)), f.x), f.y); }`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+  #ifdef USE_MAP
+  if (uReal > 0.5) {
+    vec2 w = vMapUv * vec2(${esc[0].toFixed(2)}, ${esc[1].toFixed(2)});
+    float fxx = clamp(fwidth(w.x) * 1.5 - 0.3, 0.0, 1.0);
+    float a = rdr(w * 0.06), b = rdr(w * 0.42 + 3.1), c = mix(rdr(w * 2.2 + 9.0), 0.5, fxx);
+    float remendo = smoothstep(0.7, 0.74, rdr(w * 0.11 + 21.0)) * 0.1;
+    diffuseColor.rgb *= 1.0 + (a - 0.5) * 0.36 + (b - 0.5) * 0.16 + (c - 0.5) * 0.1 - remendo * 1.6;
+  }
+  #endif`);
+    }
     if (modo === 'fachada') {
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
 varying float vTopo; varying float vAlt; varying float vLoja;
