@@ -1910,3 +1910,56 @@ export function gramaPerto(px, pz, dt) {
   T.im.count = n; T.im.instanceMatrix.needsUpdate = true;
 }
 export const listaGramados = () => gramados;
+
+// ---------------------------------------------------------------- 22i: mata fechada no lugar da parede invisível
+// Onde o jogador não pode ir (fora da área do mapa) e o chão é grama, uma faixa de mata fechada de ~24 m acompanha o
+// limite: quem chega na borda vê árvores em vez de bater num muro invisível. A barreira continua (escondida na mata).
+// As árvores são desenhadas por pedaços de 160 m (cada pedaço é um InstancedMesh): o que está atrás da câmera ou longe
+// não é desenhado. Não colidem (o limite já segura) e não entram no mar, no deserto, nem nos trilhos do trem.
+const florestaPedacos = [];
+export function plantarFloresta(scene, excluir = () => false) {
+  const P = 6, X0 = ILHA.x0 + 3, X1 = ILHA.x1 - 3, Z0 = -1500, Z1 = ILHA.z1 - 3, NX = Math.ceil((X1 - X0) / P), NZ = Math.ceil((Z1 - Z0) / P);
+  const pode = new Uint8Array(NX * NZ), v = new THREE.Vector3();
+  for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) {
+    const x = X0 + i * P, z = Z0 + j * P; v.set(x, 0, z); limitar(v);
+    pode[j * NX + i] = Math.abs(v.x - x) + Math.abs(v.z - z) < 0.05 ? 1 : 0;
+  }
+  // distância (em células) até a área livre: duas passadas
+  const INF = 255, dist = new Uint8Array(NX * NZ).fill(INF);
+  for (let k = 0; k < pode.length; k++) if (pode[k]) dist[k] = 0;
+  for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) { const k = j * NX + i; let d = dist[k]; if (i) d = Math.min(d, dist[k - 1] + 1); if (j) d = Math.min(d, dist[k - NX] + 1); dist[k] = d; }
+  for (let j = NZ - 1; j >= 0; j--) for (let i = NX - 1; i >= 0; i--) { const k = j * NX + i; let d = dist[k]; if (i < NX - 1) d = Math.min(d, dist[k + 1] + 1); if (j < NZ - 1) d = Math.min(d, dist[k + NX] + 1); dist[k] = d; }
+  const D = AREA51.deserto, pts = [];
+  let semente = 9137; const rf = () => ((semente = (semente * 16807) % 2147483647) / 2147483647);
+  for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) {
+    const d = dist[j * NX + i]; if (d < 1 || d > 4) continue;     // de 6 a 24 m para fora do limite
+    const x = X0 + i * P + (rf() - 0.5) * 4.5, z = Z0 + j * P + (rf() - 0.5) * 4.5;
+    if (x > D.x0 - 6 && x < D.x1 + 6 && z > D.z0 - 6 && z < D.z1 + 6) continue;   // deserto da Área 51
+    if (x < ILHA.x0 + 4 || x > ILHA.x1 - 4 || z > ILHA.z1 - 4) continue;          // beira do mar
+    if (excluir(x, z)) continue;
+    const y = altura(x, z) ?? 0; if (y < -0.5) continue;   // fora das calçadas a altura é o chão (0)
+    pts.push([x, y, z, (d === 1 ? 0.95 : 1.1) + rf() * 0.6, rf() * 6.28, rf()]);
+  }
+  // pedaços de 120 m
+  const TAM = 160, grupos = new Map();
+  for (const p of pts) { const c = Math.floor(p[0] / TAM) + ',' + Math.floor(p[2] / TAM); if (!grupos.has(c)) grupos.set(c, []); grupos.get(c).push(p); }
+  const gTronco = new THREE.CylinderGeometry(0.16, 0.28, 2.4, 6).translate(0, 1.2, 0);
+  const gCopa = geoCopa([[0, 0, 0, 1.35], [0.8, -0.25, 0.3, 1.0], [-0.75, -0.15, -0.35, 1.05], [0.2, 0.6, -0.45, 0.9], [-0.25, -0.35, 0.75, 0.9]]);
+  const gPinho = geoPinheiro();
+  const verdes = ['#4b7d36', '#3f6b38', '#567f37', '#355f33', '#5f8a3a', '#47753c'].map((c) => new THREE.Color(c));
+  for (const lista of grupos.values()) {
+    const pinhos = lista.filter((p) => p[5] < 0.22), folhas = lista.filter((p) => p[5] >= 0.22);
+    const tronco = new THREE.InstancedMesh(gTronco, MAT.tronco, lista.length), copa = new THREE.InstancedMesh(gCopa, MAT.copa, Math.max(1, folhas.length)), pinho = new THREE.InstancedMesh(gPinho, MAT.copa, Math.max(1, pinhos.length));
+    copa.count = folhas.length; pinho.count = pinhos.length;
+    lista.forEach(([x, y, z, s, g], k) => { _q.setFromAxisAngle(_e.set(0, 1, 0), g); _m.compose(_v.set(x, y, z), _q, _e.set(s, s * 1.1, s)); tronco.setMatrixAt(k, _m); });
+    folhas.forEach(([x, y, z, s, g, r], k) => { _q.setFromAxisAngle(_e.set(0, 1, 0), g); _m.compose(_v.set(x, y + 2.75 * s, z), _q, _e.set(s * 1.3, s * 1.15, s * 1.3)); copa.setMatrixAt(k, _m); copa.setColorAt(k, verdes[(r * 97 | 0) % verdes.length]); });
+    pinhos.forEach(([x, y, z, s, g], k) => { _q.setFromAxisAngle(_e.set(0, 1, 0), g); _m.compose(_v.set(x, y + 0.7 * s, z), _q, _e.set(s * 1.1, s * 1.3, s * 1.1)); pinho.setMatrixAt(k, _m); pinho.setColorAt(k, verdes[k % 3 + 3]); });
+    const G = new THREE.Group(); G.add(tronco, copa, pinho);
+    for (const im of [tronco, copa, pinho]) { im.computeBoundingSphere(); im.castShadow = false; im.receiveShadow = false; }
+    const cx = lista.reduce((a, p) => a + p[0], 0) / lista.length, cz = lista.reduce((a, p) => a + p[2], 0) / lista.length;
+    scene.add(G); florestaPedacos.push({ G, x: cx, z: cz });
+  }
+  return pts.length;
+}
+// só os pedaços perto aparecem (os de longe somem na neblina de qualquer jeito)
+export function florestaPerto(px, pz, lim = 420) { for (const f of florestaPedacos) f.G.visible = Math.abs(f.x - px) + Math.abs(f.z - pz) < lim; }

@@ -4319,6 +4319,12 @@ async function iniciarJogo(perfil) {
   if ($('btCelular')) $('btCelular').onclick = () => abrirCelular();
   try { montarEstacionamentos(); } catch (e) { console.warn('estacionamentos:', e); }
   try { montarPatioGuincho(); } catch (e) { console.warn('pátio do guincho:', e); }
+  try {   // 22i: mata fechada no lugar da parede invisível (sem árvore nos trilhos do trem)
+    const trilho = new Set(), C = 6;
+    for (const l of ferrovia.linhas) for (let k = 0; k < l.M; k += 4) { const i = Math.floor(l.X[k] / C), j = Math.floor(l.Z[k] / C); for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) trilho.add((i + a) + ',' + (j + b)); }
+    const n = mundo.plantarFloresta(scene, (x, z) => trilho.has(Math.floor(x / C) + ',' + Math.floor(z / C)));
+    console.info('mata nas bordas:', n, 'árvores');
+  } catch (e) { console.warn('mata:', e); }
   try { montarOficinas(); } catch (e) { console.warn('oficinas:', e); }
   try { montarSirenes(); } catch (e) { console.warn('sirenes', e); } atualizarEstadoBau(); atualizarEstadoNatal();
   montarMonumento(); try { montarViacao(); } catch (e) { console.warn('viacao', e); }
@@ -10492,7 +10498,7 @@ function quadroJogo() {
   diag('mundo (LOD)');
   mundo.atualizar(dt); clima.aguaUltra(visual.nivelAtual() === 'ultra');
   mundo.carrosPerto(foco().x, foco().z, dt);
-  mundo.arvoresPerto(foco().x, foco().z, dt); mundo.gramaPerto(foco().x, foco().z, dt); marcasSocorro(); atualizarSocorristas(dt);
+  mundo.arvoresPerto(foco().x, foco().z, dt); if ((tFloresta -= dt) <= 0) { tFloresta = 0.5; mundo.florestaPerto(foco().x, foco().z); } mundo.gramaPerto(foco().x, foco().z, dt); marcasSocorro(); atualizarSocorristas(dt);
   mundo.propsPerto(foco().x, foco().z, dt); semaforos.atualizar(dt, foco().x, foco().z);
   mundo.predios3dPerto(foco().x, foco().z, dt);
   sedes.atualizar(dt);
@@ -12185,7 +12191,7 @@ function receberPaneNpc(r, novo = false) {
 }
 function posicaoPane(ref) { const P = panes.get(ref); if (!P) return null; if (agoraServidor() >= P.fim && P.vaga != null) return VAGAS_GUINCHO[P.vaga]; return P; }
 function objDaPane(P) { if (P.ref.startsWith('rua:')) return largadosRua.get(+P.ref.slice(4))?.mesh || null; return npcDaPane(P.ref)?.obj || null; }
-let tempoPanes = 0, carregandoPanes = false;
+let tempoPanes = 0, carregandoPanes = false, tFloresta = 0;
 function carregarPanes() {
   if (carregandoPanes) return; carregandoPanes = true;
   rede.pneuNpc.ativas().then((l) => {
