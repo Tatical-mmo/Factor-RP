@@ -29,7 +29,10 @@ export async function recarregarInventario() {
 }
 let pendenteJanela = false;
 const digitandoJanela = () => { const f = document.activeElement; return !!f && ['INPUT', 'SELECT', 'TEXTAREA'].includes(f.tagName) && !!$('janela')?.contains(f); };
-export function abrir(m) { modo = m; $('janela').classList.remove('oculto'); desenhar(); }
+// 22o: lojas do terminal: cada uma vende uma parte do que a loja principal vende (mesmo preço e mesmo saldo)
+let lojaFiltro = null;   // { nome, cat }
+export const categoriaItem = (p) => (p.item.startsWith('mascara_') ? 'mascaras' : p.item === 'remedio' ? 'farmacia' : p.item === 'parafuso' ? 'ferragens' : p.item === 'desbloqueio' ? 'banca' : p.fome ? 'comida' : 'outros');
+export function abrir(m, filtro = null) { modo = m; lojaFiltro = m === 'loja' ? filtro : null; $('janela').classList.remove('oculto'); desenhar(); }
 let bau = {};
 export function fechar() { modo = null; $('janela').classList.add('oculto'); }
 export function janelaAberta() { return !!modo; }
@@ -173,20 +176,20 @@ function desenhar() {
   if (modo === 'gerenciar') { desenharGerenciar(c); return; }
   if (modo === 'predio') { desenharPredio(c); return; }
   if (modo === 'loja') {
-    $('janelaTitulo').textContent = 'Loja';
-    const venda = precos.filter((p) => p.compra != null);
-    const compra = precos.filter((p) => p.venda != null);
+    $('janelaTitulo').textContent = lojaFiltro ? lojaFiltro.nome : 'Loja';
+    const venda = precos.filter((p) => p.compra != null && (!lojaFiltro || categoriaItem(p) === lojaFiltro.cat));
+    const compra = lojaFiltro ? [] : precos.filter((p) => p.venda != null);
     c.innerHTML = `<p class="dica">Você tem <b>${moedas()}</b> moedas.</p>
-      <div class="botoes" style="margin-bottom:10px"><button id="lMercado">🤝 Mercado dos jogadores</button></div><div id="lEvento"></div>
+      ${lojaFiltro ? '' : '<div class="botoes" style="margin-bottom:10px"><button id="lMercado">🤝 Mercado dos jogadores</button></div><div id="lEvento"></div>'}
       <div class="sub">Comprar</div><div class="lista">${venda.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${p.compra} moedas${p.fome ? ` · enche ${p.fome}% da fome` : ''}${p.item === 'remedio' ? ' · cura 50 de vida' : ''}${p.item === 'desbloqueio' ? ' · libera os níveis 5, 10 e 15 de empresas e clãs' : ''}</small></span>
           <span class="bts">${p.item.startsWith('mascara_') ? (inv[p.item] > 0 ? '<button disabled>✔ Já é sua</button>' : `<button data-comprar="${p.item}" data-q="1">Comprar</button>`) : `<button data-comprar="${p.item}" data-q="1">+1</button><button data-comprar="${p.item}" data-q="5">+5</button>`}</span></div>`).join('')}</div>
-      <div class="sub">Vender</div><div class="lista">${compra.map((p) => `
+      ${compra.length ? '<div class="sub">Vender</div>' : ''}<div class="lista">${compra.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${p.venda} moedas cada · você tem ${inv[p.item] || 0}</small></span>
           <span class="bts"><button data-vender="${p.item}" data-q="1" ${inv[p.item] ? '' : 'disabled'}>1</button><button data-vender="${p.item}" data-q="${inv[p.item] || 0}" ${inv[p.item] ? '' : 'disabled'}>Todos</button></span></div>`).join('')}</div>`;
-    $('lMercado').onclick = () => abrir('mercado');
+    if ($('lMercado')) $('lMercado').onclick = () => abrir('mercado');
     // 22b: armas laser de evento (só aparecem com a vitrine aberta)
     rede.armasEvento.listar().then((l) => {
       const el = $('lEvento'), agora = Date.now(); if (!el || modo !== 'loja') return;

@@ -1522,6 +1522,8 @@ function montarMobiliario() {
   });
   fx.receiveShadow = true; scene.add(fx);
   // postes de concreto (cidade) e os da favela
+  // 22o: áreas que viraram outra coisa (a mega rodoviária fecha a rua do meio): sem poste nem carro parado ali
+  for (const lista of [postes, carros, POSTES]) for (let k = lista.length - 1; k >= 0; k--) if (emZonaLivre(lista[k][0], lista[k][1])) lista.splice(k, 1);
   const dasRuas = postes.length;   // os dos quarteirões só entram onde não há poste de rua perto (sem duplicar)
   for (const p of POSTES) if (!postes.slice(0, dasRuas).some((q) => Math.abs(q[0] - p[0]) < 6 && Math.abs(q[1] - p[1]) < 6)) postes.push(p);
   montarPostes(postes);
@@ -1771,7 +1773,25 @@ export function pontoRuaPerto(x, z) {
   }
   return dm < 120 ? m : null;
 }
-export function finalizar() { planejarProps(); montarMobiliario(); montarMalhas(); }
+// 22o: zonas sem mobiliário de rua (postes, semáforos, hidrantes, carros parados)
+const ZONAS_LIVRES = [];
+export function semMobiliario(x0, z0, x1, z1) { ZONAS_LIVRES.push([x0, z0, x1, z1]); }
+const emZonaLivre = (x, z) => ZONAS_LIVRES.some(([x0, z0, x1, z1]) => x >= x0 && x <= x1 && z >= z0 && z <= z1);
+function limparZonasLivres() {
+  if (!ZONAS_LIVRES.length) return;
+  const d = RW / 2 + 0.9;
+  for (let k = CRUZAMENTOS.length - 1; k >= 0; k--) {
+    const c = CRUZAMENTOS[k]; if (!emZonaLivre(c.x, c.z)) continue;
+    for (const [sx, sz] of [[1, 1], [-1, -1], [1, -1], [-1, 1]]) for (const l of grade.values()) for (const o of l) if (o.tipo === 'circ' && Math.abs(o.x - (c.x + sx * d)) < 0.01 && Math.abs(o.z - (c.z + sz * d)) < 0.01) Object.assign(o, { x: 1e7, z: 1e7, r: 0 });
+    CRUZAMENTOS.splice(k, 1);
+  }
+  for (const nome of ['hidrante', 'banco', 'semaforo']) for (let k = PROPS[nome].length - 1; k >= 0; k--) {
+    const [x, z] = PROPS[nome][k]; if (!emZonaLivre(x, z)) continue;
+    for (const l of grade.values()) for (const o of l) if (o.tipo === 'circ' && o.x === x && o.z === z) Object.assign(o, { x: 1e7, z: 1e7, r: 0 });
+    PROPS[nome].splice(k, 1);
+  }
+}
+export function finalizar() { planejarProps(); limparZonasLivres(); montarMobiliario(); montarMalhas(); }
 
 // ---------------------------------------------------------------- ruas de verdade: "é rua?" e caminho só pelas ruas
 // (usa os retângulos de asfalto desenhados; vale para a Metrópole, o horizonte e as cidades vizinhas)

@@ -11859,6 +11859,7 @@ function sequestroSemCla() {
 // botão extra dos crimes de clã (ao lado do botão de ação, que continua com Entrar/Arrombar/Dirigir)
 function contextoCrime() {
   { const mp = contextoMecanicoPneu(); if (mp) return mp; }   // 22d
+  { const lt = contextoLojaTerminal(); if (lt) return lt; }   // 22o: lojas do terminal
   { const ap = contextoAvePresente(); if (ap) return ap; }
   if (jogador.carregando) return null;
   { const r = contextoRacoes(); if (r) return r; }
@@ -14559,7 +14560,7 @@ function atualizarNomesCla(dt) {
 // As linhas são voltas fechadas que passam por ruas de mão dupla, então ônibus indo e vindo se cruzam.
 // O motorista jogador assume uma saída da tabela (o ônibus do sistema daquela saída some para todos).
 // Qualquer jogador pode embarcar como passageiro (5 moedas) num ônibus parado no ponto ou na plataforma.
-const RODO = { x: 135, z: -243, x0: 113, x1: 157, z0: -265, z1: -221, baia: -230, fila: -243, entrada: -262, saidaZ: -221, guiche: { x: 155.5, z: -239 } };
+const RODO = { x: 135, z: -243, x0: 113, x1: 157, z0: -265, z1: -221, baia: -230, fila: -243, entrada: -262, saidaZ: -221, guiche: { x: 205.2, z: -236 } };   // 22o: o despacho fica na ponta leste da plataforma
 // terminal rodoviário (inspirado no Tietê): as plataformas (RODO) + o quarteirão a leste (pátio de espera e saguão).
 // A rua x = 162 entre os dois quarteirões foi fechada (mundo.js) e virou parte do terminal
 const TERMINAL_RODO = { x0: 113, x1: 211, z0: -265, z1: -221, saguao: { x: 186.5, z: -232, w: 49, d: 22 }, quadra: { x: 189, z: -243 } };
@@ -14568,24 +14569,31 @@ const V_RODO = 4.5, MARGEM_RODO = 45;
 const pertoRodo = (x, z) => x > RODO.x0 - MARGEM_RODO && x < TERMINAL_RODO.x1 + MARGEM_RODO && z > RODO.z0 - MARGEM_RODO && z < RODO.z1 + MARGEM_RODO;
 // cinco plataformas na Rodoviária (oeste → leste). As linhas "circulares" não param na plataforma: passam na calçada
 // do lado leste da rodoviária (ponto Rodoviária) e rodam sem parar o dia todo.
-const PLAT = [117.5, 126.1, 134.7, 143.3, 151.9];
+// 22o: mega rodoviária (estilo Tietê): 12 baias inclinadas (45°) numa fila, cobertas, com a plataforma e o saguão
+// comprido atrás. Todos os ônibus entram pela rua de cima no canto direito (x = 205), andam pela pista de manobra de
+// mão única, encostam de frente na baia, saem de ré e vão embora pelo canto esquerdo (x = 121).
+const BAIAS = Array.from({ length: 12 }, (_, k) => ({ n: k + 1, x: 120 + k * 7.4, z: -243.6 }));
+const ANG_BAIA = -Math.PI / 4;   // o nariz do ônibus aponta para a plataforma (sudoeste)
+const MEGA = { x0: 113, x1: 211, z0: -265, z1: -221, zPista: -259, zChega: -261.8, zSai: -255.6, zBaia: -238, zSaguao: -234, entradaX: 205, saidaX: 121 };
+const BAIA_LINHA = { 1: 1, 7: 3, 8: 5, 3: 7, 2: 8 };   // índice da baia de cada linha (baias 2, 4, 6, 8 e 9: a 9 deixa pista para a fila de quem chega)
+const PLAT = [1, 3, 5, 7, 8].map((i) => BAIAS[i].x);
 const URB = ['onibus_amarelo', 'onibus_branco', 'onibus_laranja'], EXEC = ['onibus_rod_06', 'onibus_rod_02', 'onibus_rod_04', 'onibus_rod_amarelo', 'onibus_rod_dourado', 'onibus_rod_vermelho', 'onibus_rod_branco'];   // 21r: frota Fator RP; os de viagem vão para as cidades vizinhas
 const ROD = [188, -216, 'Rodoviária', 'o'];   // ponto coberto das circulares: calçada da frente do terminal (elas não entram)
 const LINHAS = [
   { id: 1, nome: 'Linha 1 · Circular', curto: 'Circular', cor: '#1f6fd1', faixa: PLAT[0], k: 3, fase: 0, modelos: URB,
-    rua: [[PLAT[0], -216], [108, -216], [108, -54], [-108, -54], [-108, 54], [108, 54], [108, -270], [PLAT[0], -270]],
+    rua: [[MEGA.saidaX, -270], [108, -270], [108, -54], [-108, -54], [-108, 54], [108, 54], [108, -270], [MEGA.entradaX, -270]],
     paradas: [[108, -150, 'Concessionária', 's'], [-27, -54, null], [-108, -27, null], [27, 54, null], [108, -110, 'Banco', 'n']] },
   { id: 7, nome: 'Linha 7 · Vila Serra', curto: 'Vila Serra', cor: '#6d4c9f', faixa: PLAT[1], k: 4, fase: 3, modelos: EXEC, inter: true,
-    rua: [[PLAT[1], -216], [108, -216], [108, -108], [-162, -108], [-162, -945], [81, -945], [81, -999], [-81, -999], [-81, -945], [-162, -945], [-162, -108], [108, -108], [108, -270], [PLAT[1], -270]],
+    rua: [[MEGA.saidaX, -270], [108, -270], [108, -108], [-162, -108], [-162, -945], [81, -945], [81, -999], [-81, -999], [-81, -945], [-162, -945], [-162, -108], [108, -108], [108, -270], [MEGA.entradaX, -270]],
     paradas: [[-27, -108, 'Estação Norte', 'o'], [-162, -560, 'Rodovia Norte', 'n'], [70, -945, '🚌 Rodoviária de Vila Serra', 'l'], [0, -999, 'Vila Serra · Centro', 'o'], [-162, -600, 'Rodovia Norte', 's'], [27, -108, 'Estação Norte', 'l']] },
   { id: 8, nome: 'Linha 8 · Porto Sul', curto: 'Porto Sul', cor: '#1a8fb0', faixa: PLAT[2], k: 4, fase: 10, modelos: EXEC, inter: true,
-    rua: [[PLAT[2], -216], [216, -216], [216, 945], [-81, 945], [-81, 999], [81, 999], [81, 945], [216, 945], [216, -270], [PLAT[2], -270]],
+    rua: [[MEGA.saidaX, -270], [216, -270], [216, 945], [-81, 945], [-81, 999], [81, 999], [81, 945], [216, 945], [216, -270], [MEGA.entradaX, -270]],
     paradas: [[216, 300, 'Av. Leste', 's'], [216, 600, 'Rodovia Sul', 's'], [70, 945, '🚌 Rodoviária de Porto Sul', 'o'], [0, 999, 'Porto Sul · Centro', 'l'], [216, 560, 'Rodovia Sul', 'n'], [216, 250, 'Av. Leste', 'n']] },
   { id: 3, nome: 'Linha 3 · Leste', curto: 'Leste', cor: '#2e9e57', faixa: PLAT[3], k: 3, fase: 14, modelos: URB,
-    rua: [[PLAT[3], -216], [270, -216], [270, 162], [108, 162], [108, -270], [PLAT[3], -270]],
+    rua: [[MEGA.saidaX, -270], [216, -270], [216, -216], [270, -216], [270, 162], [108, 162], [108, -270], [MEGA.entradaX, -270]],
     paradas: [[270, -90, 'Zona Leste'], [190, 162, 'Cemitério'], [108, 27, null], [108, -180, 'Banco']] },
   { id: 2, nome: 'Linha 2 · Aeroporto', curto: 'Aeroporto', cor: '#e8891c', faixa: PLAT[4], k: 3, fase: 7, modelos: ['onibus_rod_vermelho', 'onibus_rod_branco'],
-    rua: [[PLAT[4], -216], [216, -216], [216, -270], [162, -270], [162, -668], [400, -668], [400, -688], [162, -688], [162, -270], [PLAT[4], -270]],   // sai por baixo e contorna o terminal (a rua do meio agora é do terminal)
+    rua: [[MEGA.saidaX, -270], [162, -270], [162, -668], [400, -668], [400, -688], [162, -688], [162, -270], [MEGA.entradaX, -270]],   // 22o: sai e chega pela rua de cima
     paradas: [[162, -470, 'Av. do Aeroporto', 'n'], [270, -688, '✈️ Aeroporto · Terminal'], [162, -420, 'Av. do Aeroporto', 's']] },
   // circulares (sem plataforma): começam e terminam no ponto coberto da calçada da frente do terminal (não entram nele)
   { id: 4, nome: 'Linha 4 · Oeste e Serviços', curto: 'Serviços', cor: '#8e44ad', k: 4, fase: 5, modelos: URB, circular: true,
@@ -14624,25 +14632,50 @@ function montarCaminho(L) {
   });
   // a linha abre as curvas à direita pelo maior ônibus dela (ver abrirCurvas)
   const wb = L.wb ?? (L.modelos ? Math.max(...L.modelos.map((m) => civico.entreEixos(m))) : 0);
-  const bruto = abrirCurvas(L.circular ? ruaPts : [...(L.ini || [[f, RODO.baia], [f, RODO.saidaZ]]), ...ruaPts, ...(L.fimPts || [[f, RODO.entrada], [f, RODO.fila], [f, RODO.baia]])], wb, false);
+  const B = L.baiaMega;
+  let ini = L.ini, fim = L.fimPts;
+  if (!L.circular && B && !ini) {   // 22o: mega rodoviária
+    // ré em curva: sai da baia para trás (nordeste) e termina virado para oeste, pronto para seguir pela pista
+    const fx = Math.sin(ANG_BAIA), fz = Math.cos(ANG_BAIA), R1 = [B.x - fx * 5.5, B.z - fz * 5.5], A = [R1[0] + 6.5, R1[1] - 2.2];
+    // duas faixas na pista: a de cima é de quem chega (e da fila), a de baixo é de quem sai da baia (não se cruzam parados)
+    const P1 = [A[0] - 10, A[1] - 3], P2 = [Math.max(A[0] - 20, MEGA.saidaX + 5), MEGA.zSai];
+    ini = [[B.x, B.z], R1, A, P1, P2];
+    if (P2[0] > MEGA.saidaX + 8) ini.push([MEGA.saidaX + 4, MEGA.zSai]);
+    ini.push([MEGA.saidaX, MEGA.z0 - 1]);
+    const Q = [B.x - fx * 9, B.z - fz * 9];
+    fim = [[MEGA.entradaX, MEGA.z0 - 1], [MEGA.entradaX - 6, MEGA.zChega]];
+    if (B.x + 15 < MEGA.entradaX - 9) fim.push([B.x + 15, MEGA.zChega]);
+    fim.push(Q, [B.x, B.z]);
+  }
+  const bruto = abrirCurvas(L.circular ? ruaPts : [...(ini || [[f, RODO.baia], [f, RODO.saidaZ]]), ...ruaPts, ...(fim || [[f, RODO.entrada], [f, RODO.fila], [f, RODO.baia]])], wb, false);
   // arredonda as esquinas (curva de até 7 m)
   const pts = [bruto[0]];
   for (let i = 1; i < bruto.length - 1; i++) {
     const a = bruto[i - 1], p = bruto[i], b = bruto[i + 1], d1 = dir(a, p), d2 = dir(p, b);
     const l1 = Math.hypot(p[0] - a[0], p[1] - a[1]), l2 = Math.hypot(b[0] - p[0], b[1] - p[1]);
     if (Math.abs(d1[0] * d2[1] - d1[1] * d2[0]) < 0.05 && d1[0] * d2[0] + d1[1] * d2[1] > 0) { pts.push(p); continue; }
+    if (d1[0] * d2[0] + d1[1] * d2[1] < -0.3) { pts.push(p); continue; }   // 22o: fim da ré (o ônibus para e muda o sentido)
     const r = Math.min(wb && d1[0] * d2[1] - d1[1] * d2[0] > 0.7 ? R_DIREITA : 9, l1 * 0.45, l2 * 0.45), q0 = [p[0] - d1[0] * r, p[1] - d1[1] * r], q2 = [p[0] + d2[0] * r, p[1] + d2[1] * r];
     for (let k = 0; k <= 6; k++) { const t = k / 6, u = 1 - t; pts.push([u * u * q0[0] + 2 * u * t * p[0] + t * t * q2[0], u * u * q0[1] + 2 * u * t * p[1] + t * t * q2[1]]); }
   }
   pts.push(bruto[bruto.length - 1]);
   const acum = [0]; for (let i = 1; i < pts.length; i++) acum.push(acum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  if (B && !L.circular && !L.ini) {   // 22o: até onde vai a ré (onde o caminho inverte o sentido)
+    L.sRe = 0;
+    for (let i = 1; i < Math.min(pts.length - 1, 40); i++) { const a = pts[i - 1], p = pts[i], b = pts[i + 1]; if ((p[0] - a[0]) * (b[0] - p[0]) + (p[1] - a[1]) * (b[1] - p[1]) < 0) { L.sRe = acum[i]; break; } }
+  }
   L.pts = pts; L.acum = acum; L.L = acum[acum.length - 1]; L.sFila = L.circular ? L.L : L.L - (RODO.baia - RODO.fila);
+  if (L.baiaMega) {   // 22o: a fila fica na pista, antes de virar para a baia (não dentro da manobra)
+    let sf = L.L - 13; for (let s2 = L.L - 2; s2 > L.L - 80; s2 -= 0.5) { const q = pontoCaminho(L, s2); if (q.z < MEGA.zChega + 0.4) { sf = s2; break; } }
+    L.sFila = sf;
+  }
 }
 function pontoCaminho(L, s) {
   s = THREE.MathUtils.clamp(s, 0, L.L);
   let lo = 0, hi = L.acum.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (L.acum[m] <= s) lo = m; else hi = m; }
   const a = L.pts[lo], b = L.pts[hi], d = L.acum[hi] - L.acum[lo] || 1, k = (s - L.acum[lo]) / d;
-  return { x: a[0] + (b[0] - a[0]) * k, z: a[1] + (b[1] - a[1]) * k, ang: Math.atan2(b[0] - a[0], b[1] - a[1]) };
+  const ang = Math.atan2(b[0] - a[0], b[1] - a[1]) + (L.sRe && s < L.sRe ? Math.PI : 0);   // 22o: na ré, de frente para a baia
+  return { x: a[0] + (b[0] - a[0]) * k, z: a[1] + (b[1] - a[1]) * k, ang };
 }
 function pontoCaminhoExt(L, s) {
   if (L.circular && L.L) s = ((s % L.L) + L.L) % L.L;
@@ -14690,6 +14723,7 @@ function tabelaLinha(L) {
   L.H = L.circular ? (L.R + (L.terminal || 0)) / L.k : (L.R + FOLGA_FILA) / (L.k - 1);   // intervalo entre saídas (circular: roda sem parar; com terminal, espera lá)
   L.C = L.circular ? L.R + (L.terminal || 0) : L.k * L.H;                  // ciclo de cada ônibus
 }
+for (const L of LINHAS) if (BAIA_LINHA[L.id] !== undefined) L.baiaMega = BAIAS[BAIA_LINHA[L.id]];
 for (const L of LINHAS) { montarCaminho(L); montarParadasLinha(L); }
 const LINHA_ID = Object.fromEntries(LINHAS.map((L) => [L.id, L]));
 // posição (s) de um ônibus e. segundos depois de sair; "ponto" = índice do ponto onde está parado
@@ -14846,7 +14880,7 @@ function montarParadas() {
     esperas.push({ L, ponto: i, x: q.x + rx * 3.4, z: q.z + rz * 3.4, fx: Math.sin(q.ang), fz: Math.cos(q.ang), rx, rz, gente: [], ultima: -1 });
   });
   // plataformas da rodoviária (ilha à direita de cada faixa)
-  for (const L of LINHAS.filter((x) => !x.circular && x.faixa !== undefined)) esperas.push({ L, baia: true, x: L.faixa - 3.1, z: RODO.baia + 1, fx: 0, fz: 1, rx: -1, rz: 0, gente: [], ultima: -1 });
+  for (const L of LINHAS.filter((x) => !x.circular && x.baiaMega)) { const P = PLATAFORMA_DA(L); esperas.push({ L, baia: true, x: P.x, z: P.z, fx: 1, fz: 0, rx: 0, rz: -1, gente: [], ultima: -1 }); }   // 22o: na plataforma, em frente à baia
   montarRodoviaria(); montarAutoescola(); montarRodovias();
 }
 // rodovias até Vila Serra (norte, pela rua x = -162) e Porto Sul (sul, pela rua x = 216): trechos [x0, z0, x1, z1]
@@ -14876,42 +14910,15 @@ function montarRodovias() {
 }
 // quarteirão leste do terminal: pátio de espera (uma faixa pintada por linha, portão leste para entrar e oeste para sair)
 // e o saguão (prédio 3D, de frente para a rua de baixo, onde fica o ponto coberto das circulares)
-function montarTerminalLeste(R, y, plano, caixa, mat, branco) {
-  const T = TERMINAL_RODO, P = PATIO;
-  mundo.liberarQuadra(T.quadra.x, T.quadra.z);   // tira os prédios comuns que existiam no quarteirão
-  const asf = mat('#3b3f46'), calc = mat('#cfc8ba'), amarelo = new THREE.MeshBasicMaterial({ color: '#f2c230' });
-  // piso: pátio (asfalto) e calçada do saguão; a rua fechada entre os quarteirões fica no mesmo nível
-  plano((P.x0 + P.x1) / 2, (P.z0 + P.z1) / 2, P.x1 - P.x0, P.z1 - P.z0, asf, y + 0.012);
-  mundo.addPiso({ x0: 157, x1: T.x1, z0: P.z0, z1: P.z1, h: y });
-  plano((157 + T.x1) / 2, (P.z1 + T.z1) / 2, T.x1 - 157, T.z1 - P.z1, calc, y + 0.01);
-  mundo.addPiso({ x0: 157, x1: T.x1, z0: P.z1, z1: T.z1, h: y });
-  // faixas do pátio (cor da linha na cabeceira) e o nome
-  const linhas = LINHAS.filter((x) => !x.circular && x.faixa !== undefined);
-  P.faixas.forEach((zf, i) => {
-    for (const dz of [-2.05, 2.05]) for (let x = P.x0 + 6; x < P.x1 - 2; x += 4) plano(x, zf + dz, 2, 0.14, branco, y + 0.02);
-    const L = linhas[i]; if (L) { plano(P.x0 + 5, zf, 1.2, 3, new THREE.MeshBasicMaterial({ color: L.cor }), y + 0.022); const r = rotuloSimples(`${L.curto}`, 3); r.position.set(P.x0 + 5, 2.2, zf); scene.add(r); }
-  });
-  plano(209, P.z0 + 1, 7, 0.4, amarelo, y + 0.021); plano(161.5, P.z0 + 1, 7, 0.4, amarelo, y + 0.021);   // portões (entra a leste, sai a oeste)
-  const rp = rotuloSimples('🅿️ Pátio de espera dos ônibus', 6); rp.position.set((P.x0 + P.x1) / 2, 4.5, P.z0 + 2); scene.add(rp);
-  // saguão: modelo 3D (sólido); sem o modelo, um prédio simples no lugar
-  const S = T.saguao;
-  if (!glbEm('terminal_rodoviario', S.x, y, S.z, 1, 1, 1, 0)) {
-    caixa(S.x, y + 4, S.z, S.w, 8, S.d - 4, mat('#dfe4ea', { roughness: 0.4 }));
-    caixa(S.x, y + 8.4, S.z + 1, S.w + 2, 0.5, S.d, mat('#f4f4f2', { roughness: 0.5 }));
-  }
-  mundo.addCol({ tipo: 'caixa', x0: S.x - S.w / 2 + 0.5, x1: S.x + S.w / 2 - 0.5, z0: S.z - S.d / 2 + 1.5, z1: S.z + S.d / 2 - 4 });
-  plano(PORTA_SAGUAO.x, PORTA_SAGUAO.z + 0.2, 3.2, 1.4, mat('#3b2a1a'), y + 0.02);   // tapete da porta
-  const re = rotuloSimples('🚪 Saguão · guichês e partidas', 5); re.position.set(PORTA_SAGUAO.x, 3.4, PORTA_SAGUAO.z + 0.4); scene.add(re);
-}
 // ---------------------------------------------------------------- saguão do terminal (por dentro)
 // Inspirado nos grandes terminais: guichês das viações, painel de partidas ao vivo, bancos de espera e lanchonete.
 // Pelo guichê ou pelo painel dá para ir direto para a plataforma da linha.
 const VIACOES = { 1: 'Viação Circular Fator', 7: 'Expresso Serrano', 8: 'Litorânea Porto Sul', 3: 'Rápido Leste', 2: 'Aero Express' };
-const PORTA_SAGUAO = { x: TERMINAL_RODO.saguao.x, z: TERMINAL_RODO.saguao.z + TERMINAL_RODO.saguao.d / 2 - 2.6 };
+const PORTA_SAGUAO = { x: 162, z: MEGA.z1 - 1.6 };   // 22o: porta do saguão novo, na calçada da rua de baixo
 let painelSaguao = null, lancheAte = 0;
 const pertoSaguao = () => !jogador.dentroCasa && !jogador.carro && Math.hypot(PORTA_SAGUAO.x - jogador.pos.x, PORTA_SAGUAO.z - jogador.pos.z) < 3.2;
 const linhasPlataforma = () => LINHAS.filter((L) => !L.circular);
-const numPlataforma = (L) => PLAT.indexOf(L.faixa) + 1;
+const numPlataforma = (L) => (L.baiaMega ? L.baiaMega.n : PLAT.indexOf(L.faixa) + 1);   // 22o: número da baia
 function salaSaguao() {
   return montarSala('saguao', 3600, 2600, 36, 20, { piso: '#d9d5cd', parede: '#e9edf1', luz: '#fff4e2' }, (i) => {
     const { caixa, placa } = i;
@@ -14929,7 +14936,7 @@ function salaSaguao() {
       caixa(3.6, 0.9, 0.04, '#cfe6f7', x, 1.65, -8.62);                                        // vidro do atendimento
       caixa(3.9, 0.75, 0.12, g.cor, x, 3.0, -9.8); caixa(0.12, 3.6, 0.6, '#c9ced6', x + 2.1, 1.8, -9.5);
       placa(g.nome, x, -9.2, 3.0);
-      if (g.L) placa(`Plataforma ${numPlataforma(g.L)}`, x, -7.4, 1.6);
+      if (g.L) placa(`Baia ${numPlataforma(g.L)}`, x, -7.4, 1.6);
       movel(i, `guiche${k}`, x, -8.2, 3.6, 0.9); i.guiches.push(g);
       npcSala(i, ['Executiva', 'Rapaz_Bairro', 'Moradora', 'Executivo', 'Ruiva', 'Nipo'][k % 6], x, -9.1, 0, k === gs.length - 1 ? 'ℹ️ Informações' : '🎫 Atendente');
     });
@@ -14988,7 +14995,7 @@ function entrarSaguao() {
 // sai do saguão direto na plataforma (ou no ponto das circulares, na calçada da frente)
 function irPlataforma(L) {
   jogador.dentroCasa = null;
-  if (L.circular) teleportar(ROD[0], ROD[1] - 3.5); else teleportar(L.faixa - 3.4, -238);
+  if (L.circular) teleportar(ROD[0], ROD[1] - 3.5); else { const P = PLATAFORMA_DA(L); teleportar(P.x, P.z); }
   aviso(`🚏 ${L.nome}: ${L.circular ? 'ponto coberto em frente ao terminal' : `plataforma ${numPlataforma(L)}`}. Toque em Embarcar quando o ônibus parar (5 moedas).`, 4.5);
 }
 function opcoesPartidas() {
@@ -15028,42 +15035,125 @@ SALAS.saguao = {
   },
 };
 // a Rodoviária: três faixas (uma por linha), ilhas de embarque cobertas, guichê do despacho e painéis com a próxima saída
+// ---------------------------------------------------------------- 22o: mega rodoviária (no lugar das plataformas antigas)
+const LOJAS_TERMINAL = [
+  { nome: '🍔 Lanchonete', cat: 'comida', cor: '#d0482f', x: 172 },
+  { nome: '💊 Farmácia', cat: 'farmacia', cor: '#2f9e6a', x: 182 },
+  { nome: '🎭 Máscaras', cat: 'mascaras', cor: '#6b3fa0', x: 191 },
+  { nome: '🔩 Ferragens', cat: 'ferragens', cor: '#7a6a55', x: 199 },
+  { nome: '📰 Banca', cat: 'banca', cor: '#c98a1b', x: 141 },
+];
+const PLATAFORMA_DA = (L) => ({ x: L.baiaMega.x - 4.6, z: MEGA.zBaia + 1.6 });   // onde o passageiro espera a linha
 function montarRodoviaria() {
-  const R = RODO, y = 0.18;
+  const M = MEGA, y = 0.18, X0 = M.x0, X1 = M.x1, CX = (X0 + X1) / 2, W = X1 - X0;
+  const G = new THREE.Group(); G.name = 'megaRodoviaria'; scene.add(G);
+  mundo.liberarQuadra(135, -243); mundo.liberarQuadra(TERMINAL_RODO.quadra.x, TERMINAL_RODO.quadra.z);   // os dois quarteirões viram o terminal
   const mat = (cor, o = {}) => new THREE.MeshStandardMaterial({ color: cor, roughness: 0.8, ...o });
-  const asf = mat('#3b3f46'), ilha = mat('#cfc8ba'), cobertura = mat('#e9e4d8', { roughness: 0.5 }), metal = mat('#59606a', { metalness: 0.5, roughness: 0.5 }), branco = new THREE.MeshBasicMaterial({ color: '#f0f0f0' });
-  const caixa = (x, yy, z, w, h, d, m, sombra = true) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, yy, z); o.castShadow = sombra; o.receiveShadow = true; scene.add(o); return o; };
-  const plano = (x, z, w, d, m, yy) => { const o = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), m); o.position.set(x, yy, z); o.receiveShadow = true; scene.add(o); return o; };
-  plano(R.x, R.z, R.x1 - R.x0, R.z1 - R.z0, asf, y + 0.012);
-  for (const L of LINHAS.filter((x) => !x.circular)) {
-    for (let z = R.z0 + 2; z < R.z1 - 1; z += 4) plano(L.faixa - 1.9, z, 0.15, 2, branco, y + 0.02);   // faixa da plataforma
-    const p = plano(L.faixa, R.baia - 4, 3.6, 0.5, new THREE.MeshBasicMaterial({ color: L.cor }), y + 0.022); p.scale.set(1, 1, 1);
+  const caixa = (x, yy, z, w, h, d, m, sombra = true, ry = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, yy, z); o.rotation.y = ry; o.castShadow = sombra; o.receiveShadow = true; G.add(o); return o; };
+  const plano = (x, z, w, d, m, yy, ry = 0) => { const o = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), m); o.position.set(x, yy, z); o.rotation.y = ry; o.receiveShadow = true; G.add(o); return o; };
+  const tex = (w, h, f) => { const c = document.createElement('canvas'); c.width = w; c.height = h; f(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
+  const asf = mat('#34383f', { roughness: 0.92 }), branco = new THREE.MeshBasicMaterial({ color: '#eeeeea' }), amarelo = new THREE.MeshBasicMaterial({ color: '#f2c230' });
+  const piso = mat('#d8d3c8', { roughness: 0.7 }), pisoEsc = mat('#b9b2a4', { roughness: 0.7 }), meioFio = mat('#9c968b');
+  const aco = mat('#3e4650', { metalness: 0.6, roughness: 0.35 }), cobertura = mat('#f3f4f2', { roughness: 0.35, metalness: 0.1, side: THREE.DoubleSide });
+  const vidro = mat('#8fbfe0', { roughness: 0.08, metalness: 0.4, transparent: true, opacity: 0.55 }), caixilho = mat('#2c333b', { metalness: 0.5, roughness: 0.4 });
+  const luz = new THREE.MeshBasicMaterial({ color: '#fff7e0' });
+  // ---- pista de manobra (asfalto), faixa do meio e setas de mão única
+  plano(CX, (M.z0 + M.zBaia) / 2, W, M.zBaia - M.z0, asf, y + 0.05);
+  mundo.addPiso({ x0: X0, x1: X1, z0: M.z0, z1: M.zBaia, h: y });
+  for (let x = X0 + 6; x < X1 - 6; x += 6) plano(x, (M.zChega + M.zSai) / 2, 3, 0.16, branco, y + 0.06);   // divisa das faixas (chegada em cima, saída embaixo)
+  const seta = new THREE.MeshBasicMaterial({ map: tex(128, 64, (g, w, h) => { g.fillStyle = '#eeeeea'; g.beginPath(); g.moveTo(8, h / 2); g.lineTo(52, 6); g.lineTo(52, 22); g.lineTo(120, 22); g.lineTo(120, 42); g.lineTo(52, 42); g.lineTo(52, 58); g.closePath(); g.fill(); }), transparent: true });
+  for (let x = X0 + 20; x < X1 - 12; x += 26) for (const zf of [M.zChega, M.zSai]) plano(x, zf, 4, 2, seta, y + 0.061);
+  for (const [x, t] of [[M.entradaX, '⬇️ Entrada dos ônibus'], [M.saidaX, '⬆️ Saída dos ônibus']]) {
+    plano(x, M.z0 + 0.5, 9, 0.5, amarelo, y + 0.062);
+    for (const s of [-1, 1]) { caixa(x + s * 5.2, y + 0.6, M.z0 + 0.4, 0.4, 1.2, 0.4, mat('#f2c230')); }
+    const r = rotuloSimples(t, 4.4); r.position.set(x, 4.2, M.z0 + 0.6); G.add(r);
   }
-  // ilhas (à direita de cada ônibus = lado oeste da faixa) com cobertura, bancos e colunas
-  const ilhas = [[114.5, 3], [121.8, 3.4], [130.4, 3.4], [139, 3.4], [147.6, 3.4], [155.3, 3.4]];
-  for (const [x, w] of ilhas) {
-    caixa(x, y + 0.13, R.z, w, 0.26, R.z1 - R.z0 - 6, ilha, false);
-    { const meia = (R.z1 - R.z0 - 6) / 2; mundo.addPiso({ x0: x - w / 2, x1: x + w / 2, z0: R.z - meia, z1: R.z + meia, h: y + 0.26 }); }   // em cima da ilha (antes o pé afundava 26 cm)
-    if (x === 155.3) continue;
-    if (glbEm('rodo_cidade', x, y + 0.26, R.z - 2, 32, 4.4, w + 1.2, Math.PI / 2)) continue;   // cobertura 3D (abrigo com bancos)
-    caixa(x, y + 4.1, R.z - 2, w + 1.4, 0.25, 32, cobertura);
-    for (const dz of [-14, -2, 10]) { caixa(x, y + 2.1, R.z - 2 + dz, 0.25, 4, 0.25, metal); mundo.addCol({ tipo: 'circ', x, z: R.z - 2 + dz, r: 0.3 }); }
-    for (const dz of [-8, 4]) caixa(x - 0.8, y + 0.7, R.z - 2 + dz, 0.5, 0.45, 3, metal);
+  // ---- 12 baias inclinadas: faixas brancas, cabeceira na cor da linha e o número pintado no chão
+  const fx = Math.sin(ANG_BAIA), fz = Math.cos(ANG_BAIA), dono = new Map(LINHAS.filter((L) => L.baiaMega).map((L) => [L.baiaMega.n, L]));
+  for (const B of BAIAS) {
+    const L = dono.get(B.n), cor = L ? L.cor : '#8a9099';
+    for (const sg of [-1, 1]) plano(B.x + Math.cos(ANG_BAIA) * 1.8 * sg, B.z - Math.sin(ANG_BAIA) * 1.8 * sg, 0.16, 13, branco, y + 0.061, ANG_BAIA);
+    plano(B.x + fx * 5.4, B.z + fz * 5.4, 3.4, 0.7, new THREE.MeshBasicMaterial({ color: cor }), y + 0.063, ANG_BAIA);
+    const num = new THREE.MeshBasicMaterial({ map: tex(128, 128, (g) => { g.fillStyle = '#eeeeea'; g.font = 'bold 96px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(B.n), 64, 70); }), transparent: true });
+    plano(B.x - fx * 3.5, B.z - fz * 3.5, 2.2, 2.2, num, y + 0.062, ANG_BAIA + Math.PI);
   }
-  // guichê do despacho (motoristas) no canto leste
-  caixa(155.5, y + 1.6, -252, 3, 3.2, 8, mat('#2b5fa8', { roughness: 0.5 }));
-  const g = rotuloSimples('🚌 Despacho dos motoristas', 4.6); g.position.set(R.guiche.x, 3.9, R.guiche.z); scene.add(g);
-  mundo.addCol({ tipo: 'caixa', x0: 154, x1: 157, z0: -256, z1: -248 });
-  montarTerminalLeste(R, y, plano, caixa, mat, branco);
-  const nome = rotuloSimples('🚌 TERMINAL RODOVIÁRIO', 11); nome.position.set(TERMINAL_RODO.saguao.x, 12.5, TERMINAL_RODO.z1 + 1); scene.add(nome);
-  const fs = rotuloSimples('🧾 Fiscalização', 3.6); fs.position.set(PONTO_FISCAL.x + 2, 3.2, PONTO_FISCAL.z); scene.add(fs);
-  // painéis com a próxima saída (atualizados a cada segundo)
-  placasRodo = LINHAS.filter((x) => !x.circular).map((L) => {
+  // ---- plataforma de embarque (piso em dois tons, piso tátil amarelo na beira, meio-fio)
+  const zP0 = M.zBaia, zP1 = M.zSaguao, zPc = (zP0 + zP1) / 2;
+  caixa(CX, y + 0.13, zPc, W, 0.26, zP1 - zP0, piso, false);
+  for (let x = X0 + 2; x < X1; x += 4) plano(x, zPc + 0.6, 2, zP1 - zP0 - 1.6, pisoEsc, y + 0.262);
+  plano(CX, zP0 + 0.35, W, 0.4, amarelo, y + 0.265);
+  caixa(CX, y + 0.13, zP0 - 0.05, W, 0.27, 0.12, meioFio, false);
+  mundo.addPiso({ x0: X0, x1: X1, z0: zP0, z1: zP1, h: y + 0.26 });
+  // ---- cobertura em dente de serra (uma "asa" por baia), pilares de aço e faixa de vidro (claraboia)
+  const zC0 = zP0 - 6.5, zC1 = zP1 + 0.2, hC = 5.6;
+  for (let k = 0; k < 13; k++) {
+    const x = X0 + 2 + k * (W - 4) / 12;
+    caixa(x, y + hC / 2, zP0 + 0.6, 0.32, hC, 0.32, aco); mundo.addCol({ tipo: 'circ', x, z: zP0 + 0.6, r: 0.3 });
+    caixa(x, y + hC / 2 - 0.2, zP1 - 0.6, 0.26, hC - 0.4, 0.26, aco);
+  }
+  for (let k = 0; k < 12; k++) {
+    const x = X0 + 2 + (k + 0.5) * (W - 4) / 12, w = (W - 4) / 12;
+    const asa = caixa(x, y + hC + 0.45, (zC0 + zC1) / 2, w - 0.15, 0.18, zC1 - zC0, cobertura); asa.rotation.x = 0.07; asa.rotation.z = 0.06;
+    caixa(x, y + hC + 0.2, (zC0 + zC1) / 2, w, 0.12, 0.35, aco, false);
+    const cl = caixa(x, y + hC + 0.56, zPc, w * 0.55, 0.05, 1.6, vidro, false); cl.rotation.x = 0.07;
+    for (const dz of [-3.2, 1.4]) caixa(x, y + hC - 0.05, zPc + dz, w * 0.6, 0.06, 0.25, luz, false);   // luminárias
+  }
+  caixa(CX, y + hC, zC0 + 0.1, W, 0.45, 0.25, aco);   // viga da frente
+  // ---- placas penduradas de cada baia (número e linha) e os painéis de partida das linhas
+  for (const B of BAIAS) {
+    const L = dono.get(B.n);
+    const t = tex(256, 96, (g) => { g.fillStyle = '#12202f'; g.fillRect(0, 0, 256, 96); g.fillStyle = L ? L.cor : '#5b6470'; g.fillRect(0, 0, 70, 96); g.fillStyle = '#fff'; g.font = 'bold 56px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(B.n), 35, 50); g.font = 'bold 30px system-ui'; g.textAlign = 'left'; g.fillText(L ? L.curto : 'Reserva', 82, 50, 168); });
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.98), new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide })); pl.position.set(B.x - fx * -5.2, y + 4.2, zP0 + 0.6); G.add(pl);
+    caixa(B.x - fx * -5.2, y + 4.95, zP0 + 0.6, 0.05, 0.5, 0.05, aco, false);
+  }
+  // ---- bancos, lixeiras e floreiras na plataforma
+  for (let x = X0 + 6; x < X1 - 4; x += 9.5) { caixa(x, y + 0.7, zPc + 0.9, 2.4, 0.08, 0.55, mat('#7a5a3a')); caixa(x, y + 0.48, zPc + 0.9, 2.2, 0.42, 0.08, aco); caixa(x + 1.8, y + 0.6, zPc + 1.1, 0.4, 0.7, 0.4, mat('#2f6d3a')); }
+  for (const x of [X0 + 1.5, X1 - 1.5]) { caixa(x, y + 0.5, zPc, 1.6, 0.6, 1.6, mat('#8b8478')); const copa = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 0), mat('#3d7a3a')); copa.position.set(x, y + 1.6, zPc); G.add(copa); }
+  // ---- saguão comprido: vidro dos dois lados, laje com beiral, letreiro e as lojas viradas para a plataforma
+  const zS0 = zP1, zS1 = M.z1 - 3, zSc = (zS0 + zS1) / 2, hS = 7.2, xS0 = X0 + 5, xS1 = X1 - 5;   // corredores de 5 m nas pontas (rua -> plataforma)
+  caixa((xS0 + xS1) / 2, y + hS / 2, zSc, xS1 - xS0, hS, zS1 - zS0 - 1.2, mat('#e6e9ec', { roughness: 0.5 }));
+  caixa((xS0 + xS1) / 2, y + hS + 0.3, zSc, xS1 - xS0 + 2.4, 0.6, zS1 - zS0 + 1.6, mat('#f6f6f3', { roughness: 0.5 }));
+  caixa((xS0 + xS1) / 2, y + hS + 0.65, zSc, xS1 - xS0 + 2.6, 0.12, zS1 - zS0 + 1.8, mat('#c9ccc8', { roughness: 0.9 }), false);
+  for (let x = xS0 + 8; x < xS1 - 4; x += 16) caixa(x, y + hS + 1.1, zSc + 3, 3, 0.8, 2.2, mat('#9aa0a6'));   // máquinas do ar-condicionado
+  mundo.addCol({ tipo: 'caixa', x0: xS0, x1: xS1, z0: zS0 + 0.5, z1: zS1 - 0.5 });
+  for (const zf of [zS0 + 0.55, zS1 - 0.55]) {   // fachadas de vidro com montantes
+    for (let x = xS0 + 1.6; x < xS1 - 1; x += 3.2) { caixa(x, y + 3.1, zf, 3.0, 5.6, 0.06, vidro, false); caixa(x + 1.55, y + 3.1, zf, 0.12, 5.8, 0.14, caixilho, false); }
+    caixa((xS0 + xS1) / 2, y + 6.15, zf, xS1 - xS0, 0.14, 0.16, caixilho, false);
+  }
+  const letreiro = tex(1024, 128, (g, w, h) => { g.fillStyle = '#16324f'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.font = 'bold 78px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('TERMINAL RODOVIÁRIO', w / 2, h / 2 + 4); });
+  for (const [zf, ry] of [[zS1 + 0.25, 0], [zS0 - 0.25, Math.PI]]) { const l = new THREE.Mesh(new THREE.PlaneGeometry(26, 3.25), new THREE.MeshBasicMaterial({ map: letreiro })); l.position.set(CX, y + 8.9, zf); l.rotation.y = ry; G.add(l); caixa(CX, y + 8.9, zf + (ry ? 0.15 : -0.15), 26.4, 3.5, 0.2, aco, false); }
+  // entrada do saguão (rua de baixo): marquise e porta
+  caixa(PORTA_SAGUAO.x, y + 3.6, zS1 + 1.4, 9, 0.25, 2.8, cobertura); for (const s of [-1, 1]) caixa(PORTA_SAGUAO.x + s * 4.2, y + 1.8, zS1 + 2.5, 0.2, 3.6, 0.2, aco);
+  caixa(PORTA_SAGUAO.x, y + 1.4, zS1 - 0.45, 3.6, 2.8, 0.1, mat('#3b2a1a'), false);
+  const re = rotuloSimples('🚪 Saguão · guichês e partidas', 5); re.position.set(PORTA_SAGUAO.x, 4.4, zS1 + 0.8); G.add(re);
+  // lojas (de verdade): toldo colorido, letreiro aceso e balcão virados para a plataforma
+  for (const Lj of LOJAS_TERMINAL) {
+    const t = tex(512, 96, (g, w, h) => { g.fillStyle = Lj.cor; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.font = 'bold 54px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(Lj.nome.replace(/^\S+\s/, ''), w / 2, h / 2 + 3); });
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.1), new THREE.MeshBasicMaterial({ map: t })); pl.position.set(Lj.x, y + 5.0, zS0 - 0.08); pl.rotation.y = Math.PI; G.add(pl);
+    const toldo = caixa(Lj.x, y + 3.5, zS0 - 0.75, 6.2, 0.08, 1.5, mat(Lj.cor, { roughness: 0.6 })); toldo.rotation.x = -0.25;
+    caixa(Lj.x, y + 0.55, zS0 - 0.55, 4.4, 1.1, 0.7, mat('#f1ece2')); caixa(Lj.x, y + 1.13, zS0 - 0.55, 4.6, 0.06, 0.85, mat(Lj.cor));
+  }
+  // guichê do despacho (motoristas) e o ponto do fiscal, nas pontas da plataforma
+  caixa(RODO.guiche.x + 1.2, y + 1.6, RODO.guiche.z, 2.4, 3.2, 3, mat('#2b5fa8', { roughness: 0.5 })); mundo.addCol({ tipo: 'caixa', x0: RODO.guiche.x, x1: RODO.guiche.x + 2.4, z0: RODO.guiche.z - 1.5, z1: RODO.guiche.z + 1.5 });
+  const g2 = rotuloSimples('🚌 Despacho dos motoristas', 4.6); g2.position.set(RODO.guiche.x + 1, 3.9, RODO.guiche.z); G.add(g2);
+  const fs = rotuloSimples('🧾 Fiscalização', 3.6); fs.position.set(PONTO_FISCAL.x, 3.2, PONTO_FISCAL.z); G.add(fs);
+  const nome = rotuloSimples('🚌 TERMINAL RODOVIÁRIO', 11); nome.position.set(CX, 14, M.z1 + 1); G.add(nome);
+  for (const Lj of LOJAS_TERMINAL) { const r = rotuloSimples(Lj.nome, 3.2); r.position.set(Lj.x, 2.7, zS0 - 1.3); G.add(r); }
+  // painéis das linhas (próxima saída), pendurados sobre a plataforma em frente à baia
+  placasRodo = LINHAS.filter((x) => !x.circular && x.baiaMega).map((L) => {
     const c = document.createElement('canvas'); c.width = 512; c.height = 160;
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false })); s.scale.set(5, 5 * 160 / 512, 1); s.position.set(L.faixa, 5.4, R.baia + 4); scene.add(s);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false })); s.scale.set(4.4, 4.4 * 160 / 512, 1);
+    const P = PLATAFORMA_DA(L); s.position.set(P.x, 3.2, P.z + 0.6); scene.add(s);
     return { L, c, t, txt: '' };
   });
+}
+// loja do terminal perto? (botão no lugar das ações)
+function contextoLojaTerminal() {
+  if (jogador.carro || jogador.dentroCasa) return null;
+  const z = MEGA.zSaguao - 1.4;
+  for (const Lj of LOJAS_TERMINAL) if (Math.abs(jogador.pos.x - Lj.x) < 3 && Math.abs(jogador.pos.z - z) < 2.2) return [`${Lj.nome}: comprar`, Lj.nome, () => abrirJanela('loja', { nome: Lj.nome, cat: Lj.cat })];
+  return null;
 }
 function atualizarPlacasRodo(t) {
   for (const p of placasRodo) {
@@ -15188,6 +15278,7 @@ function sBocaPlataforma(L) {
   return (L.sBoca = melhor);
 }
 function entrarPatio(L, m, chB, st, de) {
+  if (MEGA) return false;   // 22o: a mega rodoviária não tem mais o pátio de espera (o terceiro espera na rua)
   const li = linhaDoPatio(L); if (li < 0) return false;
   const fila = PATIO.filas.get(li) || []; PATIO.filas.set(li, fila);
   if (fila.length >= PATIO.slots.length) return false;   // pátio da linha cheio: espera na rua (raro)
@@ -15600,7 +15691,7 @@ function encerrarVolta(msg) {
 }
 // ---- fiscal da rodoviária: registra os ônibus que não saíram no horário (do sistema e de motoristas jogadores)
 const ehFiscal = () => jogador.perfil?.profissao === 'fiscal' || jogador.perfil?.cargo === 'admin';
-const PONTO_FISCAL = { x: 155.5, z: -229 };
+const PONTO_FISCAL = { x: 117.5, z: -236 };   // 22o: ponta oeste da plataforma
 const atrasosRegistrados = new Set();
 let fiscalNpc = null, avisoAtrasoT = 0, ultimoAtrasoAvisado = '';
 const naRodoviaria = (x, z, m = 0) => x > RODO.x0 - m && x < TERMINAL_RODO.x1 + m && z > RODO.z0 - m && z < RODO.z1 + m;   // plataformas + pátio + saguão
@@ -15656,7 +15747,7 @@ function atualizarFiscal(dt, t) {
   const at = onibusAtrasados(t);
   if (fiscalNpc) {
     const f = fiscalNpc, av = f.av; av.raiz.visible = !fiscalJogador && !jogador.dentroCasa;
-    const alvo = at[0] ? (() => { const L = at[0].L; return { x: L.faixa - 4.3, z: RODO.baia + 2 }; })() : PONTO_FISCAL;
+    const alvo = at[0] ? (() => { const P = PLATAFORMA_DA(at[0].L); return { x: P.x - 1.6, z: P.z + 0.4 }; })() : PONTO_FISCAL;
     const dx = alvo.x - av.raiz.position.x, dz = alvo.z - av.raiz.position.z, d = Math.hypot(dx, dz);
     const anim = d > 0.4 ? 'walk' : 'idle'; if (anim !== f.anim) { f.anim = anim; av.tocar(anim, { velocidade: 0.9 }); }
     if (d > 0.4) { const st = Math.min(d, 1.6 * dt); av.raiz.position.x += dx / d * st; av.raiz.position.z += dz / d * st; av.raiz.rotation.y = Math.atan2(dx, dz); }
@@ -15700,6 +15791,7 @@ function prepararTransporte() {
   for (const c of RODO_CIDADES) mundo.abrirTrilha([[c.x0, c.z], [c.x1, c.z]], 4);
   mundo.limparArea(MONUMENTO.x - 28, MONUMENTO.z - 28, MONUMENTO.x + 28, MONUMENTO.z + 28);   // 20s: topo da Serra livre para o monumento
   mundo.limparArea(RODO.x0 - 1, RODO.z0 - 1, TERMINAL_RODO.x1 + 1, RODO.z1 + 1);   // terminal inteiro (plataformas, pátio e saguão)
+  mundo.semMobiliario(MEGA.x0 - 1, MEGA.z0 - 1, MEGA.x1 + 1, MEGA.z1 + 1);   // 22o: sem postes nem semáforos da rua fechada dentro da mega rodoviária
   mundo.limparArea(CENTRAL.x0 - 1, CENTRAL.z0 - 1, CENTRAL.x1 + 1, CENTRAL.z1 + 1); for (const S of SETORES) mundo.semEstacionar(S.cam.pts);
   mundo.limparArea(AUTOESCOLA.x0 - 1, AUTOESCOLA.z0 - 1, AUTOESCOLA.x1 + 1, AUTOESCOLA.z1 + 1);
   { const D = mundo.AREA51.deserto; mundo.limparArea(D.x0, D.z0, D.x1, D.z1); }   // deserto da Área 51
@@ -15715,10 +15807,11 @@ function prepararTransporte() {
 }
 // mapa: rodoviária, linhas e pontos (o mapa grande desenha as linhas por cima)
 function desenharTransporteNoMapa(g) {
-  g.fillStyle = '#3b3f46'; g.fillRect(RODO.x0, RODO.z0, RODO.x1 - RODO.x0, RODO.z1 - RODO.z0);
-  g.fillRect(PATIO.x0, PATIO.z0, PATIO.x1 - PATIO.x0, PATIO.z1 - PATIO.z0);   // pátio de espera
-  g.fillStyle = '#e8e4da'; g.fillRect(157, PATIO.z1, TERMINAL_RODO.x1 - 157, TERMINAL_RODO.z1 - PATIO.z1);   // saguão
-  for (const L of LINHAS) if (!L.circular) { g.fillStyle = L.cor; g.fillRect(L.faixa - 1.4, RODO.z0 + 6, 2.8, 30); }
+  // 22o: mega rodoviária: pista, plataforma, saguão e as baias com a cor da linha
+  g.fillStyle = '#3b3f46'; g.fillRect(MEGA.x0, MEGA.z0, MEGA.x1 - MEGA.x0, MEGA.zBaia - MEGA.z0);
+  g.fillStyle = '#d8d3c8'; g.fillRect(MEGA.x0, MEGA.zBaia, MEGA.x1 - MEGA.x0, MEGA.zSaguao - MEGA.zBaia);
+  g.fillStyle = '#e8e4da'; g.fillRect(MEGA.x0 + 5, MEGA.zSaguao, MEGA.x1 - MEGA.x0 - 10, MEGA.z1 - MEGA.zSaguao);
+  for (const L of LINHAS) if (L.baiaMega) { g.fillStyle = L.cor; g.fillRect(L.baiaMega.x - 2, L.baiaMega.z - 3, 4, 6); }
   g.fillStyle = '#4a4e57'; for (const [x0, z0, x1, z1] of RODOVIAS) g.fillRect(Math.min(x0, x1) - 5, Math.min(z0, z1) - 5, Math.abs(x1 - x0) + 10, Math.abs(z1 - z0) + 10);
   for (const a of AEROPORTOS) desenharAeroNoMapa(g, a);
   g.fillStyle = '#5a5d61'; g.fillRect(CENTRAL.x0, CENTRAL.z0, CENTRAL.x1 - CENTRAL.x0, CENTRAL.z1 - CENTRAL.z0); g.fillStyle = '#7d8f63'; g.fillRect(331, -98, 14, 34);

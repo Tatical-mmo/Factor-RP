@@ -132,6 +132,10 @@ export function aplicar(alturaChao) {
     ({ x: fx, z: fz } = filtrar(e, fx, fz));
     // apareceu agora ou pulou de lugar: começa alinhado
     if (e.rx === undefined || Math.hypot(fx - e.fx, fz - e.fz) > 8) { e.rx = fx - Math.sin(la) * wb; e.rz = fz - Math.cos(la) * wb; }
+    // 22o: dando ré (saindo da baia da rodoviária) o arrasto do eixo de trás não vale (ele é que vai na frente):
+    // fica na pose da lógica, que já faz a curva da ré, e volta ao arrasto quando anda para a frente de novo
+    if (e.fx !== undefined) { const mx = fx - e.fx, mz = fz - e.fz, pr = mx * Math.sin(la) + mz * Math.cos(la); if (pr < -0.002) e.re = true; else if (pr > 0.002) e.re = false; }
+    if (e.re) { e.rx = fx - Math.sin(la) * wb; e.rz = fz - Math.cos(la) * wb; }
     let dx = fx - e.rx, dz = fz - e.rz; const d = Math.hypot(dx, dz) || 1;
     // nunca fica atravessado demais em relação à rua (manobra brusca, ré): no máximo 75° (o ônibus de viagem chega a ~63° na esquina)
     let ang = Math.atan2(dx, dz), dif = Math.atan2(Math.sin(ang - la), Math.cos(ang - la));
