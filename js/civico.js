@@ -1637,6 +1637,7 @@ export const DESENHOS_LANT = {
   marcopolo: { nome: 'Marcopolo Paradiso G7', arq: 'assets/lanternas/marcopolo_', prop: 256 / 496, camadas: L3 },
   viaggio: { nome: 'Marcopolo Viaggio G7', arq: 'assets/lanternas/viaggio_', prop: 256 / 408, camadas: L3 },
   busscar: { nome: 'Busscar Jum Buss 360', arq: 'assets/lanternas/busscar_', prop: 256 / 1348, camadas: L3 },
+  torino: { nome: 'Marcopolo Torino (carcaça + 3 LEDs)', arq: 'assets/lanternas/torino_', prop: 618 / 1685, camadas: L3 },
   paradiso_g6: { nome: 'Marcopolo Paradiso G6', arq: 'assets/lanternas/paradiso_g6_', prop: 256 / 592, camadas: L3 },
   // peças soltas (cada uma ajustável sozinha)
   moldura_redondas: { nome: 'Moldura vermelha (atrás das redondas)', arq: 'assets/lanternas/moldura_redondas_', prop: 160 / 448, camadas: [], fundo: true },
@@ -1661,7 +1662,7 @@ export const LANT_PADRAO = {
   onibus_rod_vermelho: { des: 'marcopolo', x: 1.06, z: -6.64, y: 0.8, h: 1.0, w: 0.44, ang: 30 },
   onibus_rod_branco: { des: 'viaggio', x: 1.08, z: -6.56, y: 0.9, h: 0.85, w: 0.46, ang: 30 },
   onibus_rod_dourado: { des: 'paradiso_g6', x: 1.0, z: -7.14, y: 1.0, h: 1.1, w: 0.42, ang: 30 },
-  onibus_branco: { pecas: [{ des: 'moldura_redondas', x: 1.0, z: -6.06, y: 0.78, h: 0.98, w: 0.36, ang: 25 }, ...redondas(1.0, -6.06, 0.9, 0.26).pecas] },   // 22k: moldura cobre a pintura torta
+  onibus_branco: { des: 'torino', x: 1.0, z: -6.06, y: 0.7, h: 1.15, w: 0.42, ang: 25 },   // 22l: o conjunto do Torino (carcaça + LEDs) cobre a pintura torta
   onibus_laranja: redondas(0.97, -6.37, 0.82, 0.24),
   onibus_amarelo: { pecas: [
     { des: 'apache07_v1', x: 1.16, z: -6.09, y: 1.55, h: 0.55, w: 0.1, ang: 35 }, { des: 'apache07_b1', x: 1.04, z: -6.09, y: 1.55, h: 0.55, w: 0.1, ang: 25 },
