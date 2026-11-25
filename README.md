@@ -1845,6 +1845,10 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Oficinas autorizadas (18h + SQL 110)**:
   - Duas oficinas de NPC com cobertura, balcão e placa, laranja no mapa (`montarOficinas`): **Oficina do Zé** em Vila Serra (preço base, o carro fica 2 min na oficina e some do mapa) e **Garagem Premium** no quarteirão ao lado da Concessionária (30% mais cara, na hora). Para usar, o jogador estaciona o carro na vaga embaixo da cobertura e toca em 🔧 Oficina no balcão.
   - **Serviços** (`oficina_servico`, pago da carteira): pintura em 10 cores (2.000); motor 1, 2 e 3 com +10, +20 e +30% de velocidade máxima (8.000, 20.000, 45.000; `max` no `entrarCarro`); blindagem leve (30.000). O carro blindado aguenta a primeira explosão de tanque e gasta a blindagem; refazer custa a metade. Para arrombar, são 3 golpes no vidro. A janela 🚗 Veículos mostra o motor, a blindagem e se o carro está na oficina.
+## 22z5
+- Monumento ao Grande Parceiro: estátua (10 m) no alto do Morro do Porto, na laje da base, de frente para a rampa e a rua principal da favela (quem sobe vê o rosto e a placa). Placa nítida por cima da do modelo: "AO GRANDE PARCEIRO / HONRA E GLÓRIA ETERNA". Rótulo flutuante e entrada no mapa/GPS. Modelo: assets/modelos/estatua_parceiro.glb.
+- Skin limitada Luket (vitrine do admin ou presente; SQL 159). Quem veste ganha a tarja dourada "Luket", pequena, colada no canto inferior esquerdo do nome (todos veem).
+
 ## 22z4
 - Chuva/tempestade: gotas na tela (aparecem, secam e escorrem, com refração), reflexos compridos das luzes no asfalto molhado (postes, faróis, lanternas), asfalto mais escuro e liso, chuva mais cheia, halo nos postes e noite chuvosa escura (antes clareava para cinza). Gotas e reflexos: gráfico Alto para cima.
 - Neve: acumula de verdade em tudo virado para cima (rua, calçada, grama, telhados, copas, carros) em ~1 min, com marcas escuras de pneu nas ruas; derrete em ~45 s quando abre. Flocos redondos e maiores, neblina mais fechada. Vale em todos os gráficos. Mar e rio não acumulam.

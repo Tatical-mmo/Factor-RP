@@ -815,10 +815,42 @@ function atualizarRotulos() {
       if (L < 90 && (x * dm.x + y * dm.y + z * dm.z) / L > cmin) { op = 1; k = 1 / ROT_K; }   // na mira: nome inteiro
     }
     if (s.material.opacity !== op) s.material.opacity = op;
+    if (s.userData.tarja) s.userData.tarja.material.opacity = op;
     s.scale.copy(s.userData.pessoa).multiplyScalar(k);
   }
 }
 
+// 22z5: tarja dourada embaixo do nome (canto inferior esquerdo, colada) para quem veste um personagem com tarja (Luket)
+const TARJAS = Object.fromEntries(PERSONAGENS_EVENTO.filter((p) => p.tarja).map((p) => [p.id, p.tarja])), texTarjas = new Map();
+function texturaTarja(txt) {
+  if (texTarjas.has(txt)) return texTarjas.get(txt);
+  const tam = 18, c = document.createElement("canvas"), g = c.getContext("2d"); g.font = `800 ${tam}px Georgia, "Times New Roman", serif`;
+  const w = Math.ceil(g.measureText(txt).width) + 22, h = tam + 12; c.width = w; c.height = h;
+  g.fillStyle = 'rgba(18,16,10,.9)'; g.beginPath(); g.roundRect(1, 1, w - 2, h - 2, 6); g.fill();
+  const borda = g.createLinearGradient(0, 0, w, h); borda.addColorStop(0, '#fff1a8'); borda.addColorStop(0.5, '#d4a017'); borda.addColorStop(1, '#8a6410');
+  g.strokeStyle = borda; g.lineWidth = 2; g.stroke();
+  g.font = `800 ${tam}px Georgia, "Times New Roman", serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const ouro = g.createLinearGradient(0, 4, 0, h - 4); ouro.addColorStop(0, '#fff6c2'); ouro.addColorStop(0.45, '#f5c542'); ouro.addColorStop(0.55, '#d9a21b'); ouro.addColorStop(1, '#9c6e0c');
+  g.fillStyle = ouro; g.fillText(txt, w / 2, h / 2 + 1);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; texTarjas.set(txt, t); return t;
+}
+function porTarja(s, txt) {
+  if (!s) return;
+  let t = s.userData.tarja;
+  if (t && t.userData.txt !== txt) { s.remove(t); t.material.dispose(); t = s.userData.tarja = null; }
+  if (!txt || t) return;
+  const tex = texturaTarja(txt), pw = s.material.map?.image?.width || 200, ph = s.material.map?.image?.height || 54, tw = tex.image.width, th = tex.image.height;
+  t = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true }));
+  t.scale.set(tw / pw, th / ph, 1);   // mesma densidade de pixels do nome (é filho dele)
+  t.center.set((pw / 2) / tw - 0.06 * ph / th, 1 + (ph / 2) / th - 0.12);   // canto de cima à esquerda colado no canto de baixo à esquerda do nome
+  t.renderOrder = 6; t.userData.txt = txt; s.add(t); s.userData.tarja = t;
+}
+let tTarjas = 0;
+function atualizarTarjas(dt) {
+  if ((tTarjas -= dt) > 0) return; tTarjas = 0.5;
+  porTarja(jogador.etiqueta, TARJAS[skinDoJogador()] || null);
+  for (const r of remotos.values()) if (r.et) porTarja(r.et, r.av ? TARJAS[skinRemota(r.meta)] || null : null);
+}
 const placas = [], placasRua = [];
 // ---- 20e: postes, semáforos e placas que os veículos derrubam. Batida fraca: tomba no lugar; forte: é arremessado
 // para longe (quanto mais rápido, mais longe) e o que voa acerta e estraga outros veículos. Volta ao lugar em 4 min.
@@ -4524,7 +4556,7 @@ async function iniciarJogo(perfil) {
   } catch (e) { console.warn('mata:', e); }
   try { montarOficinas(); } catch (e) { console.warn('oficinas:', e); }
   try { montarSirenes(); } catch (e) { console.warn('sirenes', e); } atualizarEstadoBau(); atualizarEstadoNatal();
-  montarMonumento(); try { montarViacao(); } catch (e) { console.warn('viacao', e); }
+  montarMonumento(); try { montarEstatuaParceiro(); } catch (e) { console.warn('estatua', e); } try { montarViacao(); } catch (e) { console.warn('viacao', e); }
   desenharFundoMapa(); try { montarLocais(); } catch { /* sem locais */ }   // as oficinas e os estacionamentos entram no mapa e no teleporte
   servicos.iniciar({ ultra: () => visual.nivelAtual() === 'ultra', socorrista: socorristaNpc,
     scene, textoSprite, altura: alturaChao, jogador: () => jogador, perfil: () => jogador.perfil, aviso, agora: agoraServidor,
@@ -7456,6 +7488,39 @@ function montarMonumento() {
     scene.add(piv);
   }).catch(() => {});
 }
+// ================================================================= 22z5: ESTÁTUA DO GRANDE PARCEIRO
+// No alto do Morro do Porto (a favela sem o Guardião), em cima da laje da base, de frente para a rampa e para a rua
+// principal da favela: quem sobe vê o rosto e a placa de frente. Por cima da placa do modelo vai uma placa nítida
+// com o mesmo texto (a do modelo é borrada).
+const ESTATUA_PARCEIRO = { x: 1050, z: 1076, alt: 10 };
+function placaParceiro() {
+  const W = 1100, H = 360, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, W, H); gr.addColorStop(0, '#f2efe8'); gr.addColorStop(0.5, '#e4e0d6'); gr.addColorStop(1, '#d8d3c7'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  g.strokeStyle = '#a49d8e'; g.lineWidth = 10; g.strokeRect(5, 5, W - 10, H - 10);
+  for (const [x, y] of [[40, 40], [W - 40, 40], [40, H - 40], [W - 40, H - 40]]) { g.fillStyle = '#5b574f'; g.beginPath(); g.arc(x, y, 12, 0, Math.PI * 2); g.fill(); }
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  let fs = 92; g.font = `700 ${fs}px Georgia, "Times New Roman", serif`;
+  while (fs > 40 && g.measureText('HONRA E GLÓRIA ETERNA').width > W - 130) { fs -= 2; g.font = `700 ${fs}px Georgia, "Times New Roman", serif`; }   // cabe inteiro
+  for (const [t, y] of [['AO GRANDE PARCEIRO', 122], ['HONRA E GLÓRIA ETERNA', 244]]) {
+    g.fillStyle = 'rgba(255,255,255,.7)'; g.fillText(t, W / 2 + 2, y + 3);   // letra gravada: luz embaixo, sombra dentro
+    g.fillStyle = '#2c2a26'; g.fillText(t, W / 2, y);
+  }
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.12 });
+}
+function montarEstatuaParceiro() {
+  const E = ESTATUA_PARCEIRO, y0 = alturaChao(E.x, E.z);
+  colisores.push({ tipo: 'circ', x: E.x, z: E.z, r: 2.9 });
+  const rot = textoSprite('🗿 Monumento ao Grande Parceiro', { escala: 0.75, fundo: 'rgba(40,70,60,.9)' }); rot.position.set(E.x, y0 + E.alt + 2.4, E.z); scene.add(rot);
+  Promise.resolve(carregarGLB('assets/modelos/estatua_parceiro.glb')).then((gl) => {
+    const m = prepararEstatico(gl.scene.clone(true)), b = new THREE.Box3().setFromObject(m), k = E.alt / Math.max(0.01, b.max.y - b.min.y);
+    // placa nítida (medida no modelo: frente em +z, centro da placa em y = -0.7725, largura 0.361)
+    const placa = new THREE.Mesh(new THREE.PlaneGeometry(0.364, 0.12), placaParceiro()); placa.position.set(0, -0.7725, 0.386); m.add(placa);
+    const piv = new THREE.Group(); m.scale.setScalar(k); m.position.set(-(b.min.x + b.max.x) / 2 * k, -b.min.y * k, -(b.min.z + b.max.z) / 2 * k);
+    piv.add(m); piv.position.set(E.x, y0, E.z); piv.rotation.y = Math.PI;   // de frente para o norte (a rampa e a rua da favela)
+    scene.add(piv);
+  }).catch(() => {});
+}
 // ================================================================= SIRENES DE ALARME (20q)
 // Mastros com megafone em pontos estratégicos. Tocam juntas quando a Marinha lança o míssil de cruzeiro (e no teste do
 // admin). Cada uma toca do lugar dela: mais longe = mais baixa e atrasada (o som anda ~340 m/s), então duas perto uma da
@@ -9779,6 +9844,7 @@ function montarLocais() {
   for (const [id, p] of Object.entries(PORTAS_QG)) LOCAIS.push({ nome: `🏴 QG do clã (${id === 'leste' ? 'Leste' : 'Oeste'})`, x: p.x + (p.x > 0 ? -2 : 2), z: p.z });
   LOCAIS.push({ nome: '🚢 Píer do cargueiro', x: 48, z: 1112 });
   LOCAIS.push({ nome: '🗿 Monumento do Guardião (topo da Serra)', x: MONUMENTO.x + 8, z: MONUMENTO.z + 30 });
+  LOCAIS.push({ nome: '🗿 Monumento ao Grande Parceiro (alto do Morro do Porto)', x: ESTATUA_PARCEIRO.x, z: ESTATUA_PARCEIRO.z - 9 });
   for (const f of Object.values(mundo.FAVELAS)) {
     LOCAIS.push({ nome: `🏚️ ${f.nome} (entrada)`, x: f.entrada.x + 6, z: f.entrada.z });
     LOCAIS.push({ nome: `🏴 ${f.nome} (base de clã no alto)`, x: f.base.x, z: f.base.z });
@@ -10748,7 +10814,7 @@ function quadroJogo() {
     if (E && !militar() && p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 + 1) { p.z = E.z0 - 0.6; if (performance.now() - (avisoEstande || 0) > 4000) { avisoEstande = performance.now(); aviso('🎯 O estande de tiro é só para militares.', 2.5); } } }
   diag('remotos/voz');
   atualizarRemotos(dt); atualizarTatica(dt);
-  voz.atualizar(dt); atualizarOficinasJog(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarMarcasQueimado(); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarRotulos(); atualizarCongelados(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
+  voz.atualizar(dt); atualizarOficinasJog(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarMarcasQueimado(); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarRotulos(); atualizarTarjas(dt); atualizarCongelados(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   diag('ônibus/aviação/rodas');
   atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); atualizarPanes(dt); atualizarSinaisJog(dt); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); { const dr = civico.distRe(); if (dr < 45) sons.continuo('marcha_re', 0.55 * sons.perto(dr, 45)); } /* 22s: bipe de ré */ civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
