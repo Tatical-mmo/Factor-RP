@@ -854,12 +854,12 @@ export const RODAS = {
   onibus_articulado: { estilo: 'pesado', eixos: [[-5.25, 0.52], [-3.9, 0.52], [1.8, 0.52], [6.6, 0.52]], cy: 0.53, xo: 1.23, xi: 0.84 },
   // 21r: frota Fator RP (medidos já girados e no tamanho do jogo; vidros já viram vidro na própria textura).
   // apagar: rodas do modelo que não ficam num eixo (o de 4 eixos ganhou eixos novos)
-  onibus_amarelo: { estilo: 'onibus', eixos: [[-2.03, 0.52], [3.69, 0.52]], cy: 0.52, xo: 1.26, xi: 0.84, corte: [1.22, 0.45, 0.25] },
+  onibus_amarelo: { estilo: 'onibus', eixos: [[-2.03, 0.52], [3.69, 0.52]], cy: 0.52, xo: 1.17, xi: 0.75, corte: [1.22, 0.45, 0.25] },
   onibus_branco: { estilo: 'onibus', eixos: [[-1.97, 0.52], [3.76, 0.52]], cy: 0.52, xo: 1.26, xi: 0.84, corte: [1.22, 0.45, 0.25] },
   onibus_laranja: { estilo: 'onibus', eixos: [[-2.27, 0.52], [3.85, 0.52]], cy: 0.52, xo: 1.26, xi: 0.84, corte: [1.22, 0.45, 0.25] },
   onibus_rod_vermelho: { estilo: 'onibus', eixos: [[-3.46, 0.53], [3.86, 0.53]], cy: 0.53, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
   onibus_rod_branco: { estilo: 'onibus', eixos: [[-2.21, 0.52], [3.95, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
-  onibus_rod_dourado: { estilo: 'onibus', eixos: [[-4.07, 0.52], [-2.63, 0.52], [4.66, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
+  onibus_rod_dourado: { estilo: 'onibus', eixos: [[-4.07, 0.52], [-2.63, 0.52], [4.66, 0.52]], cy: 0.52, xo: 1.21, xi: 0.79, corte: [1.22, 0.45, 0.25] },
   onibus_rod_amarelo: { estilo: 'onibus', eixos: [[-3.38, 0.55], [3.69, 0.55]], cy: 0.55, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
   // Neobus 02: o modelo veio sem a roda da frente; o eixo da frente fica no para-lama vazio
   onibus_rod_02: { estilo: 'onibus', eixos: [[-4.24, 0.52], [-2.84, 0.52], [4.6, 0.52]], cy: 0.52, xo: 1.3, xi: 0.88, corte: [1.22, 0.45, 0.25] },
@@ -877,6 +877,8 @@ export const RODAS = {
   // 22d: guincho (Meshy): as rodas do modelo saem e entram as do ônibus
   guincho: { estilo: 'onibus', eixos: [[-1.26, 0.57], [2.65, 0.57]], cy: 0.57, xo: 1.35, xi: 0.9, corte: [1.1, 0.06, 0.08] },
 };
+// 22i: modelos que vieram deslocados para um lado (a lataria não fica no meio): a roda saía para fora de um lado só
+const CENTRO_X = { onibus_rod_dourado: 0.09, onibus_amarelo: -0.09 };
 const LARG_RODA = { classico: 0.32, carro: 0.30, esporte: 0.32, suv: 0.36, pesado: 0.30, onibus: 0.30, militar: 0.38 };   // onibus: a roda padrão da frota Fator RP (21r)
 const comRodas = new Set();
 // embaixo do veículo (para não ficar oco): assoalho, caixas de roda, motor/cárter, escapamento, tanque, eixos e diferencial
@@ -1368,6 +1370,7 @@ function veiculoGLBNovo(modelo, cor) {
   c.rotation.y = FRENTE_MENOS_Z.has(modelo) ? Math.PI : FRENTE_MENOS_X.has(modelo) ? Math.PI / 2 : -Math.PI / 2; piv.add(c); piv.updateMatrixWorld(true);
   const b = new THREE.Box3().setFromObject(piv), s = L / Math.max(0.01, b.max.z - b.min.z);
   c.position.set(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2); piv.scale.setScalar(s); g.add(piv);
+  if (CENTRO_X[modelo]) { piv.position.x += CENTRO_X[modelo]; g.updateMatrixWorld(true); }   // 22i: lataria torta para um lado (a roda saía para fora)
   const tinta = REPINTA.has(modelo) && cor;
   c.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (tinta) { o.material = o.material.clone(); repintar(o.material, cor); } } });
   const h = (b.max.y - b.min.y) * s;
