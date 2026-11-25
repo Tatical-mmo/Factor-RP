@@ -1556,8 +1556,9 @@ function texturas() {
   if (M) return;
   const canv = (w, h, f) => { const c = document.createElement('canvas'); c.width = w; c.height = h; f(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
   texBrilho = canv(64, 64, (g, w) => { const r = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.25, 'rgba(255,255,255,.8)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, w, w); });
-  texFeixe = canv(64, 128, (g, w, h) => {   // cone de luz: forte perto do carro (embaixo da textura), some à frente
-    for (let y = 0; y < h; y++) { const k = y / h, larg = w * (0.25 + 0.75 * (1 - k)) / 2, a = Math.pow(k, 1.6) * 0.95; const lg = g.createLinearGradient(w / 2 - larg, 0, w / 2 + larg, 0); lg.addColorStop(0, 'rgba(255,240,200,0)'); lg.addColorStop(0.5, `rgba(255,240,200,${a})`); lg.addColorStop(1, 'rgba(255,240,200,0)'); g.fillStyle = lg; g.fillRect(0, y, w, 1); }
+  // 22t: a luz começa no farol e é mais forte uns metros à frente (antes era mais forte embaixo do carro)
+  texFeixe = canv(64, 128, (g, w, h) => {   // cone de luz: embaixo da textura fica o carro; some à frente
+    for (let y = 0; y < h; y++) { const k = y / h, d = 1 - k, sub = Math.min(1, d / 0.2), larg = w * (0.25 + 0.75 * (1 - k)) / 2, a = 0.95 * sub * sub * (3 - 2 * sub) * Math.pow(1 - d, 1.2); const lg = g.createLinearGradient(w / 2 - larg, 0, w / 2 + larg, 0); lg.addColorStop(0, 'rgba(255,240,200,0)'); lg.addColorStop(0.5, `rgba(255,240,200,${a})`); lg.addColorStop(1, 'rgba(255,240,200,0)'); g.fillStyle = lg; g.fillRect(0, y, w, 1); }
   });
   texPoca = canv(64, 64, (g, w) => { const r = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); r.addColorStop(0, 'rgba(255,248,225,.95)'); r.addColorStop(0.5, 'rgba(255,240,200,.45)'); r.addColorStop(1, 'rgba(255,240,200,0)'); g.fillStyle = r; g.fillRect(0, 0, w, w); });
   const spr = (cor) => new THREE.SpriteMaterial({ map: texBrilho, color: cor, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false });
@@ -1794,7 +1795,7 @@ function lampadasMedidas(g, tipo, e, L, w) {
   for (const x of lados(tx)) for (const y of ysT) sp(M.lanterna, x, y, zt(x, y), tt * 2.2).userData.tras = true;
   // facho no chão (igual ao de antes)
   const moto = /^moto/.test(tipo), comp = moto ? 9 : 12, fe = new THREE.Mesh(new THREE.PlaneGeometry(moto ? 2.6 : 4.8, comp).rotateX(-Math.PI / 2), M.feixe);
-  fe.position.set(0, e.min.y + 0.06, e.max.z + comp / 2 - 0.5); fe.rotation.y = Math.PI; fe.renderOrder = 3; L.add(fe);
+  fe.position.set(0, e.min.y + 0.06, e.max.z + comp / 2 + 0.2); fe.rotation.y = Math.PI; fe.renderOrder = 3; L.add(fe);
   // sinais: sempre presentes, cada lâmpada acende sozinha (a montagem fica escondida enquanto nada está aceso)
   const S = new THREE.Group(); S.name = 'sinais'; S.visible = false; g.add(S);
   for (const x of lados(tx)) for (const y of ysT) sp(M.freio, x, y, zt(x, y) - 0.01, tt * 2.6, S, 'freio').userData.tras = true;
@@ -1824,7 +1825,7 @@ function adicionarLuzes(g, tipo, chave = null) {
       sp(M.lanterna, cx + s * w * 0.4, yf + (grande ? 0.3 : 0.05), e.min.z + (moto ? 0.15 : -0.08), grande ? 0.6 : moto ? 0.3 : 0.5);
     }
     const comp = grande ? 16 : moto ? 9 : 12, f = new THREE.Mesh(new THREE.PlaneGeometry(grande ? 6 : moto ? 2.6 : 4.8, comp).rotateX(-Math.PI / 2), M.feixe);   // moto: facho mais estreito
-    f.position.set(cx, e.min.y + 0.06, e.max.z + comp / 2 - 0.5); f.rotation.y = Math.PI; f.renderOrder = 3; L.add(f);
+    f.position.set(cx, e.min.y + 0.06, e.max.z + comp / 2 + 0.2); f.rotation.y = Math.PI; f.renderOrder = 3; L.add(f);
   } else if (heli) {   // helicóptero: nada nas pás; pisca-pisca na cauda (ponta e em cima da deriva) e um embaixo da barriga
     const t = 0.9;
     sp(M.estrobo, e.nz.x, e.nz.y, e.nz.z - 0.05, t * 2);

@@ -1687,6 +1687,17 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
   - **Mecânico** (`chamar_mecanico`): cobra 100 + 1 moeda a cada 10 m da carteira e deixa o carro na faixa junto ao meio-fio da rua mais perto (`mundo.pontoRuaPerto`). O helicóptero vem voando em linha reta (`chamada.voa`). Na chegada, o veículo fica marcado no mapa. O Materializar saiu dos carros comprados (continua nos veículos das empresas).
   - **Estacionamentos grátis:** um guichê azul 🅿️ por quarteirão (`mundo.listaQuadras`, 226 no total), no mapa em azul. No guichê, o jogador escolhe o carro e ele aparece na vaga em frente.
   - **Saque do morto:** `morrer` não passa mais 100 moedas na hora. Quem matou tem 90 s para saquear o corpo (`saquear_jogador`, até 500 da carteira). Morador ou policial NPC caído dá de 20 a 150 (`saquear_npc`, um a cada 25 s). Usa a animação `coletar`, a mesma do socorro. A poupança fica protegida.
+- **Armado em pé vira para onde anda (22v)**: com a mira de centro, em pé e andando, o personagem vira para onde o analógico aponta (como sem arma). Ao atirar (e até ~1 s depois, ou segurando o gatilho) ele vira para a mira e aí anda de lado/de costas como antes. Agachado continua igual.
+- **Horizontal, tablet, PC e controle (22u)**:
+  - **Celular deitado**: instalado na tela inicial, o jogo abre travado na horizontal (manifesto). No navegador, o primeiro toque entra em tela cheia e trava deitado; em pé aparece "Gire o celular" (com a opção "Jogar em pé assim mesmo", lembrada no aparelho).
+  - **Tablet**: joystick e botões maiores e mais espaçados.
+  - **PC**: sem joystick na tela (anda no WASD) e botões menores, só de apoio.
+  - **Controle (gamepad)** no PC e no celular: analógico esquerdo anda (dirigindo, vira), direito gira a câmera, gatilho direito acelera e esquerdo freia/ré, A pula, B age, X soca, Y arma, LB/RB setas, D-pad cima alerta e baixo farol, L3 corre, Select mochila, Start menu. Com controle, o joystick e o volante da tela somem.
+- **Rodas, realismo e noite (22t)**:
+  - **Rodas voltaram a girar** em todos os veículos (no 22s um comentário engoliu a chamada `civico.atualizarRodas` no fim da linha do quadro).
+  - **Texturas realistas ligadas** em todos os gráficos menos o Baixo: reboco irregular, escorridos de chuva e sujeira no pé das paredes; manchas e remendos no asfalto, calçada e grama.
+  - **Noite**: janelas acesas com metade do brilho; a luz dos postes cobre uma área maior no chão; a luz ambiente da noite um pouco mais clara.
+  - **Faróis**: a mancha de luz no chão começa no para-choque e é mais forte alguns metros à frente (antes saía de baixo do veículo).
 - **Batidas com peso, bipe de ré e sombra (22s)**:
   - **Peso nas batidas**: cada veículo tem um peso (moto 0,3; carro 1; SUV/viatura 1,4; van 2; ambulância 2,2; guincho 5; caminhão 6; lixo/caveirão 7; bombeiros 8; ônibus 9; articulado 11; tanque 40). Ao encostar num veículo que anda, você só é empurrado na proporção do peso dele (a van não carrega mais o ônibus). A pancada troca velocidade pelo peso (o mais leve quica e gira, o mais pesado quase não sente), com tranco na câmera, som de lataria e dano conforme a força.
   - **Bipe de ré**: ônibus (todos), caminhões (de empresa, lixo, bombeiros, Exército) e guincho tocam o bipe enquanto dão ré, inclusive os ônibus do terminal e os de outros jogadores; um ciclo do áudio enviado, repetindo sem emenda (`assets/sons/marcha_re.mp3`).

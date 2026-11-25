@@ -303,7 +303,7 @@ uniform float uNoite; uniform sampler2D uTerreo;`)
     // vitrines: só parte acende e bem mais fraca (antes todas brilhavam forte e ofuscavam quem passava na rua)
     float acesa = terreoF > 0.5 ? step(0.4, h) : step(0.45, h);
     vec3 cor = terreoF > 0.5 ? vec3(1.0, 0.72, 0.4) : mix(vec3(1.0, 0.76, 0.42), vec3(0.72, 0.84, 1.0), step(0.86, h));
-    totalEmissiveRadiance += jan * acesa * uNoite * cor * (terreoF > 0.5 ? 0.45 : 0.7);
+    totalEmissiveRadiance += jan * acesa * uNoite * cor * (terreoF > 0.5 ? 0.3 : 0.34);   // 22t: mais suave
   }`);
     }
   };
@@ -1556,7 +1556,7 @@ function montarMobiliario() {
   // a mancha fica rente ao asfalto (antes 21 cm acima: cobria as rodas e os pés, que pareciam afundados). Na calçada ela
   // fica por baixo; quem clareia a calçada é a luz de verdade do poste (gráfico ultra)
   const chaoPoca = (x, z) => { const h = altura(x, z); return h != null && h > 0.25 ? h + 0.03 : 0.035; };
-  pocas.forEach(([x, z, r, cor, y], k) => { _m.compose(_v.set(x, y ?? chaoPoca(x, z), z), _q.identity(), _e.set(r * 2, 1, r * 2)); pc.setMatrixAt(k, _m); pc.setColorAt(k, _c.set(cor || '#ffffff')); });
+  pocas.forEach(([x, z, r, cor, y], k) => { _m.compose(_v.set(x, y ?? chaoPoca(x, z), z), _q.identity(), _e.set(r * 2.3, 1, r * 2.3)); pc.setMatrixAt(k, _m); pc.setColorAt(k, _c.set(cor || '#ffffff')); });
   pc.renderOrder = 2; pc.visible = false; scene.add(pc); matPoca.userData.malha = pc;
   // carros estacionados: caixinhas leves para todos; os mais perto do jogador trocam pelo modelo 3D
   const coresCarro = ['#c0392b', '#2c3e50', '#ecf0f1', '#7f8c8d', '#2980b9', '#16a085', '#f1c40f', '#8e44ad', '#d35400', '#1f1f1f', '#bdc3c7', '#7b1e2b', '#2e5e3a', '#5dade2'];   // 22b: vinho, verde escuro e azul claro
@@ -1685,7 +1685,7 @@ export function definirNoite(n) {
   if (matLed) matLed.emissiveIntensity = n * 2.4;
   if (matLampFav) matLampFav.emissiveIntensity = n * 1.6;
   if (matHalo) { matHalo.opacity = n * 0.85; matHalo.userData.malha.visible = n > 0.05; }
-  if (matPoca) { matPoca.opacity = n * 0.6; matPoca.userData.malha.visible = n > 0.02; }
+  if (matPoca) { matPoca.opacity = n * 0.62; matPoca.userData.malha.visible = n > 0.02; }   // 22t: rua iluminada de verdade embaixo dos postes
 }
 // chuva: asfalto e calçada escurecem e ficam lisos (refletem o céu e as luzes)
 let molhadoAntes = -1;

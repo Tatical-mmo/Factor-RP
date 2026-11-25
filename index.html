@@ -303,6 +303,27 @@
   #menuBar.aberto #menuItens { display:flex; }
   /* a lista rola quando não cabe (celular em pé com muitos itens) e fica por cima do joystick */
   #menuBar.aberto { z-index:12; }
+  /* 22u: celular em pé durante o jogo: pede para girar (dá para continuar em pé) */
+  #gire { display:none; position:fixed; inset:0; z-index:60; background:rgba(10,14,22,.94); color:#fff; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; padding:24px; font:600 17px system-ui, sans-serif; }
+  #gire .ic { font-size:64px; animation:girarCel 1.8s ease-in-out infinite; }
+  #gire button { margin-top:8px; background:transparent; color:#cfd6e2; border:1px solid rgba(255,255,255,.3); border-radius:10px; padding:10px 16px; font:500 14px system-ui, sans-serif; }
+  @keyframes girarCel { 0%, 20% { transform:rotate(0); } 50%, 80% { transform:rotate(-90deg); } 100% { transform:rotate(0); } }
+  @media (orientation: portrait) and (pointer: coarse) { body.jogando:not(.aceitaEmPe) #gire { display:flex; } }
+  /* 22u: tablet: botões e joystick maiores e mais espaçados */
+  @media (pointer: coarse) and (min-width: 900px) and (min-height: 600px) {
+    #joy { width:170px; height:170px; left:calc(36px + env(safe-area-inset-left)); bottom:calc(36px + env(safe-area-inset-bottom)); }
+    #joy i { width:72px; height:72px; margin:-36px 0 0 -36px; }
+    #botoes { grid-template-columns:repeat(2, 84px); gap:16px; right:calc(28px + env(safe-area-inset-right)); bottom:calc(30px + env(safe-area-inset-bottom)); }
+    #botoes .bt { width:84px; height:84px; font-size:14px; }
+    #piscas .pd { width:56px; height:48px; font-size:24px; }
+  }
+  /* 22u: PC (mouse e teclado): sem joystick na tela (anda no WASD) e botões menores, só de apoio */
+  body:not(.toque) #joy { display:none; }
+  body:not(.toque) #botoes { grid-template-columns:repeat(2, 54px); gap:8px; opacity:.85; }
+  body:not(.toque) #botoes .bt { width:54px; height:54px; font-size:11px; }
+  /* 22u: com controle (gamepad) os comandos de toque somem */
+  body.comControle #joy, body.comControle #volanteUI { display:none !important; }
+  body.comControle #botoes { opacity:.7; }   /* continuam mostrando o que o B (agir) faz agora */
   #menuItens { max-height:calc(100vh - 210px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); max-height:calc(100dvh - 210px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; -webkit-overflow-scrolling:touch; }
   #menuBar.aberto #btMenu { background:var(--destaque); color:#20160a; }
   #menuItens .oculto { display:none !important; }
@@ -379,37 +400,37 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261125g",
-  "./js/mundo.js": "./js/mundo.js?v=20261125g",
-  "./js/arquitetura.js": "./js/arquitetura.js?v=20261125g",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261125g",
-  "./js/cla.js": "./js/cla.js?v=20261125g",
-  "./js/config.js": "./js/config.js?v=20261125g",
-  "./js/empresa.js": "./js/empresa.js?v=20261125g",
-  "./js/loja.js": "./js/loja.js?v=20261125g",
-  "./js/painel.js": "./js/painel.js?v=20261125g",
-  "./js/rede.js": "./js/rede.js?v=20261125g",
-  "./js/sedes.js": "./js/sedes.js?v=20261125g",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261125g",
-  "./js/civico.js": "./js/civico.js?v=20261125g",
-  "./js/ovni.js": "./js/ovni.js?v=20261125g",
-  "./js/jato.js": "./js/jato.js?v=20261125g",
-  "./js/governo.js": "./js/governo.js?v=20261125g",
-  "./js/servicos.js": "./js/servicos.js?v=20261125g",
-  "./js/sons.js": "./js/sons.js?v=20261125g",
-  "./js/voz.js": "./js/voz.js?v=20261125g",
-  "./js/clima.js": "./js/clima.js?v=20261125g",
-  "./js/ceu.js": "./js/ceu.js?v=20261125g",
-  "./js/semaforos.js": "./js/semaforos.js?v=20261125g",
-  "./js/cabine.js": "./js/cabine.js?v=20261125g",
-  "./js/eixos.js": "./js/eixos.js?v=20261125g",
-  "./js/racoes.js": "./js/racoes.js?v=20261125g",
-  "./js/logos.js": "./js/logos.js?v=20261125g",
-  "./js/celular.js": "./js/celular.js?v=20261125g",
-    "./js/paporeto.js": "./js/paporeto.js?v=20261125g",
-  "./js/jornal.js": "./js/jornal.js?v=20261125g",
-  "./js/visual.js": "./js/visual.js?v=20261125g",
-  "./js/tutorial.js": "./js/tutorial.js?v=20261125g"
+  "./js/main.js": "./js/main.js?v=20261125j",
+  "./js/mundo.js": "./js/mundo.js?v=20261125j",
+  "./js/arquitetura.js": "./js/arquitetura.js?v=20261125j",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261125j",
+  "./js/cla.js": "./js/cla.js?v=20261125j",
+  "./js/config.js": "./js/config.js?v=20261125j",
+  "./js/empresa.js": "./js/empresa.js?v=20261125j",
+  "./js/loja.js": "./js/loja.js?v=20261125j",
+  "./js/painel.js": "./js/painel.js?v=20261125j",
+  "./js/rede.js": "./js/rede.js?v=20261125j",
+  "./js/sedes.js": "./js/sedes.js?v=20261125j",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261125j",
+  "./js/civico.js": "./js/civico.js?v=20261125j",
+  "./js/ovni.js": "./js/ovni.js?v=20261125j",
+  "./js/jato.js": "./js/jato.js?v=20261125j",
+  "./js/governo.js": "./js/governo.js?v=20261125j",
+  "./js/servicos.js": "./js/servicos.js?v=20261125j",
+  "./js/sons.js": "./js/sons.js?v=20261125j",
+  "./js/voz.js": "./js/voz.js?v=20261125j",
+  "./js/clima.js": "./js/clima.js?v=20261125j",
+  "./js/ceu.js": "./js/ceu.js?v=20261125j",
+  "./js/semaforos.js": "./js/semaforos.js?v=20261125j",
+  "./js/cabine.js": "./js/cabine.js?v=20261125j",
+  "./js/eixos.js": "./js/eixos.js?v=20261125j",
+  "./js/racoes.js": "./js/racoes.js?v=20261125j",
+  "./js/logos.js": "./js/logos.js?v=20261125j",
+  "./js/celular.js": "./js/celular.js?v=20261125j",
+    "./js/paporeto.js": "./js/paporeto.js?v=20261125j",
+  "./js/jornal.js": "./js/jornal.js?v=20261125j",
+  "./js/visual.js": "./js/visual.js?v=20261125j",
+  "./js/tutorial.js": "./js/tutorial.js?v=20261125j"
 } }
 </script>
 </head>
@@ -608,6 +629,7 @@
 <div id="radarBau"></div>
 <div id="radarNatal"></div>
 <div id="toque" class="oculto">
+  <div id="gire"><div class="ic">📱</div><div>Gire o celular para jogar deitado</div><small style="font-weight:400;opacity:.75">Instalado na tela inicial, o jogo já abre deitado e em tela cheia</small><button id="gireOk">Jogar em pé assim mesmo</button></div>
   <div id="joy"><i></i></div>
   <div id="botoes">
     <button class="bt" id="btAcao">Pegar</button>
@@ -633,7 +655,7 @@
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
 <div id="telaFim"><b></b></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 25/11 · Batidas com peso e ré com bipe (22s)</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 25/11 · Armado vira para onde anda (22v)</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

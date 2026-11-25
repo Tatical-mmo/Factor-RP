@@ -168,7 +168,7 @@ export function materialFachada({ estilo = 0, attr = false, porta = null, loja =
       .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
       metalnessFactor = mix(mix(metalnessFactor, 0.55, metalico), 0.35, vidro);`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-      totalEmissiveRadiance += diffuseColor.rgb * aceso * vidro * uNoite * 0.9;`);
+      totalEmissiveRadiance += diffuseColor.rgb * aceso * vidro * uNoite * 0.42;`);   // 22t: janelas acesas mais suaves (ofuscavam à noite)
   };
   m.customProgramCacheKey = () => `fachada21q-${attr ? 'attr' : 'un'}`;
   m.userData.semUltra = true;

@@ -283,6 +283,7 @@ function posicionarSol(x, z) {
   sol.target.position.copy(c); sol.position.copy(c).addScaledVector(SOL_DIR, 80);
 }
 function ajustarSombraQualidade() {
+  arq.REAL.value = visual.nivelAtual() === 'baixo' ? 0 : 1;   // 22t: texturas realistas (reboco, manchas, remendos) em todos menos o Baixo
   const S = visual.maximaAtiva() ? 96 : visual.nivelAtual() === 'ultra' ? 64 : SOMBRA;   // 22q: Máxima cobre ainda mais
   if (sol.shadow.camera.right !== S) { Object.assign(sol.shadow.camera, { left: -S, right: S, top: S, bottom: -S, far: S > 70 ? 320 : S > 40 ? 260 : 160 }); sol.shadow.camera.updateProjectionMatrix(); }
 }
@@ -335,7 +336,7 @@ function atualizarCeu(t) {
   else SOL_DIR.set(-Math.cos(ang) * 0.9, Math.max(0.3, -elev), -0.35).normalize();   // luz da lua: vem de onde a lua está no céu
   sol.color.copy(CEU.lua).lerp(CEU.sol, dia).lerp(CEU.solTarde, tarde * 0.75);
   sol.intensity = 0.3 + 2.2 * dia;
-  hemi.intensity = 0.4 + 0.55 * dia;   // menos luz "chapada": sombras com mais volume
+  hemi.intensity = 0.5 + 0.45 * dia;   // menos luz "chapada": sombras com mais volume (22t: a noite um pouco mais clara)
   hemi.color.copy(CEU.hemiNoite).lerp(CEU.hemiDia, dia);
   hemi.groundColor.copy(CEU.chaoNoite).lerp(CEU.chaoDia, dia);
   scene.environmentIntensity = 0.12 + 0.33 * dia + 0.35 * molhadoAtual;   // chão molhado reflete mais
@@ -563,13 +564,60 @@ function prepararAntesDeMostrar() {
   requestAnimationFrame(passo);
 }
 let jogoEsperaIntro = false;
+// ---- 22u: celular deitado. Instalado (app), o manifesto já trava na horizontal. No navegador, no primeiro toque o jogo
+// entra em tela cheia e trava deitado (o Android só deixa travar em tela cheia); em pé aparece "gire o celular"
+// (dá para continuar em pé, se a pessoa preferir).
+function prepararHorizontal() {
+  if (!TOQUE) return;
+  const app = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
+  let emPe = false; try { emPe = localStorage.getItem('fator_em_pe') === '1'; } catch { /* nada */ }
+  document.body.classList.toggle('aceitaEmPe', emPe);
+  $('gireOk')?.addEventListener('click', () => { document.body.classList.add('aceitaEmPe'); try { localStorage.setItem('fator_em_pe', '1'); } catch { /* nada */ } });
+  if (app || emPe) { screen.orientation?.lock?.('landscape').catch(() => {}); return; }
+  const travar = () => {
+    const el = document.documentElement;
+    const tc = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : null;
+    Promise.resolve(tc).then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
+  };
+  document.addEventListener('pointerdown', travar, { once: true });
+}
+// ---- 22u: controle (gamepad, no PC ou no celular). Analógico esquerdo anda (ou vira, dirigindo), direito gira a
+// câmera; gatilhos aceleram e freiam; botões viram as teclas do PC.
+const BOTOES_CONTROLE = { 0: ' ', 1: 'e', 2: 'f', 3: 'q', 4: ',', 5: '.', 8: 'm', 10: 'shift', 12: 'n', 13: 'l' };
+const controle = { botoes: {}, teclas: new Set(), ativo: false, ultimo: 0 };
+function teclaControle(k, baixo) {
+  if (baixo === controle.teclas.has(k)) return;
+  if (baixo) controle.teclas.add(k); else controle.teclas.delete(k);
+  window.dispatchEvent(new KeyboardEvent(baixo ? 'keydown' : 'keyup', { key: k === ' ' ? ' ' : k, bubbles: true }));
+}
+function atualizarControle(dt) {
+  const gps = navigator.getGamepads ? navigator.getGamepads() : null, gp = gps && [...gps].find((g) => g && g.connected);
+  if (!gp) { if (controle.ativo) { controle.ativo = false; document.body.classList.remove('comControle'); for (const k of [...controle.teclas]) teclaControle(k, false); if (joy.id === 'controle') { joy.ativo = false; joy.x = joy.y = 0; joy.id = null; } } return; }
+  if (!controle.ativo) { controle.ativo = true; document.body.classList.add('comControle'); aviso('🎮 Controle conectado: analógico anda, A pula, B age, X soca, Y arma, gatilhos aceleram/freiam, Start abre o menu', 5); }
+  const zona = (v) => (Math.abs(v) < 0.18 ? 0 : (v - Math.sign(v) * 0.18) / 0.82);
+  const lx = zona(gp.axes[0] || 0), ly = zona(gp.axes[1] || 0), rx = zona(gp.axes[2] || 0), ry = zona(gp.axes[3] || 0);
+  const bt = (i) => !!gp.buttons[i]?.pressed, val = (i) => gp.buttons[i]?.value || 0;
+  if (jogador.carro) {   // dirigindo: o analógico vira (teclas A/D), gatilho direito acelera, esquerdo freia/ré
+    if (joy.id === 'controle') { joy.ativo = false; joy.x = joy.y = 0; joy.id = null; }
+    teclaControle('a', lx < -0.35); teclaControle('d', lx > 0.35);
+    teclaControle('w', val(7) > 0.25 || ly < -0.5); teclaControle('s', val(6) > 0.25 || ly > 0.5);
+  } else {
+    for (const k of ['a', 'd', 'w', 's']) teclaControle(k, false);
+    if (Math.hypot(lx, ly) > 0.02) { joy.ativo = true; joy.id = 'controle'; joy.x = lx; joy.y = -ly; }
+    else if (joy.id === 'controle') { joy.ativo = false; joy.x = joy.y = 0; joy.id = null; }
+  }
+  if (rx) { if (modo3D()) olhar.yaw -= rx * dt * 2.6; else if (Math.abs(rx) > 0.6 && performance.now() - controle.ultimo > 350) { controle.ultimo = performance.now(); girarCamera(rx > 0 ? 1 : -1); } }
+  if (ry && modo3D()) { if (modoCam === 'p1') olhar.pitch = THREE.MathUtils.clamp(olhar.pitch - ry * dt * 1.6, -1.25, 1.1); else olhar.incl = THREE.MathUtils.clamp(olhar.incl + ry * dt * 0.9, 0.05, 1.2); }
+  for (const [i, k] of Object.entries(BOTOES_CONTROLE)) teclaControle(k, bt(+i));
+  const st = bt(9); if (st && !controle.botoes[9]) $('menuBar')?.classList.toggle('aberto'); controle.botoes[9] = st;
+}
 function mostrarJogo() {
   if (introRodando) { jogoEsperaIntro = true; return; }   // 20l: carregou antes do vídeo acabar: abre quando ele terminar
   const tela = $('carregando'); preparando = false;
   $('progresso').style.width = '100%'; $('progressoTxt').textContent = '100%';
   pararMusicaCarregamento();
   tela.style.transition = 'opacity .7s ease'; tela.style.opacity = '0';
-  setTimeout(() => { tela.classList.add('oculto'); tela.style.opacity = ''; tela.style.transition = ''; revelarJogo(); }, 720);
+  setTimeout(() => { tela.classList.add('oculto'); tela.style.opacity = ''; tela.style.transition = ''; revelarJogo(); document.body.classList.add('jogando'); prepararHorizontal(); }, 720);
 }
 function aquecerQuadro() {
   const t = filaAquecer.shift(); if (!t) return;
@@ -3010,7 +3058,7 @@ function atirar(alvo) {
   if (armasProibidas()) { aviso('🚫 Armas não são permitidas aqui.'); return; }
   if (jogador.passageiro) { atirarDoCaveirao(alvo); return; }
   const A = ARMAS[jogador.armaTipo || 'basica'];
-  jogador.alvo = null;
+  jogador.alvo = null; jogador.tiroEm = performance.now();   // 22v: logo depois do tiro o corpo fica virado para a mira
   if (A.lanca) { dispararFoguete(A, alvo); return; }
   if (A.pente && !tenhoArmaPd()) {   // pente (20n): vazio, troca sozinho; enquanto troca, não atira
     const pe = penteDe(jogador.armaTipo || 'basica'), t = performance.now();
@@ -3606,7 +3654,7 @@ let tPrediosUltra = 0, prediosEmUltra = false; const matOrigPredio = new WeakMap
 function atualizarPrediosUltra(dt) {
   const ultra = visual.nivelAtual() === 'ultra';
   // janelas: acendem ao anoitecer (só um número muda, sem recompilar)
-  if (ultra) { const k = THREE.MathUtils.smoothstep(noiteAtual, 0.3, 0.75) * 1.4; for (const u of ultraPredio.values()) if (u) u.emissiveIntensity = k; }
+  if (ultra) { const k = THREE.MathUtils.smoothstep(noiteAtual, 0.3, 0.75) * 0.7; for (const u of ultraPredio.values()) if (u) u.emissiveIntensity = k; }
   if ((tPrediosUltra -= dt) > 0 && ultra === prediosEmUltra) return;
   tPrediosUltra = 8; prediosEmUltra = ultra;
   scene.traverse((o) => {
@@ -9944,7 +9992,10 @@ function atualizarJogador(dt) {
       j.ultimoMov = performance.now(); j.correndo = correr;
     }
     if (j.postura === 'abaixado' && vel === 0 && j.abxParou) j.abxParou = false;   // 20t: anda sempre agachado: ao parar só volta à pose parada
-    if (miraC.ligada && (!j.postura || j.abxEmPe)) j.yaw = miraC.yaw;   // 20m: com a mira de centro o corpo fica virado para a mira (anda de lado/de costas)
+    // 22v: em pé com a mira de centro, andando, o corpo vira para onde o analógico aponta (como sem arma); só fica
+    // virado para a mira parado, atirando ou logo depois do tiro (aí anda de lado/de costas, como antes)
+    const mirandoAgora = performance.now() - (j.tiroEm || 0) < 900 || !!gatilho.segurando;
+    if (miraC.ligada && (!j.postura || j.abxEmPe) && (vel === 0 || mirandoAgora)) j.yaw = vel === 0 && !mirandoAgora ? suavizarAngulo(j.yaw, miraC.yaw, dt * 10) : miraC.yaw;
     else if (miraC.ligada && vel === 0) j.yaw = suavizarAngulo(j.yaw, miraC.yaw, dt * 6);   // 20p: abaixado/deitado parado: vira para a mira
     // animação conforme o estado
     if (j.morto) { /* fica caído */ }
@@ -9955,7 +10006,7 @@ function atualizarJogador(dt) {
       else if (j.carregando) av.tocar('carry_walk', { velocidade: 1 });
       else if (j.postura && !j.abxEmPe) animPostura(av, j, true, ix);
       else if (j.armado && recargaAtual(j)) animRecarga(av, correr ? 'correndo' : 'andando', recargaAtual(j));
-      else if (j.armado && miraC.ligada && !(correr && turbinado()) && (iy < -0.2 || Math.abs(ix) > Math.max(0.25, iy * 1.1))) {   // 20o: mirando, para trás ou de lado
+      else if (j.armado && miraC.ligada && mirandoAgora && !(correr && turbinado()) && (iy < -0.2 || Math.abs(ix) > Math.max(0.25, iy * 1.1))) {   // 20o: mirando (22v: atirando), para trás ou de lado
         if (iy < 0 && -iy >= Math.abs(ix) * 0.8) av.tocar(forca > 0.75 ? 'mira_tras_rapido' : 'mira_tras_lento', { velocidade: 1 });
         else av.tocar(ix > 0 ? 'mira_lado_dir' : 'mira_lado_esq', { velocidade: 1 });
       }
@@ -10620,7 +10671,8 @@ function camLenta() {
 function quadroJogo() {
   const dtBruto = relogio.getDelta(); dtRealQ = Math.min(dtBruto, 0.5) * camLenta();   // 21t: o tempo real do quadro (a espera no trânsito conta por ele)
   const dt = Math.min(dtBruto, 0.05) * camLenta();
-  if (!preparando) visual.adaptar(dtBruto);   // 22q: resolução dinâmica (segura o FPS no aparelho que está rodando)
+  if (!preparando) visual.adaptar(dtBruto);
+  atualizarControle(dtBruto);   // 22u: controle (gamepad)   // 22q: resolução dinâmica (segura o FPS no aparelho que está rodando)
   diag('céu/clima');
   eixos.restaurar();   // a lógica do quadro usa a posição de sempre; o desenho das curvas volta no fim
   ferrovia.atualizar(agoraServidor() / 1000);
@@ -10664,7 +10716,7 @@ function quadroJogo() {
   voz.atualizar(dt); atualizarOficinasJog(dt); atualizarAperto(dt); atualizarQG(dt); atualizarAlgemas(dt); atualizarEsgoto(dt); atualizarEsteiras(dt); atualizarCarrosRua(); atualizarQueimados(dt); atualizarOnibusSeq(dt); atualizarPovo(dt); racoes.atualizar(dt); atualizarJujubas(dt); atualizarObstrucoes(dt); explosoesDeFogo(); pintarCarrosQueimados(); atualizarAveriguar(dt); atualizarVisita(); atualizarNomesCla(dt); atualizarRotulos(); atualizarCongelados(dt); atualizarConfigJogo(dt); atualizarBandidos(); atualizarPrisaoMilitar(dt); desenharBotaoViatura(); atualizarCativeiro(dt);
   jogador.avatar?.posicionarArma(); for (const r of remotos.values()) r.av?.posicionarArma();
   diag('ônibus/aviação/rodas');
-  atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); atualizarPanes(dt); atualizarSinaisJog(dt); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); { const dr = civico.distRe(); if (dr < 45) sons.continuo('marcha_re', 0.55 * sons.perto(dr, 45)); }   // 22s: bipe de ré; civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
+  atualizarDanoVeiculos(dt); atualizarUniformes(); atualizarTreino(dt); fraquezaFome(dt); atualizarOnibus(dt); atualizarAviacao(dt); atualizarAula(dt); atualizarColeta(dt); marcarEixos(); eixos.aplicar(alturaChao); atualizarPanes(dt); atualizarSinaisJog(dt); civico.atualizarLuzesVeiculos(dt, noiteAtual, alturaChao, scene); { const dr = civico.distRe(); if (dr < 45) sons.continuo('marcha_re', 0.55 * sons.perto(dr, 45)); } /* 22s: bipe de ré */ civico.atualizarRodas(dt, camAtiva === camP ? camP.position : jogador.pos);
   diag('rede');
   enviarEstado(dt);
   tempoSalvar -= dt; if (tempoSalvar <= 0) { tempoSalvar = 15; salvarAgora(); }
