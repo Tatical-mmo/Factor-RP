@@ -112,6 +112,8 @@
   #rua { position:absolute; left:50%; transform:translateX(-50%); top:calc(10px + env(safe-area-inset-top)); font-size:14px; white-space:nowrap; }
   #mapa { position:absolute; right:calc(10px + env(safe-area-inset-right)); top:calc(10px + env(safe-area-inset-top)); border-radius:12px; border:1px solid var(--borda); width:150px; height:150px; pointer-events:auto; cursor:pointer; }
   #rastreio { position:absolute; right:calc(10px + env(safe-area-inset-right)); top:calc(166px + env(safe-area-inset-top)); max-width:190px; font-size:12.5px; pointer-events:auto; cursor:pointer; }
+  #rastreio .manobra { font-size:14px; font-weight:600; color:#fff; background:rgba(110,40,200,.55); border-radius:8px; padding:4px 7px; margin:-2px -2px 5px; line-height:1.25; }
+  #rastreio .manobra b { font-size:22px; vertical-align:-3px; margin-right:4px; }
   #mapaG { width:100%; aspect-ratio:1; border-radius:10px; border:1px solid var(--borda); touch-action:none; display:block; }
   .alvos { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
   .alvos button { padding:8px 10px; border-radius:9px; border:1px solid var(--borda); background:#202737; color:var(--texto); font-weight:600; cursor:pointer; }
@@ -281,6 +283,7 @@
   body.aviao #piscas, body.heli #piscas { display:none; }
   #piscas .pd { width:46px; height:40px; border-radius:12px; font-size:20px; padding:0; }
   #piscas .pd.ativo { background:#ffa012; color:#1b1200; box-shadow:0 0 12px rgba(255,160,18,.9); }
+  #piscas .pd.ligado { background:#dff1ff; color:#06233d; box-shadow:0 0 14px rgba(170,215,255,.95); }
   #piscas.oculto { display:none; }
   #volanteUI { display:none; position:fixed; left:calc(14px + env(safe-area-inset-left)); bottom:calc(14px + env(safe-area-inset-bottom)); width:178px; height:178px; pointer-events:auto; touch-action:none; z-index:6; filter:drop-shadow(0 3px 6px rgba(0,0,0,.45)); }
   #volanteUI svg { display:block; }
@@ -376,37 +379,37 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261125c",
-  "./js/mundo.js": "./js/mundo.js?v=20261125c",
-  "./js/arquitetura.js": "./js/arquitetura.js?v=20261125c",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261125c",
-  "./js/cla.js": "./js/cla.js?v=20261125c",
-  "./js/config.js": "./js/config.js?v=20261125c",
-  "./js/empresa.js": "./js/empresa.js?v=20261125c",
-  "./js/loja.js": "./js/loja.js?v=20261125c",
-  "./js/painel.js": "./js/painel.js?v=20261125c",
-  "./js/rede.js": "./js/rede.js?v=20261125c",
-  "./js/sedes.js": "./js/sedes.js?v=20261125c",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261125c",
-  "./js/civico.js": "./js/civico.js?v=20261125c",
-  "./js/ovni.js": "./js/ovni.js?v=20261125c",
-  "./js/jato.js": "./js/jato.js?v=20261125c",
-  "./js/governo.js": "./js/governo.js?v=20261125c",
-  "./js/servicos.js": "./js/servicos.js?v=20261125c",
-  "./js/sons.js": "./js/sons.js?v=20261125c",
-  "./js/voz.js": "./js/voz.js?v=20261125c",
-  "./js/clima.js": "./js/clima.js?v=20261125c",
-  "./js/ceu.js": "./js/ceu.js?v=20261125c",
-  "./js/semaforos.js": "./js/semaforos.js?v=20261125c",
-  "./js/cabine.js": "./js/cabine.js?v=20261125c",
-  "./js/eixos.js": "./js/eixos.js?v=20261125c",
-  "./js/racoes.js": "./js/racoes.js?v=20261125c",
-  "./js/logos.js": "./js/logos.js?v=20261125c",
-  "./js/celular.js": "./js/celular.js?v=20261125c",
-    "./js/paporeto.js": "./js/paporeto.js?v=20261125c",
-  "./js/jornal.js": "./js/jornal.js?v=20261125c",
-  "./js/visual.js": "./js/visual.js?v=20261125c",
-  "./js/tutorial.js": "./js/tutorial.js?v=20261125c"
+  "./js/main.js": "./js/main.js?v=20261125d",
+  "./js/mundo.js": "./js/mundo.js?v=20261125d",
+  "./js/arquitetura.js": "./js/arquitetura.js?v=20261125d",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261125d",
+  "./js/cla.js": "./js/cla.js?v=20261125d",
+  "./js/config.js": "./js/config.js?v=20261125d",
+  "./js/empresa.js": "./js/empresa.js?v=20261125d",
+  "./js/loja.js": "./js/loja.js?v=20261125d",
+  "./js/painel.js": "./js/painel.js?v=20261125d",
+  "./js/rede.js": "./js/rede.js?v=20261125d",
+  "./js/sedes.js": "./js/sedes.js?v=20261125d",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261125d",
+  "./js/civico.js": "./js/civico.js?v=20261125d",
+  "./js/ovni.js": "./js/ovni.js?v=20261125d",
+  "./js/jato.js": "./js/jato.js?v=20261125d",
+  "./js/governo.js": "./js/governo.js?v=20261125d",
+  "./js/servicos.js": "./js/servicos.js?v=20261125d",
+  "./js/sons.js": "./js/sons.js?v=20261125d",
+  "./js/voz.js": "./js/voz.js?v=20261125d",
+  "./js/clima.js": "./js/clima.js?v=20261125d",
+  "./js/ceu.js": "./js/ceu.js?v=20261125d",
+  "./js/semaforos.js": "./js/semaforos.js?v=20261125d",
+  "./js/cabine.js": "./js/cabine.js?v=20261125d",
+  "./js/eixos.js": "./js/eixos.js?v=20261125d",
+  "./js/racoes.js": "./js/racoes.js?v=20261125d",
+  "./js/logos.js": "./js/logos.js?v=20261125d",
+  "./js/celular.js": "./js/celular.js?v=20261125d",
+    "./js/paporeto.js": "./js/paporeto.js?v=20261125d",
+  "./js/jornal.js": "./js/jornal.js?v=20261125d",
+  "./js/visual.js": "./js/visual.js?v=20261125d",
+  "./js/tutorial.js": "./js/tutorial.js?v=20261125d"
 } }
 </script>
 </head>
@@ -623,14 +626,14 @@
   <div id="volante">
     <div id="manche"><span class="m-t">▲ DESCE</span><span class="m-b">▼ SOBE</span><span class="m-l">◀</span><span class="m-r">▶</span><i></i></div>
     <div id="setas"><button class="pd" id="vEsq">◀</button><button class="pd" id="vDir">▶</button></div>
-    <div id="piscas" class="oculto"><button class="pd" id="vSetaE" title="Seta esquerda (,)">⬅</button><button class="pd" id="vAlerta" title="Pisca-alerta (N)">⚠</button><button class="pd" id="vSetaD" title="Seta direita (.)">➡</button></div>
+    <div id="piscas" class="oculto"><button class="pd" id="vSetaE" title="Seta esquerda (,)">⬅</button><button class="pd" id="vAlerta" title="Pisca-alerta (N)">⚠</button><button class="pd" id="vFarol" title="Farol (L)">💡</button><button class="pd" id="vSetaD" title="Seta direita (.)">➡</button></div>
     <div id="pedais"><button class="pd" id="vEjetar">🪂<br>EJETAR</button><button class="pd" id="vPairar">🚁<br>PAIRAR</button><button class="pd" id="vEmpinar">🏍️<br>EMPINAR</button><button class="pd" id="vFreio">FREIO<br>RÉ</button><button class="pd" id="vAcel">ACELERAR</button></div>
   </div>
 </div>
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
 <div id="telaFim"><b></b></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 25/11 · Mega rodoviária (22o)</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 25/11 · Rodoviária, GPS e farol (22p)</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

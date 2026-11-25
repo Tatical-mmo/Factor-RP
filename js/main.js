@@ -227,7 +227,9 @@ if (recuperando) telaNovaSenha();
 
 // ================================================================= MOTOR
 const canvas = $('jogo');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !TOQUE, powerPreference: 'high-performance' });
+// 22p: antisserrilhado (bordas lisas, sem "escadinha") também no celular, menos no gráfico Baixo
+const NIVEL_INICIAL = (() => { try { return localStorage.getItem('fator_qualidade') || 'medio'; } catch { return 'medio'; } })();
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !TOQUE || NIVEL_INICIAL !== 'baixo', powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, TOQUE ? 1.5 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
@@ -359,7 +361,7 @@ function atualizarCeu(t) {
   }
   for (const m of luzesCasas) m.emissiveIntensity = noite * 1.1;
   civico.brilhoOutdoors(noite);
-  if (visual.nivelAtual() === 'ultra' && (tNitidas -= 1) <= 0) { tNitidas = 600; visual.nitidas(); }   // texturas que chegaram depois (~10 s)
+  if (visual.nivelAtual() !== 'baixo' && (tNitidas -= 1) <= 0) { tNitidas = 600; visual.nitidas(); }   // 22p: nitidez de longe em todos menos o Baixo   // texturas que chegaram depois (~10 s)
   // dentro de qualquer prédio (casas, delegacia, prefeitura, hospital, CRAS, Câmara, cadeia...: todos os interiores)
   // a luz é das lâmpadas, igual de dia e de noite: não depende do sol nem da lua
   const alvo = jogador.dentroCasa || jogador.pos.x >= 1900 ? 1 : 0;
@@ -1732,6 +1734,7 @@ window.addEventListener('keydown', (e) => {
   if (k === ',' && jogador.carro) alternarSeta(1);   // 21t: seta esquerda / direita / pisca-alerta
   if (k === '.' && jogador.carro) alternarSeta(-1);
   if (k === 'n' && jogador.carro) alternarAlerta();
+  if (k === 'l' && jogador.carro) alternarFarol();   // 22p: farol
   if (k === 'z') girarCamera(-1);
   if (k === 'x') girarCamera(1);
   if (k === 'm') abrirJanela('mochila');
@@ -1864,7 +1867,7 @@ function configurarJoystick() {
     document.addEventListener('visibilitychange', solta);
     b.addEventListener('pointerup', solta); b.addEventListener('pointercancel', solta); b.addEventListener('lostpointercapture', solta);
   }
-  for (const [id, f] of [['vSetaE', () => alternarSeta(1)], ['vSetaD', () => alternarSeta(-1)], ['vAlerta', alternarAlerta]]) $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); f(); });   // 21t
+  for (const [id, f] of [['vSetaE', () => alternarSeta(1)], ['vSetaD', () => alternarSeta(-1)], ['vAlerta', alternarAlerta], ['vFarol', alternarFarol]]) $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); f(); });   // 21t
   toque('btAcao', acaoContexto); toque('btSoco', socar); toque('btArma', botaoArma); toque('btAlgema', acaoAlgema); toque('btCrime', acaoCrime);
   toque('btPular', pular); toque('btRender', renderSe); toque('btAbaixar', tocarAbaixar); toque('btDeitar', tocarDeitar);   // 20p
   toque('btRecarregar', () => trocarPente());
@@ -2603,17 +2606,36 @@ function colisaoChassi(c) {
 function rotuloVolante() { const sp = $('btVolante')?.querySelector('span'); if (sp) sp.textContent = `Direção: ${volantePref ? 'volante' : 'setas'}`; }
 // ---- 21t: setas e pisca-alerta do meu veículo (botões em cima do volante ou das setas; no PC , . e N). A seta
 // desliga sozinha depois da curva, como num carro de verdade.
-const sinalJog = { seta: 0, alerta: false, giro: 0, ry: null };
+const sinalJog = { seta: 0, alerta: false, farol: false, giro: 0, ry: null };
+// 22p: farol (botão 💡 em cima do volante, no PC a tecla L). Acende de dia também; à noite ele já acende sozinho andando.
+function alternarFarol() { if (!comSinais()) return; sinalJog.farol = !sinalJog.farol; aviso(sinalJog.farol ? '💡 Farol ligado' : 'Farol desligado', 1.2); }
+// 22p: ao descer, o farol e o pisca-alerta continuam como estavam; largado por 1 minuto, o veículo apaga sozinho
+const LUZ_LARGADA_MS = 60000;
+function guardarLuzes(mesh, farol, alerta) {
+  if (!mesh) return;
+  if (farol || alerta) mesh.userData.persist = { farol: !!farol, alerta: !!alerta, ate: performance.now() + LUZ_LARGADA_MS };
+  else delete mesh.userData.persist;
+}
 const comSinais = () => { const c = jogador.carro; return !!(c?.mesh && !c.voa && !c.aviao); };
 function alternarSeta(lado) { if (!comSinais()) return; sinalJog.seta = sinalJog.seta === lado ? 0 : lado; sinalJog.giro = 0; sinalJog.ry = null; }
 function alternarAlerta() { if (!comSinais()) return; sinalJog.alerta = !sinalJog.alerta; }
-function bitsSinal() { return (sinalJog.seta > 0 ? 1 : sinalJog.seta < 0 ? 2 : 0) | (sinalJog.alerta || jogador.carro?.pegouFogo || (jogador.carro?.dano || 0) >= 80 ? 4 : 0); }
+function bitsSinal() { return (sinalJog.seta > 0 ? 1 : sinalJog.seta < 0 ? 2 : 0) | (sinalJog.alerta || jogador.carro?.pegouFogo || (jogador.carro?.dano || 0) >= 80 ? 4 : 0) | (sinalJog.farol ? 8 : 0); }
 let carroSinal = null;
 function atualizarSinaisJog(dt) {
   const c = jogador.carro, el = $('piscas');
-  if (!comSinais()) { if (carroSinal) { sinalJog.seta = 0; sinalJog.alerta = false; carroSinal = null; } if (el) el.classList.add('oculto'); return; }
+  if (!comSinais()) {
+    if (carroSinal) {   // 22p: desceu: as luzes ficam no veículo parado (apaga sozinho depois de 1 minuto largado)
+      guardarLuzes(carroSinal.mesh, sinalJog.farol || noiteAtual > 0.25, sinalJog.alerta);
+      sinalJog.seta = 0; sinalJog.alerta = false; sinalJog.farol = false; carroSinal = null;
+    }
+    if (el) el.classList.add('oculto'); return;
+  }
   if (el) el.classList.remove('oculto');
-  if (carroSinal !== c) { carroSinal = c; sinalJog.seta = 0; sinalJog.alerta = false; sinalJog.ry = null; }
+  if (carroSinal !== c) {   // entrou: se o veículo ficou com luz acesa, continua como estava
+    const per = c.mesh.userData.persist, vale = per && performance.now() < per.ate;
+    carroSinal = c; sinalJog.seta = 0; sinalJog.alerta = !!(vale && per.alerta); sinalJog.farol = !!(vale && per.farol && noiteAtual <= 0.25); sinalJog.ry = null;
+    delete c.mesh.userData.persist;
+  }
   // desliga a seta depois de virar ~30° para o lado dela e endireitar o volante
   const ry = c.mesh.rotation.y;
   if (sinalJog.seta && sinalJog.ry !== null && Math.abs(c.vel || 0) > 0.5) {
@@ -2624,11 +2646,12 @@ function atualizarSinaisJog(dt) {
   }
   sinalJog.ry = ry;
   const alerta = !!(bitsSinal() & 4);
-  c.mesh.userData.sinalJog = { seta: sinalJog.seta, alerta, t: performance.now() };
+  c.mesh.userData.sinalJog = { seta: sinalJog.seta, alerta, farol: sinalJog.farol, t: performance.now() };
   if (el) {
     const pisca = (performance.now() % 800) < 420;
     $('vSetaE').classList.toggle('ativo', sinalJog.seta > 0 && pisca); $('vSetaD').classList.toggle('ativo', sinalJog.seta < 0 && pisca);
     $('vAlerta').classList.toggle('ativo', alerta && pisca);
+    $('vFarol')?.classList.toggle('ligado', sinalJog.farol);
   }
 }
 function montarVolante() {
@@ -3444,13 +3467,31 @@ function atualizarExplosoesUltra(dt) {
 }
 // ---- espirro d'água: quem pisa ou passa de carro numa poça de chuva levanta gotas e uma ondinha
 const MAX_GOTAS = 160, gotasAgua = [];
-let malhaGotas = null, aneisAgua = [];
+let malhaGotas = null;
+// 22p: a ondinha era um anel duro e opaco que crescia rápido (parecia um alvo desenhado no chão). Agora: ondas finas e
+// suaves (textura com a borda esfumada), bem transparentes, que abrem devagar e somem; pisando fraco é uma onda só e
+// pequena, carro passando forte faz duas. As gotas ficaram menores, menos e mais transparentes (a pé quase não espirra).
+let texOnda = null;
+function texturaOnda() {
+  if (texOnda) return texOnda;
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), m = 64;
+  const anel = (r, l, a) => { const gr = g.createRadialGradient(m, m, Math.max(0, r - l), m, m, r + l); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, `rgba(255,255,255,${a})`); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.beginPath(); g.arc(m, m, r + l, 0, 7); g.fill(); };
+  anel(56, 5, 0.9); anel(44, 4, 0.35); anel(33, 3, 0.15);
+  texOnda = new THREE.CanvasTexture(c); return texOnda;
+}
+const geoOnda = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), poolOndas = [];
+function onda(x, y, z, raio, atraso, forca) {
+  let o = poolOndas.find((p) => !p.vivo);
+  if (!o) { if (poolOndas.length >= 40) return; o = { m: new THREE.Mesh(geoOnda, new THREE.MeshBasicMaterial({ map: texturaOnda(), color: '#e3eef8', transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })) }; o.m.renderOrder = 2; poolOndas.push(o); scene.add(o.m); }
+  o.vivo = true; o.t = -atraso; o.r = raio; o.f = forca; o.dur = 0.9 + raio * 0.6; o.m.position.set(x, y, z); o.m.rotation.y = Math.random() * 6.28; o.m.scale.setScalar(0.05); o.m.visible = false;
+}
 function respingo(x, z, forca = 1) {
-  if (!malhaGotas) { malhaGotas = new THREE.InstancedMesh(new THREE.SphereGeometry(0.05, 5, 4), new THREE.MeshBasicMaterial({ color: '#cfe3f5', transparent: true, opacity: 0.85, depthWrite: false }), MAX_GOTAS); malhaGotas.frustumCulled = false; malhaGotas.count = 0; scene.add(malhaGotas); }
-  const y = alturaChao(x, z) + 0.05, n = Math.round(6 + 8 * forca);
-  for (let k = 0; k < n; k++) { if (gotasAgua.length >= MAX_GOTAS) gotasAgua.shift(); const a = Math.random() * Math.PI * 2, v = (0.8 + Math.random() * 1.6) * forca; gotasAgua.push({ x, y, z, vx: Math.cos(a) * v, vz: Math.sin(a) * v, vy: (1.8 + Math.random() * 2.2) * Math.sqrt(forca), t: 0 }); }
-  const anel = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#dcebf7', transparent: true, opacity: 0.55, depthWrite: false }));
-  anel.position.set(x, y, z); anel.scale.setScalar(0.2); scene.add(anel); aneisAgua.push({ m: anel, t: 0, f: forca });
+  if (!malhaGotas) { malhaGotas = new THREE.InstancedMesh(new THREE.SphereGeometry(0.035, 5, 4), new THREE.MeshBasicMaterial({ color: '#dceaf6', transparent: true, opacity: 0.55, depthWrite: false }), MAX_GOTAS); malhaGotas.frustumCulled = false; malhaGotas.count = 0; scene.add(malhaGotas); }
+  const y = alturaChao(x, z) + 0.03, n = Math.round(forca < 1 ? 2 + 3 * forca : 4 + 6 * forca);
+  for (let k = 0; k < n; k++) { if (gotasAgua.length >= MAX_GOTAS) gotasAgua.shift(); const a = Math.random() * Math.PI * 2, v = (0.5 + Math.random() * 1.2) * forca; gotasAgua.push({ x, y, z, vx: Math.cos(a) * v, vz: Math.sin(a) * v, vy: (1.2 + Math.random() * 1.6) * Math.sqrt(forca), t: 0, y0: y, k: 0.5 + Math.random() * 0.7 }); }
+  const r = forca < 1 ? 0.35 + 0.25 * forca : 0.6 + 0.35 * forca;
+  onda(x + (Math.random() - 0.5) * 0.1, y, z + (Math.random() - 0.5) * 0.1, r, 0, forca);
+  if (forca >= 1) onda(x, y, z, r * 0.7, 0.18, forca);
 }
 const _rsp = new Map();   // última posição de quem anda (para não espirrar parado)
 function atualizarRespingos(dt) {
@@ -3471,10 +3512,15 @@ function atualizarRespingos(dt) {
   }
   if (!malhaGotas) return;
   const M4 = new THREE.Matrix4(); let n = 0;
-  for (let i = gotasAgua.length - 1; i >= 0; i--) { const g = gotasAgua[i]; g.t += dt; g.vy -= 9.8 * dt; g.x += g.vx * dt; g.y += g.vy * dt; g.z += g.vz * dt; if (g.t > 0.9) gotasAgua.splice(i, 1); }
-  for (const g of gotasAgua) { M4.makeTranslation(g.x, g.y, g.z); malhaGotas.setMatrixAt(n++, M4); }
+  for (let i = gotasAgua.length - 1; i >= 0; i--) { const g = gotasAgua[i]; g.t += dt; g.vy -= 9.8 * dt; g.x += g.vx * dt; g.y += g.vy * dt; g.z += g.vz * dt; if (g.t > 0.9 || (g.t > 0.08 && g.y < (g.y0 ?? -1e9))) gotasAgua.splice(i, 1); }   // 22p: caiu de volta na água: some
+  for (const g of gotasAgua) { const k = (g.k || 1) * (1 - g.t * 0.6); M4.makeScale(k, k, k).setPosition(g.x, g.y, g.z); malhaGotas.setMatrixAt(n++, M4); }
   malhaGotas.count = n; malhaGotas.instanceMatrix.needsUpdate = true;
-  for (let i = aneisAgua.length - 1; i >= 0; i--) { const a = aneisAgua[i]; a.t += dt; a.m.scale.setScalar(0.2 + a.t * 2.2 * a.f); a.m.material.opacity = 0.55 * (1 - a.t / 0.8); if (a.t > 0.8) { scene.remove(a.m); a.m.geometry.dispose(); a.m.material.dispose(); aneisAgua.splice(i, 1); } }
+  for (const o of poolOndas) {   // 22p: abre rápido no começo e devagar no fim (como na água), sumindo aos poucos
+    if (!o.vivo) continue; o.t += dt; if (o.t < 0) continue;
+    const u = Math.min(1, o.t / o.dur), e = 1 - Math.pow(1 - u, 2.4);
+    o.m.visible = true; o.m.scale.setScalar(0.08 + 2 * o.r * e); o.m.material.opacity = (o.f >= 1 ? 0.32 : 0.24) * Math.min(1, o.t / 0.08) * (1 - u) * (1 - u);
+    if (u >= 1) { o.vivo = false; o.m.visible = false; }
+  }
 }
 // ---- gráfico ultra: prédios 3D (Meshy) mais realistas. Da textura de cada um sai um mapa: o que é vidro (escuro e
 // azulado) vira espelho (reflete o céu) e, à noite, parte das janelas acende com luz amarelada; o resto ganha relevo.
@@ -3937,14 +3983,41 @@ function atualizarRotaGps(dt, passo) {
   if (tRotaGps > 0 && !andou && rotaGps?.alvo === passo) return;
   tRotaGps = 2.5; rotaDe = { x: jogador.pos.x, z: jogador.pos.z };
   const c = mundo.caminhoRuas({ x: jogador.pos.x, z: jogador.pos.z }, { x: passo.x, z: passo.z });
-  rotaGps = c ? { pts: [...c, { x: passo.x, z: passo.z }], alvo: passo } : null;
+  // 22p: sem ligação pelas ruas (campo, pista, mar) fica uma linha reta tracejada até o destino
+  rotaGps = c ? { pts: [...c, { x: passo.x, z: passo.z }], alvo: passo } : { pts: [{ x: jogador.pos.x, z: jogador.pos.z }, { x: passo.x, z: passo.z }], alvo: passo, reta: true };
 }
+// 22p: próxima manobra da rota (como o GPS do GTA): para que lado virar, em quantos metros e em qual rua
+function proximaManobra() {
+  if (!rotaGps || rotaGps.reta) return null;
+  const P = [{ x: jogador.pos.x, z: jogador.pos.z }, ...rotaGps.pts.slice(1)].filter((p, i, l) => !i || Math.hypot(p.x - l[i - 1].x, p.z - l[i - 1].z) > 1.5);
+  let d = 0;
+  for (let k = 1; k < P.length - 1; k++) {
+    const a = P[k - 1], b = P[k], c = P[k + 1]; d += Math.hypot(b.x - a.x, b.z - a.z);
+    const ax = b.x - a.x, az = b.z - a.z, bx = c.x - b.x, bz = c.z - b.z, la = Math.hypot(ax, az), lb = Math.hypot(bx, bz);
+    const cos = (ax * bx + az * bz) / (la * lb), cruz = ax * bz - az * bx;
+    if (cos > 0.82 || lb < 4) continue;   // quase reto: segue
+    const t = Math.min(14, lb / 2), rua = nomeDaRua(b.x + bx / lb * t, b.z + bz / lb * t);
+    return { d, lado: cos < -0.5 ? 'volta' : cruz > 0 ? 'direita' : 'esquerda', x: b.x, z: b.z, rua: /^(Rua|Av|Avenida|Alameda|Travessa|Estrada|Rodovia)/.test(rua) ? rua : '' };
+  }
+  for (let k = Math.max(1, P.length - 1); k < P.length; k++) d += Math.hypot(P[k].x - P[k - 1].x, P[k].z - P[k - 1].z);
+  return { d, lado: 'chegada', x: P[P.length - 1].x, z: P[P.length - 1].z, rua: '' };
+}
+const SETA_MANOBRA = { direita: '↱', esquerda: '↰', volta: '↶', chegada: '🏁' };
 function desenharRotaGps(g, tela, larg) {
   if (!rotaGps) return;
   g.save(); g.lineJoin = 'round'; g.lineCap = 'round';
+  const pts = [{ x: jogador.pos.x, z: jogador.pos.z }, ...rotaGps.pts.slice(1)];   // 22p: a linha sai de onde você está agora
+  if (rotaGps.reta) g.setLineDash([larg * 2, larg * 1.6]);
   for (const [cor, l] of [['rgba(20,10,40,.85)', larg + 3], ['#b45cff', larg]]) {
     g.strokeStyle = cor; g.lineWidth = l; g.beginPath();
-    rotaGps.pts.forEach((p, i) => { const [mx, mz] = tela(p.x, p.z); if (i) g.lineTo(mx, mz); else g.moveTo(mx, mz); }); g.stroke();
+    pts.forEach((p, i) => { const [mx, mz] = tela(p.x, p.z); if (i) g.lineTo(mx, mz); else g.moveTo(mx, mz); }); g.stroke();
+  }
+  g.setLineDash([]);
+  const m = proximaManobra();   // 22p: a próxima esquina da rota fica marcada (bolinha branca com a seta)
+  if (m && m.lado !== 'chegada') {
+    const [mx, mz] = tela(m.x, m.z), r = Math.max(5, larg * 1.6);
+    g.fillStyle = '#fff'; g.strokeStyle = '#2a1050'; g.lineWidth = 2; g.beginPath(); g.arc(mx, mz, r, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = '#5a1fa8'; g.font = `bold ${Math.round(r * 1.5)}px system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(SETA_MANOBRA[m.lado], mx, mz + 1);
   }
   g.restore();
 }
@@ -3961,7 +4034,10 @@ function atualizarRastreio(dt) {
   atualizarRastreio.t = (atualizarRastreio.t || 0) - dt;
   if (atualizarRastreio.t <= 0) {
     atualizarRastreio.t = 0.3;
-    $('rastreio').innerHTML = `📍 ${passo.estacao ? 'Vá até ' : ''}<b>${passo.nome}</b> · ${Math.round(d)} m <small>(toque para parar)</small>`;
+    const m = proximaManobra(), dm = m ? Math.max(0, Math.round(m.d / 5) * 5) : 0;
+    const linha = !m ? (rotaGps?.reta ? '<div class="manobra"><b>➚</b> siga em linha reta (fora das ruas)</div>' : '')
+      : `<div class="manobra"><b>${SETA_MANOBRA[m.lado]}</b> ${m.lado === 'chegada' ? `destino em ${dm} m` : `${m.lado === 'volta' ? 'retorne' : `vire à ${m.lado}`} em ${dm} m${m.rua ? `<br><small>na ${m.rua}</small>` : ''}`}</div>`;
+    $('rastreio').innerHTML = `${linha}📍 ${passo.estacao ? 'Vá até ' : ''}<b>${passo.nome}</b> · ${Math.round(d)} m <small>(toque para parar)</small>`;
   }
   if (!passo.estacao && d < 5) { aviso(`Você chegou: ${rastreio.nome}`); rastrear(null); }
 }
@@ -4364,7 +4440,8 @@ async function iniciarJogo(perfil) {
   $('btGrafico').onclick = () => {
     const ordem = ['baixo', 'medio', 'alto', 'ultra'], prox = ordem[(ordem.indexOf(visual.nivelAtual()) + 1) % ordem.length];
     visual.definirNivel(prox); rotuloGrafico(); ajustarCamera(); ajustarSombraQualidade(); salvarPref('grafico', prox);
-    aviso(`✨ Gráficos: ${visual.NIVEIS[prox]}${prox === 'baixo' ? ' (mais leve, sem efeitos)' : prox === 'alto' ? ' (mais bonito, pesa mais)' : prox === 'ultra' ? ' (máximo: vê mais longe, sombras e texturas nítidas; pesa bastante)' : ''}`, 3);
+    const aa = TOQUE && ((prox === 'baixo') !== (NIVEL_INICIAL === 'baixo')) ? ' · as bordas lisas mudam ao reabrir o jogo' : '';   // 22p
+    aviso(`✨ Gráficos: ${visual.NIVEIS[prox]}${prox === 'baixo' ? ' (mais leve, sem efeitos)' : prox === 'alto' ? ' (mais bonito, pesa mais)' : prox === 'ultra' ? ' (máximo: vê mais longe, sombras e texturas nítidas; pesa bastante)' : ''}${aa}`, 3.5);
   };
   $('btConta').onclick = () => { abrirServico('conta'); $('menuBar').classList.remove('aberto'); };
   carregarBloqueios();
@@ -4611,7 +4688,10 @@ function atualizarRemotos(dt) {
       if (sentarNoVeiculo(r.av, r.carro, mod)) { r.arma.visible = false; r.anim = 'idle'; }
       continue;
     }
-    if (r.carro) { scene.remove(r.carro); r.carro = null; r.carroId = null; raiz.visible = true; tempoCarros = 0; }
+    if (r.carro) {
+      { const sn = r.carro.userData.sinalRede | 0, pv = carrosMundo.get(Number(r.carroId)); if (pv?.mesh) guardarLuzes(pv.mesh, (sn & 8) || noiteAtual > 0.25, sn & 4); }   // 22p: as luzes dele ficam acesas no carro parado
+      scene.remove(r.carro); r.carro = null; r.carroId = null; raiz.visible = true; tempoCarros = 0;
+    }
     if ((a.pq === 1) !== !!r.pq) { if (a.pq === 1) { r.pq = paraquedasMesh(); raiz.add(r.pq); } else { raiz.remove(r.pq); r.pq = null; } }   // descendo de paraquedas (2 = queda livre, sem a lona)
     if (!raiz.visible || Math.hypot(a.x - raiz.position.x, a.z - raiz.position.z) > 8) { raiz.position.set(a.x, a.y, a.z); raiz.visible = true; }
     const k = Math.min(1, dt * 10);
@@ -5287,6 +5367,7 @@ async function retirarDoDeposito(dep) {
       const cx = criarCaixa(produto); cx.userData.pedido = { id: pd.id, destino: pd.destino };
       jogador.carregando = cx;
       aviso(`Leve a caixa até: ${DESTINOS[pd.destino]?.nome || pd.destino}.`, 4);
+      { const D = DESTINOS[pd.destino]; if (D && D.x !== undefined) rastrear({ nome: `📦 ${D.nome}`, x: D.x, z: D.z }); }   // 22p: rota no mapa até a entrega
     } });
   } catch (e) { aviso(e.message); }
   finally { ocupado = false; }
@@ -5642,7 +5723,7 @@ function atualizarDirigido(c, dt) {
   if (jogador.carro?.caminhao === c.d.id || taxi?.c === c) return;          // sou eu que estou dirigindo (ou é o meu táxi)
   if (c.chamada) { andarChamada(c, c.obj, () => { c.chamada = null; }); return; }
   const pl = pilotos.get(c.d.id), vivo = pl && performance.now() - pl.t < 1500 && c.d.motorista;
-  if (vivo) c.obj.userData.sinalRede = pl.sn; else delete c.obj.userData.sinalRede;   // 21t: seta e alerta de quem dirige
+  if (vivo) c.obj.userData.sinalRede = pl.sn; else if (c.obj.userData.sinalRede !== undefined) { const sn = c.obj.userData.sinalRede | 0; delete c.obj.userData.sinalRede; guardarLuzes(c.obj, (sn & 8) || noiteAtual > 0.25, sn & 4); }   // 22p: desceu, as luzes ficam   // 21t: seta e alerta de quem dirige
   const x = vivo ? pl.x : c.d.pos_x, z = vivo ? pl.z : c.d.pos_z, ang = vivo ? pl.r : c.d.ang;
   if (x == null || z == null) return;
   if (Math.hypot(x - c.obj.position.x, z - c.obj.position.z) > 40) c.obj.position.set(x, c.obj.position.y, z);
@@ -7477,7 +7558,7 @@ async function natalAdmin(catalogo, testeMin) {
 // leva até outra sem paradas (rota no mapa), recebe e devolve o ônibus vazio na mesma vaga.
 const VIACAO = { x0: 278, x1: 316.5, z0: -262, z1: -224, vz: -254, vx: (i) => 292 + i * 3.85, balcao: { x: 283.6, z: -256.6 },
   escr: { x0: 278.6, x1: 289, z0: -261.5, z1: -250 }, nVagas: 7 };
-const VIACAO_PONTOS = [{ x: 135, z: -230, nome: 'Rodoviária da Metrópole' }, { x: 69, z: -931, nome: 'Rodoviária de Vila Serra' }, { x: 69, z: 931, nome: 'Rodoviária de Porto Sul' }];
+const VIACAO_PONTOS = [{ x: 194, z: -244, nome: 'Rodoviária da Metrópole (baia 11)' }, { x: 69, z: -931, nome: 'Rodoviária de Vila Serra' }, { x: 69, z: 931, nome: 'Rodoviária de Porto Sul' }];   // 22p: a Metrópole embarca na baia 11 da mega rodoviária
 const VIACAO_MODELOS = ['onibus_rod_06', 'onibus_rod_02', 'onibus_rod_04', 'onibus_rod_amarelo', 'onibus_rod_dourado', 'onibus_rod_vermelho', 'onibus_rod_branco', 'onibus_amarelo', 'onibus_branco', 'onibus_laranja'];   // 21r: a mesma frota das linhas
 let viacao = null, viacaoVagas = [], viacaoTeto = null, tViacao = 0, viacaoNpcs = null, viacaoCena = null;
 function montarViacao() {
@@ -14575,25 +14656,30 @@ const pertoRodo = (x, z) => x > RODO.x0 - MARGEM_RODO && x < TERMINAL_RODO.x1 + 
 const BAIAS = Array.from({ length: 12 }, (_, k) => ({ n: k + 1, x: 120 + k * 7.4, z: -243.6 }));
 const ANG_BAIA = -Math.PI / 4;   // o nariz do ônibus aponta para a plataforma (sudoeste)
 const MEGA = { x0: 113, x1: 211, z0: -265, z1: -221, zPista: -259, zChega: -261.8, zSai: -255.6, zBaia: -238, zSaguao: -234, entradaX: 205, saidaX: 121 };
+// 22p: entra pelo lado leste (vindo pela rua x = 216, sentido norte) e sai pelo oeste (rua x = 108): uma curva em cada portão
+const ENTRA_RODO = [216, -250], SAI_RODO = [108, -240];
+// cada linha para na primeira livre das suas 3 baias (a primeira é a dela); todas ocupadas: espera na entrada
+const GRUPO_BAIAS = { 1: [2, 1, 3], 7: [4, 3, 5], 8: [6, 5, 7], 3: [8, 7, 9], 2: [9, 10, 8] };
 const BAIA_LINHA = { 1: 1, 7: 3, 8: 5, 3: 7, 2: 8 };   // índice da baia de cada linha (baias 2, 4, 6, 8 e 9: a 9 deixa pista para a fila de quem chega)
 const PLAT = [1, 3, 5, 7, 8].map((i) => BAIAS[i].x);
+const BAIA_FATOR = 11;   // 22p: baia da Viação Expresso Fator (o ponto de embarque da Metrópole)
 const URB = ['onibus_amarelo', 'onibus_branco', 'onibus_laranja'], EXEC = ['onibus_rod_06', 'onibus_rod_02', 'onibus_rod_04', 'onibus_rod_amarelo', 'onibus_rod_dourado', 'onibus_rod_vermelho', 'onibus_rod_branco'];   // 21r: frota Fator RP; os de viagem vão para as cidades vizinhas
 const ROD = [188, -216, 'Rodoviária', 'o'];   // ponto coberto das circulares: calçada da frente do terminal (elas não entram)
 const LINHAS = [
   { id: 1, nome: 'Linha 1 · Circular', curto: 'Circular', cor: '#1f6fd1', faixa: PLAT[0], k: 3, fase: 0, modelos: URB,
-    rua: [[MEGA.saidaX, -270], [108, -270], [108, -54], [-108, -54], [-108, 54], [108, 54], [108, -270], [MEGA.entradaX, -270]],
+    rua: [SAI_RODO, [108, -54], [-108, -54], [-108, 54], [108, 54], [108, -216], [216, -216], ENTRA_RODO],
     paradas: [[108, -150, 'Concessionária', 's'], [-27, -54, null], [-108, -27, null], [27, 54, null], [108, -110, 'Banco', 'n']] },
   { id: 7, nome: 'Linha 7 · Vila Serra', curto: 'Vila Serra', cor: '#6d4c9f', faixa: PLAT[1], k: 4, fase: 3, modelos: EXEC, inter: true,
-    rua: [[MEGA.saidaX, -270], [108, -270], [108, -108], [-162, -108], [-162, -945], [81, -945], [81, -999], [-81, -999], [-81, -945], [-162, -945], [-162, -108], [108, -108], [108, -270], [MEGA.entradaX, -270]],
+    rua: [SAI_RODO, [108, -108], [-162, -108], [-162, -945], [81, -945], [81, -999], [-81, -999], [-81, -945], [-162, -945], [-162, -108], [108, -108], [108, -216], [216, -216], ENTRA_RODO],
     paradas: [[-27, -108, 'Estação Norte', 'o'], [-162, -560, 'Rodovia Norte', 'n'], [70, -945, '🚌 Rodoviária de Vila Serra', 'l'], [0, -999, 'Vila Serra · Centro', 'o'], [-162, -600, 'Rodovia Norte', 's'], [27, -108, 'Estação Norte', 'l']] },
   { id: 8, nome: 'Linha 8 · Porto Sul', curto: 'Porto Sul', cor: '#1a8fb0', faixa: PLAT[2], k: 4, fase: 10, modelos: EXEC, inter: true,
-    rua: [[MEGA.saidaX, -270], [216, -270], [216, 945], [-81, 945], [-81, 999], [81, 999], [81, 945], [216, 945], [216, -270], [MEGA.entradaX, -270]],
+    rua: [SAI_RODO, [108, -162], [216, -162], [216, 945], [-81, 945], [-81, 999], [81, 999], [81, 945], [216, 945], ENTRA_RODO],
     paradas: [[216, 300, 'Av. Leste', 's'], [216, 600, 'Rodovia Sul', 's'], [70, 945, '🚌 Rodoviária de Porto Sul', 'o'], [0, 999, 'Porto Sul · Centro', 'l'], [216, 560, 'Rodovia Sul', 'n'], [216, 250, 'Av. Leste', 'n']] },
   { id: 3, nome: 'Linha 3 · Leste', curto: 'Leste', cor: '#2e9e57', faixa: PLAT[3], k: 3, fase: 14, modelos: URB,
-    rua: [[MEGA.saidaX, -270], [216, -270], [216, -216], [270, -216], [270, 162], [108, 162], [108, -270], [MEGA.entradaX, -270]],
+    rua: [SAI_RODO, [108, -162], [270, -162], [270, 162], [108, 162], [108, -216], [216, -216], ENTRA_RODO],
     paradas: [[270, -90, 'Zona Leste'], [190, 162, 'Cemitério'], [108, 27, null], [108, -180, 'Banco']] },
   { id: 2, nome: 'Linha 2 · Aeroporto', curto: 'Aeroporto', cor: '#e8891c', faixa: PLAT[4], k: 3, fase: 7, modelos: ['onibus_rod_vermelho', 'onibus_rod_branco'],
-    rua: [[MEGA.saidaX, -270], [162, -270], [162, -668], [400, -668], [400, -688], [162, -688], [162, -270], [MEGA.entradaX, -270]],   // 22o: sai e chega pela rua de cima
+    rua: [SAI_RODO, [108, -216], [54, -216], [54, -270], [162, -270], [162, -668], [400, -668], [400, -688], [162, -688], [162, -324], [270, -324], [270, -216], [216, -216], ENTRA_RODO],   // 22p: sai pelo oeste e chega pelo leste
     paradas: [[162, -470, 'Av. do Aeroporto', 'n'], [270, -688, '✈️ Aeroporto · Terminal'], [162, -420, 'Av. do Aeroporto', 's']] },
   // circulares (sem plataforma): começam e terminam no ponto coberto da calçada da frente do terminal (não entram nele)
   { id: 4, nome: 'Linha 4 · Oeste e Serviços', curto: 'Serviços', cor: '#8e44ad', k: 4, fase: 5, modelos: URB, circular: true,
@@ -14634,23 +14720,36 @@ function montarCaminho(L) {
   const wb = L.wb ?? (L.modelos ? Math.max(...L.modelos.map((m) => civico.entreEixos(m))) : 0);
   const B = L.baiaMega;
   let ini = L.ini, fim = L.fimPts;
-  if (!L.circular && B && !ini) {   // 22o: mega rodoviária
-    // ré em curva: sai da baia para trás (nordeste) e termina virado para oeste, pronto para seguir pela pista
-    const fx = Math.sin(ANG_BAIA), fz = Math.cos(ANG_BAIA), R1 = [B.x - fx * 5.5, B.z - fz * 5.5], A = [R1[0] + 6.5, R1[1] - 2.2];
-    // duas faixas na pista: a de cima é de quem chega (e da fila), a de baixo é de quem sai da baia (não se cruzam parados)
-    const P1 = [A[0] - 10, A[1] - 3], P2 = [Math.max(A[0] - 20, MEGA.saidaX + 5), MEGA.zSai];
-    ini = [[B.x, B.z], R1, A, P1, P2];
-    if (P2[0] > MEGA.saidaX + 8) ini.push([MEGA.saidaX + 4, MEGA.zSai]);
-    ini.push([MEGA.saidaX, MEGA.z0 - 1]);
-    const Q = [B.x - fx * 9, B.z - fz * 9];
-    fim = [[MEGA.entradaX, MEGA.z0 - 1], [MEGA.entradaX - 6, MEGA.zChega]];
-    if (B.x + 15 < MEGA.entradaX - 9) fim.push([B.x + 15, MEGA.zChega]);
-    fim.push(Q, [B.x, B.z]);
+  let terminal = false;
+  if (!L.circular && B && !ini) {   // 22p: mega rodoviária com curvas contínuas (Bézier entre poses do ônibus)
+    terminal = true;
+    const fx = Math.sin(ANG_BAIA), fz = Math.cos(ANG_BAIA), O = [1, 0], W = [-1, 0];
+    const bez = (p0, d0, p1, d1, h0, h1) => {   // d0/d1: sentido do movimento no começo e no fim
+      const c1 = [p0[0] + d0[0] * h0, p0[1] + d0[1] * h0], c2 = [p1[0] - d1[0] * h1, p1[1] - d1[1] * h1], r = [];
+      const n = Math.max(4, Math.ceil(Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) / 1.2));
+      for (let k = 1; k <= n; k++) { const t = k / n, u = 1 - t; r.push([u * u * u * p0[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p1[0], u * u * u * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p1[1]]); }
+      return r;
+    };
+    // saída: ré reta para fora da baia e depois esterçando (a traseira vai para o leste, o nariz fica para o oeste),
+    // engata e segue pela faixa de saída até o portão oeste, virando direto para a rua
+    const Bp = [B.x, B.z], Rv = [B.x + 10, B.z - 11], E = ruaPts[0], dE = dir(ruaPts[0], ruaPts[1]);
+    ini = [Bp, ...bez(Bp, [-fx, -fz], Rv, O, 10, 5)];
+    if (Rv[0] - 18 > 134) { const P = [Rv[0] - 18, MEGA.zSai]; ini.push(...bez(Rv, W, P, W, 6, 6), [134, MEGA.zSai], ...bez([134, MEGA.zSai], W, E, dE, 11, 11).slice(0, -1)); }
+    else ini.push(...bez(Rv, W, E, dE, Math.max(6, (Rv[0] - E[0]) * 0.5), 11).slice(0, -1));
+    // chegada: curva do portão leste para a faixa de chegada, segue até a altura da baia e entra de frente
+    const G = ruaPts[ruaPts.length - 1], dG = dir(ruaPts[ruaPts.length - 2], G), S = [B.x - fx * 7, B.z - fz * 7], GL = [203, MEGA.zChega], T = [Math.min(200, S[0] + 12), MEGA.zChega];
+    fim = [];
+    if (T[0] < GL[0] - 1) fim.push(...bez(G, dG, GL, W, 8, 6), T, ...bez(T, W, S, [fx, fz], 6, 5));
+    else fim.push(...bez(G, dG, S, [fx, fz], 9, 7));
+    fim.push(Bp);
+    L.marcaT = T; L.marcaGL = T[0] < GL[0] - 1 ? GL : T;
   }
-  const bruto = abrirCurvas(L.circular ? ruaPts : [...(ini || [[f, RODO.baia], [f, RODO.saidaZ]]), ...ruaPts, ...(fim || [[f, RODO.entrada], [f, RODO.fila], [f, RODO.baia]])], wb, false);
+  const bruto = terminal ? [...ini, ...abrirCurvas(ruaPts, wb, false), ...fim] : abrirCurvas(L.circular ? ruaPts : [...(ini || [[f, RODO.baia], [f, RODO.saidaZ]]), ...ruaPts, ...(fim || [[f, RODO.entrada], [f, RODO.fila], [f, RODO.baia]])], wb, false);
   // arredonda as esquinas (curva de até 7 m)
   const pts = [bruto[0]];
+  const nIni = terminal ? ini.length : 0, nFim = terminal ? fim.length : 0;
   for (let i = 1; i < bruto.length - 1; i++) {
+    if (i < nIni || i >= bruto.length - nFim) { pts.push(bruto[i]); continue; }   // 22p: as curvas do terminal já vêm suaves
     const a = bruto[i - 1], p = bruto[i], b = bruto[i + 1], d1 = dir(a, p), d2 = dir(p, b);
     const l1 = Math.hypot(p[0] - a[0], p[1] - a[1]), l2 = Math.hypot(b[0] - p[0], b[1] - p[1]);
     if (Math.abs(d1[0] * d2[1] - d1[1] * d2[0]) < 0.05 && d1[0] * d2[0] + d1[1] * d2[1] > 0) { pts.push(p); continue; }
@@ -14662,15 +14761,29 @@ function montarCaminho(L) {
   const acum = [0]; for (let i = 1; i < pts.length; i++) acum.push(acum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
   if (B && !L.circular && !L.ini) {   // 22o: até onde vai a ré (onde o caminho inverte o sentido)
     L.sRe = 0;
-    for (let i = 1; i < Math.min(pts.length - 1, 40); i++) { const a = pts[i - 1], p = pts[i], b = pts[i + 1]; if ((p[0] - a[0]) * (b[0] - p[0]) + (p[1] - a[1]) * (b[1] - p[1]) < 0) { L.sRe = acum[i]; break; } }
+    for (let i = 1; i < Math.min(pts.length - 1, 120); i++) { const a = pts[i - 1], p = pts[i], b = pts[i + 1]; if ((p[0] - a[0]) * (b[0] - p[0]) + (p[1] - a[1]) * (b[1] - p[1]) < 0) { L.sRe = acum[i]; break; } }
   }
   L.pts = pts; L.acum = acum; L.L = acum[acum.length - 1]; L.sFila = L.circular ? L.L : L.L - (RODO.baia - RODO.fila);
-  if (L.baiaMega) {   // 22o: a fila fica na pista, antes de virar para a baia (não dentro da manobra)
-    let sf = L.L - 13; for (let s2 = L.L - 2; s2 > L.L - 80; s2 -= 0.5) { const q = pontoCaminho(L, s2); if (q.z < MEGA.zChega + 0.4) { sf = s2; break; } }
-    L.sFila = sf;
+  if (terminal) {   // 22p: marcos do terminal no caminho: fim da parte de saída, começo da de chegada, ponto de virar para a baia e a espera na entrada
+    const sPerto = (p, de, ate) => { let m = de, dm = Infinity; for (let i = 0; i < pts.length; i++) { if (acum[i] < de || acum[i] > ate) continue; const d = Math.hypot(pts[i][0] - p[0], pts[i][1] - p[1]); if (d < dm) { dm = d; m = acum[i]; } } return m; };
+    const Ltot = acum[acum.length - 1];
+    L.sIni = sPerto(ruaPts[0], 0, 200); L.sFim = sPerto(ruaPts[ruaPts.length - 1], Ltot - 200, Ltot);
+    L.sFila = sPerto(L.marcaT, L.sFim, Ltot); L.sEspera = sPerto(L.marcaGL, L.sFim, Ltot);
   }
 }
+// 22p: a mesma linha parando numa baia alternativa: o caminho da baia (variante) só muda dentro do terminal; o s da
+// linha (horário, pontos, fila) continua o mesmo e é convertido para o da variante na saída e na chegada
+function sDaVariante(L, V, s) {
+  if (s <= L.sIni) return s * V.sIni / (L.sIni || 1);
+  if (s >= L.sFim) {   // a curva do portão e a faixa de chegada são iguais nas variantes até o ponto de virar para a baia
+    const d = s - L.sFim, aB = L.sFila - L.sFim, aV = V.sFila - V.sFim, m = Math.min(aB, aV);
+    if (d <= m) return V.sFim + d;
+    return V.sFim + m + (d - m) * (V.L - V.sFim - m) / ((L.L - L.sFim - m) || 1);
+  }
+  return s - L.sIni + V.sIni;
+}
 function pontoCaminho(L, s) {
+  if (L.varAtual) return pontoCaminho(L.varAtual, sDaVariante(L, L.varAtual, s));
   s = THREE.MathUtils.clamp(s, 0, L.L);
   let lo = 0, hi = L.acum.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (L.acum[m] <= s) lo = m; else hi = m; }
   const a = L.pts[lo], b = L.pts[hi], d = L.acum[hi] - L.acum[lo] || 1, k = (s - L.acum[lo]) / d;
@@ -14725,6 +14838,15 @@ function tabelaLinha(L) {
 }
 for (const L of LINHAS) if (BAIA_LINHA[L.id] !== undefined) L.baiaMega = BAIAS[BAIA_LINHA[L.id]];
 for (const L of LINHAS) { montarCaminho(L); montarParadasLinha(L); }
+// 22p: caminhos das baias alternativas de cada linha (só a parte do terminal muda)
+for (const L of LINHAS) {
+  if (!L.baiaMega || !GRUPO_BAIAS[L.id]) continue;
+  L.vars = {};
+  for (const n of GRUPO_BAIAS[L.id]) {
+    if (n === L.baiaMega.n) { L.vars[n] = null; continue; }   // null: o caminho da própria linha
+    const V = { ...L, baiaMega: BAIAS[n - 1], varAtual: null, vars: null }; montarCaminho(V); L.vars[n] = V;
+  }
+}
 const LINHA_ID = Object.fromEntries(LINHAS.map((L) => [L.id, L]));
 // posição (s) de um ônibus e. segundos depois de sair; "ponto" = índice do ponto onde está parado
 // 22n: dentro de cada trecho, o tempo se distribui pela mesma conta (devagar perto do terminal). Tabela: fração do tempo -> s.
@@ -14783,6 +14905,7 @@ function estadoSaida(L, m, t) {
 const proximaSaidaLinha = (L, t) => Math.ceil((t - L.fase) / L.H);
 const saidasOcupadas = new Set();   // '2.123' assumidas por motoristas jogadores (vindas da presença)
 const onibusNpc = [];               // { mesh, L, m, x, z, ang, parado, ativo }
+const baiasDonos = new Map();   // 22p: baia da mega rodoviária -> ônibus que reservou
 const estadoBus = new Map(), pontosOcupados = [], pontosAntes = [], juncaoAntes = [], juncaoAgora = [];        // 'linha.saída' -> { atraso, sVis, bloq, fantasma }: atraso local de quem esperou no trânsito
 let paradasMontadas = false, minhaVolta = null, placasRodo = [];
 // modelo do ônibus de cada saída: as linhas alternam entre os modelos (o mesmo ônibus físico mantém o modelo)
@@ -14792,7 +14915,7 @@ const passoFila = (L) => (L.passoFila ??= Math.max(...L.modelos.map(COMP_ONIBUS)
 const folgaFila = (L) => Math.max(0, passoFila(L) - 14);   // a vaga da fila fica a 13 m da plataforma: ônibus compridos recuam
 // cada vão da rodoviária cabe dois ônibus (plataforma + fila). O terceiro espera fora, na "fila imaginária": no
 // próprio caminho, antes de chegar perto da rodoviária (a 22 m dela), sem parar na rua por onde os outros entram
-const SAIDA_RODO = { dono: null, t: -1e9 };   // quem está saindo das plataformas agora
+const SAIDA_RODO = { dono: null, t: -1e9, espera: new Map() };   // quem está saindo das plataformas agora
 function esperaFora(L) {
   if (L.sEspera !== undefined) return L.sEspera;
   let s2 = L.sFila - passoFila(L);
@@ -15063,13 +15186,42 @@ function montarRodoviaria() {
   for (let x = X0 + 6; x < X1 - 6; x += 6) plano(x, (M.zChega + M.zSai) / 2, 3, 0.16, branco, y + 0.06);   // divisa das faixas (chegada em cima, saída embaixo)
   const seta = new THREE.MeshBasicMaterial({ map: tex(128, 64, (g, w, h) => { g.fillStyle = '#eeeeea'; g.beginPath(); g.moveTo(8, h / 2); g.lineTo(52, 6); g.lineTo(52, 22); g.lineTo(120, 22); g.lineTo(120, 42); g.lineTo(52, 42); g.lineTo(52, 58); g.closePath(); g.fill(); }), transparent: true });
   for (let x = X0 + 20; x < X1 - 12; x += 26) for (const zf of [M.zChega, M.zSai]) plano(x, zf, 4, 2, seta, y + 0.061);
-  for (const [x, t] of [[M.entradaX, '⬇️ Entrada dos ônibus'], [M.saidaX, '⬆️ Saída dos ônibus']]) {
-    plano(x, M.z0 + 0.5, 9, 0.5, amarelo, y + 0.062);
-    for (const s of [-1, 1]) { caixa(x + s * 5.2, y + 0.6, M.z0 + 0.4, 0.4, 1.2, 0.4, mat('#f2c230')); }
-    const r = rotuloSimples(t, 4.4); r.position.set(x, 4.2, M.z0 + 0.6); G.add(r);
+  // 22p: portões nas laterais (entrada a leste, saída a oeste), onde os caminhos das linhas cruzam a borda; o resto é cercado
+  const vaoPortao = (xb, parte) => {
+    let z0 = Infinity, z1 = -Infinity;
+    for (const L of LINHAS) for (const V of [L, ...Object.values(L.vars || {})]) {
+      if (!V || !V.pts || !V.sIni) continue;
+      const de = parte === 'sai' ? 0 : V.sFim, ate = parte === 'sai' ? V.sIni : V.L;
+      for (let i = 1; i < V.pts.length; i++) { if (V.acum[i] < de || V.acum[i - 1] > ate) continue; const a = V.pts[i - 1], b = V.pts[i]; if ((a[0] - xb) * (b[0] - xb) <= 0) { const k = (xb - a[0]) / ((b[0] - a[0]) || 1), z = a[1] + (b[1] - a[1]) * k; z0 = Math.min(z0, z); z1 = Math.max(z1, z); } }
+    }
+    return Number.isFinite(z0) ? [Math.max(M.z0 + 0.5, z0 - 4), Math.min(M.zBaia - 0.5, z1 + 4)] : [M.zChega - 5, M.zChega + 5];
+  };
+  const PORTOES = { leste: vaoPortao(X1, 'chega'), oeste: vaoPortao(X0, 'sai') };
+  for (const [xb, [za, zb], t, sx] of [[X1, PORTOES.leste, '⬅️ Entrada dos ônibus', -1], [X0, PORTOES.oeste, '⬅️ Saída dos ônibus', 1]]) {
+    plano(xb + sx * 0.5, (za + zb) / 2, 0.5, zb - za, amarelo, y + 0.062);
+    for (const z of [za, zb]) { caixa(xb, y + 1.1, z, 0.45, 2.2, 0.45, mat('#f2c230')); caixa(xb, y + 2.25, z, 0.6, 0.12, 0.6, mat('#2b2f36'), false); }
+    const r = rotuloSimples(t, 4.4); r.position.set(xb, 4.2, (za + zb) / 2); G.add(r);
+  }
+  // cerca de grade (pilares e duas travessas) em volta da pista: só se entra pelos portões; a plataforma continua aberta pelas pontas
+  { const posteM = mat('#2b2f36', { metalness: 0.5, roughness: 0.5 }), grade = mat('#3d434c', { metalness: 0.5, roughness: 0.45 }), postes = [];
+    const trecho = (xa, za, xb2, zb2) => {
+      const L2 = Math.hypot(xb2 - xa, zb2 - za); if (L2 < 0.5) return;
+      const cx = (xa + xb2) / 2, cz = (za + zb2) / 2, ry = Math.atan2(xb2 - xa, zb2 - za);
+      for (const h of [0.55, 1.75]) caixa(cx, y + h, cz, 0.06, 0.07, L2, grade, false, ry);
+      const tela = caixa(cx, y + 1.05, cz, 0.02, 1.7, L2, mat('#5c636d', { transparent: true, opacity: 0.35, metalness: 0.3 }), false, ry); tela.castShadow = false;
+      for (let d = 0; d <= L2 + 0.01; d += 2.5) postes.push([xa + (xb2 - xa) * d / L2, za + (zb2 - za) * d / L2]);
+      mundo.addCol({ tipo: 'caixa', x0: Math.min(xa, xb2) - 0.15, x1: Math.max(xa, xb2) + 0.15, z0: Math.min(za, zb2) - 0.15, z1: Math.max(za, zb2) + 0.15 });
+    };
+    const zTopo = M.z0 + 0.3;
+    trecho(X0 + 0.3, zTopo, X1 - 0.3, zTopo);
+    trecho(X0 + 0.3, zTopo, X0 + 0.3, PORTOES.oeste[0]); trecho(X0 + 0.3, PORTOES.oeste[1], X0 + 0.3, M.zBaia - 0.2);
+    trecho(X1 - 0.3, zTopo, X1 - 0.3, PORTOES.leste[0]); trecho(X1 - 0.3, PORTOES.leste[1], X1 - 0.3, M.zBaia - 0.2);
+    const im = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 2.2, 0.12), posteM, postes.length), _o = new THREE.Object3D();
+    postes.forEach(([px, pz], i) => { _o.position.set(px, y + 1.1, pz); _o.updateMatrix(); im.setMatrixAt(i, _o.matrix); }); im.castShadow = true; G.add(im);
   }
   // ---- 12 baias inclinadas: faixas brancas, cabeceira na cor da linha e o número pintado no chão
   const fx = Math.sin(ANG_BAIA), fz = Math.cos(ANG_BAIA), dono = new Map(LINHAS.filter((L) => L.baiaMega).map((L) => [L.baiaMega.n, L]));
+  dono.set(BAIA_FATOR, { cor: '#6d3fd0', curto: 'Expresso Fator' });   // 22p: embarque da Viação Expresso Fator
   for (const B of BAIAS) {
     const L = dono.get(B.n), cor = L ? L.cor : '#8a9099';
     for (const sg of [-1, 1]) plano(B.x + Math.cos(ANG_BAIA) * 1.8 * sg, B.z - Math.sin(ANG_BAIA) * 1.8 * sg, 0.16, 13, branco, y + 0.061, ANG_BAIA);
@@ -15106,6 +15258,7 @@ function montarRodoviaria() {
     const pl = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.98), new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide })); pl.position.set(B.x - fx * -5.2, y + 4.2, zP0 + 0.6); G.add(pl);
     caixa(B.x - fx * -5.2, y + 4.95, zP0 + 0.6, 0.05, 0.5, 0.05, aco, false);
   }
+  { const B = BAIAS[BAIA_FATOR - 1], r = rotuloSimples('🚌 Expresso Fator · embarque', 4.2); r.position.set(B.x - 4.6, 3.4, zP0 + 2); G.add(r); }   // 22p
   // ---- bancos, lixeiras e floreiras na plataforma
   for (let x = X0 + 6; x < X1 - 4; x += 9.5) { caixa(x, y + 0.7, zPc + 0.9, 2.4, 0.08, 0.55, mat('#7a5a3a')); caixa(x, y + 0.48, zPc + 0.9, 2.2, 0.42, 0.08, aco); caixa(x + 1.8, y + 0.6, zPc + 1.1, 0.4, 0.7, 0.4, mat('#2f6d3a')); }
   for (const x of [X0 + 1.5, X1 - 1.5]) { caixa(x, y + 0.5, zPc, 1.6, 0.6, 1.6, mat('#8b8478')); const copa = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 0), mat('#3d7a3a')); copa.position.set(x, y + 1.6, zPc); G.add(copa); }
@@ -15339,6 +15492,8 @@ function atualizarOnibus(dt) {
   // pontos ocupados: quem já estava parado no quadro anterior continua dono (os outros esperam atrás)
   pontosOcupados.length = 0; for (const o of pontosAntes) pontosOcupados.push(o);
   for (const b of onibusNpc) b.ativo = false;
+  // 22p: baias da mega rodoviária ocupadas (quem reservou e continua aparecendo)
+  baiasDonos.clear(); for (const [k2, s2] of estadoBus) if (s2.baiaN) { if (s2.vistoEm > t - 20) { if (!baiasDonos.has(s2.baiaN)) baiasDonos.set(s2.baiaN, k2); } else s2.baiaN = 0; }
   for (const L of LINHAS) {
     const m0 = Math.floor((t - L.fase) / L.H);
     for (let m = m0 - L.k - 1; m <= m0 + L.k + 1; m++) {
@@ -15353,6 +15508,20 @@ function atualizarOnibus(dt) {
         const qp = andarPatio(L, m, chB, st, t, dt, anterior);
         if (qp) { colocarOnibus(L, m, chB, st, qp, { rota: true, s: esperaFora(L), parado: !!qp.parado, patio: true }, usados); continue; }
         e = estadoSaida(L, m, t - st.atraso); if (!e) continue;
+      }
+      // 22p: mega rodoviária: reserva uma das 3 baias da linha ao chegar (a primeira livre) e solta quando sai para a rua
+      if (L.vars) {
+        st.vistoEm = t;
+        const chegando = (e.rota && e.s > L.sFim - 0.5) || e.fila || e.baia, saindo = e.rota && e.s < L.sIni + 0.5;
+        if (st.baiaN && !chegando && !saindo) { if (baiasDonos.get(st.baiaN) === chB) baiasDonos.delete(st.baiaN); st.baiaN = 0; }
+        if (!st.baiaN && (chegando || saindo)) {
+          // na faixa de chegada só serve baia cuja curva ainda está à frente (senão ele "pularia" para trás)
+          const sReal = st.mAnt === m && st.sAnt !== undefined ? st.sAnt : e.fila || e.baia ? L.sFila : e.s, dAnd = sReal - L.sFim, cabe = (n) => !chegando || dAnd < 0.5 || ((L.vars[n] || L).sFila - (L.vars[n] || L).sFim) >= dAnd - 0.5;
+          const livre = GRUPO_BAIAS[L.id].find((n) => !baiasDonos.has(n) && cabe(n));
+          if (livre) { st.baiaN = livre; baiasDonos.set(livre, chB); }
+          else if (saindo) st.baiaN = GRUPO_BAIAS[L.id][0];   // (carregou o jogo agora) sai da dele
+        }
+        L.varAtual = st.baiaN ? L.vars[st.baiaN] : null;
       }
       // ponto ocupado (linhas que dividem o mesmo ponto): quem chegou depois espera atrás, sem parar em cima do outro
       if (e.rota) {
@@ -15383,7 +15552,25 @@ function atualizarOnibus(dt) {
         }
       }
       // plataforma: só entra quem achar a baia livre; na fila, um atrás do outro (14 m cada), na ordem de chegada
-      if (!L.circular) {
+      if (L.vars) {   // 22p: com baia reservada entra direto e espera o horário parado nela; sem baia, fila na entrada (ordem de chegada, qualquer linha)
+        if (st.baiaN && (e.fila || e.baia)) e = { s: L.L, baia: true, parado: true, atrasado: e.atrasado };
+        // antes de cruzar a faixa de saída para entrar na baia: espera quem está saindo (de ré perto da baia ou passando na faixa)
+        if (st.baiaN && (e.rota || e.baia) && e.s > L.sFila - 0.5 && (st.sAnt === undefined || st.sAnt <= L.sFila + 0.5)) {
+          const T = pontoCaminho(L, L.sFila), Bb = BAIAS[st.baiaN - 1];
+          const saindoPerto = onibusNpc.some((o) => o.vivo && o.chB !== chB && o.L.vars && o.e?.rota && o.e.s < o.L.sIni && o.e.s > 0.4 &&
+            ((o.e.s < (o.L.sRe || 0) + 2 && Math.hypot(o.x - Bb.x, o.z - Bb.z) < 16) || (o.z > MEGA.zChega + 3 && o.x > Bb.x - 8 && o.x < T.x + 24)));
+          if (saindoPerto) { st.atraso += dt; e = { ...e, s: Math.min(e.s, L.sFila), rota: true, baia: false, parado: true, chegando: true }; }
+        }
+        else if (!st.baiaN && (e.fila || e.baia || (e.rota && e.s > L.sFila))) {
+          if (e.fila || e.baia) st.atraso += dt; else st.atraso += dt;
+          st.filaDesde ??= t;
+          const alvo = L.sFila;   // espera na faixa de chegada, no ponto de virar para a baia dela (quem vem atrás para atrás dele)
+          let sl = e.fila || e.baia ? alvo : Math.min(e.s, alvo);
+          if (st.sAnt !== undefined && st.mAnt === m && sl > st.sAnt) sl = Math.min(sl, st.sAnt + 7 * dt);
+          e = { ...e, s: sl, rota: !(e.fila || e.baia), fila: !!(e.fila || e.baia), parado: true, chegando: true };
+          st.filaMega = true;
+        } else { st.filaMega = false; st.filaDesde = undefined; }
+      } else if (!L.circular) {
         const pl = porLinha.get(L) || { fila: 0, baia: false }; porLinha.set(L, pl);
         if (e.rota && e.s < 14) pl.baia = true;
         // chegando: para atrás do último da fila (a fila do quadro anterior), sem encostar nele
@@ -15427,13 +15614,19 @@ function atualizarOnibus(dt) {
       // saindo da rodoviária: espera a rua ficar livre antes de pôr o bico para fora (quem vem pela rua tem a vez)
       // e a saída é de um por vez: enquanto um ônibus não terminou de sair (35 m), os outros esperam na plataforma
       // (antes saíam juntos de plataformas vizinhas e se embolavam na esquina)
-      if (!L.circular && e.rota && !e.fila && !e.baia && e.s < 35) {
+      if (!L.circular && e.rota && !e.fila && !e.baia && e.s < (L.vars ? L.sIni + 25 : 35)) {   // 22p: na mega, um sai por vez: a vez vale até ele passar o portão oeste e andar um pouco na rua
         const sa = st.mAnt === m ? st.sAnt : undefined, d = SAIDA_RODO.dono;
-        const outro = d && d !== chB && t - SAIDA_RODO.t < 0.6;
+        let outro = d && d !== chB && t - SAIDA_RODO.t < 0.6;
+        if (L.vars && !outro && (sa === undefined || sa < 2) && e.s > 0.35) {   // 22p: livre: sai primeiro quem está esperando há mais tempo
+          const w = SAIDA_RODO.espera; w.set(chB, { desde: w.get(chB)?.desde ?? t, visto: t });
+          for (const [k2, v] of w) if (t - v.visto > 1) w.delete(k2);
+          const prim = [...w].sort((a, b) => a[1].desde - b[1].desde || (a[0] < b[0] ? -1 : 1))[0];
+          if (prim && prim[0] !== chB) outro = true;
+        }
         if (outro && (sa === undefined || sa < 2)) { const alvo = sa !== undefined ? Math.max(0.3, sa) : 0.3; if (e.s > alvo) { e = segurarAte(L, m, t, st, alvo) || e; q = pontoCaminho(L, e.s); } }
-        else if (e.s > 0.35 && (!outro || d === chB)) { SAIDA_RODO.dono = chB; SAIDA_RODO.t = t; }
+        else if (e.s > 0.35 && (!outro || d === chB)) { SAIDA_RODO.dono = chB; SAIDA_RODO.t = t; SAIDA_RODO.espera.delete(chB); }
       }
-      if (!L.circular && e.rota && !e.fila && !e.baia && e.s < 9) {
+      if (!L.circular && !L.vars && e.rota && !e.fila && !e.baia && e.s < 9) {
         const sa = st.mAnt === m ? st.sAnt : undefined, X = pontoCaminho(L, 9);
         const vem = onibusNpc.some((o) => o.vivo && o.chB !== chB && Math.hypot(o.x - X.x, o.z - X.z) < 25 && o.e?.rota && !o.e.parado && (o.L.circular || (o.e.s >= 12 && o.e.s < o.L.sFila - 60)));   // só quem está andando na rua (não quem está na plataforma ou na fila)
         // só segura quem ainda não pôs o bico na rua; quem já saiu termina de sair (a rua espera por ele)
@@ -15452,7 +15645,7 @@ function atualizarOnibus(dt) {
         // perto da rodoviária os caminhos se cruzam (entradas, saídas, circulares): vale o retângulo inteiro, em qualquer
         // direção. Só não avança se o passo novo encostaria em alguém (se já estavam encostados, deixa separar).
         // Quem está saindo da plataforma também deixa passar quem está chegando (olha 12 m à frente de quem chega)
-        const perto = naRodoviaria(q.x, q.z, 30), saindo = !L.circular && e.s < 30;
+        const perto = naRodoviaria(q.x, q.z, 30), saindo = !L.circular && e.s < (L.vars ? L.sIni : 30);
         const cruza = (qq) => !perto ? [] : onibusNpc.filter((o) => {
           if (!o.vivo || o.chB === chB || Math.abs(o.x - qq.x) + Math.abs(o.z - qq.z) > 40) return false;
           if (retangulosBatem(qq.x, qq.z, qq.ang, cp / 2, o.x, o.z, o.ang, o.comp / 2)) return true;
@@ -15488,7 +15681,7 @@ function atualizarOnibus(dt) {
         st.desvioAntes = !!dv && st.desvio === dv?.id; }
       const { b, longe } = colocarOnibus(L, m, chB, st, q, e, usados);
       // respeita quem está na frente: com um veículo parado à frente, espera (o horário dele atrasa um pouco)
-      if (!e.parado && !e.fila) {
+      if (!e.parado && !e.fila && !(L.vars && e.rota && e.s < (L.sRe || 0) + 1)) {   // 22p: dando ré o "olhar para a frente" apontaria para a baia (as manobras do terminal se cuidam acima)
         // chegando na rodoviária: os ônibus da própria linha na fila e na plataforma estão no lugar deles (a fila já cuida)
         // ônibus lado a lado (chegaram juntos num trecho em comum): só um espera, senão os dois travariam
         const fx = Math.sin(b.ang), fz = Math.cos(b.ang);
@@ -15498,6 +15691,7 @@ function atualizarOnibus(dt) {
       }
     }
   }
+  for (const L of LINHAS) L.varAtual = null;   // 22p: fora do laço, o caminho de cada linha é o da baia dela
   for (const b of onibusNpc) { if (!b.ativo) b.mesh.visible = false; b.vivo = b.ativo; }   // corpos para o próximo quadro
   corposT = 0;
   pontosAntes.length = 0; for (const b of onibusNpc) if (b.ativo && b.e?.rota && b.e.parado) pontosAntes.push({ x: b.x, z: b.z, dono: b.chB });   // libera quem saiu

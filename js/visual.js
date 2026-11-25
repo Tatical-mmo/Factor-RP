@@ -53,7 +53,9 @@ export function definirNivel(n) {
 function montarComposer() {
   if (comp || falhou) return;
   try {
-    comp = new EffectComposer(R);
+    // 22p: com pós-processamento a imagem passa por uma textura: ela também ganha antisserrilhado (MSAA)
+    const sz = R.getDrawingBufferSize(new THREE.Vector2());
+    comp = new EffectComposer(R, new THREE.WebGLRenderTarget(sz.x, sz.y, { type: THREE.HalfFloatType, samples: toque ? 2 : 4 }));
     passeRender = new RenderPass(cena, null);
     bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.55, 1.0);
     // 21k: um pixel NaN/infinito (normal zerada, luz forte à noite) entrava no brilho e o desfoque espalhava pela tela
@@ -83,16 +85,17 @@ function aplicar() {
   nitidas();   // liga ou desliga o relevo e a nitidez do ultra
   redimensionar();
 }
-// ultra: filtro anisotrópico nas texturas (o chão, as ruas e as paredes não borram quando vistos de lado ou de longe)
-let anisoFeito = new WeakSet();
+// filtro anisotrópico nas texturas (o chão, as ruas e as paredes não borram quando vistos de lado ou de longe):
+// 22p: Média 4x, Alta 8x, Ultra 16x (antes só no Ultra)
+const anisoFeito = new WeakMap();
 // e relevo: a própria textura vira mapa de relevo (grama, asfalto, terra, calçada e paredes ganham volume com a luz)
 export function nitidas() {
   if (!R) return;
-  const ultra = nivel === 'ultra', max = R.capabilities.getMaxAnisotropy?.() || 1;
+  const ultra = nivel === 'ultra', max = R.capabilities.getMaxAnisotropy?.() || 1, alvoA = Math.min(max, ultra ? 16 : nivel === 'alto' ? 8 : nivel === 'medio' ? 4 : 1);
   cena.traverse((o) => {
     if (!o.isMesh || o.isSkinnedMesh) return;
     for (const m of [].concat(o.material || [])) {
-      if (ultra && max > 1) for (const k of ['map', 'normalMap', 'roughnessMap']) { const t = m[k]; if (t && !anisoFeito.has(t)) { anisoFeito.add(t); t.anisotropy = Math.min(16, max); t.needsUpdate = true; } }
+      for (const k of ['map', 'normalMap', 'roughnessMap']) { const t = m[k]; if (t && anisoFeito.get(t) !== alvoA && (alvoA > 1 || anisoFeito.has(t))) { anisoFeito.set(t, alvoA); t.anisotropy = alvoA; t.needsUpdate = true; } }
       if (!m.isMeshStandardMaterial || m.transparent) continue;
       if (ultra && m.map && !m.normalMap && !m.bumpMap && m.roughness >= 0.8) { m.bumpMap = m.map; m.bumpScale = 1.6; m.userData.relevoUltra = true; m.needsUpdate = true; }
       else if (!ultra && m.userData.relevoUltra) { m.bumpMap = null; m.userData.relevoUltra = false; m.needsUpdate = true; }

@@ -1878,8 +1878,13 @@ function sinaisDo(o, u, ult, dt) {
   const freio = tLuz - (u.freouEm ?? -9) < 0.35 || (Math.abs(v) < 0.3 && u.andouEm !== undefined && tLuz - u.andouEm < 20);
   let seta = 0, alerta = !!u.alerta;
   const jog = u.sinalJog && performance.now() - u.sinalJog.t < 600 ? u.sinalJog : null;
+  // 22p: luzes que ficaram acesas no veículo parado (o motorista desceu): valem até 1 minuto largado
+  const per = u.persist && performance.now() < u.persist.ate ? u.persist : null;
+  if (u.persist && !per) delete u.persist;
+  u.farolOn = jog ? !!jog.farol : u.sinalRede !== undefined ? !!(u.sinalRede & 8) : !!per?.farol;
   if (jog) { seta = jog.seta; alerta = alerta || jog.alerta; }
   else if (u.sinalRede !== undefined) { seta = u.sinalRede & 1 ? 1 : u.sinalRede & 2 ? -1 : 0; alerta = alerta || !!(u.sinalRede & 4); }
+  else if (per) alerta = alerta || per.alerta;
   else {
     if (Math.abs(u.yS || 0) > 0.12 && Math.abs(v) > 1) { u.setaInf = Math.sign(u.yS) * Math.sign(v); u.setaAte = tLuz + 1.2; }
     seta = tLuz < (u.setaAte || 0) ? u.setaInf : 0;
@@ -1909,7 +1914,7 @@ export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
     sinaisDo(o, u, ult, dt);
     if (ult && Math.hypot(_f.x - ult.x, _f.y - ult.y, _f.z - ult.z) > 0.03) u.ativoAte = tLuz + 4;
     u.ultLuz = { x: _f.x, y: _f.y, z: _f.z };
-    const ligado = noite > 0.25 && tLuz < (u.ativoAte || 0) && o.visible;
+    const ligado = o.visible && ((noite > 0.25 && tLuz < (u.ativoAte || 0)) || !!u.farolOn);   // 22p: farol ligado na mão (ou deixado aceso) vale de dia também
     L.visible = ligado;
     if (u.lantDes) acenderLantDes(o, u, ligado || u.lantTeste?.ligado);
     const G = o.getObjectByName('giroflex'); if (G) G.visible = o.visible && (tLuz < (u.ativoAte || 0) || !!u.giroflex);
