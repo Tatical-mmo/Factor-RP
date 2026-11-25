@@ -1845,6 +1845,13 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Oficinas autorizadas (18h + SQL 110)**:
   - Duas oficinas de NPC com cobertura, balcão e placa, laranja no mapa (`montarOficinas`): **Oficina do Zé** em Vila Serra (preço base, o carro fica 2 min na oficina e some do mapa) e **Garagem Premium** no quarteirão ao lado da Concessionária (30% mais cara, na hora). Para usar, o jogador estaciona o carro na vaga embaixo da cobertura e toca em 🔧 Oficina no balcão.
   - **Serviços** (`oficina_servico`, pago da carteira): pintura em 10 cores (2.000); motor 1, 2 e 3 com +10, +20 e +30% de velocidade máxima (8.000, 20.000, 45.000; `max` no `entrarCarro`); blindagem leve (30.000). O carro blindado aguenta a primeira explosão de tanque e gasta a blindagem; refazer custa a metade. Para arrombar, são 3 golpes no vidro. A janela 🚗 Veículos mostra o motor, a blindagem e se o carro está na oficina.
+## 22z3
+- Farol: a luz agora sai de cada farol. Um facho no ar por farol (forte na lâmpada, inclinado até o chão uns 11 m à frente; 15 m nos grandes) e uma mancha no chão por farol, começando à frente do para-choque. Antes era uma mancha só, colada embaixo do veículo.
+
+## 22z2
+- Farol: desligar agora funciona a qualquer hora. Com jogador no volante, quem manda é o botão (de noite também: dá para andar apagado e despistar). Entrando de noite o farol já vem aceso; se anoitecer dirigindo e ninguém mexeu, acende sozinho. Desceu com o farol apagado, ele continua apagado. A luz de freio continua acendendo ao frear.
+- Pássaro/corvo na horizontal: os botões 📣, 🐦‍⬛, ⬆️ e ⬇️ ficavam acima da tela; agora viram uma fileira embaixo, no meio.
+
 ## 22z
 - Marca de chão queimado (fuligem com os raios da explosão) onde algo explode e embaixo de veículo em chamas. Fica enquanto o fogo ou a carcaça estiverem lá; depois que levam o veículo, fica 1 min 30 s e some aos poucos (25 s).
 - Veículo que explodiu ou pegou fogo: o mecânico/guincho do pneu furado não aparece mais (e não abre chamado novo de pneu em carcaça).

@@ -1551,7 +1551,7 @@ export function brilhoOutdoors(noite) { for (const v of outdoors.values()) v.pla
 // Só acendem com o veículo em uso (andou nos últimos segundos) e de noite. Tudo é sprite/plano aditivo, sem luz real (leve no celular).
 const comLuz = new Set();
 const extremos = new Map();
-let texBrilho = null, texFeixe = null, texPoca = null, M = null, tLuz = 0;
+let texBrilho = null, texFeixe = null, texPoca = null, texCone = null, M = null, tLuz = 0;
 function texturas() {
   if (M) return;
   const canv = (w, h, f) => { const c = document.createElement('canvas'); c.width = w; c.height = h; f(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
@@ -1561,6 +1561,8 @@ function texturas() {
     for (let y = 0; y < h; y++) { const k = y / h, d = 1 - k, sub = Math.min(1, d / 0.2), larg = w * (0.25 + 0.75 * (1 - k)) / 2, a = 0.95 * sub * sub * (3 - 2 * sub) * Math.pow(1 - d, 1.2); const lg = g.createLinearGradient(w / 2 - larg, 0, w / 2 + larg, 0); lg.addColorStop(0, 'rgba(255,240,200,0)'); lg.addColorStop(0.5, `rgba(255,240,200,${a})`); lg.addColorStop(1, 'rgba(255,240,200,0)'); g.fillStyle = lg; g.fillRect(0, y, w, 1); }
   });
   texPoca = canv(64, 64, (g, w) => { const r = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); r.addColorStop(0, 'rgba(255,248,225,.95)'); r.addColorStop(0.5, 'rgba(255,240,200,.45)'); r.addColorStop(1, 'rgba(255,240,200,0)'); g.fillStyle = r; g.fillRect(0, 0, w, w); });
+  // 22z: facho no ar saindo de cada farol (forte na lâmpada, some no fim), um por farol
+  texCone = canv(32, 128, (g, w, h) => { for (let y = 0; y < h; y++) { const k = y / h, a = 0.9 * Math.pow(1 - k, 1.6) * Math.min(1, (k + 0.02) / 0.06); g.fillStyle = `rgba(255,244,214,${a.toFixed(3)})`; g.fillRect(0, y, w, 1); } });
   const spr = (cor) => new THREE.SpriteMaterial({ map: texBrilho, color: cor, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false });
   M = { farol: spr('#fff1c8'), lanterna: spr('#ff2a1a'), navV: spr('#ff2020'), navG: spr('#1fff5a'), estrobo: spr('#ffffff'), giro: spr('#ff3020'),
     laranjaA: spr('#ff8a12'), laranjaB: spr('#ff8a12'),
@@ -1569,7 +1571,8 @@ function texturas() {
     re: new THREE.SpriteMaterial({ map: texBrilho, color: '#ffffff', depthWrite: false, transparent: true, toneMapped: false }),
     seta: new THREE.SpriteMaterial({ map: texBrilho, color: '#ffa012', depthWrite: false, transparent: true, toneMapped: false }),
     feixe: new THREE.MeshBasicMaterial({ map: texFeixe, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false, opacity: 0.8 }),
-    poca: new THREE.MeshBasicMaterial({ map: texPoca, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }) };
+    poca: new THREE.MeshBasicMaterial({ map: texPoca, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }),
+    cone: new THREE.MeshBasicMaterial({ map: texCone, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false, side: THREE.DoubleSide, opacity: 0.2 }) };
 }
 // pontos extremos do modelo (no espaço do próprio objeto), ignorando as pás do rotor
 function medir(g) {
@@ -1783,6 +1786,18 @@ function zLataria(g, x, y, lado, e) {
   _rc.set(o, d); _rc.far = (e.max.z - e.min.z) * 0.45 + 1;
   const h = _rc.intersectObjects(alvos, false)[0]; return h ? h.point.clone().applyMatrix4(inv).z + lado * 0.03 : null;
 }
+// 22z: a luz sai de cada farol: um facho no ar (cone inclinado até o chão lá na frente) e uma mancha no chão por farol,
+// começando à frente do para-choque (antes era uma mancha só, colada embaixo do carro)
+function fachosFarol(L, lamps, e, grande, moto) {
+  const chao = e.min.y + 0.06, alcance = grande ? 15 : moto ? 9 : 11, larg = grande ? 3.2 : moto ? 2.6 : 2.5;
+  for (const p of lamps) {
+    const alvo = new THREE.Vector3(p.x * 1.15, chao, e.max.z + alcance), dir = alvo.clone().sub(new THREE.Vector3(p.x, p.y, p.z)), len = dir.length(); dir.normalize();
+    const geo = new THREE.ConeGeometry(len * (grande ? 0.17 : 0.15), len, 18, 1, true).translate(0, -len / 2, 0);
+    const c = new THREE.Mesh(geo, M.cone); c.position.set(p.x, p.y, p.z); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir); c.renderOrder = 4; c.name = 'cone'; L.add(c);
+    const comp = alcance + 3, f = new THREE.Mesh(new THREE.PlaneGeometry(larg, comp).rotateX(-Math.PI / 2), M.feixe);
+    f.position.set(p.x * 1.1, chao, e.max.z + 0.9 + comp / 2); f.rotation.y = Math.PI; f.renderOrder = 3; L.add(f);
+  }
+}
 function lampadasMedidas(g, tipo, e, L, w) {
   const T = LAMPADAS[tipo]; if (!T) return false;
   const sp = (mat, x, y, z, t, pai = L, nome = '') => { const s = new THREE.Sprite(mat); s.position.set(x, y, z); s.scale.set(t, t, t); s.name = nome; pai.add(s); return s; };
@@ -1794,8 +1809,8 @@ function lampadasMedidas(g, tipo, e, L, w) {
   for (const x of lados(fx)) sp(M.farol, x, fy, zf(x, fy), fs * 2.6);
   for (const x of lados(tx)) for (const y of ysT) sp(M.lanterna, x, y, zt(x, y), tt * 2.2).userData.tras = true;
   // facho no chão (igual ao de antes)
-  const moto = /^moto/.test(tipo), comp = moto ? 9 : 12, fe = new THREE.Mesh(new THREE.PlaneGeometry(moto ? 2.6 : 4.8, comp).rotateX(-Math.PI / 2), M.feixe);
-  fe.position.set(0, e.min.y + 0.06, e.max.z + comp / 2 + 0.2); fe.rotation.y = Math.PI; fe.renderOrder = 3; L.add(fe);
+  const moto = /^moto/.test(tipo);
+  fachosFarol(L, lados(fx).map((x) => ({ x, y: fy, z: zf(x, fy) + 0.05 })), e, w > 2.2, moto);   // 22z: sai dos faróis
   // sinais: sempre presentes, cada lâmpada acende sozinha (a montagem fica escondida enquanto nada está aceso)
   const S = new THREE.Group(); S.name = 'sinais'; S.visible = false; g.add(S);
   for (const x of lados(tx)) for (const y of ysT) sp(M.freio, x, y, zt(x, y) - 0.01, tt * 2.6, S, 'freio').userData.tras = true;
@@ -1823,12 +1838,13 @@ function adicionarLuzes(g, tipo, chave = null) {
   if (!aereo && lampadasMedidas(g, tipo, e, L, w)) { /* 21t: lâmpadas nos lugares do modelo */ }
   else if (!aereo) {
     const grande = w > 2.2, moto = /^moto/.test(tipo), yf = e.min.y + h * (grande ? 0.22 : moto ? 0.62 : 0.38);
+    const lamps = [];
     for (const s of moto ? [0] : [-1, 1]) {   // moto: um farol só
       sp(M.farol, cx + s * w * 0.34, moto ? yf + 0.12 : yf, e.max.z + (moto ? -0.25 : 0.08), grande ? 0.9 : moto ? 0.42 : 0.7);
+      lamps.push({ x: cx + s * w * 0.34, y: moto ? yf + 0.12 : yf, z: e.max.z + (moto ? -0.2 : 0.12) });
       sp(M.lanterna, cx + s * w * 0.4, yf + (grande ? 0.3 : 0.05), e.min.z + (moto ? 0.15 : -0.08), grande ? 0.6 : moto ? 0.3 : 0.5);
     }
-    const comp = grande ? 16 : moto ? 9 : 12, f = new THREE.Mesh(new THREE.PlaneGeometry(grande ? 6 : moto ? 2.6 : 4.8, comp).rotateX(-Math.PI / 2), M.feixe);   // moto: facho mais estreito
-    f.position.set(cx, e.min.y + 0.06, e.max.z + comp / 2 + 0.2); f.rotation.y = Math.PI; f.renderOrder = 3; L.add(f);
+    fachosFarol(L, lamps, e, grande, moto);   // 22z: um facho por farol
   } else if (heli) {   // helicóptero: nada nas pás; pisca-pisca na cauda (ponta e em cima da deriva) e um embaixo da barriga
     const t = 0.9;
     sp(M.estrobo, e.nz.x, e.nz.y, e.nz.z - 0.05, t * 2);
@@ -1886,6 +1902,7 @@ function sinaisDo(o, u, ult, dt) {
   const per = u.persist && performance.now() < u.persist.ate ? u.persist : null;
   if (u.persist && !per) delete u.persist;
   u.farolOn = jog ? !!jog.farol : u.sinalRede !== undefined ? !!(u.sinalRede & 8) : !!per?.farol;
+  u.farolManual = !!(jog || u.sinalRede !== undefined || per);   // 22z: com jogador no volante (ou largado aceso) quem manda é o botão: desligado fica apagado, de noite também
   if (jog) { seta = jog.seta; alerta = alerta || jog.alerta; }
   else if (u.sinalRede !== undefined) { seta = u.sinalRede & 1 ? 1 : u.sinalRede & 2 ? -1 : 0; alerta = alerta || !!(u.sinalRede & 4); }
   else if (per) alerta = alerta || per.alerta;
@@ -1913,7 +1930,7 @@ export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
   tLuz += dt;
   M.estrobo.opacity = (tLuz % 1.3) < 0.07 || ((tLuz % 1.3) > 0.18 && (tLuz % 1.3) < 0.24) ? 1 : 0;   // pisca-pisca duplo
   M.giro.opacity = 0.25 + 0.75 * Math.max(0, Math.sin(tLuz * 5.5));
-  M.feixe.opacity = 0.75 * noite; M.poca.opacity = noite;
+  M.feixe.opacity = 0.6 * noite; M.poca.opacity = noite; M.cone.opacity = 0.03 + 0.16 * noite;   // 22z: o facho no ar só aparece mesmo no escuro
   const gi = (tLuz * 2.2) % 1; M.laranjaA.opacity = gi < 0.5 ? 1 : 0.08; M.laranjaB.opacity = gi < 0.5 ? 0.08 : 1;
   for (const o of comLuz) {
     const L = o.getObjectByName('luzes');
@@ -1923,7 +1940,7 @@ export function atualizarLuzesVeiculos(dt, noite, chao, cena) {
     sinaisDo(o, u, ult, dt);
     if (ult && Math.hypot(_f.x - ult.x, _f.y - ult.y, _f.z - ult.z) > 0.03) u.ativoAte = tLuz + 4;
     u.ultLuz = { x: _f.x, y: _f.y, z: _f.z };
-    const ligado = o.visible && ((noite > 0.25 && tLuz < (u.ativoAte || 0)) || !!u.farolOn);   // 22p: farol ligado na mão (ou deixado aceso) vale de dia também
+    const ligado = o.visible && (u.farolManual ? !!u.farolOn : (noite > 0.25 && tLuz < (u.ativoAte || 0)) || !!u.farolOn);   // 22p: farol ligado na mão (ou deixado aceso) vale de dia também
     L.visible = ligado; u.luzesAcesas = ligado;   // 22x: a lateral do ônibus fica acesa fixa junto com o farol
     if (u.lantDes) acenderLantDes(o, u, ligado || u.lantTeste?.ligado);
     const G = o.getObjectByName('giroflex'); if (G) G.visible = o.visible && (tLuz < (u.ativoAte || 0) || !!u.giroflex);

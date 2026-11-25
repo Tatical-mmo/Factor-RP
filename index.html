@@ -42,6 +42,11 @@
   body.editandoFarda #hud, body.editandoFarda #mapa, body.editandoFarda #avisos { visibility:hidden; }
   .logoJogo { display:block; width:min(340px, 82vw); height:auto; margin:-70px auto 2px; filter:drop-shadow(0 6px 10px rgba(0,0,0,.55)); }
   #escolha .logoJogo { margin:0 auto 4px; width:min(300px, 70vw); }
+  /* 22z: pássaro na horizontal (tela baixa): a coluna de 4 botões passava do topo da tela; vira uma fileira embaixo, no meio */
+  @media (max-height: 560px) {
+    #aveCtl { flex-direction:row !important; right:auto !important; left:50% !important; transform:translateX(-50%); bottom:calc(10px + env(safe-area-inset-bottom)) !important; gap:12px !important; }
+    #aveCtl button { width:56px !important; height:56px !important; font-size:23px !important; }
+  }
   /* carregamento: cenas do jogo passando (aproxima devagar e troca a cada 5 s) */
   #carregando .cena { position:absolute; inset:0; background-size:cover; background-position:center; opacity:0; transform:scale(1.04); transition:opacity 1.2s ease; }
   #carregando .cena.on { opacity:1; animation:zoomCena 7s linear forwards; }
@@ -400,37 +405,37 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261125o",
-  "./js/mundo.js": "./js/mundo.js?v=20261125o",
-  "./js/arquitetura.js": "./js/arquitetura.js?v=20261125o",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261125o",
-  "./js/cla.js": "./js/cla.js?v=20261125o",
-  "./js/config.js": "./js/config.js?v=20261125o",
-  "./js/empresa.js": "./js/empresa.js?v=20261125o",
-  "./js/loja.js": "./js/loja.js?v=20261125o",
-  "./js/painel.js": "./js/painel.js?v=20261125o",
-  "./js/rede.js": "./js/rede.js?v=20261125o",
-  "./js/sedes.js": "./js/sedes.js?v=20261125o",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261125o",
-  "./js/civico.js": "./js/civico.js?v=20261125o",
-  "./js/ovni.js": "./js/ovni.js?v=20261125o",
-  "./js/jato.js": "./js/jato.js?v=20261125o",
-  "./js/governo.js": "./js/governo.js?v=20261125o",
-  "./js/servicos.js": "./js/servicos.js?v=20261125o",
-  "./js/sons.js": "./js/sons.js?v=20261125o",
-  "./js/voz.js": "./js/voz.js?v=20261125o",
-  "./js/clima.js": "./js/clima.js?v=20261125o",
-  "./js/ceu.js": "./js/ceu.js?v=20261125o",
-  "./js/semaforos.js": "./js/semaforos.js?v=20261125o",
-  "./js/cabine.js": "./js/cabine.js?v=20261125o",
-  "./js/eixos.js": "./js/eixos.js?v=20261125o",
-  "./js/racoes.js": "./js/racoes.js?v=20261125o",
-  "./js/logos.js": "./js/logos.js?v=20261125o",
-  "./js/celular.js": "./js/celular.js?v=20261125o",
-    "./js/paporeto.js": "./js/paporeto.js?v=20261125o",
-  "./js/jornal.js": "./js/jornal.js?v=20261125o",
-  "./js/visual.js": "./js/visual.js?v=20261125o",
-  "./js/tutorial.js": "./js/tutorial.js?v=20261125o"
+  "./js/main.js": "./js/main.js?v=20261125q",
+  "./js/mundo.js": "./js/mundo.js?v=20261125q",
+  "./js/arquitetura.js": "./js/arquitetura.js?v=20261125q",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261125q",
+  "./js/cla.js": "./js/cla.js?v=20261125q",
+  "./js/config.js": "./js/config.js?v=20261125q",
+  "./js/empresa.js": "./js/empresa.js?v=20261125q",
+  "./js/loja.js": "./js/loja.js?v=20261125q",
+  "./js/painel.js": "./js/painel.js?v=20261125q",
+  "./js/rede.js": "./js/rede.js?v=20261125q",
+  "./js/sedes.js": "./js/sedes.js?v=20261125q",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261125q",
+  "./js/civico.js": "./js/civico.js?v=20261125q",
+  "./js/ovni.js": "./js/ovni.js?v=20261125q",
+  "./js/jato.js": "./js/jato.js?v=20261125q",
+  "./js/governo.js": "./js/governo.js?v=20261125q",
+  "./js/servicos.js": "./js/servicos.js?v=20261125q",
+  "./js/sons.js": "./js/sons.js?v=20261125q",
+  "./js/voz.js": "./js/voz.js?v=20261125q",
+  "./js/clima.js": "./js/clima.js?v=20261125q",
+  "./js/ceu.js": "./js/ceu.js?v=20261125q",
+  "./js/semaforos.js": "./js/semaforos.js?v=20261125q",
+  "./js/cabine.js": "./js/cabine.js?v=20261125q",
+  "./js/eixos.js": "./js/eixos.js?v=20261125q",
+  "./js/racoes.js": "./js/racoes.js?v=20261125q",
+  "./js/logos.js": "./js/logos.js?v=20261125q",
+  "./js/celular.js": "./js/celular.js?v=20261125q",
+    "./js/paporeto.js": "./js/paporeto.js?v=20261125q",
+  "./js/jornal.js": "./js/jornal.js?v=20261125q",
+  "./js/visual.js": "./js/visual.js?v=20261125q",
+  "./js/tutorial.js": "./js/tutorial.js?v=20261125q"
 } }
 </script>
 </head>
@@ -657,7 +662,7 @@
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
 <div id="telaFim"><b></b></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 25/11 · Chão queimado, guincho nos carros da rua e aba Perdão (22z)</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 25/11 · Facho do farol saindo dos faróis (22z3)</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {

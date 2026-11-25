@@ -2724,7 +2724,7 @@ function rotuloVolante() { const sp = $('btVolante')?.querySelector('span'); if 
 // desliga sozinha depois da curva, como num carro de verdade.
 const sinalJog = { seta: 0, alerta: false, farol: false, giro: 0, ry: null };
 // 22p: farol (botão 💡 em cima do volante, no PC a tecla L). Acende de dia também; à noite ele já acende sozinho andando.
-function alternarFarol() { if (!comSinais()) return; sinalJog.farol = !sinalJog.farol; aviso(sinalJog.farol ? '💡 Farol ligado' : 'Farol desligado', 1.2); }
+function alternarFarol() { if (!comSinais()) return; sinalJog.farol = !sinalJog.farol; sinalJog.mexeu = true; aviso(sinalJog.farol ? '💡 Farol ligado' : 'Farol desligado', 1.2); }
 // 22p: ao descer, o farol e o pisca-alerta continuam como estavam; largado por 1 minuto, o veículo apaga sozinho
 const LUZ_LARGADA_MS = 60000;
 function guardarLuzes(mesh, farol, alerta) {
@@ -2741,7 +2741,7 @@ function atualizarSinaisJog(dt) {
   const c = jogador.carro, el = $('piscas');
   if (!comSinais()) {
     if (carroSinal) {   // 22p: desceu: as luzes ficam no veículo parado (apaga sozinho depois de 1 minuto largado)
-      guardarLuzes(carroSinal.mesh, sinalJog.farol || noiteAtual > 0.25, sinalJog.alerta);
+      guardarLuzes(carroSinal.mesh, sinalJog.farol, sinalJog.alerta);   // 22z: apagado na mão fica apagado
       sinalJog.seta = 0; sinalJog.alerta = false; sinalJog.farol = false; carroSinal = null;
     }
     if (el) el.classList.add('oculto'); return;
@@ -2749,9 +2749,11 @@ function atualizarSinaisJog(dt) {
   if (el) el.classList.remove('oculto');
   if (carroSinal !== c) {   // entrou: se o veículo ficou com luz acesa, continua como estava
     const per = c.mesh.userData.persist, vale = per && performance.now() < per.ate;
-    carroSinal = c; sinalJog.seta = 0; sinalJog.alerta = !!(vale && per.alerta); sinalJog.farol = !!(vale && per.farol && noiteAtual <= 0.25); sinalJog.ry = null;
+    carroSinal = c; sinalJog.seta = 0; sinalJog.alerta = !!(vale && per.alerta); sinalJog.farol = vale ? !!per.farol : noiteAtual > 0.25; sinalJog.mexeu = false; sinalJog.noite = noiteAtual > 0.25; sinalJog.ry = null;   // 22z: de noite já entra com o farol aceso (desliga no botão)
     delete c.mesh.userData.persist;
   }
+  // 22z: anoiteceu dirigindo e ninguém mexeu no farol: acende sozinho (amanheceu: apaga)
+  { const n = noiteAtual > 0.25; if (n !== sinalJog.noite) { sinalJog.noite = n; if (!sinalJog.mexeu) sinalJog.farol = n; } }
   // desliga a seta depois de virar ~30° para o lado dela e endireitar o volante
   const ry = c.mesh.rotation.y;
   if (sinalJog.seta && sinalJog.ry !== null && Math.abs(c.vel || 0) > 0.5) {
