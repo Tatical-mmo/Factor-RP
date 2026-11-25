@@ -68,6 +68,7 @@ function desenhar() {
   else if (aba === 'salarios') abaSalarios();
   else if (aba === 'tempo') abaTempo();
   else if (aba === 'denuncias') abaDenuncias();
+  else if (aba === 'perdao') abaPerdao();   // 22z: perdão em aba própria (só o administrador)
   else if (aba === 'carreiras') abaCarreiras();
   else if (aba === 'cidade') abaCidade();
   else if (aba === 'lanternas') { aba = 'eu'; fechar(); ctx.ajusteLanternas?.(); }   // 22e: faixa de ajuste em cima do jogo
@@ -544,7 +545,6 @@ function abaEu() {
       <div id="pNatalCat" class="poderes" style="max-height:260px;overflow:auto">Carregando…</div>`;
   }
   if (eu.cargo === 'admin') h += '<div class="sub">🐀 Bueiro secreto dos Lixeiros</div><div id="pBueiro" class="dica">Carregando…</div>';
-  if (eu.cargo === 'admin') h += '<div class="sub">⚖️ Perdoar crimes</div><div id="pPerdao" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') h += '<div class="sub">Prefeitura</div><div id="pPref" class="dica">Carregando…</div>';
   if (eu.cargo === 'admin') {
     h += `<div class="sub">Personagens limitados: vitrine</div><p class="dica">Abre a vitrine para os jogadores comprarem. Marque quais (nenhum marcado = todos) e o tempo.</p>
@@ -600,7 +600,7 @@ function abaEu() {
   }
   c.querySelectorAll('[data-testar]').forEach((x) => { x.onclick = () => { fechar(); ctx.testarVeiculo(x.dataset.testar); }; });
   c.querySelectorAll('[data-skin]').forEach((x) => { x.onclick = () => executar(() => rede.painel.skin(x.dataset.skin), 'Skin trocada.'); });
-  if (eu.cargo === 'admin') { blocoPrefeitura(); blocoPerdao(); }
+  if (eu.cargo === 'admin') blocoPrefeitura();
   const evSel = () => [...c.querySelectorAll('[data-ev]')].filter((x) => x.checked).map((x) => x.dataset.ev);
   const ba = $('pEvAbrir'); if (ba) ba.onclick = () => { const m = Number($('pEvTempo').value); executar(() => rede.personagens.liberarEvento(evSel(), m), 'Vitrine do evento aberta. Todos foram avisados.'); };
   const bf = $('pEvFechar'); if (bf) bf.onclick = () => executar(() => rede.personagens.liberarEvento(evSel(), 0), 'Vitrine fechada.');
@@ -614,6 +614,13 @@ function abaEu() {
       msg(`Mapa resetado: ${r || 'feito'}. O jogo de todos vai recarregar.`); ctx.resetFeito?.();
     }).catch((e) => msg(e.message, false));
   };
+}
+// 22z: aba só do administrador com todos os procurados
+function abaPerdao() {
+  const c = $('painelConteudo');
+  if (ctx?.perfil().cargo !== 'admin') { aba = 'jogadores'; c.innerHTML = '<p class="dica">Só o administrador perdoa crimes por aqui.</p>'; return; }
+  c.innerHTML = '<div class="sub">⚖️ Perdoar crimes</div><p class="dica">Todos com estrelas ou recompensa (online ou não). Perdoar zera as estrelas e a recompensa.</p><div id="pPerdao" class="dica">Carregando…</div>';
+  blocoPerdao();
 }
 // todos com crime ou recompensa (inclusive você e a equipe); um toque perdoa tudo
 async function blocoPerdao() {

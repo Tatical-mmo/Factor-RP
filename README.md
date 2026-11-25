@@ -1849,6 +1849,9 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - Marca de chão queimado (fuligem com os raios da explosão) onde algo explode e embaixo de veículo em chamas. Fica enquanto o fogo ou a carcaça estiverem lá; depois que levam o veículo, fica 1 min 30 s e some aos poucos (25 s).
 - Veículo que explodiu ou pegou fogo: o mecânico/guincho do pneu furado não aparece mais (e não abre chamado novo de pneu em carcaça).
 - Carcaça do caminhão de serviço que explodiu também conta como obstrução e segura a marca.
+- Guincho também leva carro estacionado na rua: com 2 pneus furados ou mais (servidor, SQL 158) e a carcaça queimada depois que o fogo apaga. Fica 10 min no pátio e a vaga ganha carro novo.
+- Painel: perdão de crimes saiu da aba Cidade e virou a aba "⚖️ Perdão", só do administrador.
+- SQL novo: `supabase/158_guincho_carros_rua.sql` (rodar no Supabase).
 
 ## 22y
 - Armado em pé: andando, o personagem sempre vira para onde anda, mesmo atirando (sai o andar de lado/de costas). Parado, vira na hora para onde está mirando.

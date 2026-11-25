@@ -12049,7 +12049,7 @@ const veiculoEmChamas = (ref) => servicos.listaIncendios().some((f) => f.ref ===
 // veículos que podem pegar fogo, pela referência ('rua:12' …): { mesh, x, z }
 function veiculoPorRef(ref) {
   const [t, k] = ref.split(':');
-  if (t === 'rua') { const l = largadosRua.get(+k); return l ? { mesh: l.mesh, x: l.x, z: l.z, l } : null; }
+  if (t === 'rua') { const l = largadosRua.get(+k); return l ? { mesh: l.mesh, x: l.mesh?.position.x ?? l.x, z: l.mesh?.position.z ?? l.z, l } : null; }   // 22z: o guincho leva: a posição é a do carro
   if (t === 'cam') { const c = caminhoes.get(+k); return c?.obj && c.d.status === 'dirigido' && !c.d.motorista ? { mesh: c.obj, x: c.obj.position.x, z: c.obj.position.z, l: c } : null; }
   if (t === 'car') { const v = carrosMundo.get(+k); return v?.mesh && jogador.carro?.id !== v.d.id ? { mesh: v.mesh, x: v.mesh.position.x, z: v.mesh.position.z, l: v } : null; }
   if (t === 'juj') { const v = viagensJuj.get(+k); return v?.mesh && v.d.status === 'sequestrada' && v.d.largado ? { mesh: v.mesh, x: v.mesh.position.x, z: v.mesh.position.z, l: v } : null; }
@@ -12358,6 +12358,7 @@ function npcDaPane(ref) {
   if (t === 'bomb') { const v = rondasBombeiros[+k]; return v ? { obj: v.obj, st: v.st, comp: 8.2, oculto: !v.obj.visible } : null; }
   if (t === 'bus') { const b = onibusNpc.find((o) => o.ativo && o.chB === k); const st = estadoBus.get(k); return st ? { obj: b && !b.leve ? b.mesh : null, st, comp: b?.comp || 12, bus: b } : null; }
   if (t === 'via') { const v = viaturas.find((x) => x.id === +k); return v && !v.roubada ? { obj: v.obj, st: v.st ||= { atraso: 0 }, comp: 4.8 } : null; }   // 22w
+  if (t === 'rua') { const l = largadosRua.get(+k); return l?.mesh ? { obj: l.mesh, st: null, comp: 4.5, rua: true } : null; }   // 22z: carro da vaga (só com guincho)
   if (t === 'serv') { const n = servicos.npcDaChave(k); return n ? { obj: n.obj, st: null, comp: n.modelo === 'bombeiros' ? 8.2 : 5.6, serv: k } : null; }   // 22w
   return null;
 }
@@ -12403,7 +12404,7 @@ function receberPaneNpc(r, novo = false) {
   const P = linhaPane(r), velho = panes.get(P.ref), novos = P.mask & ~(velho?.mask || 0);
   if (velho) P.cena = velho.cena;
   panes.set(P.ref, P);
-  if (P.ref.startsWith('rua:')) { const k = +P.ref.slice(4), m = carroDaVaga(k), l = largadosRua.get(k); if (l) l.ate = Math.max(l.ate, P.fim); if (m) { civico.aplicarPneus(m, P.mask, !!m.userData.queimaTotal); comPane.add(m); } }
+  if (P.ref.startsWith('rua:')) { const k = +P.ref.slice(4), m = carroDaVaga(k), l = largadosRua.get(k); if (l) l.ate = Math.max(l.ate, P.patio || P.fim); if (m) { civico.aplicarPneus(m, P.mask, !!m.userData.queimaTotal); comPane.add(m); } }
   if (novos && (novo || velho)) { const o = objDaPane(P); if (o) faiscarRoda(o, primeiroBit(novos)); }   // faísca só no furo que acabou de acontecer
 }
 function posicaoPane(ref) { const P = panes.get(ref); if (!P) return null; if (agoraServidor() >= P.fim && P.vaga != null) return VAGAS_GUINCHO[P.vaga]; return P; }
@@ -12531,7 +12532,7 @@ function atualizarPanes(dt) {
   const usados = new Set();
   for (const P of [...panes.values()]) {
     if (agora > (P.patio || P.fim)) { terminarPane(P); continue; }
-    if (P.ref.startsWith('rua:')) { const m = objDaPane(P); if (m) usados.add(m); continue; }   // o carro da vaga só fica murcho
+    if (P.ref.startsWith('rua:') && !P.guincho) { const m = objDaPane(P); if (m) usados.add(m); continue; }   // o carro da vaga só fica murcho (22z: com 2 pneus ou queimado, o guincho leva)
     const N = npcDaPane(P.ref); if (!N) continue;
     if (N.st) N.st.atraso = (N.st.atraso || 0) + dt;   // o horário fica segurado
     if (N.serv) servicos.pausarNpc(N.serv, true);   // 22w: o de serviço espera parado
@@ -12543,10 +12544,10 @@ function atualizarPanes(dt) {
       continue;
     }
     if (!veh) continue;
-    if (veh.userData.queimado || veiculoEmChamas(P.ref)) { if (P.cena) limparAtores(P); veh.userData.alerta = false; continue; }   // 22z: explodiu/pegou fogo: o mecânico não vem mais (nem o guincho com fogo)
+    if (veiculoEmChamas(P.ref) || (veh.userData.queimado && !P.guincho)) { if (P.cena) limparAtores(P); veh.userData.alerta = false; continue; }   // carcaça já apagada: o guincho leva   // 22z: explodiu/pegou fogo: o mecânico não vem mais (nem o guincho com fogo)
     usados.add(veh); comPane.add(veh);
     // encosta no meio-fio (nos primeiros segundos) e liga o pisca-alerta
-    P.lat = N.bus ? 0.8 : 1.3;   // o ônibus já anda mais perto da calçada
+    P.lat = N.rua ? 0 : N.bus ? 0.8 : 1.3;   // 22z: o da vaga já está estacionado   // o ônibus já anda mais perto da calçada
     const u = suave(e / T_SAV.para), q = pontoPane(P, 0, P.lat * u);
     if (!P.guincho || e < T_GUI.reboca[0]) { veh.position.set(q.x, alturaChao(q.x, q.z), q.z); veh.rotation.y = P.ang; veh.rotation.x = 0; }
     veh.userData.alerta = true;
@@ -13179,6 +13180,14 @@ function atualizarQueimados(dt) {
     if (v.l) v.l.queima = Math.max(v.l.queima || 0, q);
     pintarQueimado(v.mesh, v.l ? v.l.queima : q);
     if ((v.l ? v.l.queima : q) > 0.85) { v.mesh.userData.queimaTotal = true; civico.aplicarPneus(v.mesh, 0, true); }   // 22b: pneus queimaram: só o aro
+  }
+  // 22z: carro da rua queimado e já apagado: o guincho vem buscar a carcaça (cena local, igual à do pneu)
+  for (const [k, l] of largadosRua) {
+    const ref = 'rua:' + k;
+    if (l.rebocar || !l.mesh?.userData.queimado || veiculoEmChamas(ref) || panes.has(ref)) continue;
+    l.rebocar = true; const t0 = agora, vaga = k % 8, o = l.mesh;
+    const P = { ref, mask: 0, x: o.position.x, z: o.position.z, ang: o.rotation.y, guincho: true, vaga, t0, fim: t0 + 75000, patio: t0 + 75000 + 600000, local: true };
+    panes.set(ref, P); l.ate = Math.max(l.ate, P.patio);
   }
   atualizarPneus();
   // o veículo da empresa voltou para o dono (garagem): sai novo, sem a pintura de queimado
