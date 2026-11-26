@@ -1845,6 +1845,10 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Oficinas autorizadas (18h + SQL 110)**:
   - Duas oficinas de NPC com cobertura, balcão e placa, laranja no mapa (`montarOficinas`): **Oficina do Zé** em Vila Serra (preço base, o carro fica 2 min na oficina e some do mapa) e **Garagem Premium** no quarteirão ao lado da Concessionária (30% mais cara, na hora). Para usar, o jogador estaciona o carro na vaga embaixo da cobertura e toca em 🔧 Oficina no balcão.
   - **Serviços** (`oficina_servico`, pago da carteira): pintura em 10 cores (2.000); motor 1, 2 e 3 com +10, +20 e +30% de velocidade máxima (8.000, 20.000, 45.000; `max` no `entrarCarro`); blindagem leve (30.000). O carro blindado aguenta a primeira explosão de tanque e gasta a blindagem; refazer custa a metade. Para arrombar, são 3 golpes no vidro. A janela 🚗 Veículos mostra o motor, a blindagem e se o carro está na oficina.
+## 22z9
+- Rodoviária: além da reserva, a baia precisa estar fisicamente vazia (nenhum ônibus parado nela ou ainda saindo de ré por cima). Quem chega com a baia ainda ocupada troca por outra vazia do grupo ou espera no pátio, antes da curva de entrada.
+- Som dos ônibus das linhas um pouco mais alto (parado e andando) e ouvido um pouco mais longe.
+
 ## 22z8
 - Ônibus invisíveis na rodoviária: a neve acumulada (22z4) punha uma variável a mais no shader de todos os materiais; em alguns celulares os materiais mais pesados (ônibus) passavam do limite e não desenhavam. Agora a posição é calculada sem variável extra (só o asfalto usa uma, para as marcas de pneu).
 - Horizontal: a tela vira (tela cheia + deitado) já no primeiro toque da abertura/login, antes de carregar a cidade (antes virava com o jogo rodando e travava).

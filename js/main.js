@@ -15666,6 +15666,31 @@ function arrancar(st, s, dt, modelo, vmax) {
 }
 // o menor atraso que deixa o ônibus em s <= alvo (busca binária): ele chega exatamente no limite e espera ali.
 // Somar meio segundo de cada vez passava do ponto e o ônibus ficava indo para trás e para frente.
+// 22z9: a baia está fisicamente livre? (nenhum outro ônibus parado nela ou ainda saindo de ré por cima dela)
+function pontoDaBaia(L, n) {
+  L.pontosBaia ||= {};
+  if (!L.pontosBaia[n]) {
+    const V = (L.vars && L.vars[n]) || L, va = V.varAtual; V.varAtual = null;
+    const a = pontoCaminho(V, V.L), b = pontoCaminho(V, V.L - 6); V.varAtual = va;
+    const ux = a.x - b.x, uz = a.z - b.z, d = Math.hypot(ux, uz) || 1;
+    L.pontosBaia[n] = { x: a.x, z: a.z, ux: ux / d, uz: uz / d };
+  }
+  return L.pontosBaia[n];
+}
+function baiaFisicaLivre(L, n, chB) {
+  const B = pontoDaBaia(L, n);
+  // a vaga: do ponto de parada até 13 m para trás (o tamanho de um ônibus), 2,6 m para cada lado
+  for (const o of onibusNpc) {
+    if (!o.chB || o.chB === chB || o.x === undefined || !o.mesh?.visible) continue;
+    const q = o, a = o.ang, fx = Math.sin(a), fz = Math.cos(a), meio = (o.comp || 12) / 2;
+    for (const k of [-1, -0.5, 0, 0.5, 1]) {   // pontos ao longo do outro ônibus
+      const px = q.x + fx * meio * k - B.x, pz = q.z + fz * meio * k - B.z;
+      const ao = -(px * B.ux + pz * B.uz), lado = Math.abs(px * B.uz - pz * B.ux);
+      if (ao > -7.5 && ao < 9 && lado < 2.6) return false;   // ponto da baia = meio do ônibus parado
+    }
+  }
+  return true;
+}
 function segurarAte(L, m, t, st, alvo) {
   const ok = (a) => { const e2 = estadoSaida(L, m, t - a); return !e2 || !e2.rota || e2.s <= alvo; };
   if (ok(st.atraso)) return null;
@@ -15829,7 +15854,7 @@ function atualizarOnibus(dt) {
         if (!st.baiaN && (chegando || saindo)) {
           // na faixa de chegada só serve baia cuja curva ainda está à frente (senão ele "pularia" para trás)
           const sReal = st.mAnt === m && st.sAnt !== undefined ? st.sAnt : e.fila || e.baia ? L.sFila : e.s, dAnd = sReal - L.sFim, cabe = (n) => !chegando || dAnd < 0.5 || ((L.vars[n] || L).sFila - (L.vars[n] || L).sFim) >= dAnd - 0.5;
-          const livre = GRUPO_BAIAS[L.id].find((n) => !baiasDonos.has(n) && cabe(n));
+          const livre = GRUPO_BAIAS[L.id].find((n) => !baiasDonos.has(n) && cabe(n) && baiaFisicaLivre(L, n, chB));   // 22z9: e sem ninguém ainda dentro dela
           // 22q: sair sem ter estado numa baia não pode (antes ele "aparecia" na baia dele mesmo ocupada e ficava um
           // dentro do outro). Quem estava na fila segura o horário e continua na fila; só quem acabou de aparecer
           // (jogo recém-aberto) sai de uma baia, e só se ela estiver livre
@@ -15840,6 +15865,16 @@ function atualizarOnibus(dt) {
         if (st.entrando) {   // estava na fila quando deu o horário: entra na baia (o horário espera) e só então sai
           if (st.mAnt === m && st.sVis !== undefined && st.sVis >= L.L - 0.3) st.entrando = false;
           else { st.atraso += dt; e = { s: L.L, baia: true, parado: true }; }
+        }
+        // 22z9: chegando com baia reservada, mas tem ônibus ainda nela (saindo de ré): troca por outra vazia ou espera
+        // no pátio, antes da curva de entrada (nunca entra em cima do outro)
+        if (st.baiaN && chegando && !st.entrando && !baiaFisicaLivre(L, st.baiaN, chB)) {
+          const sReal = st.mAnt === m && st.sAnt !== undefined ? st.sAnt : e.fila || e.baia ? L.sFila : e.s;
+          if (sReal <= L.sFila + 0.5) {
+            const outra = GRUPO_BAIAS[L.id].find((n) => n !== st.baiaN && !baiasDonos.has(n) && baiaFisicaLivre(L, n, chB) && ((L.vars[n] || L).sFila - (L.vars[n] || L).sFim) >= sReal - L.sFim - 0.5);
+            if (outra) { if (baiasDonos.get(st.baiaN) === chB) baiasDonos.delete(st.baiaN); st.baiaN = outra; baiasDonos.set(outra, chB); }
+            else { st.mot = 'baia ocupada'; const h = e.rota ? segurarAte(L, m, t, st, Math.min(L.sFila, Math.max(e.s, sReal))) : null; if (h) e = h; else if (!e.rota) { st.atraso += dt; e = { s: L.sFila, fila: true, parado: true }; } }
+          }
         }
         L.varAtual = st.baiaN ? L.vars[st.baiaN] : null;
       }
@@ -16045,12 +16080,12 @@ function atualizarOnibus(dt) {
   // (o ônibus que você dirige toca em somMotores)
   // som de viagem (motor a diesel e estrada) só com o ônibus andando; parado no ponto ou esperando na rodoviária, silêncio
   // 21d: sons novos também nos ônibus das linhas (antes só no que você dirige): andando e ligado parado
-  if (jogador.onibus) { const b = onibusNpc.find((x) => x.ativo && x.L === jogador.onibus.L && x.m === jogador.onibus.m); if (b) sons.continuo(b.parado ? 'onibusN_lenta' : 'onibusN_alto', b.parado ? 0.3 : 0.5, 0.95); }
+  if (jogador.onibus) { const b = onibusNpc.find((x) => x.ativo && x.L === jogador.onibus.L && x.m === jogador.onibus.m); if (b) sons.continuo(b.parado ? 'onibusN_lenta' : 'onibusN_alto', b.parado ? 0.38 : 0.62, 0.95); }   // 22z9: um pouco mais alto
   for (const b of onibusNpc) {
     if (!b.ativo || !b.mesh.visible) continue;
-    const d = Math.hypot(b.x - jogador.pos.x, b.z - jogador.pos.z); if (d > 60) continue;
-    if (b.parado || !andando(b.mesh)) sons.continuo('onibusN_lenta', 0.3 * sons.perto(d, 30));   // ligado parado (ponto, plataforma)
-    else sons.continuo('onibusN_alto', 0.45 * sons.perto(d, 55), 0.95);
+    const d = Math.hypot(b.x - jogador.pos.x, b.z - jogador.pos.z); if (d > 70) continue;
+    if (b.parado || !andando(b.mesh)) sons.continuo('onibusN_lenta', 0.38 * sons.perto(d, 36));   // ligado parado (ponto, plataforma); 22z9: um pouco mais alto
+    else sons.continuo('onibusN_alto', 0.58 * sons.perto(d, 64), 0.95);
   }
 }
 // ônibus do sistema empurram quem está no caminho (três círculos ao longo do comprimento)
