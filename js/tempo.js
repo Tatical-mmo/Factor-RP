@@ -10,7 +10,7 @@ export const UNEVE = { value: 0 };   // 0 = sem neve, 1 = tudo coberto
 
 // ---------------------------------------------------------------- neve acumulada (injeção no shader dos materiais)
 const NEVE_FRAG_TOPO = `
-uniform float uNeve; varying vec3 vNvP;
+uniform float uNeve;
 #ifdef NEVE_RUA
 varying float vTrilha;
 #endif
@@ -20,6 +20,7 @@ float nvR(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f)
 const NEVE_FRAG = (pbr) => `
   if (uNeve > 0.001) {
     vec3 nW = inverseTransformDirection(normal, viewMatrix);
+    vec3 vNvP = cameraPosition + (vec4(-vViewPosition, 0.0) * viewMatrix).xyz;   // posição no mundo sem varying a mais (celular tem limite)
     float rug = nvR(vNvP.xz * 0.31) * 0.62 + nvR(vNvP.xz * 1.9) * 0.38;
     float cobre = clamp(uNeve * 1.7 - rug * 0.7, 0.0, 1.0);
     float kN = smoothstep(0.42, 0.82, nW.y) * smoothstep(0.0, 0.3, cobre);
@@ -44,26 +45,20 @@ function nevarMaterial(m) {
     antes?.call(this, sh, r);
     sh.uniforms.uNeve = UNEVE;
     if (rua) sh.defines = { ...(sh.defines || {}), NEVE_RUA: '' };
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
-varying vec3 vNvP;
-#ifdef NEVE_RUA
-varying float vTrilha;
-#endif`).replace('#include <project_vertex>', `#include <project_vertex>
+    if (rua) sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
+varying float vTrilha;`).replace('#include <project_vertex>', `#include <project_vertex>
   {
     mat4 nvM = modelMatrix;
     #ifdef USE_INSTANCING
     nvM = modelMatrix * instanceMatrix;
     #endif
-    vNvP = (nvM * vec4(transformed, 1.0)).xyz;
-    #ifdef NEVE_RUA
     float nsx = length(nvM[0].xyz), nsz = length(nvM[2].xyz);
     vTrilha = max(nsx, nsz) < 1.5 ? 99.0 : (nsx > nsz ? (0.5 - uv.y) * nsz : (uv.x - 0.5) * nsx);
-    #endif
   }`);
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>' + NEVE_FRAG_TOPO)
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>' + NEVE_FRAG(pbr));
   };
-  m.customProgramCacheKey = () => (k0 !== null ? k0 : chave.call(m)) + '|neve1' + (rua ? 'R' : '');
+  m.customProgramCacheKey = () => (k0 !== null ? k0 : chave.call(m)) + '|neve2' + (rua ? 'R' : '');
   m.needsUpdate = true;
 }
 function podeNevar(o, m) {

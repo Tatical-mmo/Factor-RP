@@ -572,6 +572,8 @@ let jogoEsperaIntro = false;
 // ---- 22u: celular deitado. Instalado (app), o manifesto já trava na horizontal. No navegador, no primeiro toque o jogo
 // entra em tela cheia e trava deitado (o Android só deixa travar em tela cheia); em pé aparece "gire o celular"
 // (dá para continuar em pé, se a pessoa preferir).
+// 22z8: já no primeiro toque da abertura/login (antes de carregar a cidade), para não virar a tela com o jogo rodando (travava)
+setTimeout(() => { try { prepararHorizontal(); } catch { /* nada */ } }, 0);
 function prepararHorizontal() {
   if (!TOQUE) return;
   const app = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
@@ -622,7 +624,7 @@ function mostrarJogo() {
   $('progresso').style.width = '100%'; $('progressoTxt').textContent = '100%';
   pararMusicaCarregamento();
   tela.style.transition = 'opacity .7s ease'; tela.style.opacity = '0';
-  setTimeout(() => { tela.classList.add('oculto'); tela.style.opacity = ''; tela.style.transition = ''; revelarJogo(); document.body.classList.add('jogando'); prepararHorizontal(); }, 720);
+  setTimeout(() => { tela.classList.add('oculto'); tela.style.opacity = ''; tela.style.transition = ''; revelarJogo(); document.body.classList.add('jogando'); }, 720);
 }
 function aquecerQuadro() {
   const t = filaAquecer.shift(); if (!t) return;

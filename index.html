@@ -372,6 +372,22 @@
   #chatCaixa button { padding:0 10px; border-radius:9px; border:1px solid var(--borda); background:#202737; color:var(--texto); font-weight:700; cursor:pointer; white-space:nowrap; }
   #chatCaixa #chatModo.privado { background:#5a4a10; color:#ffe066; }
   @media (min-width: 900px) { #chatLog { bottom:calc(20px + env(safe-area-inset-bottom)); } }
+  /* 22z8: login na horizontal (celular deitado): duas colunas, logo e avisos à esquerda, campos à direita, tudo cabe sem rolar */
+  @media (orientation: landscape) and (max-height: 560px) {
+    #login { padding:8px calc(10px + env(safe-area-inset-right)) 8px calc(10px + env(safe-area-inset-left)); }
+    #login .cartao { width:min(760px, 96vw); display:grid; grid-template-columns: 1fr 1.1fr; column-gap:18px; row-gap:7px; align-items:start; padding:12px 16px 10px; max-height:calc(100dvh - 16px); overflow:auto; }
+    #login .cartao > * { grid-column:2; }
+    #login .cartao > .logoJogo, #login .cartao > .seloBeta, #login .cartao > .sub, #login .cartao > .classif, #login .cartao > .legal { grid-column:1; }
+    #login .logoJogo { width:min(260px, 34vw); margin:0 auto; grid-row:1 / span 2; }
+    #login .seloBeta { grid-row:3; justify-self:center; }
+    #login .sub { grid-row:4; margin:0; font-size:13px; }
+    #login .classif { grid-row:5; margin:4px 0 0; font-size:12px; }
+    #login .legal { grid-row:6; font-size:10.5px; }
+    #login input { font-size:15px; padding:9px 12px; }
+    #login .btn { padding-top:9px; padding-bottom:9px; }
+    #btEsqueci { margin-top:2px !important; font-size:13px !important; }
+    #login .logoK { width:30px; }
+  }
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preload" as="image" href="assets/telas/logo.webp" fetchpriority="high">
@@ -405,37 +421,37 @@
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
   "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
-  "./js/main.js": "./js/main.js?v=20261125u",
-  "./js/mundo.js": "./js/mundo.js?v=20261125u",
-  "./js/arquitetura.js": "./js/arquitetura.js?v=20261125u",
-  "./js/ferrovia.js": "./js/ferrovia.js?v=20261125u",
-  "./js/cla.js": "./js/cla.js?v=20261125u",
-  "./js/config.js": "./js/config.js?v=20261125u",
-  "./js/empresa.js": "./js/empresa.js?v=20261125u",
-  "./js/loja.js": "./js/loja.js?v=20261125u",
-  "./js/painel.js": "./js/painel.js?v=20261125u",
-  "./js/rede.js": "./js/rede.js?v=20261125u",
-  "./js/sedes.js": "./js/sedes.js?v=20261125u",
-  "./js/conquistas.js": "./js/conquistas.js?v=20261125u",
-  "./js/civico.js": "./js/civico.js?v=20261125u",
-  "./js/ovni.js": "./js/ovni.js?v=20261125u",
-  "./js/jato.js": "./js/jato.js?v=20261125u",
-  "./js/governo.js": "./js/governo.js?v=20261125u",
-  "./js/servicos.js": "./js/servicos.js?v=20261125u",
-  "./js/sons.js": "./js/sons.js?v=20261125u",
-  "./js/voz.js": "./js/voz.js?v=20261125u",
-  "./js/clima.js": "./js/clima.js?v=20261125u",
-  "./js/ceu.js": "./js/ceu.js?v=20261125u",
-  "./js/semaforos.js": "./js/semaforos.js?v=20261125u",
-  "./js/cabine.js": "./js/cabine.js?v=20261125u",
-  "./js/eixos.js": "./js/eixos.js?v=20261125u",
-  "./js/racoes.js": "./js/racoes.js?v=20261125u",
-  "./js/logos.js": "./js/logos.js?v=20261125u",
-  "./js/celular.js": "./js/celular.js?v=20261125u",
-    "./js/paporeto.js": "./js/paporeto.js?v=20261125u",
-  "./js/jornal.js": "./js/jornal.js?v=20261125u",
-  "./js/visual.js": "./js/visual.js?v=20261125u",
-  "./js/tutorial.js": "./js/tutorial.js?v=20261125u"
+  "./js/main.js": "./js/main.js?v=20261125v",
+  "./js/mundo.js": "./js/mundo.js?v=20261125v",
+  "./js/arquitetura.js": "./js/arquitetura.js?v=20261125v",
+  "./js/ferrovia.js": "./js/ferrovia.js?v=20261125v",
+  "./js/cla.js": "./js/cla.js?v=20261125v",
+  "./js/config.js": "./js/config.js?v=20261125v",
+  "./js/empresa.js": "./js/empresa.js?v=20261125v",
+  "./js/loja.js": "./js/loja.js?v=20261125v",
+  "./js/painel.js": "./js/painel.js?v=20261125v",
+  "./js/rede.js": "./js/rede.js?v=20261125v",
+  "./js/sedes.js": "./js/sedes.js?v=20261125v",
+  "./js/conquistas.js": "./js/conquistas.js?v=20261125v",
+  "./js/civico.js": "./js/civico.js?v=20261125v",
+  "./js/ovni.js": "./js/ovni.js?v=20261125v",
+  "./js/jato.js": "./js/jato.js?v=20261125v",
+  "./js/governo.js": "./js/governo.js?v=20261125v",
+  "./js/servicos.js": "./js/servicos.js?v=20261125v",
+  "./js/sons.js": "./js/sons.js?v=20261125v",
+  "./js/voz.js": "./js/voz.js?v=20261125v",
+  "./js/clima.js": "./js/clima.js?v=20261125v",
+  "./js/ceu.js": "./js/ceu.js?v=20261125v",
+  "./js/semaforos.js": "./js/semaforos.js?v=20261125v",
+  "./js/cabine.js": "./js/cabine.js?v=20261125v",
+  "./js/eixos.js": "./js/eixos.js?v=20261125v",
+  "./js/racoes.js": "./js/racoes.js?v=20261125v",
+  "./js/logos.js": "./js/logos.js?v=20261125v",
+  "./js/celular.js": "./js/celular.js?v=20261125v",
+    "./js/paporeto.js": "./js/paporeto.js?v=20261125v",
+  "./js/jornal.js": "./js/jornal.js?v=20261125v",
+  "./js/visual.js": "./js/visual.js?v=20261125v",
+  "./js/tutorial.js": "./js/tutorial.js?v=20261125v"
 } }
 </script>
 </head>
@@ -662,7 +678,7 @@
 
 <div id="mira1p" class="oculto" style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;z-index:6"></div>
 <div id="telaFim"><b></b></div>
-<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 25/11 · Reflexo dos faróis só de frente (22z7)</div>
+<div id="versao" style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:rgba(255,255,255,.55);pointer-events:none;z-index:5">BETA · versão 25/11 · Ônibus invisíveis e login deitado (22z8)</div>
 <script>
 // tela cheia e instalação como aplicativo (celular e computador)
 (() => {
