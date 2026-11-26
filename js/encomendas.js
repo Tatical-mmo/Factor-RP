@@ -31,7 +31,7 @@ export async function desenharEncomendas(c, api) {
   let lista = [], est = [], empresas = [];
   try {
     [lista, est, empresas] = await Promise.all([rede.quadroEncomendas.quadro(), rede.cidade.estoque(), rede.listarEmpresas()]);
-  } catch (e) { c.innerHTML = `<p class="dica">O quadro de encomendas precisa do SQL 160 no Supabase. (${esc(e.message)})</p><div class="botoes"><button id="encVoltar">Voltar</button></div>`; c.querySelector('#encVoltar').onclick = api.voltar; return; }
+  } catch (e) { c.innerHTML = `<p class="dica">O quadro de encomendas precisa dos SQL 160a a 160d no Supabase. (${esc(e.message)})</p><div class="botoes"><button id="encVoltar">Voltar</button></div>`; c.querySelector('#encVoltar').onclick = api.voltar; return; }
   if (!api.aberto()) return;
   const eu = api.perfil().id;
   const minhasFab = empresas.filter((e) => e.dono === eu && e.fabrica && PRODUTOS_CIDADE[e.produto]);
