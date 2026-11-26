@@ -115,22 +115,29 @@ function escolherCandidatos(cam) {
 function atualizarReflexos(dt, cam, molhado, noite) {
   if ((tCand -= dt) <= 0) { tCand = 0.5; escolherCandidatos(cam); }
   const luzes = noite > 0.05 ? candidatos.map((c) => c.slice(0, 4)) : [];   // poste só acende de noite
-  ctx.luzesVeiculos?.((x, y, z, tipo) => { if (luzes.length < 70 && Math.abs(x - cam.x) + Math.abs(z - cam.z) < 90) luzes.push([x, y, z, tipo === 0 ? 1 : 2]); });
+  ctx.luzesVeiculos?.((x, y, z, tipo, fx, fz) => {
+    if (luzes.length >= 70 || Math.abs(x - cam.x) + Math.abs(z - cam.z) > 90) return;
+    // 22z7: o reflexo do farol/lanterna só aparece de quem está na frente da luz (farol) ou atrás (lanterna); de lado some
+    const dx = cam.x - x, dz = cam.z - z, d = Math.hypot(dx, dz) || 1, olha = (dx * (fx || 0) + dz * (fz || 0)) / (d * (Math.hypot(fx || 0, fz || 0) || 1));
+    const k = Math.min(1, Math.max(0, (olha - 0.45) / 0.4));
+    if (k > 0.02) luzes.push([x, y, z, tipo === 0 ? 1 : 2, 0, k]);
+  });
   // da mais perto para a mais longe (as mais perto aparecem mais)
   for (const L of luzes) L[4] = Math.hypot(L[0] - cam.x, L[2] - cam.z);
   luzes.sort((a, b) => a[4] - b[4]);
   let n = 0;
-  for (const [x, y, z, tipo, d0] of luzes) {
+  for (const [x, y, z, tipo, d0, kv] of luzes) {
     if (n >= NR) break;
     if (d0 < 3) continue;
     // no asfalto molhado (áspero) a luz vira uma faixa comprida que sai do pé da luz e vem na direção de quem olha
     const dx = x - cam.x, dz = z - cam.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
     const comp = Math.min(28, Math.max(2, d * 0.62)) * (0.5 + 0.5 * molhado), larg = (tipo === 0 ? 0.7 : 0.38) + d * 0.02;
     const fx = x + ux * 0.4, fz = z + uz * 0.4, mx = fx - ux * comp / 2, mz = fz - uz * comp / 2;
+    if (!ctx.naRua(mx, mz) || !ctx.naRua(fx - ux * comp * 0.9, fz - uz * comp * 0.9)) continue;   // 22z7: grama não espelha
     _q.setFromAxisAngle(_y, Math.atan2(-ux, -uz));   // a ponta forte da textura (em cima) fica no pé da luz
     _m.compose(_p.set(mx, ctx.alturaChao(mx, mz) + 0.05, mz), _q, _s.set(larg, 1, comp));
     reflexos.setMatrixAt(n, _m);
-    const forca = 1.8 * molhado * (tipo === 0 ? 1.1 * noite : tipo === 1 ? 1.0 : 0.8) * Math.min(1, 1.5 - d0 / 80);
+    const forca = 1.8 * molhado * (tipo === 0 ? 1.1 * noite : (tipo === 1 ? 1.0 : 0.8) * (kv ?? 1) * (0.3 + 0.7 * noite)) * Math.min(1, 1.5 - d0 / 80);   // de dia o reflexo do farol é fraco
     _c.copy(tipo === 0 ? COR_POSTE : tipo === 1 ? COR_FAROL : COR_LANT).multiplyScalar(Math.max(0, forca));
     reflexos.setColorAt(n, _c); n++;
   }

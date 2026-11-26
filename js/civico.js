@@ -1924,13 +1924,15 @@ function sinaisDo(o, u, ult, dt) {
 }
 let reMin = Infinity;
 export const distRe = () => reMin;
-// 22z4: faróis e lanternas acesos agora (para o reflexo no chão molhado): fn(x, y, z, 0 = farol | 1 = lanterna)
-const _pl = new THREE.Vector3();
+// 22z4: faróis e lanternas acesos agora (para o reflexo no chão molhado): fn(x, y, z, 0 = farol | 1 = lanterna, fx, fz)
+// 22z7: (fx, fz) = para onde a luz aponta (farol: frente do veículo; lanterna: trás)
+const _pl = new THREE.Vector3(), _fw = new THREE.Vector3();
 export function pontosDeLuz(fn) {
   if (!M) return;
   for (const o of comLuz) {
     if (!o.visible || !o.parent) continue; const L = _luzesDe(o); if (!L?.visible || L.userData.aereo) continue;
-    for (const s of L.children) if (s.isSprite && (s.material === M.farol || s.material === M.lanterna)) { s.getWorldPosition(_pl); fn(_pl.x, _pl.y, _pl.z, s.material === M.farol ? 0 : 1); }
+    o.getWorldDirection(_fw);
+    for (const s of L.children) if (s.isSprite && (s.material === M.farol || s.material === M.lanterna)) { const f = s.material === M.farol; s.getWorldPosition(_pl); fn(_pl.x, _pl.y, _pl.z, f ? 0 : 1, f ? _fw.x : -_fw.x, f ? _fw.z : -_fw.z); }
   }
 }
 const _luzesMapa = new WeakMap();
