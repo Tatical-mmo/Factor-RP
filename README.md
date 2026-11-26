@@ -1845,6 +1845,14 @@ Sem SQL. Mudam `js/main.js`, `js/mundo.js` e `index.html`.
 - **Oficinas autorizadas (18h + SQL 110)**:
   - Duas oficinas de NPC com cobertura, balcão e placa, laranja no mapa (`montarOficinas`): **Oficina do Zé** em Vila Serra (preço base, o carro fica 2 min na oficina e some do mapa) e **Garagem Premium** no quarteirão ao lado da Concessionária (30% mais cara, na hora). Para usar, o jogador estaciona o carro na vaga embaixo da cobertura e toca em 🔧 Oficina no balcão.
   - **Serviços** (`oficina_servico`, pago da carteira): pintura em 10 cores (2.000); motor 1, 2 e 3 com +10, +20 e +30% de velocidade máxima (8.000, 20.000, 45.000; `max` no `entrarCarro`); blindagem leve (30.000). O carro blindado aguenta a primeira explosão de tanque e gasta a blindagem; refazer custa a metade. Para arrombar, são 3 golpes no vidro. A janela 🚗 Veículos mostra o motor, a blindagem e se o carro está na oficina.
+## 23a
+- **Economia das fábricas (SQL 160)**:
+  - **Estoque da cidade**: a tabela `mercado` guarda quantas caixas a cidade tem de cada produto. A transportadora entrega → a cidade paga a fábrica e a caixa entra no estoque (1 caixa = 1 unidade). A loja só vende o que tem; zerado aparece "Em falta: aguardando entrega das fábricas". Os moradores consomem um pouco por hora (`atualizar_cidade`, calculado ao abrir/comprar). Estoque inicial semeado.
+  - **Hospital**: cada tratamento (`tratar_hospital`, balcão e SAMU) gasta 1 remédio do estoque; sem remédio cura só +30 de vida e cobra 50. Respawn (`alta_hospital`) e ambulância continuam iguais.
+  - **Preço que varia**: estoque vazio paga até 1,6x o valor base por caixa, cheio paga 0,4x; cheio, a cidade para de comprar (`criar_pedido` conta o que já está a caminho). Tabela de preços na aba Vendas da empresa e no quadro.
+  - **Quadro de encomendas** (`js/encomendas.js`; loja → 📋 Encomendas, aba Vendas e app 📋 no celular): jogador ou líder de clã (paga do caixa do clã) encomenda produto, quantidade e preço máximo; o dinheiro fica guardado. As fábricas do produto dão lances por 10 min, o menor vence e envia por uma transportadora como frete normal. Os itens vão para a mochila ou para o cofre do clã. Não entregue em 24 h, o resto volta.
+  - **Produtos novos** (escolhidos ao fundar a fábrica): 🍔 Hambúrguer (loja 250, enche a fome toda, 150 s por funcionário NPC) e 🍽️ Refeição completa (loja 450, enche a fome toda e ela cai pela metade por 20 min, 240 s).
+
 ## 22z9
 - Rodoviária: além da reserva, a baia precisa estar fisicamente vazia (nenhum ônibus parado nela ou ainda saindo de ré por cima). Quem chega com a baia ainda ocupada troca por outra vazia do grupo ou espera no pátio, antes da curva de entrada.
 - Som dos ônibus das linhas um pouco mais alto (parado e andando) e ouvido um pouco mais longe.

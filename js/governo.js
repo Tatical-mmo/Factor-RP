@@ -509,11 +509,13 @@ async function telaFiscal(c) {
 async function telaHospital(c) {
   const carreira = await cartaoCarreira('medico');
   c.innerHTML = `${carreira}<div class="sub">Tratamento</div>
-    <p class="dica">Recupere toda a vida na hora por <b>150</b> (o valor vai para o cofre da prefeitura). Quem morre sem socorro acorda aqui e paga até 100 de conta.</p>
+    <p class="dica">Recupere toda a vida na hora por <b>150</b> (o valor vai para o cofre da prefeitura). Cada tratamento gasta <b>1 remédio</b> do estoque da cidade; se as fábricas não entregaram, o hospital só dá <b>+30</b> de vida (conta 50). Quem morre sem socorro acorda aqui e paga até 100 de conta.</p>
     <div class="botoes"><button id="hTratar">Tratar (150)</button></div>
     <div class="sub">Plantão médico</div>
     ${telaProfissao(c, 'medico', 'Médico', 'Médicos em serviço veem os feridos (✚ FERIDO) pela cidade. Chegue perto em até 20 s e toque em <b>Socorrer</b>: a pessoa levanta ali mesmo e você ganha <b>250</b>. Do nível <b>Enfermeiro</b> em diante, pegue até 20 remédios no <b>almoxarifado</b> (anexo leste do hospital, só funcionários) e <b>medique de graça</b> quem vier ao hospital (+50 de vida): você ganha comissão por medicação. Na loja o remédio custa 3.000. Procurados não podem trabalhar no serviço público.')}`;
-  $('hTratar').onclick = () => (ctx.vida?.() >= 100 ? msg('Sua vida já está cheia.', false) : executar(async () => { const v = await rede.saude.tratar(); ctx.curar?.(); return v; }, 'Vida cheia!'));
+  // 23a: 1 remédio do estoque da cidade por tratamento; sem remédio cura só 30 (conta 50)
+  $('hTratar').onclick = () => (ctx.vida?.() >= 100 ? msg('Sua vida já está cheia.', false) : executar(async () => { const v = Number(await rede.saude.tratar()); const cura = v > 0 && v < 100 ? v : 100; ctx.curar?.(cura); return cura; },
+    (cura) => (cura < 100 ? 'Hospital sem remédio (aguardando entrega das fábricas): só +30 de vida, conta 50.' : 'Vida cheia!')));
   ligarProfissao('medico');
 }
 

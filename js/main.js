@@ -4515,7 +4515,8 @@ async function iniciarJogo(perfil) {
   criarNPCs(id);
   conectarMultiplayer(perfil);
   rede.escutarMeuPerfil(perfil.id, { perfil: aplicarPerfil, comando: aoComando, inventario: recarregarInventario });
-  iniciarLoja({ usarMascara: (item) => usarMascara(item), mascaraAtual: () => jogador.mascara, equiparArma: (item) => equiparArma(item), colocarBarricada: () => colocarBarricadaAqui(), usarJujuba: () => usarJujuba(), usarAntiacido: () => usarAntiacido(), perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, curar: usarRemedio, vida: () => jogador.vida,
+  iniciarLoja({ usarMascara: (item) => usarMascara(item), mascaraAtual: () => jogador.mascara, equiparArma: (item) => equiparArma(item), colocarBarricada: () => colocarBarricadaAqui(), usarJujuba: () => usarJujuba(), usarAntiacido: () => usarAntiacido(), perfil: () => jogador.perfil, fome: () => jogador.fome, definirFome: (f) => { jogador.fome = f; desenharFome(); }, comeu: (it) => { if (it === 'refeicao') jogador.refeicaoAte = agoraServidor() + 20 * 60e3; },
+    saldoMudou: () => rede.carregarPerfil(jogador.perfil.id).then((p) => { if (p) { jogador.perfil.moedas = p.moedas; atualizarInfo(); } }).catch(() => {}), curar: usarRemedio, vida: () => jogador.vida,
     casaId: () => (typeof jogador.dentroCasa === 'number' ? jogador.dentroCasa : null),
     meuTerreno: () => { const d = casasMundo.get(portaAberta)?.d; return d?.tipo === 'terreno' && d.dono === jogador.perfil.id ? d : null; },
     portaAtual: () => { const d = casasMundo.get(portaAberta)?.d; return moraEm(d) ? d : null; },
@@ -4532,11 +4533,12 @@ async function iniciarJogo(perfil) {
     lotesOcupados: () => unidades.size,
     lotesDe: (id) => [...unidades.entries()].filter(([, u]) => u.empresa === id).map(([l]) => l),
     recarregar: () => { tempoLogistica = 0; }, recarregarLogos: () => recarregarLogos(),
+    abrirEncomendas: () => abrirJanela('encomendas'),
   });
   iniciarLogistica();
   celular.iniciarCelular({
     hora: () => { const h = horaAtual || 0; return `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`; }, lugares: lugaresCelular, veiculos: veiculosCelular, marcar: (a) => rastrear(a),
-    abrirJanela: (q) => $(q === 'empresa' ? 'btEmpresa' : 'btCla')?.click(), chamarMecanico, chamarSamu, pneuFurado: () => { const c = jogador.carro, v = typeof c?.id === 'number' ? carrosMundo.get(c.id) : null; const n = v && v.d.dono === jogador.perfil?.id && !mecanicoMeu ? bitsDe(v.d.pneus || 0) : 0; return n ? { n } : null; }, trocarPneuAqui: () => { if (Math.abs(jogador.carro?.vel || 0) > 0.5) { aviso('Pare o carro para o mecânico trocar o pneu.', 3); return; } chamarMecanicoPneu(false); }, vida: () => Math.round(jogador.vida ?? 100), estacionamentoPerto: estacionamentoMaisPerto,
+    abrirJanela: (q) => $(q === 'empresa' ? 'btEmpresa' : 'btCla')?.click(), abrirEncomendas: () => abrirJanela('encomendas'), chamarMecanico, chamarSamu, pneuFurado: () => { const c = jogador.carro, v = typeof c?.id === 'number' ? carrosMundo.get(c.id) : null; const n = v && v.d.dono === jogador.perfil?.id && !mecanicoMeu ? bitsDe(v.d.pneus || 0) : 0; return n ? { n } : null; }, trocarPneuAqui: () => { if (Math.abs(jogador.carro?.vel || 0) > 0.5) { aviso('Pare o carro para o mecânico trocar o pneu.', 3); return; } chamarMecanicoPneu(false); }, vida: () => Math.round(jogador.vida ?? 100), estacionamentoPerto: estacionamentoMaisPerto,
     saldoMudou: () => rede.carregarPerfil(jogador.perfil.id).then((p) => { if (p) { jogador.perfil.moedas = p.moedas; atualizarInfo(); } }).catch(() => {}), aoFechar: () => { if (jogador.emote === 'celular' || jogador.emote === 'insta') jogador.emote = null; },
     moedas: () => jogador.perfil?.moedas || 0, lojaOnline, comprarOnline, miniaturaCarro,
     online: (id) => remotos.has(id), euId: () => jogador.perfil?.id, aviso, toqueCelular,
@@ -4587,7 +4589,7 @@ async function iniciarJogo(perfil) {
     bloqueiosMudaram: () => carregarBloqueios(), sairDaConta: async () => { await rede.sair(); location.reload(); },
     rastrear: (a) => rastrear(a), portaoEmpresa: (id) => portaoDaEmpresa(id),
     locaisTrabalho: () => ({ policia: pontos.delegacia, prf: civico.PREFEITURA.prf, medico: civico.HOSPITAL.balcao, bombeiro: civico.BOMBEIROS.balcao,
-      jornalista: civico.PREFEITURA.jornal, exercito: mundo.QUARTEL.portao, motorista: TERMINAL, fiscal: PONTO_FISCAL, gari: CENTRAL.garagem, piloto: AERO.metro.hangar, controlador: AERO.metro.torre, agencia: civico.BANCO.empregos }), destinosTaxi, voarPara, vida: () => jogador.vida, curar: () => { jogador.vida = 100; desenharFome(); dublar('hospital_alta'); }, pontoMudou: () => servicos.recomecarPonto(),
+      jornalista: civico.PREFEITURA.jornal, exercito: mundo.QUARTEL.portao, motorista: TERMINAL, fiscal: PONTO_FISCAL, gari: CENTRAL.garagem, piloto: AERO.metro.hangar, controlador: AERO.metro.torre, agencia: civico.BANCO.empregos }), destinosTaxi, voarPara, vida: () => jogador.vida, curar: (v = 100) => { jogador.vida = v >= 100 ? 100 : Math.min(100, (jogador.vida ?? 0) + v); desenharFome(); if (v >= 100) dublar('hospital_alta'); }, pontoMudou: () => servicos.recomecarPonto(),
   });
   $('btVolante').onclick = () => { volantePref = !volantePref; rotuloVolante(); salvarPref('volante', volantePref); aviso(volantePref ? '🛞 Direção com volante: no carro, gire o volante da tela (motos, aviões e helicópteros continuam com os controles deles).' : '🛞 Direção com as setas ◀ ▶.', 4); };
   rotuloVolante(); montarVolante();
@@ -8336,8 +8338,14 @@ function chamarSamu() {
   if (performance.now() < samuAte) throw new Error('A ambulância já está a caminho.');
   const seg = servicos.chamarAmbulancia('samu', { x: j.pos.x, z: j.pos.z }, () => {
     samuAte = 0; if (jogador.morto) return;
-    rede.saude.tratar().then(() => { jogador.perfil.moedas = Math.max(0, (jogador.perfil.moedas || 0) - 150); atualizarInfo(); }).catch(() => {});
-    jogador.vida = 100; desenharFome(); aviso('🚑 O socorrista cuidou de você: vida cheia. Conta: 150 moedas.', 4);
+    // 23a: o hospital gasta 1 remédio do estoque da cidade; sem remédio cura só 30 (conta 50)
+    rede.saude.tratar().then((v) => {
+      const sem = Number(v) > 0 && Number(v) < 100;
+      jogador.perfil.moedas = Math.max(0, (jogador.perfil.moedas || 0) - (sem ? 50 : 150)); atualizarInfo();
+      if (jogador.morto) return;
+      jogador.vida = sem ? Math.min(100, (jogador.vida ?? 0) + Number(v)) : 100; desenharFome();
+      aviso(sem ? '🚑 Hospital sem remédio (falta entrega das fábricas): o socorrista só estancou, +30 de vida. Conta: 50 moedas.' : '🚑 O socorrista cuidou de você: vida cheia. Conta: 150 moedas.', 4.5);
+    }).catch((e) => aviso(`🚑 ${e.message}`, 3));
   }, 1.5);
   if (!seg) throw new Error('A ambulância já está a caminho.');
   samuAte = performance.now() + (seg + 30) * 1000;
@@ -10700,7 +10708,7 @@ function contexto() {
 // ---------------------------------------------------------------- fome
 let avisoFome = false;
 function atualizarFome(dt) {
-  jogador.fome = Math.max(0, jogador.fome - (antiacidoAtivo() ? Math.min(FOME_POR_SEGUNDO, 3 / 420) : FOME_POR_SEGUNDO) * dt);   // anti-ácido: no máximo 3% em 7 min
+  jogador.fome = Math.max(0, jogador.fome - (antiacidoAtivo() ? Math.min(FOME_POR_SEGUNDO, 3 / 420) : FOME_POR_SEGUNDO) * (refeicaoAtiva() ? 0.5 : 1) * dt);   // anti-ácido: no máximo 3% em 7 min; 23a: refeição completa: metade por 20 min
   if (jogador.fome <= 0 && !avisoFome) { avisoFome = true; aviso('Você está com fome e mais lento. Coma algo da mochila.', 4); }
   if (jogador.fome > 5) avisoFome = false;
   tempoInfo -= dt; if (tempoInfo <= 0) { tempoInfo = 1; desenharFome(); }
@@ -13455,6 +13463,7 @@ const viagensJuj = new Map();   // id -> { d, rota, mesh }
 let placaRacoes = null, valorPlaca = 0, compradorMontado = null, tempoJujPos = 0, jujubaAvisou = 0;
 const racaoAtiva = () => Math.max(jogador.jujubaAte || 0, Date.parse(jogador.perfil?.jujuba_ate || 0) || 0) > agoraServidor();
 // anti-ácido (suplemento do Exército): por 7 min a fome cai no máximo 3% (não enche a barrinha)
+const refeicaoAtiva = () => Math.max(jogador.refeicaoAte || 0, Date.parse(jogador.perfil?.refeicao_ate || 0) || 0) > agoraServidor();
 const antiacidoAtivo = () => Math.max(jogador.antiacidoAte || 0, Date.parse(jogador.perfil?.antiacido_ate || 0) || 0) > agoraServidor();
 async function usarAntiacido() {
   const ate = await rede.jujuba.usarAntiacido();

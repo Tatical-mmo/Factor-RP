@@ -1,10 +1,11 @@
 // Loja e mochila (etapa 3). Toda compra, venda e refeição é feita no banco.
 import * as rede from './rede.js';
+import { desenharEncomendas } from './encomendas.js';
 import { PERSONAGENS, PERSONAGENS_GRATIS, PERSONAGENS_EVENTO, PRECO_PERSONAGEM, PRECO_NOME } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-export const ICONES = { mascara_camisa_cinza: '😷', mascara_camisa_vermelha: '😷', mascara_bandana: '😷', mascara_balaclava: '🥷', mascara_lenco: '🧕', mascara_estrela: '🎭', mascara_caveira: '💀', mascara_camuflada: '🎭', mascara_onca: '🐆', mascara_coroa: '👑', espingarda: '🔫', fuzil: '🔫', granada: '💣', barricada: '🚧', jujuba: '🍬', antiacido: '🥤', sucata: '⚙️', chocolate: '🍫', cereal: '🥣', remedio: '💊', desbloqueio: '🔓', parafuso: '🔩' };
+export const ICONES = { mascara_camisa_cinza: '😷', mascara_camisa_vermelha: '😷', mascara_bandana: '😷', mascara_balaclava: '🥷', mascara_lenco: '🧕', mascara_estrela: '🎭', mascara_caveira: '💀', mascara_camuflada: '🎭', mascara_onca: '🐆', mascara_coroa: '👑', espingarda: '🔫', fuzil: '🔫', granada: '💣', barricada: '🚧', jujuba: '🍬', antiacido: '🥤', sucata: '⚙️', chocolate: '🍫', cereal: '🥣', remedio: '💊', desbloqueio: '🔓', parafuso: '🔩', hamburguer: '🍔', refeicao: '🍽️' };
 
 let ctx = null;
 let precos = [];
@@ -32,7 +33,18 @@ const digitandoJanela = () => { const f = document.activeElement; return !!f && 
 // 22o: lojas do terminal: cada uma vende uma parte do que a loja principal vende (mesmo preço e mesmo saldo)
 let lojaFiltro = null;   // { nome, cat }
 export const categoriaItem = (p) => (p.item.startsWith('mascara_') ? 'mascaras' : p.item === 'remedio' ? 'farmacia' : p.item === 'parafuso' ? 'ferragens' : p.item === 'desbloqueio' ? 'banca' : p.fome ? 'comida' : 'outros');
-export function abrir(m, filtro = null) { modo = m; lojaFiltro = m === 'loja' ? filtro : null; $('janela').classList.remove('oculto'); desenhar(); }
+export function abrir(m, filtro = null) {
+  modo = m; lojaFiltro = m === 'loja' ? filtro : null; $('janela').classList.remove('oculto'); desenhar();
+  if (m === 'loja') carregarEstoqueCidade();
+}
+// 23a: estoque da cidade: a loja só vende o que as fábricas entregaram
+let estoqueCidade = {};
+async function carregarEstoqueCidade() {
+  try { const l = await rede.cidade.estoque(); estoqueCidade = Object.fromEntries((l || []).map((m) => [m.produto, m])); } catch { return; }
+  if (modo === 'loja' && !digitandoJanela()) desenhar();
+}
+const infoEstoque = (item) => { const m = estoqueCidade[item]; return !m ? '' : m.estoque > 0 ? ` · estoque ${m.estoque}` : ''; };
+const emFalta = (item) => estoqueCidade[item] && estoqueCidade[item].estoque <= 0;
 let bau = {};
 export function fechar() { modo = null; $('janela').classList.add('oculto'); }
 export function janelaAberta() { return !!modo; }
@@ -175,21 +187,28 @@ function desenhar() {
   if (modo === 'porta') { desenharPorta(c); return; }
   if (modo === 'gerenciar') { desenharGerenciar(c); return; }
   if (modo === 'predio') { desenharPredio(c); return; }
+  if (modo === 'encomendas') {
+    $('janelaTitulo').textContent = '📋 Quadro de encomendas';
+    desenharEncomendas(c, { perfil: ctx.perfil, aberto: () => modo === 'encomendas', voltar: () => abrir('loja'), saldo: () => ctx.saldoMudou?.(),
+      executar: (fn, ok) => executar(fn, ok) });
+    return;
+  }
   if (modo === 'loja') {
     $('janelaTitulo').textContent = lojaFiltro ? lojaFiltro.nome : 'Loja';
     const venda = precos.filter((p) => p.compra != null && (!lojaFiltro || categoriaItem(p) === lojaFiltro.cat));
     const compra = lojaFiltro ? [] : precos.filter((p) => p.venda != null);
     c.innerHTML = `<p class="dica">Você tem <b>${moedas()}</b> moedas.</p>
-      ${lojaFiltro ? '' : '<div class="botoes" style="margin-bottom:10px"><button id="lMercado">🤝 Mercado dos jogadores</button></div><div id="lEvento"></div>'}
+      ${lojaFiltro ? '' : '<div class="botoes" style="margin-bottom:10px"><button id="lMercado">🤝 Mercado dos jogadores</button><button id="lEncom">📋 Encomendas</button></div><div id="lEvento"></div>'}
       <div class="sub">Comprar</div><div class="lista">${venda.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
-          <span class="nm"><b>${esc(p.nome)}</b><small>${p.compra} moedas${p.fome ? ` · enche ${p.fome}% da fome` : ''}${p.item === 'remedio' ? ' · cura 50 de vida' : ''}${p.item === 'desbloqueio' ? ' · libera os níveis 5, 10 e 15 de empresas e clãs' : ''}</small></span>
-          <span class="bts">${p.item.startsWith('mascara_') ? (inv[p.item] > 0 ? '<button disabled>✔ Já é sua</button>' : `<button data-comprar="${p.item}" data-q="1">Comprar</button>`) : `<button data-comprar="${p.item}" data-q="1">+1</button><button data-comprar="${p.item}" data-q="5">+5</button>`}</span></div>`).join('')}</div>
+          <span class="nm"><b>${esc(p.nome)}</b><small>${p.compra} moedas${p.item === 'refeicao' ? ' · enche a fome e ela cai pela metade por 20 min' : p.fome ? ` · enche ${p.fome}% da fome` : ''}${emFalta(p.item) ? ' · <b style="color:#ff9b8a">Em falta: aguardando entrega das fábricas</b>' : infoEstoque(p.item)}${p.item === 'remedio' ? ' · cura 50 de vida' : ''}${p.item === 'desbloqueio' ? ' · libera os níveis 5, 10 e 15 de empresas e clãs' : ''}</small></span>
+          <span class="bts">${p.item.startsWith('mascara_') ? (inv[p.item] > 0 ? '<button disabled>✔ Já é sua</button>' : `<button data-comprar="${p.item}" data-q="1">Comprar</button>`) : emFalta(p.item) ? '<button disabled>Em falta</button>' : `<button data-comprar="${p.item}" data-q="1">+1</button><button data-comprar="${p.item}" data-q="5">+5</button>`}</span></div>`).join('')}</div>
       ${compra.length ? '<div class="sub">Vender</div>' : ''}<div class="lista">${compra.map((p) => `
         <div class="linha item"><span class="ic">${ICONES[p.item] || '📦'}</span>
           <span class="nm"><b>${esc(p.nome)}</b><small>${p.venda} moedas cada · você tem ${inv[p.item] || 0}</small></span>
           <span class="bts"><button data-vender="${p.item}" data-q="1" ${inv[p.item] ? '' : 'disabled'}>1</button><button data-vender="${p.item}" data-q="${inv[p.item] || 0}" ${inv[p.item] ? '' : 'disabled'}>Todos</button></span></div>`).join('')}</div>`;
     if ($('lMercado')) $('lMercado').onclick = () => abrir('mercado');
+    if ($('lEncom')) $('lEncom').onclick = () => abrir('encomendas');
     // 22b: armas laser de evento (só aparecem com a vitrine aberta)
     rede.armasEvento.listar().then((l) => {
       const el = $('lEvento'), agora = Date.now(); if (!el || modo !== 'loja') return;
@@ -200,7 +219,7 @@ function desenhar() {
           <span class="bts">${inv[a.id] > 0 ? '<button disabled>✔ Já é sua</button>' : `<button data-arma-ev="${a.id}">Comprar</button>`}</span></div>`).join('')}</div>`;
       el.querySelectorAll('[data-arma-ev]').forEach((b) => { b.onclick = () => { if (!b.dataset.conf) { b.dataset.conf = '1'; b.textContent = 'Confirmar'; return; } executar(() => rede.armasEvento.comprar(b.dataset.armaEv), 'Arma comprada! Equipe pelo 🎯 Tático.'); }; });
     }).catch(() => {});
-    c.querySelectorAll('[data-comprar]').forEach((b) => { b.onclick = () => executar(() => rede.economia.comprar(b.dataset.comprar, Number(b.dataset.q)), `Comprado: ${b.dataset.q}x ${nomeDe(b.dataset.comprar)}.`); });
+    c.querySelectorAll('[data-comprar]').forEach((b) => { b.onclick = () => executar(async () => { try { await rede.economia.comprar(b.dataset.comprar, Number(b.dataset.q)); } finally { carregarEstoqueCidade(); } }, `Comprado: ${b.dataset.q}x ${nomeDe(b.dataset.comprar)}.`); });
     c.querySelectorAll('[data-vender]').forEach((b) => { b.onclick = () => { const q = Number(b.dataset.q); if (q > 0) executar(() => rede.economia.vender(b.dataset.vender, q), (r) => `Vendido por ${r} moedas.`); }; });
   } else {
     $('janelaTitulo').textContent = 'Mochila';
@@ -227,7 +246,7 @@ function desenhar() {
     c.querySelectorAll('[data-jujuba]').forEach((b) => { b.onclick = () => executar(() => ctx.usarJujuba(), 'Ração militar ativa por 5 minutos.'); });
     c.querySelectorAll('[data-antiacido]').forEach((b) => { b.onclick = () => executar(() => ctx.usarAntiacido(), 'Anti-ácido ativo por 7 minutos.'); });
     c.querySelectorAll('[data-comer]').forEach((b) => {
-      b.onclick = () => executar(async () => { const f = await rede.economia.consumir(b.dataset.comer); ctx.definirFome(Number(f)); return f; }, (f) => `Fome agora: ${Math.round(f)}%.`);
+      b.onclick = () => executar(async () => { const f = await rede.economia.consumir(b.dataset.comer); ctx.definirFome(Number(f)); ctx.comeu?.(b.dataset.comer); return f; }, (f) => `Fome agora: ${Math.round(f)}%.${b.dataset.comer === 'refeicao' ? ' A fome vai cair pela metade por 20 min.' : ''}`);
     });
   }
 }

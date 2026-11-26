@@ -3,6 +3,7 @@
 import * as rede from './rede.js';
 import { LOTES_VENDA, DESTINOS, PRODUTOS } from './config.js';
 import * as logos from './logos.js';
+import { tabelaCidade } from './encomendas.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -45,7 +46,12 @@ export async function iniciarEmpresa(contexto) {
   ctx = contexto;
   $('btEmpresa').onclick = () => abrirEmpresa();
   $('fecharEmpresa').onclick = fechar;
-  try { for (const m of await rede.listarMercado()) mercado[m.produto] = m.valor_caixa; } catch { /* sem preços ainda */ }
+  await carregarCidade();
+}
+// 23a: preço por caixa varia com o estoque da cidade (vazio paga mais, cheio paga menos e para de comprar)
+let cidadeEst = [];
+async function carregarCidade() {
+  try { cidadeEst = (await rede.cidade.estoque()) || []; for (const m of cidadeEst) mercado[m.produto] = m.valor_caixa; } catch { /* sem preços ainda */ }
 }
 export function abrirEmpresa(id = null) { modo = 'empresa'; aba = 'resumo'; if (id) selecionada = id; mostrar(); }
 export function abrirCompra(lote) { modo = 'comprar'; loteCompra = lote; mostrar(); }
@@ -257,15 +263,19 @@ function seletorTransportadora(empresas, id, fabrica) {
   return `<select id="${id}">${t.map((x) => `<option value="${x.id}">${esc(x.nome)}${fabrica && x.dono === fabrica.dono ? ' (sua, sem frete)' : ' (dono: ' + esc(x.dono_perfil?.nome || '?') + ')'}</option>`).join('')}</select>`;
 }
 async function telaVendas(c, e, empresas) {
-  const pedidos = await rede.pedidosDe(e.id);
+  const [pedidos] = await Promise.all([rede.pedidosDe(e.id), carregarCidade()]);
   const valor = mercado[e.produto] || 0;
-  c.innerHTML = `<p class="dica">Estoque: <b>${e.estoque}</b> caixas. O mercado paga <b>${valor}</b> por caixa; você paga o frete à transportadora.</p>
-    <div class="sub">Novo pedido para o mercado</div>
+  const m = cidadeEst.find((x) => x.produto === e.produto), vaga = m ? m.capacidade - m.estoque - (m.a_caminho || 0) : null;
+  c.innerHTML = `<p class="dica">Estoque: <b>${e.estoque}</b> caixas. A cidade paga <b>${valor}</b> por caixa agora (preço do momento: cidade vazia paga mais, cheia paga menos); você paga o frete à transportadora. ${vaga != null ? (vaga > 0 ? `Ela compra até <b>${vaga}</b> caixas agora.` : '<b>O estoque da cidade está cheio: espere baixar ou atenda encomendas.</b>') : ''}</p>
+    <div class="botoes" style="margin-bottom:8px"><button id="eEncom">📋 Quadro de encomendas (jogadores e clãs)</button></div>
+    <div class="sub">Novo pedido para a cidade</div>
     <div class="form">${seletorTransportadora(empresas, 'eTra', e)}
       <label>Caixas <input id="eQtd" type="number" min="1" max="${Math.max(1, e.estoque)}" value="${Math.min(20, Math.max(1, e.estoque))}" inputmode="numeric"></label>
       <label>Frete por caixa <input id="eFrete" type="number" min="0" max="${valor}" value="${Math.round(valor * 0.3)}" inputmode="numeric"></label>
       <button id="eCriar">Enviar pedido</button></div>
-    <div class="sub">Pedidos</div><div class="lista">${listaPedidos(pedidos, 'fabrica')}</div>`;
+    <div class="sub">Pedidos</div><div class="lista">${listaPedidos(pedidos, 'fabrica')}</div>
+    <div class="sub">🏙️ Quanto a cidade paga por caixa</div>${tabelaCidade(cidadeEst, e.produto)}`;
+  $('eEncom').onclick = () => { fechar(); ctx.abrirEncomendas?.(); };
   const b = $('eCriar'); if (b) b.onclick = () => { const t = Number($('eTra')?.value); if (!t) { msg('Escolha uma transportadora.', false); return; }
     executar(() => rede.logistica.criarPedido(e.id, t, inteiro('eQtd'), inteiro('eFrete')), 'Pedido enviado à transportadora.'); };
   ligarPedidos(c);
@@ -335,7 +345,7 @@ const cachePreco = new Map();
 function telaRobos(c, e) {
   const alugadosAtivos = e.aluguel_ate && Date.parse(e.aluguel_ate) > Date.now() ? e.robos_alugados : 0;
   const custo = lim(e, 'evoluir');
-  const funcao = [e.fabrica ? 'Na fábrica, cada funcionário NPC embala <b>1 caixa a cada 90 s</b> sozinho (acumula até 4 h fora do jogo).' : '',
+  const funcao = [e.fabrica && !(e.produto === 'robo' || VEICULOS[e.produto]) ? `Na fábrica, cada funcionário NPC embala <b>1 caixa a cada ${({ hamburguer: 150, refeicao: 240 })[e.produto] || 90} s</b> sozinho (acumula até 4 h fora do jogo).` : '',
     e.produto === 'robo' ? 'Na fábrica de robôs, cada funcionário NPC monta <b>1 robô a cada 20 min</b>, vendido a empresas e clãs por 8.000 (o dinheiro entra no caixa).' : '',
     VEICULOS[e.produto] ? `Na fábrica de ${({ van: 'vans', caminhao: 'caminhões', helicoptero: 'helicópteros' })[e.produto]}, cada funcionário NPC monta <b>1 a cada ${({ van: 25, caminhao: 40, helicoptero: 120 })[e.produto]} min</b>, vendido a outras empresas por ${num(VEICULOS[e.produto].fabrica)} (o dinheiro entra no caixa).` : '',
     temFrota(e) ? 'Na transportadora, cada funcionário NPC carregador põe <b>+5 caixas</b> em cada caminhão (máximo 60).' : ''].filter(Boolean).join(' ');
@@ -390,7 +400,7 @@ function telaCompra(c) {
     <div class="form">
       <label>Nome da empresa <input id="cNome" maxlength="24" placeholder="Ex.: Doces do Vale"></label>
       <label>Tipo <select id="cTipo"><option value="fabrica">Fábrica</option><option value="transportadora">Transportadora</option></select></label>
-      <label id="cProdL">Produto <select id="cProd"><option value="chocolate">Chocolate</option><option value="remedio">Remédio</option><option value="robo">Robôs (vende a empresas e clãs)</option><option value="van">Vans</option><option value="caminhao">Caminhões</option><option value="helicoptero">Helicópteros</option></select></label>
+      <label id="cProdL">Produto <select id="cProd"><option value="chocolate">Chocolate</option><option value="remedio">Remédio</option><option value="hamburguer">Hambúrguer 🍔</option><option value="refeicao">Refeição completa 🍽️</option><option value="robo">Robôs (vende a empresas e clãs)</option><option value="van">Vans</option><option value="caminhao">Caminhões</option><option value="helicoptero">Helicópteros</option></select></label>
       <button id="cComprar">Comprar lote e fundar empresa</button></div>
     ${filiaisPossiveis().length ? `<div class="sub">Ou abrir uma filial (nível 10+)</div><div class="form">
       <label>Empresa <select id="fEmp">${filiaisPossiveis().map((e) => `<option value="${e.id}">${esc(e.nome)} · ${nivelTexto(e.nivel)}</option>`).join('')}</select></label>

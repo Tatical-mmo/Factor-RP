@@ -116,6 +116,7 @@ async function desenhar(manterMsg = false) {
         <button class="app" data-ir="estac"><i style="background:#1f6feb">🅿️</i>Estacionar</button>
         <button class="app" data-ir="contatos"><i style="background:#0f7b6c">👥</i>Contatos${totalNaoLidas() ? `<span class="badge">${totalNaoLidas()}</span>` : ''}</button>
         <button class="app" data-ir="loja"><i style="background:#8250df">🛒</i>Concessionária</button>
+        <button class="app" id="celEncom"><i style="background:#9a6700">📋</i>Encomendas</button>
         ${modoPc ? '<button class="app" data-ir="caixa"><i style="background:#bf8700">💼</i>Caixa da empresa</button>' : `<button class="app" id="celCamera"><i style="background:#30363d">📷</i>Câmera</button>
         <button class="app" data-ir="papo"><i style="background:linear-gradient(135deg,#ffd166,#ef476f)">💬</i>Papo Reto</button>
         <button class="app" data-ir="galeria"><i style="background:#2b6cb0">🖼️</i>Galeria</button>
@@ -227,6 +228,7 @@ async function desenhar(manterMsg = false) {
   if (m) c.insertAdjacentHTML('afterbegin', m); else c.insertAdjacentHTML('afterbegin', '<div class="msg" id="celMsg"></div>');
   c.querySelectorAll('[data-ir]').forEach((b) => { b.onclick = () => ir(b.dataset.ir); });
   if ($('celCamera')) $('celCamera').onclick = () => ctx.abrirCamera?.();
+  if ($('celEncom')) $('celEncom').onclick = () => { fechar(); ctx.abrirEncomendas?.(); };
   c.querySelectorAll('[data-ate]').forEach((b) => { b.onclick = () => { const [x, z] = b.dataset.ate.split(',').map(Number); ctx.marcar({ nome: b.dataset.nome, x, z }); msg('📍 Marcado no mapa.'); }; });
   c.querySelectorAll('[data-abrir]').forEach((b) => { b.onclick = () => { fechar(); ctx.abrirJanela(b.dataset.abrir); }; });
   c.querySelectorAll('[data-pneuaqui]').forEach((b) => { b.onclick = () => { ctx.trocarPneuAqui?.(); fechar?.(); }; });

@@ -613,9 +613,27 @@ function traduzirRpc(m) {
     'casa ja vendida': 'Essa casa já tem dono.',
     'voce nao tem casa': 'Você não tem casa.',
     'bau cheio': 'O baú está cheio (200 de cada item).',
+    // 23a: economia das fábricas
+    'em falta na cidade': 'Em falta: aguardando entrega das fábricas.',
+    'estoque da cidade cheio': 'O estoque da cidade está cheio: ela só volta a comprar quando o estoque baixar.',
+    'leilao encerrado': 'Os lances dessa encomenda já fecharam.',
+    'sua fabrica nao faz esse produto': 'Sua fábrica não faz esse produto.',
+    'nao pode dar lance na propria encomenda': 'Você não pode dar lance na sua própria encomenda.',
+    'lance fora do limite': 'Lance inválido: precisa ser de 1 até o preço máximo da encomenda.',
+    'encomenda indisponivel': 'Encomenda indisponível.',
+    'encomenda ja enviada': 'Essa encomenda já foi enviada.',
+    'so da para cancelar antes de fechar': 'Só dá para cancelar antes de fechar os lances.',
+    'ja tem lances': 'Já tem lances: não dá mais para cancelar.',
+    'limite de encomendas': 'Você já tem 5 encomendas em andamento.',
+    'caixa do cla sem saldo': 'O caixa do clã não tem dinheiro suficiente.',
+    'preco invalido': 'Preço inválido.',
   };
   const espera = /^aguarde (\d+) s$/.exec(m);
   if (espera) return `Aguarde ${espera[1]} s.`;
+  const lojaTem = /^a loja so tem (\d+) em estoque$/.exec(m);
+  if (lojaTem) return `A loja só tem ${lojaTem[1]} em estoque.`;
+  const cidadeVaga = /^a cidade so compra mais (\d+) caixas agora$/.exec(m);
+  if (cidadeVaga) return `A cidade só compra mais ${cidadeVaga[1]} caixas agora (estoque quase cheio).`;
   return t[m] || m;
 }
 export const roubarCarroRua = () => rpc('roubar_carro_rua');
@@ -1119,6 +1137,17 @@ export const listarEmpresas = () => sel(sb.from('empresas').select('*, dono_perf
 export const listarCaminhoes = () => sel(sb.from('caminhoes').select('*').order('id'));
 export const listarUnidades = () => sel(sb.from('unidades').select('*'));
 export const listarMercado = () => sel(sb.from('mercado').select('*'));
+// 23a: estoque da cidade (com o consumo dos moradores já descontado) e quadro de encomendas
+export const cidade = {
+  estoque: async () => { try { return await rpc('estoque_cidade'); } catch { return await listarMercado(); } },
+};
+export const quadroEncomendas = {
+  quadro: () => rpc('quadro_encomendas'),
+  criar: (produto, qtd, precoMax, cla) => rpc('criar_encomenda', { p_produto: produto, p_qtd: qtd, p_preco_max: precoMax, p_cla: !!cla }),
+  cancelar: (id) => rpc('cancelar_encomenda', { p_encomenda: id }),
+  lance: (id, empresa, preco) => rpc('lance_encomenda', { p_encomenda: id, p_empresa: empresa, p_preco: preco }),
+  enviar: (id, transportadora, frete) => rpc('enviar_encomenda', { p_encomenda: id, p_transportadora: transportadora, p_frete: frete }),
+};
 export async function minhaEmpresaId(id) {
   const d = await sel(sb.from('membros').select('empresa').eq('jogador', id).maybeSingle());
   return d?.empresa ?? null;
